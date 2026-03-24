@@ -35,6 +35,11 @@ model Project {
   project_type    String        @default("RETAIL") // RETAIL, NON_RETAIL
   status_progress ProjectStatus @default(ACTIVE)
   phases          Phase[]
+  timelines       ProjectTimeline[]
+  client_name     String?
+  client_contact  String?
+  address         String?
+  area            Float?
 }
 
 model Phase {
@@ -46,6 +51,7 @@ model Phase {
   order_index       Int
   is_locked         Boolean     @default(false)
   revisions         Revision[]
+  timelines       ProjectTimeline[]
 }
 
 model Revision {
@@ -56,6 +62,7 @@ model Revision {
   minor       Int            @default(0)
   status_enum String         @default("ACTIVE") // ACTIVE, COMPLETED
   activities  Activity[]
+  files       File[]
 }
 
 model Activity {
@@ -66,6 +73,41 @@ model Activity {
   mode        String         // TODO, FEEDBACK
   status      String         @default("OPEN") // OPEN, DONE
 }
+
+model File {
+  id          String   @id @default(uuid())
+  revision_id String
+  revision    Revision @relation(fields: [revision_id], references: [id])
+  file_url    String
+  file_name   String
+  file_type   String   
+  uploaded_by String   
+  created_at  DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   
+  entity_type String   
+  entity_id   String
+  user_id     String   
+  details     Json?    
+  created_at  DateTime @default(now())
+}
+
+model ProjectTimeline {
+  id          String   @id @default(uuid())
+  project_id  String
+  project     Project  @relation(fields: [project_id], references: [id])
+  status      String   @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED
+  start_date  DateTime?
+  end_date    DateTime?
+  phase_id    String?
+  phase       Phase?   @relation(fields: [phase_id], references: [id])
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+}
+
 ```
 
 ---

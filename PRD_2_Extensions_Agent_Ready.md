@@ -80,6 +80,12 @@ Aksi khusus Admin untuk menyetujui item baru di katalog.
         * ELSE (untuk DIC, DrIC, STAFF), set status = "PENDING".  
     * **Insert** : Insert data ke GlobalLibrary dengan status yang sudah ditentukan.
 
+### D. insertAuditLog(action, entityType, entityId, userId, details)
+* **Aturan Wajib**: Fungsi ini HARUS dipanggil di dalam `prisma.$transaction` setiap kali terjadi mutasi data krusial.
+* **Integrasi**: 
+  - Saat `addToProjectSchedule` dieksekusi, catat aksi ini ke AuditLog.
+  - Saat `approveClientPhase` atau `reopenPhase` dieksekusi, catat ke AuditLog.
+
 ---
 
 ## 4. UI & FALLBACK RULES

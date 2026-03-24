@@ -1,0 +1,168 @@
+// schema.prisma — RAD SAAS
+// Source of truth: PRD 1 (Core) + PRD 2 (Extensions)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  DIC
+  DRIC
+  STAFF
+}
+
+enum PhaseName {
+  MOODBOARD
+  LAYOUT
+  DESIGN_3D
+  CD
+  SUPERVISION
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+}
+
+// ---------------------------------------------------------------------------
+// PRD 1 — CORE MODELS
+// ---------------------------------------------------------------------------
+
+model User {
+  id                   String    @id @default(uuid())
+  name                 String
+  role                 Role      @default(STAFF)
+  projects_as_designer Project[] @relation("Designer")
+  projects_as_drafter  Project[] @relation("Drafter")
+}
+
+model Project {
+  id              String            @id @default(uuid())
+  name            String
+  pic_designer_id String
+  designer        User              @relation("Designer", fields: [pic_designer_id], references: [id])
+  pic_drafter_id  String
+  drafter         User              @relation("Drafter", fields: [pic_drafter_id], references: [id])
+  opening_date    DateTime?
+  project_type    String            @default("RETAIL") // RETAIL, NON_RETAIL
+  status_progress ProjectStatus     @default(ACTIVE)
+  client_name     String?
+  client_contact  String?
+  address         String?
+  area            Float?
+  phases          Phase[]
+  timelines       ProjectTimeline[]
+  schedules       ProjectSchedule[] // PRD 2
+}
+
+model Phase {
+  id          String            @id @default(uuid())
+  project_id  String
+  project     Project           @relation(fields: [project_id], references: [id])
+  name_enum   PhaseName
+  // PENDING | IN_PROGRESS | ON_REVIEW_INTERNAL | ON_REVIEW_CLIENT | READY_FOR_NEXT | COMPLETED
+  status_enum String            @default("PENDING")
+  order_index Int
+  is_locked   Boolean           @default(false)
+  revisions   Revision[]
+  timelines   ProjectTimeline[]
+}
+
+model Revision {
+  id          String     @id @default(uuid())
+  phase_id    String
+  phase       Phase      @relation(fields: [phase_id], references: [id])
+  major       Int        @default(1)
+  minor       Int        @default(0)
+  // ACTIVE | COMPLETED
+  status_enum String     @default("ACTIVE")
+  activities  Activity[]
+  files       File[]
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  revision_id String
+  revision    Revision @relation(fields: [revision_id], references: [id])
+  content     String
+  // TODO | FEEDBACK
+  mode        String
+  // OPEN | DONE
+  status      String   @default("OPEN")
+}
+
+model File {
+  id          String   @id @default(uuid())
+  revision_id String
+  revision    Revision @relation(fields: [revision_id], references: [id])
+  file_url    String
+  file_name   String
+  file_type   String
+  uploaded_by String
+  created_at  DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  entity_type String
+  entity_id   String
+  user_id     String
+  details     Json?
+  created_at  DateTime @default(now())
+}
+
+model ProjectTimeline {
+  id         String    @id @default(uuid())
+  project_id String
+  project    Project   @relation(fields: [project_id], references: [id])
+  // NOT_STARTED | IN_PROGRESS | COMPLETED
+  status     String    @default("NOT_STARTED")
+  start_date DateTime?
+  end_date   DateTime?
+  phase_id   String?
+  phase      Phase?    @relation(fields: [phase_id], references: [id])
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// PRD 2 — EXTENSION MODELS
+// ---------------------------------------------------------------------------
+
+model GlobalLibrary {
+  id            String            @id @default(uuid())
+  // MATERIAL | FIXTURE
+  category_enum String
+  internal_code String            @unique
+  item_name     String
+  vendor_name   String
+  price         Float
+  specs         Json // Key-Value pair
+  image_url     String?
+  // PENDING | APPROVED
+  status        String            @default("PENDING")
+  schedules     ProjectSchedule[]
+}
+
+model ProjectSchedule {
+  id                  String         @id @default(uuid())
+  project_id          String
+  project             Project        @relation(fields: [project_id], references: [id])
+  category_enum       String
+  data_snapshot       Json // LibrarySnapshot interface
+  original_library_id String?
+  library_master      GlobalLibrary? @relation(fields: [original_library_id], references: [id], onDelete: SetNull)
+  created_at          DateTime       @default(now())
+}
