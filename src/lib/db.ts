@@ -2,6 +2,7 @@ import { PrismaClient } from "@/generated/prisma"; // Refreshed for Dynamic UI E
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 
+const connectionString = `${process.env.DATABASE_URL}`;
 const isVercel = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
 
 const pool = new Pool({
