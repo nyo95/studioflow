@@ -2,7 +2,7 @@
 // Source of truth: PRD 1 (Core) + PRD 2 (Extensions)
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -42,9 +42,22 @@ enum ProjectStatus {
 model User {
   id                   String    @id @default(uuid())
   name                 String
+  email                String    @unique
+  password             String
   role                 Role      @default(STAFF)
   projects_as_designer Project[] @relation("Designer")
   projects_as_drafter  Project[] @relation("Drafter")
+  assigned_cd_drawings CDList[]
+  comments             Comment[]
+}
+
+model Client {
+  id         String    @id @default(uuid())
+  name       String    @unique
+  address    String?
+  logo_url   String?
+  updated_at DateTime  @updatedAt
+  projects   Project[]
 }
 
 model Project {
@@ -54,14 +67,16 @@ model Project {
   designer        User              @relation("Designer", fields: [pic_designer_id], references: [id])
   pic_drafter_id  String
   drafter         User              @relation("Drafter", fields: [pic_drafter_id], references: [id])
+  clientId        String?
+  client          Client?           @relation(fields: [clientId], references: [id])
   opening_date    DateTime?
   project_type    String            @default("RETAIL") // RETAIL, NON_RETAIL
   status_progress ProjectStatus     @default(ACTIVE)
-  client_name     String?
   client_contact  String?
   address         String?
   area            Float?
   phases          Phase[]
+  checklists      ProjectChecklist[]
   timelines       ProjectTimeline[]
   schedules       ProjectSchedule[] // PRD 2
 }
@@ -76,7 +91,10 @@ model Phase {
   order_index Int
   is_locked   Boolean           @default(false)
   revisions   Revision[]
+  checklists  ProjectChecklist[]
+  cd_lists    CDList[]
   timelines   ProjectTimeline[]
+  comments    Comment[]
 }
 
 model Revision {
@@ -110,6 +128,8 @@ model File {
   file_name   String
   file_type   String
   uploaded_by String
+  link_url    String? // Untuk Google Drive link
+  is_external Boolean  @default(false) // True jika link_url diisi, False jika upload file lokal
   created_at  DateTime @default(now())
 }
 
@@ -147,7 +167,8 @@ model GlobalLibrary {
   category_enum String
   internal_code String            @unique
   item_name     String
-  vendor_name   String
+  vendor_id     String?
+  vendor        Vendor?           @relation(fields: [vendor_id], references: [id])
   price         Float
   specs         Json // Key-Value pair
   image_url     String?
@@ -165,4 +186,69 @@ model ProjectSchedule {
   original_library_id String?
   library_master      GlobalLibrary? @relation(fields: [original_library_id], references: [id], onDelete: SetNull)
   created_at          DateTime       @default(now())
+}
+
+// --- 1. SETTINGS & TEMPLATES ---
+model TimelineTemplate {
+  id            String @id @default(uuid())
+  phase_enum    String @unique // MOODBOARD, LAYOUT, dll
+  duration_days Int    @default(7)
+}
+
+model ChecklistTemplate {
+  id         String  @id @default(uuid())
+  phase_enum String? // MOODBOARD, LAYOUT, dll, or null for global
+  label      String
+  is_active  Boolean @default(true)
+}
+
+model SystemConfig {
+  id                     String  @id @default("default")
+  app_title              String  @default("StudioFlow")
+  is_auto_naming_enabled Boolean @default(true)
+}
+
+// --- 2. VENDOR RELATION ---
+model Vendor {
+  id             String          @id @default(uuid())
+  name           String
+  contact_person String?
+  phone          String?
+  address        String?
+  libraries      GlobalLibrary[] // Relasi 1-to-M ke GlobalLibrary
+}
+
+// --- 3. PROJECT CHECKLIST & CD LIST ---
+model ProjectChecklist {
+  id         String  @id @default(uuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id])
+  phase_id   String?
+  phase      Phase?  @relation(fields: [phase_id], references: [id])
+  label      String
+  is_checked Boolean @default(false)
+}
+
+model CDList {
+  id             String  @id @default(uuid())
+  phase_id       String // Harus mengarah ke Phase dengan name_enum = CD
+  phase          Phase   @relation(fields: [phase_id], references: [id])
+  group_code     String // misal: "ARS", "MEP", "INT"
+  drawing_name   String
+  status_enum    String  @default("PENDING") // PENDING, ON_PROGRESS, DELIVERED
+  assigned_to_id String? // Relasi ke User (DrIC)
+  assigned_to    User?   @relation(fields: [assigned_to_id], references: [id])
+}
+
+// --- 4. LIVE COLLABORATION (EXTENSION) ---
+model Comment {
+  id         String   @id @default(uuid())
+  content    String
+  author_id  String
+  author     User     @relation(fields: [author_id], references: [id])
+  phase_id   String
+  phase      Phase    @relation(fields: [phase_id], references: [id])
+  task_id    String?  // Optional for future task-level links
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 }
