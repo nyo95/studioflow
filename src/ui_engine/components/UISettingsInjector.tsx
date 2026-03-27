@@ -13,10 +13,16 @@ interface UISettings {
 }
 
 export async function UISettingsInjector() {
-  const config = await prisma.systemConfig.findUnique({
-    where: { id: "default" },
-    select: { ui_settings: true },
-  });
+  let config = null;
+  try {
+    config = await prisma.systemConfig.findUnique({
+      where: { id: "default" },
+      select: { ui_settings: true },
+    });
+  } catch (error) {
+    console.error("Failed to fetch UI settings during build:", error);
+    return null;
+  }
 
   if (!config?.ui_settings) {
     return null;
