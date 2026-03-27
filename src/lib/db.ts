@@ -4,7 +4,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 const connectionString = `${process.env.DATABASE_URL}`;
 
-const pool = new Pool({ connectionString });
+const pool = new Pool({
+  connectionString,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+});
 // PrismaPg ships its own pg types, so this cast avoids duplicate-type incompatibility.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adapter = new PrismaPg(pool as any);
