@@ -2,13 +2,20 @@ import { prisma } from "@/lib/db";
 import { LoginForm } from "@/components/login-form";
 
 export default async function LoginPage() {
-  const [systemConfig] = await prisma.$queryRaw<Array<{ app_title: string }>>`
-    SELECT "app_title"
-    FROM "SystemConfig"
-    WHERE "id" = 'default'
-    LIMIT 1
-  `;
-  const appTitle = systemConfig?.app_title ?? "StudioFlow";
+  let appTitle = "StudioFlow";
+  try {
+    const [systemConfig] = await prisma.$queryRaw<Array<{ app_title: string }>>`
+      SELECT "app_title"
+      FROM "SystemConfig"
+      WHERE "id" = 'default'
+      LIMIT 1
+    `;
+    if (systemConfig?.app_title) {
+      appTitle = systemConfig.app_title;
+    }
+  } catch (error) {
+    console.error("Failed to fetch app title during build:", error);
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-6 font-sans">
