@@ -8,7 +8,7 @@ import { canEditProjectMetadata } from "@/lib/permissions";
 import { ProjectOverviewForm } from "@/components/project-overview-form";
 import { ProjectChecklistOverview } from "@/components/project-checklist-overview";
 import { Button } from "@/components/ui/button";
-import { DashboardPageShell, PageBackLink, PageHeader } from "@/ui_engine";
+import { DashboardPageShell, PageBackLink, PageHeader, Heading } from "@/ui_engine";
 import { getProjectProgress, formatPhaseName } from "@/lib/project-progress";
 
 export const generateStaticParams = async () => {
@@ -139,7 +139,7 @@ export default async function ProjectOverviewPage({
                     </div>
                     <div>
                       <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-400 text-opacity-80">Final State</p>
-                      <h2 className="mt-1 font-serif text-2xl font-bold text-slate-950">PROJECT COMPLETED ✓</h2>
+                      <Heading level={2} className="mt-1">PROJECT COMPLETED ✓</Heading>
                     </div>
                   </div>
                 </div>
@@ -158,9 +158,9 @@ export default async function ProjectOverviewPage({
                     </div>
                     <div>
                       <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-500 text-opacity-80">Next Step</p>
-                      <h2 className="mt-1 font-serif text-2xl font-bold text-slate-950">
+                      <Heading level={2} className="mt-1">
                         READY FOR {formatPhaseName(progress.nextPhaseName)}
-                      </h2>
+                      </Heading>
                     </div>
                   </div>
                   <Link href={`/projects/${projectId}/phases/${project.phases.find(p => p.name_enum === progress.nextPhaseName)?.id}`}>
@@ -186,15 +186,17 @@ export default async function ProjectOverviewPage({
                   </div>
                   <div className="flex flex-col gap-2">
                     <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Current Progress</p>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-x-6 gap-y-2">
                       {progress.phases.map((p, idx: number) => (
-                        <h2 key={idx} className="font-serif text-2xl font-bold text-slate-950">
-                          {formatPhaseName(p.name)}
-                          <span className="ml-2 text-sm font-light text-slate-400">
+                        <div key={idx} className="flex items-center gap-2">
+                          <Heading level={2}>
+                            {formatPhaseName(p.name)}
+                          </Heading>
+                          <span className="text-sm font-light text-slate-400">
                             v{p.major}.{p.minor}
                           </span>
                           {idx < progress.phases.length - 1 && <span className="ml-3 text-slate-200">|</span>}
-                        </h2>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -225,7 +227,7 @@ export default async function ProjectOverviewPage({
           title={project.name}
           description={project.client?.name}
           divider={false}
-          titleClassName="mt-2 font-serif text-4xl font-bold tracking-tight text-slate-950 normal-case"
+          titleClassName="mt-2 normal-case"
           descriptionClassName="mt-4 font-sans text-base font-medium text-slate-600"
         />
 

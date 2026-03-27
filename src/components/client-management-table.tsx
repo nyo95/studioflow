@@ -22,19 +22,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  TableCard,
+  TableCardHeader,
+  TableCardHead,
+  TableCardBody,
+  TableCardRow,
+  TableCardCell,
+} from "@/ui_engine";
 
 interface ManagedClient {
   id: string;
@@ -150,132 +150,128 @@ export function ClientManagementTable({ clients }: ClientManagementTableProps) {
       ) : null}
 
       <TooltipProvider delayDuration={0}>
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
-                <TableHead className="px-6 py-4 font-sans text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Client</TableHead>
-                <TableHead className="px-6 py-4 font-sans text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Address</TableHead>
-                <TableHead className="px-6 py-4 font-sans text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Projects</TableHead>
-                <TableHead className="px-6 py-4 text-right font-sans text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {clients.length === 0 ? (
-                <TableRow className="hover:bg-white">
-                  <TableCell colSpan={4} className="px-6 py-16 text-center font-sans text-sm text-slate-500">
-                    No clients found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                clients.map((client) => {
-                  const hasProjects = client.projects.length > 0;
-                  const mergeCandidates = clients.filter((candidate) => candidate.id !== client.id);
+        <TableCard>
+          <TableCardHeader>
+            <TableCardHead>Client</TableCardHead>
+            <TableCardHead>Address</TableCardHead>
+            <TableCardHead>Projects</TableCardHead>
+            <TableCardHead align="right">Action</TableCardHead>
+          </TableCardHeader>
+          <TableCardBody>
+            {clients.length === 0 ? (
+              <TableCardRow className="hover:bg-white text-center">
+                <TableCardCell colSpan={4} align="center" className="py-16 text-slate-500">
+                  No clients found.
+                </TableCardCell>
+              </TableCardRow>
+            ) : (
+              clients.map((client) => {
+                const hasProjects = client.projects.length > 0;
+                const mergeCandidates = clients.filter((candidate) => candidate.id !== client.id);
 
-                  return (
-                    <TableRow key={client.id} className="border-slate-200 hover:bg-slate-50/60">
-                      <TableCell className="px-6 py-5">
-                        <div className="space-y-2">
-                          {client.logo_url ? (
-                            <ClientBranding
-                              name={client.name}
-                              logoUrl={client.logo_url}
-                              fallback="text"
-                              showName
-                              nameClassName="font-medium text-slate-900"
-                            />
-                          ) : (
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10 rounded-2xl border border-slate-200 bg-white">
-                                <AvatarFallback className="rounded-2xl bg-slate-100 font-sans text-xs font-bold uppercase tracking-[0.18em] text-slate-700">
-                                  {getClientInitials(client.name)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className="font-sans text-sm font-semibold text-slate-900">{client.name}</p>
-                                <p className="text-xs text-slate-500">No logo uploaded.</p>
-                              </div>
+                return (
+                  <TableCardRow key={client.id}>
+                    <TableCardCell>
+                      <div className="space-y-2">
+                        {client.logo_url ? (
+                          <ClientBranding
+                            name={client.name}
+                            logoUrl={client.logo_url}
+                            fallback="text"
+                            showName
+                            nameClassName="font-medium text-slate-900"
+                          />
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10 rounded-2xl border border-slate-200 bg-white">
+                              <AvatarFallback className="rounded-2xl bg-slate-100 font-sans text-xs font-bold uppercase tracking-[0.18em] text-slate-700">
+                                {getClientInitials(client.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="font-sans text-sm font-semibold text-slate-900">{client.name}</p>
+                              <p className="text-xs text-slate-500">No logo uploaded.</p>
                             </div>
-                          )}
-                          <p className="text-xs text-slate-400">
-                            Updated {clientDateFormatter.format(client.updated_at)}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-6 py-5">
-                        <div className="flex items-start gap-2 text-sm text-slate-600">
-                          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                          <span className="whitespace-normal">{client.address || "No address yet."}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-6 py-5 font-sans text-sm font-semibold text-slate-700">
-                        {client.projects.length}
-                      </TableCell>
-                      <TableCell className="px-6 py-5">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="rounded-lg border-slate-200 text-xs font-semibold"
-                            onClick={() => {
-                              setSelectedClient(client);
-                              setError(null);
-                              setOpen(true);
-                            }}
-                          >
-                            <Edit2 className="mr-2 h-3.5 w-3.5" />
-                            Edit
-                          </Button>
+                          </div>
+                        )}
+                        <p className="text-xs text-slate-400">
+                          Updated {clientDateFormatter.format(client.updated_at)}
+                        </p>
+                      </div>
+                    </TableCardCell>
+                    <TableCardCell>
+                      <div className="flex items-start gap-2 text-sm text-slate-600">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                        <span className="whitespace-normal">{client.address || "No address yet."}</span>
+                      </div>
+                    </TableCardCell>
+                    <TableCardCell className="font-sans text-sm font-semibold text-slate-700">
+                      {client.projects.length}
+                    </TableCardCell>
+                    <TableCardCell>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-lg border-slate-200 text-xs font-semibold"
+                          onClick={() => {
+                            setSelectedClient(client);
+                            setError(null);
+                            setOpen(true);
+                          }}
+                        >
+                          <Edit2 className="mr-2 h-3.5 w-3.5" />
+                          Edit
+                        </Button>
 
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="rounded-lg border-slate-200 text-xs font-semibold"
-                            onClick={() => {
-                              setClientToMerge(client);
-                              setMergeTargetId(mergeCandidates[0]?.id ?? "");
-                              setMergeError(null);
-                              setMergeOpen(true);
-                            }}
-                            disabled={mergeCandidates.length === 0}
-                          >
-                            <GitMerge className="mr-2 h-3.5 w-3.5" />
-                            Merge
-                          </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-lg border-slate-200 text-xs font-semibold"
+                          onClick={() => {
+                            setClientToMerge(client);
+                            setMergeTargetId(mergeCandidates[0]?.id ?? "");
+                            setMergeError(null);
+                            setMergeOpen(true);
+                          }}
+                          disabled={mergeCandidates.length === 0}
+                        >
+                          <GitMerge className="mr-2 h-3.5 w-3.5" />
+                          Merge
+                        </Button>
 
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="icon-sm"
-                                  className="rounded-lg border-slate-200 text-slate-600 hover:text-red-600"
-                                  disabled={hasProjects || deleteLoadingId === client.id}
-                                  onClick={() => handleDelete(client)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  <span className="sr-only">Delete client</span>
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            {hasProjects ? (
-                              <TooltipContent side="left">
-                                <p>Cannot delete client with active projects. Use Merge instead.</p>
-                              </TooltipContent>
-                            ) : null}
-                          </Tooltip>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-sm"
+                                className="rounded-lg border-slate-200 text-slate-600 hover:text-red-600"
+                                disabled={hasProjects || deleteLoadingId === client.id}
+                                onClick={() => handleDelete(client)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span className="sr-only">Delete client</span>
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          {hasProjects ? (
+                            <TooltipContent side="left">
+                              <p>Cannot delete client with active projects. Use Merge instead.</p>
+                            </TooltipContent>
+                          ) : null}
+                        </Tooltip>
+                      </div>
+                    </TableCardCell>
+                  </TableCardRow>
+                );
+              })
+            )}
+          </TableCardBody>
+        </TableCard>
       </TooltipProvider>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>

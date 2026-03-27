@@ -23,6 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Edit2, User, MapPin, Calendar, Building2, Lock } from "lucide-react";
+import { Heading } from "@/ui_engine";
 
 interface UserOption {
   id: string;
@@ -156,8 +157,8 @@ export function ProjectOverviewForm({
     <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
       <div className="flex items-start justify-between gap-6 border-b border-slate-200 pb-6">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Project Metadata</p>
-          <h2 className="mt-2 font-serif text-2xl font-bold text-slate-950">Overview</h2>
+          <Heading variant="uiMeta" level={6}>Project Metadata</Heading>
+          <Heading level={2} className="mt-2">Overview</Heading>
         </div>
 
         <Dialog open={open} onOpenChange={setOpen}>
@@ -170,7 +171,9 @@ export function ProjectOverviewForm({
           <DialogContent className="sm:max-w-[500px]">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
-                <DialogTitle className="font-serif text-xl font-bold">Edit Project Metadata</DialogTitle>
+                <DialogTitle>
+                  <Heading level={3}>Edit Project Metadata</Heading>
+                </DialogTitle>
                 <DialogDescription>
                   Update project details and assigned PICs.
                 </DialogDescription>
@@ -356,7 +359,7 @@ export function ProjectOverviewForm({
             <Building2 className="h-5 w-5" />
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Client Name</p>
+            <Heading variant="uiMeta" level={6}>Client Name</Heading>
             {project.client ? (
               <p className="text-sm font-semibold text-slate-900">
                 {project.client.name}
@@ -372,7 +375,7 @@ export function ProjectOverviewForm({
             <MapPin className="h-5 w-5" />
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Area (sqm)</p>
+            <Heading variant="uiMeta" level={6}>Area (sqm)</Heading>
             <p className="text-sm font-semibold text-slate-900">{project.area ? `${project.area} sqm` : "-"}</p>
           </div>
         </div>
@@ -382,7 +385,7 @@ export function ProjectOverviewForm({
             <Calendar className="h-5 w-5" />
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Opening</p>
+            <Heading variant="uiMeta" level={6}>Target Opening</Heading>
             <p className="text-sm font-semibold text-slate-900">{project.opening_date_display}</p>
           </div>
         </div>
@@ -392,7 +395,7 @@ export function ProjectOverviewForm({
             <User className="h-5 w-5" />
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assigned Team</p>
+            <Heading variant="uiMeta" level={6}>Assigned Team</Heading>
             <p className="text-sm font-semibold text-slate-900">{project.designer_name} (DIC)</p>
             <p className="text-[11px] text-slate-500">{project.drafter_name} (DRIC)</p>
           </div>

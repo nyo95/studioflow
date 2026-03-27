@@ -19,33 +19,31 @@
 import { Role, PhaseName } from "@/generated/prisma";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
-import { canEditPhase, canEditProjectMetadata } from "@/lib/permissions";
+import { 
+  canEditPhase, 
+  canEditProjectMetadata, 
+  getActorSession,
+  assertAdmin,
+  assertPhaseOwnerAccess,
+  assertPhaseContentMutationAccess,
+  assertGlobalChecklistAccess,
+  assertDeliverableUploadAccess,
+  getOwnedPhaseOrThrow,
+  getPhaseWithProjectOrThrow,
+  getRevisionWithPhaseOrThrow,
+  getActivityWithPhaseOrThrow,
+  getChecklistWithPhaseOrThrow,
+  getCDItemWithPhaseOrThrow,
+  getProjectMembershipOrThrow,
+  isGlobalChecklistTemplate,
+  ERR,
+  GLOBAL_CHECKLIST_PHASE,
+  SYSTEM_CONFIG_ID,
+  TxClient
+} from "@/lib/permissions";
 import { calculateBackwardTimeline } from "@/lib/date-utils";
-import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { signOut } from "@/auth";
-
-// ---------------------------------------------------------------------------
-// Since Prisma v7 generates with @ts-nocheck, $transaction callback inferencing
-// can fail in strict mode. We define a fallback `TxClient` to bypass TS errors.
-// ---------------------------------------------------------------------------
-type TxClient = any;
-
-// ---------------------------------------------------------------------------
-// Error codes (PRD 1 §2)
-// ---------------------------------------------------------------------------
-const ERR = {
-  UNAUTHORIZED_ACTION: "UNAUTHORIZED_ACTION",
-  INVALID_PHASE_STATE: "INVALID_PHASE_STATE",
-  PHASE_ALREADY_LOCKED: "PHASE_ALREADY_LOCKED",
-  UNRESOLVED_ACTIVITIES_EXIST: "UNRESOLVED_ACTIVITIES_EXIST",
-  RACE_CONDITION_PREVENTED: "RACE_CONDITION_PREVENTED",
-  // PRD 2
-  ITEM_NOT_APPROVED: "ITEM_NOT_APPROVED",
-} as const;
-
-const GLOBAL_CHECKLIST_PHASE = "GLOBAL";
-const SYSTEM_CONFIG_ID = "default";
 
 // ---------------------------------------------------------------------------
 // PRD 2 §2 — Snapshot interface (enforced at runtime via this mapping)
@@ -170,6 +168,55 @@ export async function submitForClientReview(phaseId: string, userId: string, use
     });
 
     await insertAuditLog(tx, "submitForClientReview", "Phase", phaseId, session.userId, { phaseId });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// A4. activatePhase(phaseId) - Transitions a phase from PENDING to IN_PROGRESS
+// ---------------------------------------------------------------------------
+export async function activatePhase(phaseId: string, userId: string, userRole: Role) {
+  void userId;
+  void userRole;
+  return prisma.$transaction(async (tx: any) => {
+    const session = await getActorSession();
+    const phase = await getOwnedPhaseOrThrow(tx, phaseId, session.userId, session.role);
+
+    if (phase.status_enum !== "PENDING") throw new Error("Phase is already active or completed.");
+
+    // 0. Sequence Check: Ensure previous phase (if any) is READY_FOR_NEXT or COMPLETED
+    if (phase.order_index > 1) {
+      const prevPhase = await tx.phase.findFirst({
+        where: { 
+          project_id: phase.project_id, 
+          order_index: phase.order_index - 1 
+        },
+        select: { status_enum: true }
+      });
+      if (prevPhase && prevPhase.status_enum !== "READY_FOR_NEXT" && prevPhase.status_enum !== "COMPLETED") {
+        throw new Error("Fase sebelumnya harus diselesaikan terlebih dahulu.");
+      }
+    }
+
+    // 1. Activate phase
+    await tx.phase.update({
+      where: { id: phaseId },
+      data: { 
+        status_enum: "IN_PROGRESS", 
+        is_locked: false
+      },
+    });
+
+    // 2. Create initial revision v1.0
+    await tx.revision.create({
+      data: {
+        phase_id: phaseId,
+        major: 1,
+        minor: 0,
+        status_enum: "ACTIVE",
+      },
+    });
+
+    await insertAuditLog(tx, "activatePhase", "Phase", phaseId, session.userId, { phaseId });
   });
 }
 
@@ -939,8 +986,41 @@ export async function addChecklistItem(phaseId: string, label: string) {
   });
 }
 
-async function getActorSession() {
-  return requireSession();
+// ---------------------------------------------------------------------------
+// ADMIN-ONLY: updateProjectPriority(projectId, priority)
+// Sets the priority level of a project. ADMIN role required.
+// ---------------------------------------------------------------------------
+export async function updateProjectPriority(projectId: string, priority: string) {
+  return prisma.$transaction(async (tx: any) => {
+    const session = await getActorSession();
+
+    // STRICT: Admin-only access control
+    if (session.role !== "ADMIN") {
+      throw new Error("UNAUTHORIZED_ACTION");
+    }
+
+    // Verify project exists
+    const project = await tx.project.findUniqueOrThrow({
+      where: { id: projectId },
+    });
+
+    // Update project priority
+    const updated = await tx.project.update({
+      where: { id: projectId },
+      data: { priority },
+    });
+
+    // Audit log
+    await insertAuditLog(tx, "updateProjectPriority", "Project", projectId, session.userId, {
+      projectId,
+      newPriority: priority,
+      previousPriority: project.priority,
+    });
+
+    revalidatePath("/");
+
+    return updated;
+  });
 }
 
 async function upsertClientByName(
@@ -1004,10 +1084,6 @@ async function getSystemConfigTx(tx: TxClient) {
   return { id: SYSTEM_CONFIG_ID, is_auto_naming_enabled: true };
 }
 
-function assertAdmin(role: Role) {
-  if (role !== "ADMIN") throw new Error(ERR.UNAUTHORIZED_ACTION);
-}
-
 function normalizeOptionalString(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -1025,190 +1101,6 @@ function normalizeDrawingCode(input: string) {
   }
 
   return `ID_${trimmed}`;
-}
-
-function assertPhaseOwnerAccess(
-  phaseName: PhaseName,
-  project: { pic_designer_id: string; pic_drafter_id: string },
-  userId: string,
-  role: Role
-) {
-  if (role === "ADMIN") return;
-  if (!canEditPhase(role, phaseName)) throw new Error(ERR.UNAUTHORIZED_ACTION);
-
-  const ownerId = phaseName === "CD" ? project.pic_drafter_id : project.pic_designer_id;
-  if (ownerId !== userId) throw new Error(ERR.UNAUTHORIZED_ACTION);
-}
-
-function assertPhaseContentMutationAccess(
-  phase: {
-    name_enum: PhaseName;
-    status_enum: string;
-    is_locked: boolean;
-    project: { pic_designer_id: string; pic_drafter_id: string };
-  },
-  userId: string,
-  role: Role
-) {
-  if (phase.is_locked) throw new Error(ERR.INVALID_PHASE_STATE);
-  if (role === "ADMIN") return;
-
-  const ownerId =
-    phase.name_enum === "CD" ? phase.project.pic_drafter_id : phase.project.pic_designer_id;
-  if (ownerId !== userId) throw new Error(ERR.UNAUTHORIZED_ACTION);
-}
-
-function assertGlobalChecklistAccess(
-  project: { pic_designer_id: string; pic_drafter_id: string },
-  userId: string,
-  role: Role
-) {
-  if (role === "ADMIN") return;
-  if (project.pic_designer_id !== userId && project.pic_drafter_id !== userId) {
-    throw new Error(ERR.UNAUTHORIZED_ACTION);
-  }
-}
-
-function assertDeliverableUploadAccess(
-  phaseName: PhaseName,
-  project: { pic_designer_id: string; pic_drafter_id: string },
-  userId: string,
-  role: Role
-) {
-  if (role === "ADMIN") return;
-
-  const ownerId = phaseName === "CD" ? project.pic_drafter_id : project.pic_designer_id;
-  if (ownerId !== userId) throw new Error(ERR.UNAUTHORIZED_ACTION);
-}
-
-function isGlobalChecklistTemplate(phaseEnum: string | null | undefined) {
-  return phaseEnum == null || phaseEnum === GLOBAL_CHECKLIST_PHASE;
-}
-
-async function getOwnedPhaseOrThrow(tx: TxClient, phaseId: string, userId: string, role: Role) {
-  const phase = await getPhaseWithProjectOrThrow(tx, phaseId);
-  assertPhaseOwnerAccess(phase.name_enum as PhaseName, phase.project, userId, role);
-  return phase;
-}
-
-async function getPhaseWithProjectOrThrow(tx: TxClient, phaseId: string) {
-  return tx.phase.findUniqueOrThrow({
-    where: { id: phaseId },
-    include: {
-      project: {
-        select: {
-          id: true,
-          pic_designer_id: true,
-          pic_drafter_id: true,
-        },
-      },
-    },
-  });
-}
-
-async function getRevisionWithPhaseOrThrow(tx: TxClient, revisionId: string) {
-  return tx.revision.findUniqueOrThrow({
-    where: { id: revisionId },
-    include: {
-      phase: {
-        include: {
-          project: {
-            select: {
-              id: true,
-              pic_designer_id: true,
-              pic_drafter_id: true,
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-async function getActivityWithPhaseOrThrow(tx: TxClient, activityId: string) {
-  return tx.activity.findUniqueOrThrow({
-    where: { id: activityId },
-    include: {
-      revision: {
-        include: {
-          phase: {
-            include: {
-              project: {
-                select: {
-                  id: true,
-                  pic_designer_id: true,
-                  pic_drafter_id: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-async function getChecklistWithPhaseOrThrow(tx: TxClient, checklistId: string) {
-  return tx.projectChecklist.findUniqueOrThrow({
-    where: { id: checklistId },
-    include: {
-      project: {
-        select: {
-          id: true,
-          pic_designer_id: true,
-          pic_drafter_id: true,
-        },
-      },
-      phase: {
-        include: {
-          project: {
-            select: {
-              id: true,
-              pic_designer_id: true,
-              pic_drafter_id: true,
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-async function getCDItemWithPhaseOrThrow(tx: TxClient, itemId: string) {
-  return tx.cDList.findUniqueOrThrow({
-    where: { id: itemId },
-    include: {
-      phase: {
-        include: {
-          project: {
-            select: {
-              id: true,
-              pic_designer_id: true,
-              pic_drafter_id: true,
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-async function getProjectMembershipOrThrow(tx: TxClient, projectId: string, userId: string, role: Role) {
-  const project = await tx.project.findUniqueOrThrow({
-    where: { id: projectId },
-    select: {
-      id: true,
-      pic_designer_id: true,
-      pic_drafter_id: true,
-    },
-  });
-
-  if (role === "ADMIN") return project;
-  if (project.pic_designer_id !== userId && project.pic_drafter_id !== userId) {
-    throw new Error(ERR.UNAUTHORIZED_ACTION);
-  }
-
-  return project;
 }
 
 // ---------------------------------------------------------------------------
@@ -1725,5 +1617,28 @@ export async function updateUserName(userId: string, newName: string) {
 
   revalidatePath("/settings");
   return user;
+}
+
+export async function updateUISettings(uiSettings: any, appTitle?: string) {
+  const session = await getActorSession();
+  assertAdmin(session.role);
+
+  await prisma.systemConfig.upsert({
+    where: { id: SYSTEM_CONFIG_ID },
+    update: { 
+      ui_settings: uiSettings,
+      app_title: appTitle || undefined,
+    },
+    create: { 
+      id: SYSTEM_CONFIG_ID, 
+      ui_settings: uiSettings,
+      app_title: appTitle || "StudioFlow",
+    },
+  });
+
+  revalidatePath("/", "layout");
+  revalidatePath("/settings/studio");
+
+  return uiSettings;
 }
 

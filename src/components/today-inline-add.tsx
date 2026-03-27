@@ -3,13 +3,19 @@
 import { KeyboardEvent, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
-import { addChecklistItem } from "@/app/actions";
+import { addActivity } from "@/app/actions";
 import { cn } from "@/lib/utils";
+import {
+  UI_ENGINE_INLINE_ADD_ACTION_CLASS,
+  UI_ENGINE_INLINE_ADD_INPUT_CLASS,
+} from "@/ui_engine";
 
 interface TodayInlineAddProps {
   phaseId: string;
+  revisionId?: string; // Add this
   phaseName: string;
   className?: string;
+  containerClassName?: string;
   buttonClassName?: string;
   inputWrapperClassName?: string;
   inputClassName?: string;
@@ -19,8 +25,10 @@ interface TodayInlineAddProps {
 
 export function TodayInlineAdd({
   phaseId,
+  revisionId,
   phaseName,
   className,
+  containerClassName,
   buttonClassName,
   inputWrapperClassName,
   inputClassName,
@@ -48,10 +56,16 @@ export function TodayInlineAdd({
       return;
     }
 
+    if (!revisionId) {
+      setError("Cannot add tasks without an active iteration.");
+      return;
+    }
+
     setError(null);
     startTransition(async () => {
       try {
-        await addChecklistItem(phaseId, trimmedValue);
+        // userId and userRole are retrieved via session on the server action getActorSession()
+        await addActivity(revisionId, trimmedValue, "TODO", "", "STAFF");
         setValue("");
         setIsEditing(false);
         router.refresh();
@@ -81,20 +95,24 @@ export function TodayInlineAdd({
       {!showInput ? (
         <button
           type="button"
+          disabled={!revisionId}
           onClick={() => setIsEditing(true)}
           className={cn(
-            "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-sm text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600",
+            UI_ENGINE_INLINE_ADD_ACTION_CLASS,
+            !revisionId && "opacity-50 cursor-not-allowed",
+            containerClassName,
             buttonClassName
           )}
         >
-          <Plus className="h-4 w-4 shrink-0" />
-          <span>{buttonLabel ?? `Add task to ${phaseName}...`}</span>
+          <Plus className="h-3.5 w-3.5 shrink-0" />
+          <span>{buttonLabel ?? `Add todo to ${phaseName}...`}</span>
         </button>
       ) : (
         <div
           className={cn(
-            "flex items-center gap-2 rounded-xl border-b px-2 py-2 transition-all",
+            UI_ENGINE_INLINE_ADD_INPUT_CLASS,
             error ? "border-rose-300" : "border-slate-300 focus-within:border-slate-900",
+            containerClassName,
             inputWrapperClassName
           )}
         >
@@ -119,7 +137,7 @@ export function TodayInlineAdd({
               }
             }}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder ?? `Add task to ${phaseName}...`}
+            placeholder={placeholder ?? `Add todo to ${phaseName}...`}
             disabled={isPending}
             className={cn(
               "flex-1 bg-transparent font-sans text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none disabled:opacity-50",

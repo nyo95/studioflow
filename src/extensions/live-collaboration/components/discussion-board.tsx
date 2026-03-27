@@ -2,7 +2,7 @@
 
 import { useTransition, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardBody, UI_ENGINE_CANVAS_CLASS } from "@/ui_engine";
+import { SimpleCard, SimpleCardHeader, SimpleCardTitle, SimpleCardBody, UI_ENGINE_CANVAS_CLASS, Heading } from "@/ui_engine";
 import { HydrationGuard } from "@/ui_engine/components/HydrationGuard";
 import { CommentWithAuthor } from "../types/comment";
 import { createComment, deleteComment } from "../actions/comment-actions";
@@ -60,6 +60,10 @@ export function DiscussionBoard({
       } catch (error) {
         removeComment(tempComment.id);
         console.error("Failed to create comment:", error);
+      } finally {
+        void syncNow().catch((error) => {
+          console.error("Failed to sync live discussion after create:", error);
+        });
       }
     });
   };
@@ -89,19 +93,18 @@ export function DiscussionBoard({
   return (
     <HydrationGuard>
       <SimpleCard className={cn(UI_ENGINE_CANVAS_CLASS, "flex h-[600px] flex-col")}>
-        <SimpleCardHeader className="bg-slate-50/50 shrink-0">
-          <SimpleCardTitle className="flex items-center gap-2 font-serif text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+        <SimpleCardHeader className="bg-slate-50/50 shrink-0 px-6">
+          <Heading level={6} variant="uiMeta" className="flex items-center gap-2">
             <MessageSquare className="h-3.5 w-3.5" />
             Live Discussion
-          </SimpleCardTitle>
+          </Heading>
         </SimpleCardHeader>
         
-        <SimpleCardBody className="flex flex-1 flex-col overflow-hidden py-6">
+        <SimpleCardBody className="flex flex-1 flex-col overflow-hidden px-6 py-6">
           <div 
             ref={scrollRef}
             className="flex-1 space-y-4 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200"
           >
-            {optimisticComments.length === 0 ? (
             {comments.length === 0 ? (
               <div className="py-10 text-center">
                 <p className="font-sans text-xs italic text-slate-400">

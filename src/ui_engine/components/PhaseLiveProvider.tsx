@@ -9,12 +9,14 @@ import {
   useState,
 } from "react";
 import {
+  Activity,
   PhaseHeartbeatChecklistItem,
   PhaseHeartbeatSnapshot,
 } from "@/lib/phase-heartbeat";
 import { CommentWithAuthor } from "@/extensions/live-collaboration/types/comment";
 
 interface PhaseLiveContextValue extends PhaseHeartbeatSnapshot {
+  activities: Activity[];
   addOptimisticComment: (comment: CommentWithAuthor) => void;
   replaceComment: (tempCommentId: string, comment: CommentWithAuthor) => void;
   removeComment: (commentId: string) => void;
@@ -37,10 +39,6 @@ export function PhaseLiveProvider({
 }: PhaseLiveProviderProps) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
 
-  useEffect(() => {
-    setSnapshot(initialSnapshot);
-  }, [initialSnapshot]);
-
   const syncNow = useCallback(async () => {
     const response = await fetch(`/api/phases/${phaseId}/heartbeat`, {
       cache: "no-store",
@@ -51,6 +49,7 @@ export function PhaseLiveProvider({
     }
 
     const nextSnapshot = (await response.json()) as PhaseHeartbeatSnapshot;
+    console.log("Heartbeat received (syncNow):", nextSnapshot);
     setSnapshot(nextSnapshot);
   }, [phaseId]);
 
@@ -68,8 +67,14 @@ export function PhaseLiveProvider({
         }
 
         const nextSnapshot = (await response.json()) as PhaseHeartbeatSnapshot;
+        console.log("Heartbeat received (poll):", nextSnapshot);
         if (isActive) {
-          setSnapshot(nextSnapshot);
+          setSnapshot((current) => {
+            // Simple reconciliation: only update if something actually changed
+            // This also helps avoid overwriting optimistic updates if they are already in the new snapshot
+            const hasChanged = JSON.stringify(current) !== JSON.stringify(nextSnapshot);
+            return hasChanged ? nextSnapshot : current;
+          });
         }
       } catch (error) {
         console.error("Failed to fetch phase heartbeat:", error);
@@ -145,6 +150,7 @@ export function PhaseLiveProvider({
     () => ({
       comments: snapshot.comments,
       checklistItems: snapshot.checklistItems,
+      activities: snapshot.activities,
       addOptimisticComment,
       replaceComment,
       removeComment,
@@ -178,4 +184,4 @@ export function usePhaseLive() {
   return context;
 }
 
-export type { PhaseHeartbeatChecklistItem, PhaseHeartbeatSnapshot };
+export type { Activity, PhaseHeartbeatChecklistItem, PhaseHeartbeatSnapshot };

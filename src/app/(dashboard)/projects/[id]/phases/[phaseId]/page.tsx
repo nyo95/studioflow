@@ -8,18 +8,12 @@ import { CDListTable } from "@/components/cd-list-table";
 import { PhaseChecklist } from "@/components/phase-checklist";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DashboardPageShell, PageBackLink, PageHeader, PhaseLiveProvider } from "@/ui_engine";
+import { DashboardPageShell, PageBackLink, PageHeader, PhaseLiveProvider, Heading, SectionCard } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { PhaseName, Role } from "@/generated/prisma";
 import { DiscussionBoard } from "@/extensions/live-collaboration/components/discussion-board";
 import { getPhaseHeartbeatSnapshot } from "@/lib/phase-heartbeat";
-
-type PhaseActivity = {
-  id: string;
-  content: string;
-  mode: string;
-  status: string;
-};
+import { HydrationGuard } from "@/ui_engine/components/HydrationGuard";
 
 export const generateStaticParams = async () => {
   return [];
@@ -40,6 +34,13 @@ export default async function PhaseDetailPage({
       name: true,
       pic_designer_id: true,
       pic_drafter_id: true,
+      phases: {
+        select: {
+          order_index: true,
+          status_enum: true
+        },
+        orderBy: { order_index: "asc" }
+      }
     },
   });
 
@@ -78,15 +79,28 @@ export default async function PhaseDetailPage({
     throw new Error("PHASE_PROJECT_MISMATCH");
   }
 
-  const canMutatePhase =
+  const canManagePhase =
     role === Role.ADMIN ||
     (phase.name_enum === "CD"
       ? role === Role.DRIC && userId === project.pic_drafter_id
       : role === Role.DIC && userId === project.pic_designer_id);
   
+  const canMutateContent =
+    role === Role.ADMIN ||
+    (phase.name_enum === "CD"
+      ? (userId === project.pic_drafter_id || userId === project.pic_designer_id)
+      : role === Role.DIC && userId === project.pic_designer_id);
+  
   const initialSnapshot = await getPhaseHeartbeatSnapshot(phaseId);
   const session = await getSession();
   const currentUserName = session.user?.name || "User";
+
+  // Calculate if this phase is ready to start (previous phase COMPLETED/READY_FOR_NEXT)
+  const isReadyToStart = phase.order_index === 1 || 
+    project.phases.some(p => 
+      p.order_index === phase.order_index - 1 && 
+      (p.status_enum === "READY_FOR_NEXT" || p.status_enum === "COMPLETED")
+    );
   const canMutateChecklist =
     role === Role.ADMIN ||
     (phase.name_enum === "CD"
@@ -98,49 +112,55 @@ export default async function PhaseDetailPage({
 
   const reviewPanel = (
     <section className="space-y-8">
-      <h2 className="mb-6 flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+      <Heading variant="uiMeta" level={2} className="mb-6 flex items-center gap-4">
         Active Iteration Review
         <div className="h-px flex-1 bg-zinc-100" />
-      </h2>
+      </Heading>
 
-      {activeRevision ? (
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition-all animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="flex items-center justify-between bg-zinc-900 px-6 p-3 text-white">
-            <span className="font-serif text-xs font-black uppercase tracking-widest">Version {activeRevision.major}.{activeRevision.minor}</span>
-            <span className="text-[9px] font-mono uppercase tracking-widest opacity-60">{activeRevision.status_enum}</span>
-          </div>
+      <HydrationGuard>
+        {activeRevision ? (
+          <SectionCard
+            padding="sm"
+            className="animate-in fade-in slide-in-from-bottom-4 duration-700"
+            header={
+              <>
+                <span className="font-serif text-xs font-black uppercase tracking-widest">Version {activeRevision.major}.{activeRevision.minor}</span>
+                <span className="text-[9px] font-mono uppercase tracking-widest opacity-60">{activeRevision.status_enum}</span>
+              </>
+            }
+            headerVariant="dark"
+          >
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="space-y-6">
+                <Heading variant="uiMeta" level={4} className="border-b border-zinc-100 pb-3 opacity-80">
+                  Discussion & Action Items
+                </Heading>
+                <ActivityManager
+                  revisionId={activeRevision.id}
+                  isLocked={phase.is_locked || activeRevision.status_enum !== "ACTIVE"}
+                  phaseStatus={phase.status_enum}
+                  phaseName={phase.name_enum as PhaseName}
+                  userId={userId}
+                  userRole={role as Role}
+                  canMutate={canMutateContent}
+                />
+              </div>
 
-          <div className="grid grid-cols-1 gap-6 p-8 lg:grid-cols-2">
-            <div className="space-y-6">
-              <h4 className="border-b border-zinc-100 pb-3 text-[10px] font-bold uppercase tracking-widest text-slate-900 opacity-80">
-                Discussion & Action Items
-              </h4>
-              <ActivityManager
-                revisionId={activeRevision.id}
-                activities={activeRevision.activities as PhaseActivity[]}
-                isLocked={phase.is_locked || activeRevision.status_enum !== "ACTIVE"}
-                phaseStatus={phase.status_enum}
-                phaseName={phase.name_enum as PhaseName}
-                userId={userId}
-                userRole={role as Role}
-                canMutate={canMutatePhase}
+              <DiscussionBoard
+                phaseId={phaseId}
+                currentUserId={userId}
+                currentUserName={currentUserName}
+                userRole={role}
               />
             </div>
-
-            <DiscussionBoard
-              phaseId={phaseId}
-              currentUserId={userId}
-              currentUserName={currentUserName}
-              userRole={role}
-            />
+          </SectionCard>
+        ) : (
+          <div className="rounded-2xl border-2 border-dashed border-zinc-100 bg-zinc-50/10 py-20 text-center font-sans text-slate-400">
+            <Clock className="mx-auto mb-4 h-10 w-10 opacity-20" />
+            <p className="text-sm font-light">No iterations created for this phase yet.</p>
           </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl border-2 border-dashed border-zinc-100 bg-zinc-50/10 py-20 text-center font-sans text-slate-400">
-          <Clock className="mx-auto mb-4 h-10 w-10 opacity-20" />
-          <p className="text-sm font-light">No iterations created for this phase yet.</p>
-        </div>
-      )}
+        )}
+      </HydrationGuard>
     </section>
   );
 
@@ -159,7 +179,8 @@ export default async function PhaseDetailPage({
               nameEnum={phase.name_enum}
               userId={userId}
               userRole={role as Role}
-              canMutate={canMutatePhase}
+              canMutate={canManagePhase}
+              isReadyToStart={isReadyToStart}
             />
           }
           meta={
@@ -226,7 +247,7 @@ export default async function PhaseDetailPage({
                       items={phase.cd_lists}
                       userId={userId}
                       userRole={role as Role}
-                      canMutate={canMutatePhase}
+                      canMutate={canManagePhase}
                     />
                   </section>
                 </TabsContent>
@@ -238,14 +259,16 @@ export default async function PhaseDetailPage({
 
           <div className="space-y-8 xl:col-span-4">
             <section className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm transition-all hover:border-zinc-300 hover:shadow-lg">
-              <PhaseChecklist
-                isLocked={phase.is_locked}
-                canEdit={canMutateChecklist}
-                phaseStatus={phase.status_enum}
-              />
+              <HydrationGuard>
+                <PhaseChecklist
+                  isLocked={phase.is_locked}
+                  canEdit={canMutateChecklist}
+                  phaseStatus={phase.status_enum}
+                />
+              </HydrationGuard>
             </section>
             <section className="rounded-2xl border border-slate-900 bg-slate-900 p-8 text-white shadow-xl shadow-slate-200">
-              <h3 className="mb-6 text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Internal Notes</h3>
+              <Heading variant="uiMeta" level={3} className="mb-6 opacity-40">Internal Notes</Heading>
               <p className="font-sans text-xs font-light leading-relaxed opacity-80 italic">
                 &quot;Ensure all checklist items above are resolved before submitting for formal internal review. Formal client approval will lock the phase.&quot;
               </p>

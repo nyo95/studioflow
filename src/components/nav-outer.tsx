@@ -11,6 +11,7 @@ import {
 import { useStablePathname } from "@/hooks/use-stable-pathname";
 import { useSidebar } from "@/context/sidebar-context";
 import { EXTENSIONS } from "@/extensions/registry";
+import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 import { cn } from "@/lib/utils";
 
 const coreItems = [
@@ -19,7 +20,7 @@ const coreItems = [
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
-export function NavOuter() {
+export function NavOuter({ appTitle = "StudioFlow" }: { appTitle?: string }) {
   const pathname = useStablePathname();
   const { close, isOpen } = useSidebar();
 
@@ -60,11 +61,13 @@ export function NavOuter() {
               )}
               title={tooltipLabel}
             >
-              <Icon className="h-5 w-5" />
+              <div className="relative">
+                <Icon className="h-5 w-5" />
+                <Lock className="absolute -bottom-1 -right-1 h-2.5 w-2.5 text-slate-400" />
+              </div>
               {showLabels ? (
-                <span className="font-sans text-sm font-medium">{item.label}</span>
+                <span className="ml-3 font-sans text-sm font-medium">{item.label}</span>
               ) : null}
-              <Lock className="absolute right-3 top-3 h-3.5 w-3.5 text-slate-400" />
               <span className="sr-only">{tooltipLabel}</span>
             </div>
           ) : (
@@ -107,9 +110,12 @@ export function NavOuter() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <aside className="hidden h-full w-16 flex-shrink-0 border-r border-slate-200 bg-white py-4 text-slate-500 lg:block">
-        {renderNavList(false)}
-      </aside>
+      <aside 
+      className="hidden h-full flex-shrink-0 border-r border-slate-200 bg-white py-4 text-slate-500 lg:block"
+      style={{ width: DESIGN_SYSTEM_CONFIG.rails.outerWidth }}
+    >
+      {renderNavList(false)}
+    </aside>
 
       <div
         className={cn(
@@ -131,7 +137,7 @@ export function NavOuter() {
             Workspace
           </p>
           <p className="mt-1 font-serif text-2xl font-bold text-slate-900">
-            StudioFlow
+            {appTitle}
           </p>
         </div>
         {renderNavList(true)}

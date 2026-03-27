@@ -18,6 +18,7 @@ export default async function DashboardPage() {
     select: {
       id: true,
       name: true,
+      priority: true,
       client: {
         select: {
           id: true,
@@ -65,9 +66,10 @@ export default async function DashboardPage() {
         },
       },
     },
-    orderBy: {
-      name: "asc",
-    },
+    orderBy: [
+      { priority: "asc" },
+      { name: "asc" },
+    ],
   });
 
   const users = await prisma.user.findMany({

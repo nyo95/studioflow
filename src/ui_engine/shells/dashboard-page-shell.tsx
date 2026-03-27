@@ -1,9 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import {
-  UI_ENGINE_CANVAS_CLASS,
-  UI_ENGINE_PAGE_SHELL_CLASS,
-} from "@/ui_engine/tokens";
+import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 
 type DashboardPageShellProps = React.HTMLAttributes<HTMLDivElement> & {
   as?: "div" | "main" | "section";
@@ -19,7 +16,12 @@ export function DashboardPageShell({
 
   return (
     <Comp
-      className={cn(UI_ENGINE_PAGE_SHELL_CLASS, UI_ENGINE_CANVAS_CLASS, className)}
+      className={cn(
+        DESIGN_SYSTEM_CONFIG.spacing.containerMaxWidth,
+        "mx-auto w-full px-[var(--ui-section-px)] py-10",
+        DESIGN_SYSTEM_CONFIG.colors.canvas,
+        className
+      )}
       {...props}
     >
       {children}

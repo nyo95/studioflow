@@ -1,19 +1,28 @@
 import Link from "next/link";
-import { ArrowUpRight, CalendarCheck2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { CalendarCheck2, CircleDashed } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { TodayInlineAdd } from "@/components/today-inline-add";
+import { PhaseLink } from "@/components/phase-link";
 import { TodayQuickAddModal } from "@/components/today-quick-add-modal";
 import { TodayTaskItem } from "@/components/today-task-item";
 import {
   DashboardPageShell,
   PageHeader,
-  SimpleCard,
+  PhaseSectionContent,
+  PhaseSectionGroup,
+  PhaseSectionItem,
+  PhaseSectionTrigger,
+  ProjectSectionContent,
+  ProjectSectionGroup,
+  ProjectSectionItem,
+  ProjectSectionTrigger,
   SimpleCardBadge,
   SimpleCardBody,
-  SimpleCardFooter,
-  SimpleCardHeader,
-  SimpleCardTitle,
+  Heading,
 } from "@/ui_engine";
+import { getSession } from "@/lib/auth";
+import { Role } from "@/generated/prisma";
 
 function formatPhaseName(name: string) {
   return name.replace(/_/g, " ");
@@ -21,21 +30,23 @@ function formatPhaseName(name: string) {
 
 function getPhaseBadgeClass(status: string) {
   if (status === "IN_PROGRESS") {
-    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    return "text-slate-700";
   }
 
   if (status.startsWith("READY_FOR")) {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "text-slate-600";
   }
 
-  return "border-slate-200 bg-slate-100 text-slate-600";
+  return "text-slate-500";
 }
 
 type TaskGroup = {
   projectId: string;
   projectName: string;
+  projectPriority: string;
   phases: {
     phaseId: string;
+    revisionId?: string;
     phaseName: string;
     phaseStatus: string;
     tasks: { id: string; label: string; is_checked: boolean }[];
@@ -43,15 +54,27 @@ type TaskGroup = {
 };
 
 export default async function TodayPage() {
-  const projects = await prisma.project.findMany({
-    where: {
-      phases: {
-        some: { status_enum: "IN_PROGRESS" },
-      },
+  const { userId, role } = await getSession();
+
+  const whereClause: any = {
+    phases: {
+      some: { status_enum: "IN_PROGRESS" },
     },
+  };
+
+  if (role !== Role.ADMIN) {
+    whereClause.OR = [
+      { pic_designer_id: userId },
+      { pic_drafter_id: userId },
+    ];
+  }
+
+  const projects = await prisma.project.findMany({
+    where: whereClause,
     select: {
       id: true,
       name: true,
+      priority: true,
       phases: {
         where: { status_enum: "IN_PROGRESS" },
         select: {
@@ -59,38 +82,63 @@ export default async function TodayPage() {
           name_enum: true,
           status_enum: true,
           order_index: true,
-          checklists: {
-            where: { phase_id: { not: null } },
-            orderBy: { id: "asc" },
+          revisions: {
+            where: { status_enum: "ACTIVE" },
+            take: 1,
             select: {
               id: true,
-              label: true,
-              is_checked: true,
+              activities: {
+                where: { mode: "TODO" },
+                orderBy: { id: "asc" },
+                select: {
+                  id: true,
+                  content: true,
+                  status: true,
+                },
+              },
             },
           },
         },
         orderBy: { order_index: "asc" },
       },
     },
-    orderBy: { name: "asc" },
+    orderBy: [
+      { priority: "asc" },
+      { name: "asc" },
+    ],
   });
 
   const groups: TaskGroup[] = projects.map((project) => ({
     projectId: project.id,
     projectName: project.name,
-    phases: project.phases.map((phase) => ({
-      phaseId: phase.id,
-      phaseName: formatPhaseName(phase.name_enum),
-      phaseStatus: phase.status_enum,
-      tasks: phase.checklists,
-    })),
+    projectPriority: project.priority,
+    phases: project.phases.map((phase) => {
+      const activeRevision = phase.revisions[0];
+      return {
+        phaseId: phase.id,
+        revisionId: activeRevision?.id,
+        phaseName: formatPhaseName(phase.name_enum),
+        phaseStatus: phase.status_enum,
+        tasks: activeRevision?.activities.map((a: any) => ({
+          id: a.id,
+          label: a.content,
+          is_checked: a.status === "DONE",
+        })) || [],
+      };
+    }),
   }));
+
+  // Refinement: Only show projects that have at least one TODO task
+  const groupsToDisplay = groups.filter((group) => 
+    group.phases.some((phase) => phase.tasks.length > 0)
+  );
 
   const modalProjects = projects.map((project) => ({
     projectId: project.id,
     projectName: project.name,
     phases: project.phases.map((phase) => ({
       phaseId: phase.id,
+      activeRevisionId: phase.revisions[0]?.id,
       phaseName: formatPhaseName(phase.name_enum),
     })),
   }));
@@ -104,114 +152,137 @@ export default async function TodayPage() {
         action={<TodayQuickAddModal projects={modalProjects} />}
       />
 
-      {groups.length === 0 ? (
+      {groupsToDisplay.length === 0 ? (
         <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-slate-500">
           <CalendarCheck2 className="h-8 w-8 text-slate-300" />
           <div className="space-y-1">
-            <p className="font-serif text-2xl font-bold text-slate-900">No tasks today</p>
+            <Heading level={2}>No tasks today</Heading>
             <p className="text-sm text-slate-500">
-              All active phases are clear. Use quick add to drop in a new checklist item.
+              All active phases are clear. Todo items from discussion board will appear here.
             </p>
           </div>
         </div>
       ) : (
-        <div>
-          {groups.map((group) => {
+        <ProjectSectionGroup
+          type="multiple"
+        >
+          {groupsToDisplay.map((group) => {
             const tasks = group.phases.flatMap((phase) => phase.tasks);
             const doneCount = tasks.filter((task) => task.is_checked).length;
             const totalCount = tasks.length;
+            const progressPercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
             return (
-              <SimpleCard
-                key={group.projectId}
-                className="mb-4 last:mb-0"
+              <ProjectSectionItem 
+                key={group.projectId} 
+                value={group.projectId}
+                className={cn(
+                  group.projectPriority === "URGENT" && "bg-rose-50/40 border-red-100 ring-1 ring-red-200"
+                )}
               >
-                <SimpleCardHeader>
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/projects/${group.projectId}`}
-                      title={`Open ${group.projectName}`}
-                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-950 transition-colors hover:text-slate-700"
-                    >
-                      <SimpleCardTitle>{group.projectName}</SimpleCardTitle>
-                      <ArrowUpRight className="h-3.5 w-3.5 text-slate-400" />
-                    </Link>
-                  </div>
-                  <SimpleCardBadge>
-                    {totalCount} task{totalCount === 1 ? "" : "s"}
-                  </SimpleCardBadge>
-                </SimpleCardHeader>
-
-                <SimpleCardBody>
-                  {group.phases.map((phase) => (
-                    <section
-                      key={phase.phaseId}
-                      className="border-b border-slate-100 py-3 last:border-b-0"
-                    >
-                      <div className="mb-2 flex flex-wrap items-center gap-3">
-                        <Link
-                          href={`/projects/${group.projectId}/phases/${phase.phaseId}`}
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] transition-colors hover:opacity-80 ${getPhaseBadgeClass(
-                            phase.phaseStatus
-                          )}`}
-                        >
-                          {phase.phaseName}
-                        </Link>
-                        <Link
-                          href={`/projects/${group.projectId}/phases/${phase.phaseId}`}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-700"
-                        >
-                          Open phase
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                        </Link>
+                <ProjectSectionTrigger>
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <Link href={`/projects/${group.projectId}`} className="group/title inline-block">
+                        <Heading level={3} className="line-clamp-1 text-lg font-bold text-slate-900 transition-colors group-hover/title:text-slate-600 group-hover/title:underline decoration-slate-300 underline-offset-4">
+                          {group.projectName}
+                        </Heading>
+                      </Link>
+                      <p className="mt-1 font-sans text-xs text-slate-500 opacity-80">
+                        Active phases and daily todo list for this project.
+                      </p>
+                    </div>
+                    <div className="w-full max-w-44 space-y-2 md:text-right">
+                      <div className="flex items-center justify-between gap-3 md:justify-end">
+                        <SimpleCardBadge className="border-slate-200 bg-white px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-600">
+                          {totalCount} todo{totalCount === 1 ? "" : "s"}
+                        </SimpleCardBadge>
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          {doneCount}/{totalCount} done
+                        </span>
                       </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className="h-full rounded-full bg-slate-900 transition-all"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                </ProjectSectionTrigger>
 
-                      {phase.tasks.length > 0 ? (
-                        <div className="space-y-1">
-                          {phase.tasks.map((task) => (
-                            <TodayTaskItem
-                              key={task.id}
-                              id={task.id}
-                              label={task.label}
-                              isChecked={task.is_checked}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="px-2 py-1 text-sm text-slate-400">No tasks in this phase yet.</p>
-                      )}
-                    </section>
-                  ))}
-                </SimpleCardBody>
+                <ProjectSectionContent>
+                  <SimpleCardBody className="px-6 py-5 md:px-8">
 
-                <SimpleCardFooter>
-                  <div className="space-y-2">
-                    {group.phases.map((phase) => (
-                      <TodayInlineAdd
-                        key={phase.phaseId}
-                        phaseId={phase.phaseId}
-                        phaseName={phase.phaseName}
-                        className="pt-0"
-                        buttonLabel={`+ Add task${group.phases.length > 1 ? ` to ${phase.phaseName}` : ""}`}
-                        placeholder={`Add task to ${phase.phaseName}...`}
-                        buttonClassName="rounded-md px-0 py-0 text-slate-500 hover:bg-transparent hover:text-slate-800"
-                        inputWrapperClassName="rounded-md px-0 py-0"
-                      />
-                    ))}
-                  </div>
-                  {totalCount > 0 ? (
-                    <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                      <span className={doneCount === totalCount ? "text-emerald-600" : "text-slate-700"}>
-                        {doneCount}
-                      </span>
-                      /{totalCount} done
-                    </p>
-                  ) : null}
-                </SimpleCardFooter>
-              </SimpleCard>
+                    <PhaseSectionGroup
+                      type="multiple"
+                    >
+                      {group.phases.map((phase) => (
+                        <PhaseSectionItem key={phase.phaseId} value={phase.phaseId}>
+                          <PhaseSectionTrigger>
+                            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="flex min-w-0 flex-wrap items-center gap-3">
+                                <PhaseLink
+                                  href={`/projects/${group.projectId}/phases/${phase.phaseId}`}
+                                  name={phase.phaseName}
+                                  badgeClass={getPhaseBadgeClass(phase.phaseStatus)}
+                                />
+                              </div>
+                              <span className="pr-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
+                                {phase.tasks.filter((task) => task.is_checked).length}/{phase.tasks.length} complete
+                              </span>
+                            </div>
+                          </PhaseSectionTrigger>
+
+                          <PhaseSectionContent>
+                            {phase.tasks.length > 0 ? (
+                              <div className="space-y-2">
+                                {phase.tasks.map((task) => (
+                                  <TodayTaskItem
+                                    key={task.id}
+                                    id={task.id}
+                                    label={task.label}
+                                    isChecked={task.is_checked}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-400">
+                                <CircleDashed className="h-4 w-4 shrink-0 text-slate-300" />
+                                <p className="text-xs font-medium text-slate-400">
+                                  No todos scheduled in this phase yet.
+                                </p>
+                              </div>
+                            )}
+
+                            {phase.revisionId ? (
+                              <TodayInlineAdd
+                                phaseId={phase.phaseId}
+                                revisionId={phase.revisionId}
+                                phaseName={phase.phaseName}
+                                className="pt-4"
+                                buttonLabel={`Add todo${group.phases.length > 1 ? ` to ${phase.phaseName}` : ""}`}
+                                placeholder={`Add todo to ${phase.phaseName}...`}
+                                buttonClassName="w-auto justify-start px-0 py-0 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400"
+                                containerClassName="inline-flex w-auto"
+                                inputWrapperClassName="max-w-md rounded-lg"
+                                inputClassName="min-w-[14rem]"
+                              />
+                            ) : (
+                              <p className="mt-4 px-1 text-[10px] text-slate-400 italic">
+                                Action Items can only be added when an iteration is active.
+                              </p>
+                            )}
+                          </PhaseSectionContent>
+                        </PhaseSectionItem>
+                      ))}
+                    </PhaseSectionGroup>
+                  </SimpleCardBody>
+                </ProjectSectionContent>
+              </ProjectSectionItem>
             );
           })}
-        </div>
+        </ProjectSectionGroup>
       )}
     </DashboardPageShell>
   );

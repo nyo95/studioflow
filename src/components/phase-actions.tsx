@@ -11,9 +11,10 @@ import {
   approveClientPhase, 
   rejectPhase, 
   reopenPhase,
-  completeSupervisionPhase 
+  completeSupervisionPhase,
+  activatePhase
 } from "@/app/actions";
-import { Loader2, CheckCircle2, XCircle, Unlock, Send } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Unlock, Send, Play } from "lucide-react";
 import { Role } from "@/generated/prisma";
 
 interface PhaseActionsProps {
@@ -24,6 +25,7 @@ interface PhaseActionsProps {
   userId: string;
   userRole: Role;
   canMutate: boolean;
+  isReadyToStart: boolean;
 }
 
 export function PhaseActions({
@@ -34,6 +36,7 @@ export function PhaseActions({
   userId,
   userRole,
   canMutate,
+  isReadyToStart,
 }: PhaseActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const router = useRouter();
@@ -78,6 +81,17 @@ export function PhaseActions({
 
   return (
     <div className="flex flex-wrap items-center gap-3">
+      {status === "PENDING" && canMutate && isReadyToStart && (
+        <Button
+          onClick={() => handleAction("Activate", () => activatePhase(phaseId, userId, userRole))}
+          disabled={loading !== null}
+          className="bg-amber-600 hover:bg-amber-700 text-white font-sans font-medium px-5"
+        >
+          {loading === "Activate" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+          Start Phase
+        </Button>
+      )}
+
       {status === "IN_PROGRESS" && nameEnum !== "SUPERVISION" && (
         <Button
           onClick={() => handleAction("Submit Internal", () => submitForInternalReview(phaseId, userId, userRole))}

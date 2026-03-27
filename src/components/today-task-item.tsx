@@ -3,19 +3,24 @@
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { toggleChecklist } from "@/app/actions";
+import { toggleActivityStatus } from "@/app/actions";
 import { cn } from "@/lib/utils";
+import { UI_ENGINE_TASK_ROW_CLASS } from "@/ui_engine";
 
 interface TodayTaskItemProps {
   id: string;
   label: string;
   isChecked: boolean;
+  className?: string;
+  labelClassName?: string;
 }
 
 export function TodayTaskItem({
   id,
   label,
   isChecked,
+  className,
+  labelClassName,
 }: TodayTaskItemProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -23,7 +28,8 @@ export function TodayTaskItem({
   function handleToggle() {
     startTransition(async () => {
       try {
-        await toggleChecklist(id, !isChecked);
+        // userId and userRole are retrieved via session on the server action getActorSession()
+        await toggleActivityStatus(id, "", "STAFF");
         router.refresh();
       } catch (err) {
         console.error("Failed to toggle task:", err);
@@ -35,8 +41,10 @@ export function TodayTaskItem({
     <div
       onClick={handleToggle}
       className={cn(
-        "group flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-slate-50",
-        isPending && "pointer-events-none opacity-60"
+        UI_ENGINE_TASK_ROW_CLASS,
+        isChecked && "bg-white text-slate-400",
+        isPending && "pointer-events-none opacity-60",
+        className
       )}
     >
       <div
@@ -53,7 +61,8 @@ export function TodayTaskItem({
       <span
         className={cn(
           "flex-1 pt-0.5 font-sans text-sm leading-6 transition-all",
-          isChecked ? "text-slate-400 line-through" : "text-slate-700"
+          isChecked ? "text-slate-400 line-through" : "text-slate-700",
+          labelClassName
         )}
       >
         {label}

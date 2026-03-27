@@ -9,14 +9,6 @@ import {
   deleteCDItem
 } from "@/app/actions";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -27,6 +19,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowDownAZ, ArrowUpAZ, Loader2, Plus, Trash2 } from "lucide-react";
 import { Role } from "@/generated/prisma";
+import { 
+  SectionCard, 
+  TableCard, 
+  TableCardHeader, 
+  TableCardHead, 
+  TableCardBody, 
+  TableCardRow, 
+  TableCardCell,
+  Heading
+} from "@/ui_engine";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface CDItem {
   id: string;
@@ -224,101 +228,99 @@ export function CDListTable({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-zinc-100 pb-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h3 className="font-serif text-xl font-bold text-slate-900 uppercase tracking-tight">
-            Construction Drawing List
-          </h3>
-          <p className="mt-1 text-xs text-slate-500">
-            Enter only the drawing number. StudioFlow stores it automatically as <span className="font-mono">ID_[number]</span>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Select value={sortBy} onValueChange={(value) => setSortBy(value as "drawing_code" | "group")}>
-            <SelectTrigger className="h-9 w-[180px] border-slate-200 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="drawing_code">Sort by Drawing Code</SelectItem>
-              <SelectItem value="group">Sort by Group</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => setSortDirection((current) => (current === "asc" ? "desc" : "asc"))}
-            className="h-9 w-9 border-slate-200 text-slate-500"
-          >
-            {sortDirection === "asc" ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
-          </Button>
-        </div>
-      </div>
-
-      {isEditable && (
-        <form onSubmit={handleCreate} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[180px_minmax(0,1fr)_auto]">
-          <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Drawing Code</p>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-2.5 font-mono text-xs text-slate-400">ID_</span>
-              <Input
-                placeholder="e.g. 100.1"
-                value={newCode}
-                onChange={(e) => setNewCode(extractNumericCode(e.target.value))}
-                className="h-9 border-slate-200 pl-10 font-mono text-xs"
-              />
-            </div>
+    <SectionCard
+      header={
+        <div className="flex w-full flex-col gap-4 md:flex-row md:items-start md:justify-between py-2">
+          <div>
+            <Heading level={3} className="uppercase">Construction Drawing List</Heading>
+            <p className="mt-1 text-xs text-slate-500">
+              Enter only the drawing number. StudioFlow stores it automatically as <span className="font-mono">ID_[number]</span>.
+            </p>
           </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Drawing Name</p>
-            <Input
-              placeholder="Reflected Ceiling Plan"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="h-9 border-slate-200 text-xs"
-            />
-          </div>
-          <div className="flex items-end">
-            <Button disabled={loading === "creating"} size="sm" className="bg-slate-900 h-9 font-sans text-xs px-4">
-              {loading === "creating" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3 mr-1.5" />}
-              Add Drawing
+          <div className="flex items-center gap-2">
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as "drawing_code" | "group")}>
+              <SelectTrigger className="h-9 w-[180px] border-slate-200 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="drawing_code">Sort by Drawing Code</SelectItem>
+                <SelectItem value="group">Sort by Group</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setSortDirection((current) => (current === "asc" ? "desc" : "asc"))}
+              className="h-9 w-9 border-slate-200 text-slate-500"
+            >
+              {sortDirection === "asc" ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
             </Button>
           </div>
-        </form>
-      )}
+        </div>
+      }
+    >
+      <div className="space-y-8">
+        {isEditable && (
+          <form onSubmit={handleCreate} className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-6 md:grid-cols-[180px_minmax(0,1fr)_auto]">
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drawing Code</p>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-2.5 font-mono text-xs text-slate-400">ID_</span>
+                <Input
+                  placeholder="e.g. 100.1"
+                  value={newCode}
+                  onChange={(e) => setNewCode(extractNumericCode(e.target.value))}
+                  className="h-9 border-slate-200 pl-10 font-mono text-xs focus-visible:ring-slate-200"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drawing Name</p>
+              <Input
+                placeholder="Reflected Ceiling Plan"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="h-9 border-slate-200 text-xs focus-visible:ring-slate-200"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button disabled={loading === "creating"} size="sm" className="bg-slate-900 h-9 font-sans text-xs px-6 hover:bg-slate-800 transition-colors">
+                {loading === "creating" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3 mr-1.5" />}
+                Add Drawing
+              </Button>
+            </div>
+          </form>
+        )}
 
-      <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
-        <Table>
-          <TableHeader className="bg-slate-50">
-            <TableRow className="hover:bg-transparent border-slate-200">
-              <TableHead className="w-28 text-[10px] font-black uppercase tracking-widest text-slate-500 py-3">Group</TableHead>
-              <TableHead className="w-40 text-[10px] font-black uppercase tracking-widest text-slate-500 py-3">Drawing Code</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-3">Drawing Name</TableHead>
-              <TableHead className="w-48 text-[10px] font-black uppercase tracking-widest text-slate-500 py-3">Status</TableHead>
-              <TableHead className="w-28 text-[10px] font-black uppercase tracking-widest text-slate-500 py-3"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <TableCard>
+          <TableCardHeader>
+            <TableCardHead className="w-28">Group</TableCardHead>
+            <TableCardHead className="w-40">Drawing Code</TableCardHead>
+            <TableCardHead>Drawing Name</TableCardHead>
+            <TableCardHead className="w-48">Status</TableCardHead>
+            <TableCardHead className="w-28 align-right"></TableCardHead>
+          </TableCardHeader>
+          <TableCardBody>
             {groupedRows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-12 text-slate-400 font-sans italic text-sm">
+              <TableCardRow>
+                <TableCardCell colSpan={5} className="text-center py-20 text-slate-400 font-sans italic text-sm">
                   No drawings listed for this phase.
-                </TableCell>
-              </TableRow>
+                </TableCardCell>
+              </TableCardRow>
             ) : (
-              groupedRows.map((grouped) => [
-                <TableRow key={`group-${grouped.group}`} className="border-slate-200 bg-slate-50 hover:bg-slate-50">
-                  <TableCell colSpan={5} className="py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+              groupedRows.flatMap((grouped) => [
+                <TableCardRow key={`group-${grouped.group}`} className="bg-slate-50/50 hover:bg-slate-50/50">
+                  <TableCardCell colSpan={5} className="py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                     {`Group ${grouped.group}`}
-                  </TableCell>
-                </TableRow>,
+                  </TableCardCell>
+                </TableCardRow>,
                 ...grouped.items.map((item) => (
-                  <TableRow key={item.id} className="border-slate-100 group">
-                    <TableCell className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <TableCardRow key={item.id} className="group">
+                    <TableCardCell className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                       {extractGroup(item.group_code)}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs font-bold text-slate-600">
+                    </TableCardCell>
+                    <TableCardCell className="font-mono text-xs font-bold text-slate-600">
                       {editingId === item.id ? (
                         <div className="relative">
                           <span className="pointer-events-none absolute left-3 top-2.5 font-mono text-xs text-slate-400">ID_</span>
@@ -331,8 +333,8 @@ export function CDListTable({
                       ) : (
                         normalizeDrawingCode(item.group_code)
                       )}
-                    </TableCell>
-                    <TableCell className="font-sans text-sm font-medium text-slate-900">
+                    </TableCardCell>
+                    <TableCardCell className="font-sans text-sm font-medium text-slate-900">
                       {editingId === item.id ? (
                         <Input
                           value={draftName}
@@ -342,24 +344,24 @@ export function CDListTable({
                       ) : (
                         `${normalizeDrawingCode(item.group_code)} - ${item.drawing_name}`
                       )}
-                    </TableCell>
-                    <TableCell>
+                    </TableCardCell>
+                    <TableCardCell>
                       <Select
                         disabled={!isEditable || loading === item.id || loading === `edit-${item.id}` || editingId === item.id}
                         defaultValue={item.status_enum}
                         onValueChange={(val) => handleUpdateStatus(item.id, val)}
                       >
-                        <SelectTrigger className="h-8 text-xs font-medium border-slate-200 focus:ring-0 shadow-none">
+                        <SelectTrigger className="h-8 text-xs font-medium border-slate-200 focus:ring-0 shadow-none bg-white">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent side="top">
                           <SelectItem value="PENDING">PENDING</SelectItem>
                           <SelectItem value="ON_PROGRESS">ON PROGRESS</SelectItem>
                           <SelectItem value="DELIVERED">DELIVERED</SelectItem>
                         </SelectContent>
                       </Select>
-                    </TableCell>
-                    <TableCell>
+                    </TableCardCell>
+                    <TableCardCell align="right">
                       {isEditable && (
                         <div className="flex items-center justify-end gap-1 opacity-0 transition-all group-hover:opacity-100">
                           {editingId === item.id ? (
@@ -370,7 +372,7 @@ export function CDListTable({
                                 type="button"
                                 onClick={() => handleSaveEdit(item.id)}
                                 disabled={loading === `edit-${item.id}`}
-                                className="h-8 border-slate-200 text-xs"
+                                className="h-8 border-slate-200 text-xs px-3"
                               >
                                 {loading === `edit-${item.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
                               </Button>
@@ -410,14 +412,14 @@ export function CDListTable({
                           )}
                         </div>
                       )}
-                    </TableCell>
-                  </TableRow>
+                    </TableCardCell>
+                  </TableCardRow>
                 )),
               ])
             )}
-          </TableBody>
-        </Table>
+          </TableCardBody>
+        </TableCard>
       </div>
-    </div>
+    </SectionCard>
   );
 }

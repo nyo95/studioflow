@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Role } from "@/generated/prisma";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { setAutoNamingEnabled } from "@/app/actions";
+import { setAutoNamingEnabled, updateUISettings } from "@/app/actions";
 import { StudioSettingsPanel } from "@/components/studio-settings-panel";
 import { SettingsShell } from "@/ui_engine";
 
@@ -29,13 +29,12 @@ export default async function StudioSettingsPage() {
 
   const timelineTemplates = await prisma.timelineTemplate.findMany();
   const checklistTemplates = await prisma.checklistTemplate.findMany();
-  const [systemConfig] = await prisma.$queryRaw<Array<{ is_auto_naming_enabled: boolean }>>`
-    SELECT "is_auto_naming_enabled"
-    FROM "SystemConfig"
-    WHERE "id" = 'default'
-    LIMIT 1
-  `;
+  const systemConfig = await prisma.systemConfig.findUnique({
+    where: { id: "default" },
+    select: { is_auto_naming_enabled: true, ui_settings: true, app_title: true },
+  });
   const isAutoNamingEnabled = systemConfig?.is_auto_naming_enabled ?? true;
+  const uiSettings = (systemConfig?.ui_settings as any) || {};
 
   async function saveBranding(formData: FormData) {
     "use server";
@@ -59,7 +58,10 @@ export default async function StudioSettingsPage() {
         timelineTemplates={timelineTemplates}
         checklistTemplates={checklistTemplates}
         isAutoNamingEnabled={isAutoNamingEnabled}
+        appTitleInitial={systemConfig?.app_title || "StudioFlow"}
         saveBranding={saveBranding}
+        uiSettings={uiSettings}
+        updateUISettings={updateUISettings}
       />
     </SettingsShell>
   );

@@ -10,9 +10,17 @@ export interface PhaseHeartbeatChecklistItem {
   phase_id: string | null;
 }
 
+export interface Activity {
+  id: string;
+  content: string;
+  mode: string;
+  status: string;
+}
+
 export interface PhaseHeartbeatSnapshot {
   comments: CommentWithAuthor[];
   checklistItems: PhaseHeartbeatChecklistItem[];
+  activities: Activity[];
 }
 
 export async function getPhaseHeartbeatSnapshot(
@@ -20,7 +28,7 @@ export async function getPhaseHeartbeatSnapshot(
 ): Promise<PhaseHeartbeatSnapshot> {
   const commentsSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  const [comments, checklistItems] = await Promise.all([
+  const [comments, checklistItems, activeRevision] = await Promise.all([
     prisma.comment.findMany({
       where: {
         phase_id: phaseId,
@@ -49,10 +57,20 @@ export async function getPhaseHeartbeatSnapshot(
       },
       orderBy: { id: "asc" },
     }),
+    prisma.revision.findFirst({
+      where: { phase_id: phaseId, status_enum: "ACTIVE" },
+      include: {
+        activities: {
+          orderBy: { id: "asc" },
+        },
+      },
+      orderBy: [{ major: "desc" }, { minor: "desc" }],
+    }),
   ]);
 
   return {
     comments,
     checklistItems,
+    activities: activeRevision?.activities ?? [],
   };
 }

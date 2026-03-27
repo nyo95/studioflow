@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { toggleChecklist, syncProjectChecklists } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Check } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Heading } from "@/ui_engine";
 
 interface ChecklistItem {
   id: string;
@@ -49,16 +50,16 @@ export function ProjectChecklistOverview({
 
   return (
     <Card className="border-slate-200 bg-white shadow-sm overflow-hidden rounded-lg">
-      <CardHeader className="border-b border-slate-100 bg-slate-50/30 pb-4">
+      <div className="border-b border-slate-100 bg-slate-50/30 p-6 pb-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <CardTitle className="font-serif text-lg font-bold text-slate-900">Project-Wide Items</CardTitle>
-            <CardDescription className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+            <Heading level={4}>Project-Wide Items</Heading>
+            <Heading variant="uiMeta" level={6} className="opacity-80">
               Global Checklist
-            </CardDescription>
+            </Heading>
           </div>
         </div>
-      </CardHeader>
+      </div>
       <CardContent className="p-0">
         <div className="divide-y divide-slate-100">
           {sortedChecklists.length === 0 ? (

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Loader2, Plus } from "lucide-react";
-import { addChecklistItem } from "@/app/actions";
+import { addActivity } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +22,7 @@ import {
 
 interface ActivePhase {
   phaseId: string;
+  activeRevisionId?: string; // Add this
   phaseName: string;
 }
 
@@ -46,6 +47,7 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
 
   const selectedProject = projects.find((project) => project.projectId === selectedProjectId);
   const availablePhases = selectedProject?.phases ?? [];
+  const selectedPhase = availablePhases.find((p) => p.phaseId === selectedPhaseId);
 
   function handleProjectChange(value: string) {
     setSelectedProjectId(value);
@@ -76,6 +78,11 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
       return;
     }
 
+    if (!selectedPhase?.activeRevisionId) {
+      setError("This phase has no active iteration.");
+      return;
+    }
+
     const trimmedTaskName = taskName.trim();
     if (!trimmedTaskName) {
       setError("Task name cannot be empty.");
@@ -85,7 +92,8 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
     setError(null);
     startTransition(async () => {
       try {
-        await addChecklistItem(selectedPhaseId, trimmedTaskName);
+        // userId and userRole are retrieved via session on the server action getActorSession()
+        await addActivity(selectedPhase.activeRevisionId!, trimmedTaskName, "TODO", "", "STAFF");
         router.refresh();
         handleClose();
       } catch (err) {
@@ -113,7 +121,7 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
             Quick Add Task
           </DialogTitle>
           <p className="font-sans text-xs text-slate-400">
-            Add a new task to any active project phase.
+            Add a new todo to any active project phase iteration.
           </p>
         </DialogHeader>
 
@@ -165,7 +173,7 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
 
           <div className="space-y-1.5">
             <label className="font-sans text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              Task Name
+              Todo Name
             </label>
             <input
               type="text"
@@ -179,7 +187,7 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
                   handleSubmit();
                 }
               }}
-              placeholder="e.g. Submit layout draft..."
+              placeholder="e.g. Update layout based on client notes..."
               disabled={isPending}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 font-sans text-sm text-slate-700 placeholder:text-slate-300 focus:border-slate-400 focus:outline-none disabled:opacity-50"
             />
@@ -207,7 +215,7 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
                   Adding...
                 </>
               ) : (
-                "Add Task"
+                "Add Todo"
               )}
             </Button>
           </div>

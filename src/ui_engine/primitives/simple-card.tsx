@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { UI_ENGINE_RADIUS_CARD } from "@/ui_engine/tokens";
 
 const SimpleCard = React.forwardRef<
   HTMLDivElement,
@@ -8,7 +9,8 @@ const SimpleCard = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "overflow-hidden rounded-lg border border-slate-200 bg-white",
+      "overflow-hidden border border-slate-200 bg-white",
+      UI_ENGINE_RADIUS_CARD,
       className
     )}
     {...props}
@@ -23,7 +25,7 @@ const SimpleCardHeader = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/50 px-4 py-2",
+      "flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/50 px-[var(--ui-section-px)] py-[var(--ui-section-py)]",
       className
     )}
     {...props}
@@ -35,7 +37,7 @@ const SimpleCardBody = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("px-4 py-2", className)} {...props} />
+  <div ref={ref} className={cn("px-[var(--ui-section-px)] py-[var(--ui-section-py)]", className)} {...props} />
 ));
 SimpleCardBody.displayName = "SimpleCardBody";
 
@@ -46,7 +48,7 @@ const SimpleCardFooter = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "border-t border-slate-200 px-4 py-3 text-slate-500",
+      "border-t border-slate-200 px-[var(--ui-section-px)] py-3 text-slate-500",
       className
     )}
     {...props}

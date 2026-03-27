@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useStablePathname } from "@/hooks/use-stable-pathname";
+import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
+import { Heading } from "@/ui_engine/components/heading";
 import { 
   ChevronDown, 
   LayoutDashboard, 
@@ -67,11 +69,17 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
   const items = phases.length > 0 ? phases : defaultPhases;
 
   return (
-    <div className="w-64 min-h-full bg-white border-r border-zinc-100 flex flex-col py-6 px-4">
+    <div 
+      className="min-h-full bg-white border-r border-zinc-100 flex flex-col py-6 px-4"
+      style={{ width: DESIGN_SYSTEM_CONFIG.rails.innerWidth }}
+    >
       <div className="mb-6 px-2">
-        <p className="text-[10px] font-sans text-slate-400 uppercase tracking-widest font-bold select-none">Project</p>
+        <Heading level={6} variant="uiMeta">Project</Heading>
         <h2 
-          className="font-serif text-sm font-semibold text-slate-950 mt-1 line-clamp-2 leading-tight" 
+          className={cn(
+            DESIGN_SYSTEM_CONFIG.typography.h4.family,
+            "text-sm font-semibold text-slate-950 mt-1 line-clamp-2 leading-tight"
+          )}
           title={projectName}
         >
           {projectName}
@@ -81,7 +89,7 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
       <nav className="flex-1 space-y-8 overflow-y-auto pr-2 scrollbar-none">
         {/* GROUP: GENERAL */}
         <div>
-          <p className="text-[10px] font-sans text-slate-400 font-bold mb-3 px-2 tracking-widest select-none uppercase">Project</p>
+          <Heading level={6} variant="uiMeta" className="mb-3 px-2">Project</Heading>
           <ul className="flex flex-col gap-1">
             <li>
               <Link
@@ -104,9 +112,9 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
         <div>
           <button 
             onClick={() => setIsOpenPhases(!isOpenPhases)}
-            className="w-full flex items-center justify-between text-[10px] font-sans text-slate-400 font-bold mb-3 px-2 tracking-widest select-none uppercase group"
+            className="w-full flex items-center justify-between mb-3 px-2 group"
           >
-            PHASES
+            <Heading level={6} variant="uiMeta">PHASES</Heading>
             <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", !isOpenPhases && "-rotate-90")} />
           </button>
           
@@ -140,9 +148,9 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
         <div>
           <button 
             onClick={() => setIsOpenExtensions(!isOpenExtensions)}
-            className="w-full flex items-center justify-between text-[10px] font-sans text-slate-400 font-bold mb-3 px-2 tracking-widest select-none uppercase group"
+            className="w-full flex items-center justify-between mb-3 px-2 group"
           >
-            EXTENSIONS
+            <Heading level={6} variant="uiMeta">EXTENSIONS</Heading>
             <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", !isOpenExtensions && "-rotate-90")} />
           </button>
 

@@ -35,6 +35,12 @@ enum ProjectStatus {
   ON_HOLD
 }
 
+enum ProjectPriority {
+  URGENT
+  NORMAL
+  LOW
+}
+
 // ---------------------------------------------------------------------------
 // PRD 1 — CORE MODELS
 // ---------------------------------------------------------------------------
@@ -72,6 +78,7 @@ model Project {
   opening_date    DateTime?
   project_type    String            @default("RETAIL") // RETAIL, NON_RETAIL
   status_progress ProjectStatus     @default(ACTIVE)
+  priority        ProjectPriority   @default(NORMAL)
   client_contact  String?
   address         String?
   area            Float?
@@ -206,6 +213,7 @@ model SystemConfig {
   id                     String  @id @default("default")
   app_title              String  @default("StudioFlow")
   is_auto_naming_enabled Boolean @default(true)
+  ui_settings            Json?   // Dynamic UI Engine settings (radius, spacing, bg)
 }
 
 // --- 2. VENDOR RELATION ---

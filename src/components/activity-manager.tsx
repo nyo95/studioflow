@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -13,17 +12,10 @@ import {
 import { Loader2, Plus, Trash2, CheckCircle2, Circle, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Role, PhaseName } from "@/generated/prisma";
-
-interface Activity {
-  id: string;
-  content: string;
-  mode: string;
-  status: string;
-}
+import { usePhaseLive, Activity } from "@/ui_engine";
 
 interface ActivityManagerProps {
   revisionId: string;
-  activities: Activity[];
   isLocked: boolean;
   phaseStatus: string;
   phaseName: PhaseName;
@@ -34,7 +26,6 @@ interface ActivityManagerProps {
 
 export function ActivityManager({
   revisionId,
-  activities,
   isLocked,
   phaseStatus,
   phaseName,
@@ -42,11 +33,18 @@ export function ActivityManager({
   userRole,
   canMutate,
 }: ActivityManagerProps) {
+  const { activities: contextActivities, syncNow } = usePhaseLive();
+  const [internalActivities, setInternalActivities] = useState(contextActivities);
+  
+  // Sync internal state with Provider whenever Provider data changes
+  useEffect(() => {
+    setInternalActivities(contextActivities);
+  }, [contextActivities]);
+
   const [newContent, setNewContent] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftContent, setDraftContent] = useState("");
-  const router = useRouter();
 
   const targetMode: "TODO" | "FEEDBACK" = phaseStatus.startsWith("ON_REVIEW") ? "FEEDBACK" : "TODO";
   const isEditable = !isLocked && canMutate;
@@ -59,7 +57,8 @@ export function ActivityManager({
     try {
       await addActivity(revisionId, newContent, targetMode, userId, userRole);
       setNewContent("");
-      router.refresh();
+      // Trigger sync for immediate reflection
+      void syncNow();
     } catch (error) {
       console.error(error);
     } finally {
@@ -70,10 +69,15 @@ export function ActivityManager({
   const handleToggle = async (id: string) => {
     if (!isEditable) return;
     setLoading(id);
+    
+    // Optimistic Toggle
+    setInternalActivities(prev => prev.map(a => a.id === id ? { ...a, status: a.status === "DONE" ? "OPEN" : "DONE" } : a));
+
     try {
       await toggleActivityStatus(id, userId, userRole);
-      router.refresh();
+      void syncNow();
     } catch (error) {
+      setInternalActivities(contextActivities);
       console.error(error);
     } finally {
       setLoading(null);
@@ -84,10 +88,15 @@ export function ActivityManager({
     if (!isEditable) return;
     if (!confirm("Are you sure you want to delete this?")) return;
     setLoading(id);
+    
+    // Optimistic Delete
+    setInternalActivities(prev => prev.filter(a => a.id !== id));
+
     try {
       await deleteActivity(id, userId, userRole);
-      router.refresh();
+      void syncNow();
     } catch (error) {
+      setInternalActivities(contextActivities);
       console.error(error);
     } finally {
       setLoading(null);
@@ -107,11 +116,16 @@ export function ActivityManager({
   const handleSaveEdit = async (id: string) => {
     if (!isEditable || !draftContent.trim()) return;
     setLoading(`edit-${id}`);
+    
+    // Optimistic Update
+    setInternalActivities(prev => prev.map(a => a.id === id ? { ...a, content: draftContent } : a));
+
     try {
       await updateActivityContent(id, draftContent, userId, userRole);
       cancelEdit();
-      router.refresh();
+      void syncNow();
     } catch (error) {
+      setInternalActivities(contextActivities);
       console.error(error);
     } finally {
       setLoading(null);
@@ -144,12 +158,12 @@ export function ActivityManager({
 
       {/* Items List */}
       <div className="flex flex-col gap-2">
-        {activities.length === 0 ? (
+        {internalActivities.length === 0 ? (
           <div className="py-8 text-center text-slate-400 text-sm italic font-sans border border-dashed border-zinc-200 rounded-lg">
             No activities yet.
           </div>
         ) : (
-          activities.map((activity) => (
+          internalActivities.map((activity) => (
             <div 
               key={activity.id}
               className={cn(

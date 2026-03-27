@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { PageBackLink } from "@/ui_engine/navigation/page-back-link";
 import { PageHeader } from "@/ui_engine/layout/page-header";
 import { DashboardPageShell } from "@/ui_engine/shells/dashboard-page-shell";
+import { Heading } from "@/ui_engine/components/heading";
+import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 
 type SettingsShellProps = {
   activeTab: "profile" | "studio" | "clients";
@@ -76,12 +78,12 @@ export function SettingsShell({
 
       <section className="space-y-8">
         <div className="space-y-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+          <Heading level={6} variant="uiMeta">
             {activeTab === "profile" ? "Personal Settings" : "Admin Settings"}
-          </p>
-          <h2 className="font-serif text-2xl font-bold text-slate-950">
+          </Heading>
+          <Heading level={2}>
             {title}
-          </h2>
+          </Heading>
         </div>
 
         {children}

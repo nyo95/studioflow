@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Blocks, Settings2, Users2 } from "lucide-react";
+import { Blocks, Palette, Settings2, Users2 } from "lucide-react";
 import type { Role } from "@/generated/prisma";
 import { TemplateManager } from "@/components/template-manager";
 import { UserManagement } from "@/components/user-management";
@@ -19,7 +19,7 @@ interface ChecklistTemplate {
   label: string;
 }
 
-type PanelKey = "general" | "team" | "project-engine";
+type PanelKey = "general" | "team" | "project-engine" | "design-system";
 
 const sections = [
   {
@@ -27,6 +27,12 @@ const sections = [
     label: "General",
     description: "Branding and naming rules",
     icon: Settings2,
+  },
+  {
+    key: "design-system" as const,
+    label: "Design System",
+    description: "UI Engine & Studioflow specs",
+    icon: Palette,
   },
   {
     key: "team" as const,
@@ -42,6 +48,19 @@ const sections = [
   },
 ];
 
+interface UISettings {
+  canvasBg?: string;
+  radiusCard?: string;
+  sectionPx?: string;
+  sectionPy?: string;
+  sidebarWidth?: string;
+  containerMaxWidth?: string;
+  fontSerif?: string;
+  appLogoUrl?: string;
+  rowPaddingY?: string;
+  [key: string]: string | undefined;
+}
+
 export function StudioSettingsPanel({
   allUsers,
   currentUserId,
@@ -49,7 +68,10 @@ export function StudioSettingsPanel({
   timelineTemplates,
   checklistTemplates,
   isAutoNamingEnabled,
+  appTitleInitial = "StudioFlow",
   saveBranding,
+  uiSettings = {},
+  updateUISettings,
 }: {
   allUsers: Array<{ id: string; name: string; email: string; role: Role }>;
   currentUserId: string;
@@ -57,9 +79,47 @@ export function StudioSettingsPanel({
   timelineTemplates: TimelineTemplate[];
   checklistTemplates: ChecklistTemplate[];
   isAutoNamingEnabled: boolean;
+  appTitleInitial?: string;
   saveBranding: (formData: FormData) => Promise<void>;
+  uiSettings: UISettings;
+  updateUISettings: (settings: UISettings, appTitle?: string) => Promise<UISettings>;
 }) {
   const [activePanel, setActivePanel] = useState<PanelKey>("general");
+  const [localUISettings, setLocalUISettings] = useState<UISettings>(uiSettings || {});
+  const [appTitle, setAppTitle] = useState(appTitleInitial);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleUISettingChange = (key: string, value: string) => {
+    const nextSettings = { ...localUISettings, [key]: value };
+    setLocalUISettings(nextSettings);
+    
+    // Apply live preview by updating CSS variables on the fly
+    const variableMap: Record<string, string> = {
+      canvasBg: "--ui-canvas-bg",
+      radiusCard: "--ui-radius-card",
+      sectionPx: "--ui-section-px",
+      sectionPy: "--ui-section-py",
+      sidebarWidth: "--ui-sidebar-width",
+      containerMaxWidth: "--ui-container-max-width",
+      fontSerif: "--ui-font-serif",
+      rowPaddingY: "--ui-row-padding-y",
+    };
+    
+    if (variableMap[key]) {
+      document.documentElement.style.setProperty(variableMap[key], value);
+    }
+  };
+
+  const saveDesignSystem = async () => {
+    setIsSaving(true);
+    try {
+      await updateUISettings(localUISettings, appTitle);
+    } catch (error) {
+      console.error("Failed to save UI settings:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
@@ -109,8 +169,42 @@ export function StudioSettingsPanel({
               </p>
               <h3 className="font-serif text-2xl font-bold text-slate-950">Branding</h3>
               <p className="max-w-2xl text-sm text-slate-500">
-                Control the default naming pattern applied across StudioFlow.
+                Customize your website identity and naming rules.
               </p>
+            </div>
+
+            <div className="mt-6 space-y-6 border-b border-slate-100 pb-8">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-slate-900">Website Title</label>
+                  <input
+                    type="text"
+                    value={appTitle}
+                    onChange={(e) => setAppTitle(e.target.value)}
+                    placeholder="StudioFlow"
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  />
+                  <p className="text-[10px] text-slate-400 italic">Watermark "by BK" is preserved.</p>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-slate-900">App Logo URL</label>
+                  <input
+                    type="text"
+                    value={localUISettings.appLogoUrl || ""}
+                    onChange={(e) => handleUISettingChange("appLogoUrl", e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  />
+                  <p className="text-[10px] text-slate-400 italic">Provide a direct link to your logo image.</p>
+                </div>
+              </div>
+              <Button 
+                onClick={saveDesignSystem}
+                disabled={isSaving}
+                className="rounded-full bg-slate-900 px-6 py-2 text-xs font-bold uppercase tracking-widest text-white transition-opacity hover:opacity-90"
+              >
+                {isSaving ? "Saving..." : "Update Branding"}
+              </Button>
             </div>
 
             <form
@@ -157,6 +251,147 @@ export function StudioSettingsPanel({
                 </span>
               </button>
             </form>
+          </section>
+        ) : null}
+
+        {activePanel === "design-system" ? (
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="space-y-1 border-b border-slate-100 pb-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                UI Engine
+              </p>
+              <h3 className="font-serif text-2xl font-bold text-slate-950">Design System</h3>
+              <p className="max-w-2xl text-sm text-slate-500">
+                Tweak the Studioflow visual identity. Changes apply globally.
+              </p>
+            </div>
+
+            <div className="mt-8 space-y-8">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Card Radius</label>
+                  <select
+                    value={localUISettings?.radiusCard || "1rem"}
+                    onChange={(e) => handleUISettingChange("radiusCard", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="0.5rem">Sharp (8px)</option>
+                    <option value="1rem">Soft (16px) - Default</option>
+                    <option value="1.25rem">Modern (20px)</option>
+                    <option value="1.5rem">Extra Rounded (24px)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Canvas Background</label>
+                  <select
+                    value={localUISettings?.canvasBg || "oklch(0.985 0 0)"}
+                    onChange={(e) => handleUISettingChange("canvasBg", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="white">Pure White</option>
+                    <option value="oklch(0.985 0 0)">Studio Slate (Default)</option>
+                    <option value="oklch(0.967 0 0)">Deep Slate</option>
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Horizontal Padding</label>
+                  <select
+                    value={localUISettings?.sectionPx || "2rem"}
+                    onChange={(e) => handleUISettingChange("sectionPx", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="1rem">Narrow (16px)</option>
+                    <option value="1.5rem">Studio (24px)</option>
+                    <option value="2rem">Standard (32px)</option>
+                    <option value="3rem">Wide (48px)</option>
+                    <option value="4rem">Extra Wide (64px)</option>
+                    <option value="6rem">Ultra Wide (96px)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Vertical Padding</label>
+                  <select
+                    value={localUISettings?.sectionPy || "1.5rem"}
+                    onChange={(e) => handleUISettingChange("sectionPy", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="1rem">Tight (16px)</option>
+                    <option value="1.5rem">Standard (24px) - Default</option>
+                    <option value="2rem">Loose (32px)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Sidebar Width</label>
+                  <select
+                    value={localUISettings?.sidebarWidth || "256px"}
+                    onChange={(e) => handleUISettingChange("sidebarWidth", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="220px">Compact (220px)</option>
+                    <option value="256px">Standard (256px)</option>
+                    <option value="280px">Wide (280px)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Max Container Width</label>
+                  <select
+                    value={localUISettings?.containerMaxWidth || "max-w-7xl"}
+                    onChange={(e) => handleUISettingChange("containerMaxWidth", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="max-w-4xl">4xl (896px)</option>
+                    <option value="max-w-5xl">5xl (1024px)</option>
+                    <option value="max-w-6xl">6xl (1152px)</option>
+                    <option value="max-w-7xl">7xl (1280px) - Default</option>
+                    <option value="max-w-full">Full Width</option>
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Heading Font (Serif)</label>
+                  <select
+                    value={localUISettings?.fontSerif || "var(--font-lora-base)"}
+                    onChange={(e) => handleUISettingChange("fontSerif", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="var(--font-lora-base)">Lora (StudioFlow Serif)</option>
+                    <option value="ui-serif, Georgia, serif">System Serif</option>
+                    <option value="var(--font-inter-base)">Switch to Sans (All-Inter)</option>
+                  </select>
+                </div>
+ 
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Row Compactness</label>
+                  <select
+                    value={localUISettings?.rowPaddingY || "1.25rem"}
+                    onChange={(e) => handleUISettingChange("rowPaddingY", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="0.75rem">Compact (12px) - Best Proportion</option>
+                    <option value="1rem">Tighter (16px)</option>
+                    <option value="1.25rem">Standard (20px) - Default</option>
+                    <option value="1.5rem">Relaxed (24px)</option>
+                    <option value="2rem">Loose (32px)</option>
+                  </select>
+                  <p className="text-[10px] text-slate-400 italic">Controls internal spacing of lists and project rows.</p>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <Button 
+                  onClick={saveDesignSystem}
+                  disabled={isSaving}
+                  className="rounded-full bg-slate-900 px-8 py-6 text-xs font-bold uppercase tracking-widest text-white transition-all hover:scale-105 active:scale-95"
+                >
+                  {isSaving ? "Publishing Changes..." : "Publish Design System"}
+                </Button>
+              </div>
+            </div>
           </section>
         ) : null}
 

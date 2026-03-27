@@ -119,7 +119,7 @@ export function DataTable<TData>({
             <TableRow
               key={getRowId(row)}
               className={cn(
-                "group bg-white transition-colors hover:bg-zinc-50/50 [&>td]:border-y [&>td]:border-zinc-200/60 [&>td:first-child]:rounded-l-[4px] [&>td:first-child]:border-l [&>td:last-child]:rounded-r-[4px] [&>td:last-child]:border-r",
+                "group bg-white transition-colors hover:bg-zinc-50/50 [&>td]:border-y [&>td]:border-zinc-200/60 [&>td:first-child]:rounded-l-[var(--ui-radius-card,8px)] [&>td:first-child]:border-l [&>td:last-child]:rounded-r-[var(--ui-radius-card,8px)] [&>td:last-child]:border-r",
                 rowClassName,
                 getRowClassName?.(row)
               )}

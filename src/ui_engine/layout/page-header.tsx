@@ -1,9 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import {
-  UI_ENGINE_PAGE_HEADER_DESCRIPTION_CLASS,
-  UI_ENGINE_PAGE_HEADER_TITLE_CLASS,
-} from "@/ui_engine/tokens";
+import { Heading } from "@/ui_engine/components/heading";
+import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 
 interface PageHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
@@ -39,17 +37,23 @@ export function PageHeader({
     >
       <div>
         {eyebrow ? (
-          <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+          <Heading level={6} variant="uiMeta" className="mb-1">
             {eyebrow}
-          </p>
+          </Heading>
         ) : null}
-        <h1 className={cn(UI_ENGINE_PAGE_HEADER_TITLE_CLASS, titleClassName)}>
+        <Heading 
+          level={1} 
+          className={cn("select-none", titleClassName)}
+        >
           {title}
-        </h1>
+        </Heading>
         {description ? (
           <p
             className={cn(
-              UI_ENGINE_PAGE_HEADER_DESCRIPTION_CLASS,
+              DESIGN_SYSTEM_CONFIG.typography.body.family,
+              DESIGN_SYSTEM_CONFIG.typography.body.size,
+              DESIGN_SYSTEM_CONFIG.typography.body.color,
+              "mt-1.5 font-light",
               descriptionClassName
             )}
           >
