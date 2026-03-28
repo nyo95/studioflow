@@ -3,6 +3,7 @@ import { Inter, Lora } from "next/font/google";
 import { LayoutClient } from "@/components/layout-client";
 import { UI_ENGINE_CANVAS_CLASS } from "@/ui_engine/tokens";
 import { UISettingsInjector } from "@/ui_engine/components/UISettingsInjector";
+import { HydrationProvider, DehydrationDebug } from "@/ui_engine/components/EnhancedHydrationGuard";
 import "./globals.css";
 
 const inter = Inter({
@@ -38,7 +39,10 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`h-screen overflow-hidden ${UI_ENGINE_CANVAS_CLASS} font-sans text-slate-900 antialiased`}
       >
-        <LayoutClient>{children}</LayoutClient>
+        <HydrationProvider>
+          <LayoutClient>{children}</LayoutClient>
+          {process.env.NODE_ENV === "development" && <DehydrationDebug />}
+        </HydrationProvider>
       </body>
     </html>
   );
