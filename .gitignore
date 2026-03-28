@@ -46,12 +46,14 @@ prisma_error.txt
 supabase_local_config.json
 supabase/.temp
 README_LOCAL.md
+PRD*
+*PRD*
+*Guideline*
+*GUIDELINE*
 walkthrough.md
 task.md
 implementation_plan.md
-PRD*.md
 AGENTS.md
 CLAUDE.md
-*GUIDELINES.md
 *_LOG.md
 *_ANALYSIS.md
