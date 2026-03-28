@@ -9,6 +9,7 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // CLI commands like db push need the direct session connection (5432)
+    url: process.env["DIRECT_URL"],
   },
 });
