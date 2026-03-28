@@ -97,16 +97,16 @@ export function TopHeader({
           className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
           strokeWidth={1.5}
         />
-        <input
-          disabled
+        <div
           className={cn(
-            "h-10 w-full cursor-not-allowed rounded-full border-none pl-11 pr-4 font-sans text-sm placeholder:font-light transition-colors",
+            "flex h-10 w-full items-center rounded-full pl-11 pr-4 font-sans text-sm font-light transition-colors",
             isDark 
-              ? "bg-slate-900/90 text-slate-200 placeholder:text-slate-500" 
-              : "bg-zinc-100 text-slate-900 placeholder:text-slate-500"
+              ? "bg-slate-900/90 text-slate-500" 
+              : "bg-zinc-100 text-slate-500"
           )}
-          placeholder="Search global workspace (Coming soon)..."
-        />
+        >
+          Search global workspace (Coming soon)...
+        </div>
       </div>
 
       <div className="flex items-center gap-2 lg:gap-3">
