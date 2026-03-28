@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { LoginForm } from "@/components/login-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function LoginPage() {
   let appTitle = "StudioFlow";
   try {
