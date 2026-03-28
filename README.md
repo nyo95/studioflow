@@ -29,8 +29,20 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deploy on Vercel with Supabase
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+To deploy this project to Vercel and connect it to a Supabase database, follow these steps:
+
+1. Create a new project on [Supabase](https://supabase.com/).
+2. In your Supabase project settings, go to **Database** and copy your **Connection String** (URI) and **Direct Connection String** (Session mode).
+3. Push your project code to GitHub.
+4. Import your project into Vercel.
+5. In the Vercel deployment settings, add the following Environment Variables:
+   - `DATABASE_URL`: Set this to the pooled connection string from Supabase (typically starts with `postgresql://` and connects to the port `6543` if using Supavisor).
+   - `DIRECT_URL`: Set this to the direct, unpooled connection string from Supabase (typically uses port `5432`).
+   - `AUTH_SECRET`: Set this to a random 32-character string for NextAuth session encryption (generate via `openssl rand -base64 32`).
+
+6. Deploy the project. The build step (`prisma generate && next build`) will automatically generate the Prisma Client using the provided connection settings.
+7. Run migrations using the Supabase CLI or Prisma if you have not set up the database schema yet.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

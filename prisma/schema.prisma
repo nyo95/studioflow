@@ -67,18 +67,18 @@ model Client {
 }
 
 model Project {
-  id              String            @id @default(uuid())
+  id              String             @id @default(uuid())
   name            String
   pic_designer_id String
-  designer        User              @relation("Designer", fields: [pic_designer_id], references: [id])
+  designer        User               @relation("Designer", fields: [pic_designer_id], references: [id])
   pic_drafter_id  String
-  drafter         User              @relation("Drafter", fields: [pic_drafter_id], references: [id])
+  drafter         User               @relation("Drafter", fields: [pic_drafter_id], references: [id])
   clientId        String?
-  client          Client?           @relation(fields: [clientId], references: [id])
+  client          Client?            @relation(fields: [clientId], references: [id])
   opening_date    DateTime?
-  project_type    String            @default("RETAIL") // RETAIL, NON_RETAIL
-  status_progress ProjectStatus     @default(ACTIVE)
-  priority        ProjectPriority   @default(NORMAL)
+  project_type    String             @default("RETAIL") // RETAIL, NON_RETAIL
+  status_progress ProjectStatus      @default(ACTIVE)
+  priority        ProjectPriority    @default(NORMAL)
   client_contact  String?
   address         String?
   area            Float?
@@ -89,14 +89,14 @@ model Project {
 }
 
 model Phase {
-  id          String            @id @default(uuid())
+  id          String             @id @default(uuid())
   project_id  String
-  project     Project           @relation(fields: [project_id], references: [id])
+  project     Project            @relation(fields: [project_id], references: [id])
   name_enum   PhaseName
   // PENDING | IN_PROGRESS | ON_REVIEW_INTERNAL | ON_REVIEW_CLIENT | READY_FOR_NEXT | COMPLETED
-  status_enum String            @default("PENDING")
+  status_enum String             @default("PENDING")
   order_index Int
-  is_locked   Boolean           @default(false)
+  is_locked   Boolean            @default(false)
   revisions   Revision[]
   checklists  ProjectChecklist[]
   cd_lists    CDList[]
@@ -213,7 +213,7 @@ model SystemConfig {
   id                     String  @id @default("default")
   app_title              String  @default("StudioFlow")
   is_auto_naming_enabled Boolean @default(true)
-  ui_settings            Json?   // Dynamic UI Engine settings (radius, spacing, bg)
+  ui_settings            Json? // Dynamic UI Engine settings (radius, spacing, bg)
 }
 
 // --- 2. VENDOR RELATION ---
@@ -256,7 +256,7 @@ model Comment {
   author     User     @relation(fields: [author_id], references: [id])
   phase_id   String
   phase      Phase    @relation(fields: [phase_id], references: [id])
-  task_id    String?  // Optional for future task-level links
+  task_id    String? // Optional for future task-level links
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 }

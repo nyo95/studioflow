@@ -7,6 +7,8 @@ import { prisma } from "@/lib/db";
 import { UI_ENGINE_CANVAS_CLASS } from "@/ui_engine/tokens";
 import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -25,6 +27,7 @@ export default async function DashboardLayout({
   });
 
   const appTitle = systemConfig?.app_title || "StudioFlow";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const uiSettings = (systemConfig?.ui_settings as any) || {};
   const logoUrl = uiSettings.appLogoUrl || null;
 
