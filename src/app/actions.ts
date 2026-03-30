@@ -1426,6 +1426,10 @@ export async function deleteProject(projectId: string, userRole: Role) {
       where: { phase_id: { in: phaseIds } },
     });
 
+    await tx.comment.deleteMany({
+      where: { phase_id: { in: phaseIds } },
+    });
+
     await tx.revision.deleteMany({
       where: { id: { in: revisionIds } },
     });
