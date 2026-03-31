@@ -6,7 +6,7 @@ import {
   upsertTimelineTemplate,
   createChecklistTemplate,
   deleteChecklistTemplate,
-} from "@/app/actions";
+} from "@/actions/settings-actions";
 import {
   Accordion,
   AccordionContent,
@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus, Trash2, Save, CheckCircle2 } from "lucide-react";
 import { Role } from "@/generated/prisma";
+import { unwrapActionResult } from "@/lib/result";
 
 interface TimelineTemplate {
   phase_enum: string;
@@ -47,6 +48,7 @@ export function TemplateManager({
   checklistTemplates,
   userRole,
 }: TemplateManagerProps) {
+  void userRole;
   const [loading, setLoading] = useState<string | null>(null);
   const [newChecklistLabels, setNewChecklistLabels] = useState<Record<string, string>>({});
   const [durations, setDurations] = useState<Record<string, number>>(
@@ -57,7 +59,9 @@ export function TemplateManager({
   const handleSaveDuration = async (phase: string) => {
     setLoading(`duration-${phase}`);
     try {
-      await upsertTimelineTemplate(phase, durations[phase] || 7, userRole);
+      unwrapActionResult(
+        await upsertTimelineTemplate({ phaseEnum: phase, durationDays: durations[phase] || 7 })
+      );
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -73,7 +77,7 @@ export function TemplateManager({
 
     setLoading(`checklist-add-${key}`);
     try {
-      await createChecklistTemplate(phase, label, userRole);
+      unwrapActionResult(await createChecklistTemplate({ phaseEnum: phase, label }));
       setNewChecklistLabels((prev) => ({ ...prev, [key]: "" }));
       router.refresh();
     } catch (err) {
@@ -86,7 +90,7 @@ export function TemplateManager({
   const handleDeleteChecklist = async (id: string) => {
     setLoading(id);
     try {
-      await deleteChecklistTemplate(id, userRole);
+      unwrapActionResult(await deleteChecklistTemplate({ id }));
       router.refresh();
     } catch (err) {
       console.error(err);

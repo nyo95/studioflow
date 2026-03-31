@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addDeliverable } from "@/app/actions";
+import { addDeliverable } from "@/actions/phase-actions";
 import { 
   Dialog, 
   DialogContent, 
@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Upload, Link as LinkIcon } from "lucide-react";
 import { Role } from "@/generated/prisma";
+import { unwrapActionResult } from "@/lib/result";
 
 interface DeliverableUploadDialogProps {
   revisionId: string;
@@ -53,18 +54,16 @@ export function DeliverableUploadDialog({
 
     setLoading(true);
     try {
-      await addDeliverable(
+      unwrapActionResult(await addDeliverable({
         revisionId,
-        {
+        data: {
           file_name: fileName,
           file_type: isExternal ? "LINK" : fileType,
           link_url: isExternal ? linkUrl : undefined,
           file_url: isExternal ? undefined : "/mock/path/" + fileName, // Mock upload path
           is_external: isExternal,
         },
-        userId,
-        userRole
-      );
+      }));
       setOpen(false);
       setFileName("");
       setLinkUrl("");

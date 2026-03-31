@@ -3,7 +3,7 @@
 import { Bell, LogOut, Menu, Search } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { logout } from "@/app/actions";
+import { logout } from "@/actions/user-actions";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/context/sidebar-context";
@@ -142,9 +142,11 @@ export function TopHeader({
               </span>
             </div>
           </Link>
-          <form action={logout}>
-            <button
-              type="submit"
+          <button
+              type="button"
+              onClick={() => {
+                void logout(undefined);
+              }}
               className={cn(
                 "ml-1 flex h-8 w-8 items-center justify-center rounded-full transition-colors",
                 isDark 
@@ -155,7 +157,6 @@ export function TopHeader({
             >
               <LogOut className="h-4 w-4" strokeWidth={1.5} />
             </button>
-          </form>
         </div>
       </div>
     </header>

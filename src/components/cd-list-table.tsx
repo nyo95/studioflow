@@ -7,7 +7,7 @@ import {
   updateCDItem,
   updateCDStatus,
   deleteCDItem
-} from "@/app/actions";
+} from "@/actions/phase-actions";
 import {
   Select,
   SelectContent,
@@ -31,6 +31,7 @@ import {
 } from "@/ui_engine";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { unwrapActionResult } from "@/lib/result";
 
 interface CDItem {
   id: string;
@@ -165,7 +166,7 @@ export function CDListTable({
 
     setLoading("creating");
     try {
-      await createCDItem(phaseId, { group_code: newCode, drawing_name: newName }, userId, userRole);
+      unwrapActionResult(await createCDItem({ phaseId, data: { group_code: newCode, drawing_name: newName } }));
       setNewCode("");
       setNewName("");
       router.refresh();
@@ -179,7 +180,7 @@ export function CDListTable({
   const handleUpdateStatus = async (id: string, status: string) => {
     setLoading(id);
     try {
-      await updateCDStatus(id, status, userId, userRole);
+      unwrapActionResult(await updateCDStatus({ itemId: id, status }));
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -192,7 +193,7 @@ export function CDListTable({
     if (!confirm("Delete this drawing?")) return;
     setLoading(id);
     try {
-      await deleteCDItem(id, userId, userRole);
+      unwrapActionResult(await deleteCDItem({ itemId: id }));
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -217,7 +218,7 @@ export function CDListTable({
     if (!draftCode.trim() || !draftName.trim()) return;
     setLoading(`edit-${id}`);
     try {
-      await updateCDItem(id, { group_code: draftCode, drawing_name: draftName }, userId, userRole);
+      unwrapActionResult(await updateCDItem({ itemId: id, data: { group_code: draftCode, drawing_name: draftName } }));
       cancelEdit();
       router.refresh();
     } catch (err) {

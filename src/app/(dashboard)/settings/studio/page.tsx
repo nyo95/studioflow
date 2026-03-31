@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { Role } from "@/generated/prisma";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { setAutoNamingEnabled, updateUISettings } from "@/app/actions";
+import { setAutoNamingEnabled, updateUISettings } from "@/actions/settings-actions";
 import { StudioSettingsPanel } from "@/components/studio-settings-panel";
+import { unwrapActionResult } from "@/lib/result";
 import { SettingsShell } from "@/ui_engine";
 
 export default async function StudioSettingsPage() {
@@ -41,7 +42,17 @@ export default async function StudioSettingsPage() {
 
     const isAutoNamingEnabled =
       String(formData.get("is_auto_naming_enabled")) === "true";
-    await setAutoNamingEnabled(isAutoNamingEnabled);
+    unwrapActionResult(await setAutoNamingEnabled({ isEnabled: isAutoNamingEnabled }));
+  }
+
+  async function saveUISettings(
+    uiSettings: Record<string, string | undefined>,
+    appTitle?: string
+  ) {
+    "use server";
+
+    unwrapActionResult(await updateUISettings({ uiSettings, appTitle }));
+    return uiSettings;
   }
 
   return (
@@ -61,7 +72,7 @@ export default async function StudioSettingsPage() {
         appTitleInitial={systemConfig?.app_title || "StudioFlow"}
         saveBranding={saveBranding}
         uiSettings={uiSettings}
-        updateUISettings={updateUISettings}
+        updateUISettings={saveUISettings}
       />
     </SettingsShell>
   );

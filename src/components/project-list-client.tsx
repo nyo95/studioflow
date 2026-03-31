@@ -19,7 +19,8 @@ import {
   TableCardRow, 
   TableCardCell 
 } from "@/ui_engine";
-import { updateProjectPriority } from "@/app/actions";
+import { updateProjectPriority } from "@/actions/project-actions";
+import { unwrapActionResult } from "@/lib/result";
 
 type DashboardProject = Prisma.ProjectGetPayload<{
   select: {
@@ -332,8 +333,13 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
                           <>
                             <select
                               value={project.priority}
-                              onChange={(e) => {
-                                updateProjectPriority(project.id, e.target.value);
+                              onChange={async (e) => {
+                                unwrapActionResult(
+                                  await updateProjectPriority({
+                                    projectId: project.id,
+                                    priority: e.target.value as DashboardProject["priority"],
+                                  })
+                                );
                               }}
                               className="rounded-md px-2 py-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-700 transition-all duration-200 hover:border-slate-300 focus:border-slate-400 focus:outline-none"
                               title="Set project priority"

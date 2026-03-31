@@ -3,9 +3,10 @@
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { toggleActivityStatus } from "@/app/actions";
+import { toggleActivityStatus } from "@/actions/phase-actions";
 import { cn } from "@/lib/utils";
 import { UI_ENGINE_TASK_ROW_CLASS } from "@/ui_engine";
+import { unwrapActionResult } from "@/lib/result";
 
 interface TodayTaskItemProps {
   id: string;
@@ -28,8 +29,7 @@ export function TodayTaskItem({
   function handleToggle() {
     startTransition(async () => {
       try {
-        // userId and userRole are retrieved via session on the server action getActorSession()
-        await toggleActivityStatus(id, "", "STAFF");
+        unwrapActionResult(await toggleActivityStatus({ activityId: id }));
         router.refresh();
       } catch (err) {
         console.error("Failed to toggle task:", err);

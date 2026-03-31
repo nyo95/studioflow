@@ -7,7 +7,7 @@ import {
   deleteClient,
   mergeClients,
   updateClientBranding,
-} from "@/app/actions";
+} from "@/actions/client-actions";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ClientBranding, getClientInitials } from "@/components/client-branding";
 import { Button } from "@/components/ui/button";

@@ -4,7 +4,7 @@ import { Role } from "@/generated/prisma";
 import {
   updateUserRole,
   createUser
-} from "@/app/actions";
+} from "@/actions/user-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { 
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import { unwrapActionResult } from "@/lib/result";
 
 export function UserManagement({ 
   allUsers, 
@@ -26,6 +27,7 @@ export function UserManagement({
   currentUserId: string;
   requesterRole: Role;
 }) {
+  void requesterRole;
   const [isPending, startTransition] = useTransition();
 
   async function handleCreateUser(formData: FormData) {
@@ -36,7 +38,7 @@ export function UserManagement({
     
     startTransition(async () => {
       try {
-        await createUser({ name, email, password, role }, requesterRole);
+        unwrapActionResult(await createUser({ name, email, password, role }));
         toast.success("User created successfully");
       } catch {
         toast.error("Failed to create user");
@@ -47,7 +49,7 @@ export function UserManagement({
   async function handleRoleChange(targetId: string, newRole: Role) {
     startTransition(async () => {
       try {
-        await updateUserRole(targetId, newRole, requesterRole);
+        unwrapActionResult(await updateUserRole({ targetUserId: targetId, newRole }));
         toast.success("Role updated");
       } catch {
         toast.error("Failed to update role");

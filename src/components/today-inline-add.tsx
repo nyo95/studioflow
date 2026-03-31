@@ -3,8 +3,9 @@
 import { KeyboardEvent, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
-import { addActivity } from "@/app/actions";
+import { addActivity } from "@/actions/phase-actions";
 import { cn } from "@/lib/utils";
+import { unwrapActionResult } from "@/lib/result";
 import {
   UI_ENGINE_INLINE_ADD_ACTION_CLASS,
   UI_ENGINE_INLINE_ADD_INPUT_CLASS,
@@ -64,8 +65,7 @@ export function TodayInlineAdd({
     setError(null);
     startTransition(async () => {
       try {
-        // userId and userRole are retrieved via session on the server action getActorSession()
-        await addActivity(revisionId, trimmedValue, "TODO", "", "STAFF");
+        unwrapActionResult(await addActivity({ revisionId, content: trimmedValue, mode: "TODO" }));
         setValue("");
         setIsEditing(false);
         router.refresh();

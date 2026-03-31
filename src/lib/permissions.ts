@@ -15,8 +15,8 @@ export const ERR = {
 export const GLOBAL_CHECKLIST_PHASE = "GLOBAL";
 export const SYSTEM_CONFIG_ID = "default";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export type TxClient = any;
+import { PrismaTransaction } from "@/lib/action-wrapper";
+export type TxClient = PrismaTransaction;
 
 // --- Existing Logic ---
 

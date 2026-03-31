@@ -2,10 +2,11 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteProject } from "@/app/actions";
+import { deleteProject } from "@/actions/project-actions";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { Role } from "@/generated/prisma";
+import { unwrapActionResult } from "@/lib/result";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,13 +26,14 @@ export function DeleteProjectButton({
   projectId: string;
   userRole: Role;
 }) {
+  void userRole;
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   const handleDelete = () => {
     startTransition(async () => {
       try {
-        await deleteProject(projectId, userRole);
+        unwrapActionResult(await deleteProject({ projectId }));
         router.refresh();
       } catch (error) {
         alert("Failed to delete project. Please try again.");

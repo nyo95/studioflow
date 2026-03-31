@@ -13,9 +13,10 @@ import {
   reopenPhase,
   completeSupervisionPhase,
   activatePhase
-} from "@/app/actions";
+} from "@/actions/phase-actions";
 import { Loader2, CheckCircle2, XCircle, Unlock, Send, Play } from "lucide-react";
 import { Role } from "@/generated/prisma";
+import { unwrapActionResult } from "@/lib/result";
 
 interface PhaseActionsProps {
   phaseId: string;
@@ -62,7 +63,7 @@ export function PhaseActions({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleAction("Reopen", () => reopenPhase(phaseId, userId, userRole))}
+            onClick={() => handleAction("Reopen", async () => unwrapActionResult(await reopenPhase({ phaseId })))}
             disabled={loading !== null}
             className="border-zinc-200 text-slate-500 hover:text-slate-900 hover:bg-zinc-50 transition-all font-sans"
           >
@@ -83,7 +84,7 @@ export function PhaseActions({
     <div className="flex flex-wrap items-center gap-3">
       {status === "PENDING" && canMutate && isReadyToStart && (
         <Button
-          onClick={() => handleAction("Activate", () => activatePhase(phaseId, userId, userRole))}
+          onClick={() => handleAction("Activate", async () => unwrapActionResult(await activatePhase({ phaseId })))}
           disabled={loading !== null}
           className="bg-amber-600 hover:bg-amber-700 text-white font-sans font-medium px-5"
         >
@@ -94,7 +95,7 @@ export function PhaseActions({
 
       {status === "IN_PROGRESS" && nameEnum !== "SUPERVISION" && (
         <Button
-          onClick={() => handleAction("Submit Internal", () => submitForInternalReview(phaseId, userId, userRole))}
+          onClick={() => handleAction("Submit Internal", async () => unwrapActionResult(await submitForInternalReview({ phaseId })))}
           disabled={loading !== null}
           className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-medium px-5"
         >
@@ -105,7 +106,7 @@ export function PhaseActions({
 
       {status === "IN_PROGRESS" && nameEnum === "SUPERVISION" && (
         <Button
-          onClick={() => handleAction("Complete", () => completeSupervisionPhase(phaseId, userId, userRole))}
+          onClick={() => handleAction("Complete", async () => unwrapActionResult(await completeSupervisionPhase({ phaseId })))}
           disabled={loading !== null}
           className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-medium px-5"
         >
@@ -118,7 +119,7 @@ export function PhaseActions({
         <>
           <Button
             variant="outline"
-            onClick={() => handleAction("Reject Internal", () => rejectPhase(phaseId, "INTERNAL", userId, userRole))}
+            onClick={() => handleAction("Reject Internal", async () => unwrapActionResult(await rejectPhase({ phaseId, type: "INTERNAL" })))}
             disabled={loading !== null}
             className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-sans font-medium px-5"
           >
@@ -126,7 +127,7 @@ export function PhaseActions({
             Reject (Internal)
           </Button>
           <Button
-            onClick={() => handleAction("Approve Internal", () => approveInternal(phaseId, userId, userRole))}
+            onClick={() => handleAction("Approve Internal", async () => unwrapActionResult(await approveInternal({ phaseId })))}
             disabled={loading !== null}
             className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-medium px-5"
           >
@@ -138,7 +139,7 @@ export function PhaseActions({
 
       {status === "APPROVED_INTERNAL" && (
         <Button
-          onClick={() => handleAction("Submit Client", () => submitForClientReview(phaseId, userId, userRole))}
+          onClick={() => handleAction("Submit Client", async () => unwrapActionResult(await submitForClientReview({ phaseId })))}
           disabled={loading !== null}
           className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-medium px-5"
         >
@@ -151,7 +152,7 @@ export function PhaseActions({
         <>
           <Button
             variant="outline"
-            onClick={() => handleAction("Reject Client", () => rejectPhase(phaseId, "CLIENT", userId, userRole))}
+            onClick={() => handleAction("Reject Client", async () => unwrapActionResult(await rejectPhase({ phaseId, type: "CLIENT" })))}
             disabled={loading !== null}
             className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-sans font-medium px-5"
           >
@@ -159,7 +160,7 @@ export function PhaseActions({
             Reject (Client)
           </Button>
           <Button
-            onClick={() => handleAction("Approve Client", () => approveClientPhase(phaseId, userId, userRole))}
+            onClick={() => handleAction("Approve Client", async () => unwrapActionResult(await approveClientPhase({ phaseId })))}
             disabled={loading !== null}
             className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-medium px-5"
           >

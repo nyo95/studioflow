@@ -4,11 +4,12 @@ import bcrypt from "bcryptjs";
 import { Role } from "@/generated/prisma";
 import { getSession, requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { updateUserName } from "@/app/actions";
+import { updateUserName } from "@/actions/user-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { unwrapActionResult } from "@/lib/result";
 import { SettingsShell } from "@/ui_engine";
 
 export default async function ProfileSettingsPage() {
@@ -39,7 +40,7 @@ export default async function ProfileSettingsPage() {
     const password = String(formData.get("password") ?? "");
     const confirmPassword = String(formData.get("confirm_password") ?? "");
 
-    await updateUserName(session.userId, name);
+    unwrapActionResult(await updateUserName({ userId: session.userId, newName: name }));
 
     if (!email) {
       throw new Error("Email is required.");

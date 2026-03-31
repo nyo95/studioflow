@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Loader2, Plus } from "lucide-react";
-import { addActivity } from "@/app/actions";
+import { addActivity } from "@/actions/phase-actions";
+import { unwrapActionResult } from "@/lib/result";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -92,8 +93,13 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
     setError(null);
     startTransition(async () => {
       try {
-        // userId and userRole are retrieved via session on the server action getActorSession()
-        await addActivity(selectedPhase.activeRevisionId!, trimmedTaskName, "TODO", "", "STAFF");
+        unwrapActionResult(
+          await addActivity({
+            revisionId: selectedPhase.activeRevisionId!,
+            content: trimmedTaskName,
+            mode: "TODO",
+          })
+        );
         router.refresh();
         handleClose();
       } catch (err) {

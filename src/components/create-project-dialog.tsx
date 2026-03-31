@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Building, Folder } from "lucide-react";
-import { bootstrapProject } from "@/app/actions";
+import { bootstrapProject } from "@/actions/project-actions";
 
 interface UserOption {
   id: string;

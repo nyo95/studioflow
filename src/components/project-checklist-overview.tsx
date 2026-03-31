@@ -2,11 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { toggleChecklist, syncProjectChecklists } from "@/app/actions";
+import { toggleChecklist } from "@/actions/phase-actions";
+import { syncProjectChecklists } from "@/actions/project-actions";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Heading } from "@/ui_engine";
+import { unwrapActionResult } from "@/lib/result";
 
 interface ChecklistItem {
   id: string;
@@ -33,7 +35,8 @@ export function ProjectChecklistOverview({
 
   React.useEffect(() => {
     // We keep the sync logic to ensure global templates are loaded
-    syncProjectChecklists(projectId).then(() => {
+    syncProjectChecklists({ projectId }).then((result) => {
+      unwrapActionResult(result);
       router.refresh();
     }).catch(console.error);
   }, [projectId, router]);
@@ -41,7 +44,7 @@ export function ProjectChecklistOverview({
   async function handleToggle(id: string, current: boolean) {
     if (!canEdit) return;
     try {
-      await toggleChecklist(id, !current);
+      unwrapActionResult(await toggleChecklist({ checklistId: id, isChecked: !current }));
       router.refresh();
     } catch (error) {
       console.error("Failed to toggle checklist:", error);

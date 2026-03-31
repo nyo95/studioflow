@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toggleChecklist } from "@/app/actions";
+import { toggleChecklist } from "@/actions/phase-actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { usePhaseLive } from "@/ui_engine";
+import { unwrapActionResult } from "@/lib/result";
 
 interface PhaseChecklistProps {
   isLocked: boolean;
@@ -48,7 +49,7 @@ export function PhaseChecklist({
     toggleChecklistOptimistic(id, checked);
 
     try {
-      await toggleChecklist(id, checked);
+      unwrapActionResult(await toggleChecklist({ checklistId: id, isChecked: checked }));
     } catch (err) {
       // Rollback on error
       setInternalItems(checklistItems);

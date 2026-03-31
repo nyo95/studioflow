@@ -8,11 +8,12 @@ import {
   updateActivityContent,
   toggleActivityStatus, 
   deleteActivity 
-} from "@/app/actions";
+} from "@/actions/phase-actions";
 import { Loader2, Plus, Trash2, CheckCircle2, Circle, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Role, PhaseName } from "@/generated/prisma";
 import { usePhaseLive, Activity } from "@/ui_engine";
+import { unwrapActionResult } from "@/lib/result";
 
 interface ActivityManagerProps {
   revisionId: string;
@@ -55,7 +56,7 @@ export function ActivityManager({
 
     setLoading("adding");
     try {
-      await addActivity(revisionId, newContent, targetMode, userId, userRole);
+      unwrapActionResult(await addActivity({ revisionId, content: newContent, mode: targetMode }));
       setNewContent("");
       // Trigger sync for immediate reflection
       void syncNow();
@@ -74,7 +75,7 @@ export function ActivityManager({
     setInternalActivities(prev => prev.map(a => a.id === id ? { ...a, status: a.status === "DONE" ? "OPEN" : "DONE" } : a));
 
     try {
-      await toggleActivityStatus(id, userId, userRole);
+      unwrapActionResult(await toggleActivityStatus({ activityId: id }));
       void syncNow();
     } catch (error) {
       setInternalActivities(contextActivities);
@@ -93,7 +94,7 @@ export function ActivityManager({
     setInternalActivities(prev => prev.filter(a => a.id !== id));
 
     try {
-      await deleteActivity(id, userId, userRole);
+      unwrapActionResult(await deleteActivity({ activityId: id }));
       void syncNow();
     } catch (error) {
       setInternalActivities(contextActivities);
@@ -121,7 +122,7 @@ export function ActivityManager({
     setInternalActivities(prev => prev.map(a => a.id === id ? { ...a, content: draftContent } : a));
 
     try {
-      await updateActivityContent(id, draftContent, userId, userRole);
+      unwrapActionResult(await updateActivityContent({ activityId: id, content: draftContent }));
       cancelEdit();
       void syncNow();
     } catch (error) {
