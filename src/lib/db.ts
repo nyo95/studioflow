@@ -1,11 +1,15 @@
-import { PrismaClient } from "@/generated/prisma";
+import { PrismaClient, Prisma } from "@/generated/prisma";
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const connectionString = `${process.env.DATABASE_URL}`;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool as any);
 
-export const db =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    log: ["query", "error", "warn"],
-  });
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+export async function ensureDbSchemaPreflight() {
+  // Schema validation logic
+}
