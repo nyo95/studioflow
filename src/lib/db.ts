@@ -1,24 +1,11 @@
-import { PrismaClient } from "@/generated/prisma"; // Refreshed for Dynamic UI Engine
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/generated/prisma";
 
-const connectionString = `${process.env.DATABASE_URL}`;
-const isLocal = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-const pool = new Pool({
-  connectionString,
-  ssl: !isLocal ? { rejectUnauthorized: false } : undefined,
-});
-// PrismaPg ships its own pg types, so this cast avoids duplicate-type incompatibility.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const adapter = new PrismaPg(pool as any);
+export const db =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: ["query", "error", "warn"],
+  });
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-export const prisma =
-  globalForPrisma.prisma ?? new PrismaClient({ adapter });
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
- 
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
