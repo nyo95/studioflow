@@ -1,6 +1,3 @@
-// schema.prisma — RAD SAAS
-// Source of truth: PRD 1 (Core) + PRD 2 (Extensions)
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -8,11 +5,355 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// ---------------------------------------------------------------------------
-// ENUMS
-// ---------------------------------------------------------------------------
+model User {
+  id                   String                   @id @default(uuid())
+  name                 String
+  email                String                   @unique
+  password             String
+  role                 Role                     @default(STAFF)
+  audit_logs           AuditLog[]
+  assigned_cd_drawings CDList[]
+  comments             Comment[]
+  projects_as_designer Project[]                @relation("Designer")
+  projects_as_drafter  Project[]                @relation("Drafter")
+  material_requests    ProjectMaterialRequest[]
+  assigned_activities  Activity[]
+}
+
+model Client {
+  id         String    @id @default(uuid())
+  name       String    @unique
+  address    String?
+  logo_url   String?
+  updated_at DateTime  @updatedAt
+  projects   Project[]
+}
+
+model Project {
+  id                String                   @id @default(uuid())
+  name              String
+  pic_designer_id   String
+  pic_drafter_id    String
+  clientId          String?
+  opening_date      DateTime?
+  project_type      String                   @default("RETAIL")
+  status_progress   ProjectStatus            @default(ACTIVE)
+  priority          ProjectPriority          @default(NORMAL)
+  client_contact    String?
+  address           String?
+  area              Float?
+  audit_logs        AuditLog[]
+  comments          Comment[]
+  phases            Phase[]
+  client            Client?                  @relation(fields: [clientId], references: [id])
+  designer          User                     @relation("Designer", fields: [pic_designer_id], references: [id])
+  drafter           User                     @relation("Drafter", fields: [pic_drafter_id], references: [id])
+  checklists        ProjectChecklist[]
+  material_requests ProjectMaterialRequest[]
+  schedule_entries  ProjectScheduleEntry[]
+  timelines         ProjectTimeline[]
+  activities        Activity[]
+}
+
+model Phase {
+  id          String             @id @default(uuid())
+  project_id  String
+  name_enum   PhaseName
+  status_enum PhaseStatus        @default(PENDING)
+  order_index Int
+  is_locked   Boolean            @default(false)
+  audit_logs  AuditLog[]
+  cd_lists    CDList[]
+  comments    Comment[]
+  project     Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  checklists  ProjectChecklist[]
+  timelines   ProjectTimeline[]
+  revisions   Revision[]
+}
+
+model Revision {
+  id          String         @id @default(uuid())
+  phase_id    String
+  major       Int            @default(1)
+  minor       Int            @default(0)
+  status_enum RevisionStatus @default(ACTIVE)
+  created_at  DateTime       @default(now())
+  activities  Activity[]
+  files       File[]
+  phase       Phase          @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id                    String         @id @default(uuid())
+  project_id            String?
+  revision_id           String?
+  content               String
+  mode                  ActivityMode   @default(TODO)
+  status                ActivityStatus @default(OPEN)
+  assigned_to_id        String?
+  origin_phase_id       String?
+  deferred_from_version String?
+  created_at            DateTime       @default(now())
+  updated_at            DateTime?      @updatedAt
+
+  project Project? @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  revision    Revision? @relation(fields: [revision_id], references: [id], onDelete: Cascade)
+  assigned_to User?     @relation(fields: [assigned_to_id], references: [id])
+}
+
+model File {
+  id          String   @id @default(uuid())
+  revision_id String
+  file_url    String
+  file_name   String
+  file_type   String
+  uploaded_by String
+  link_url    String?
+  is_external Boolean  @default(false)
+  created_at  DateTime @default(now())
+  revision    Revision @relation(fields: [revision_id], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  action      String
+  entity_type String
+  entity_id   String
+  user_id     String
+  project_id  String?
+  phase_id    String?
+  details     Json?
+  created_at  DateTime  @default(now())
+  reverted_at DateTime?
+  phase       Phase?    @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+  project     Project?  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [user_id], references: [id])
+}
+
+model ProjectTimeline {
+  id         String         @id @default(uuid())
+  project_id String
+  status     TimelineStatus @default(NOT_STARTED)
+  start_date DateTime?
+  end_date   DateTime?
+  phase_id   String?
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
+  phase      Phase?         @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [project_id], references: [id], onDelete: Cascade)
+}
+
+model TimelineTemplate {
+  id            String @id @default(uuid())
+  phase_enum    String @unique
+  duration_days Int    @default(7)
+}
+
+model ChecklistTemplate {
+  id         String  @id @default(uuid())
+  phase_enum String?
+  label      String
+  is_active  Boolean @default(true)
+}
+
+model SystemConfig {
+  id                     String  @id @default("default")
+  app_title              String  @default("StudioFlow")
+  is_auto_naming_enabled Boolean @default(true)
+  ui_settings            Json?
+}
+
+model Vendor {
+  id            String            @id @default(uuid())
+  brand_name    String
+  company_name  String?
+  company_pt    String?
+  address       String?
+  website_url   String?
+  instagram_url String?
+  deleted_at    DateTime?
+  materials     MaterialCatalog[]
+  contacts      VendorContact[]
+}
+
+model VendorContact {
+  id             String  @id @default(uuid())
+  vendor_id      String
+  contact_person String
+  contact_role   String
+  phone_number   String?
+  email          String?
+  vendor         Vendor  @relation(fields: [vendor_id], references: [id])
+}
+
+model MaterialCatalog {
+  id                  String                   @id @default(uuid())
+  vendor_id           String
+  category            String
+  sub_category        String?
+  product_type        String
+  motif_or_color      String?
+  tags                String[]                 @default([])
+  dimension_p         String?
+  dimension_l         String?
+  dimension_t         String?
+  dimension_unit      String?                  @default("cm")
+  color               String?
+  finishing           String?
+  rak_location        String?
+  box_number          String?
+  cover_url           String?
+  original_url        String?
+  digital_catalog_url String?
+  digital_folder_url  String?
+  metadata            Json?
+  price               Float?
+  created_at          DateTime                 @default(now())
+  status              LibraryItemStatus        @default(PENDING)
+  deleted_at          DateTime?
+  vendor              Vendor                   @relation(fields: [vendor_id], references: [id])
+  physical_samples    PhysicalSample[]
+  material_requests   ProjectMaterialRequest[]
+  schedule_options    ProjectScheduleOption[]
+
+  @@index([vendor_id])
+  @@index([category])
+}
+
+model PhysicalSample {
+  id            String          @id @default(uuid())
+  material_id   String
+  location_rak  String
+  container_box String
+  notes         String?
+  created_at    DateTime        @default(now())
+  updated_at    DateTime        @updatedAt
+  material      MaterialCatalog @relation(fields: [material_id], references: [id], onDelete: Cascade)
+
+  @@index([material_id])
+}
+
+model ProjectMaterialRequest {
+  id                   String                @id @default(uuid())
+  project_id           String
+  material_id          String?
+  schedule_entry_id    String?
+  custom_material_name String?
+  reference_url        String?
+  requested_by_id      String
+  status               MaterialRequestStatus @default(REQUESTED)
+  area_location        String?
+  is_scheduled         Boolean               @default(true)
+  notes                String?
+  staff_name_override  String?
+  created_at           DateTime              @default(now())
+  updated_at           DateTime              @updatedAt
+  material             MaterialCatalog?      @relation(fields: [material_id], references: [id])
+  schedule_entry       ProjectScheduleEntry? @relation(fields: [schedule_entry_id], references: [id], onDelete: SetNull)
+  project              Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  requested_by         User                  @relation(fields: [requested_by_id], references: [id])
+}
+
+model ProjectChecklist {
+  id         String  @id @default(uuid())
+  project_id String
+  phase_id   String?
+  label      String
+  is_checked Boolean @default(false)
+  phase      Phase?  @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+}
+
+model CDList {
+  id             String       @id @default(uuid())
+  phase_id       String
+  group_code     String
+  drawing_name   String
+  status_enum    CDItemStatus @default(PENDING)
+  assigned_to_id String?
+  assigned_to    User?        @relation(fields: [assigned_to_id], references: [id])
+  phase          Phase        @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  content    String
+  author_id  String
+  project_id String
+  phase_id   String?
+  task_id    String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  author     User     @relation(fields: [author_id], references: [id])
+  phase      Phase?   @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+  project    Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+}
+
+model PrefixDictionary {
+  id       String                 @id @default(uuid())
+  category String
+  prefix   String
+  section  ScheduleSection        @default(MATERIAL)
+  entries  ProjectScheduleEntry[]
+
+  @@unique([section, category])
+}
+
+model ProjectScheduleEntry {
+  id                String                   @id @default(uuid())
+  project_id        String
+  category          String
+  code              String
+  index_number      Int
+  sort_order        Int
+  qty               Float?
+  unit              String?
+  location          String?
+  section           ScheduleSection          @default(MATERIAL)
+  prefix_id         String?
+  created_at        DateTime                 @default(now())
+  updated_at        DateTime                 @updatedAt
+  prefix_ref        PrefixDictionary?        @relation(fields: [prefix_id], references: [id])
+  project           Project                  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  options           ProjectScheduleOption[]
+  material_requests ProjectMaterialRequest[]
+
+  @@unique([project_id, section, code])
+}
+
+model ProjectScheduleOption {
+  id                  String               @id @default(uuid())
+  entry_id            String
+  material_catalog_id String?
+  manual_data         Json?
+  data_snapshot       Json?
+  option_label        String
+  is_final            Boolean              @default(false)
+  status              ScheduleOptionStatus @default(DRAFT)
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  entry               ProjectScheduleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  material_catalog    MaterialCatalog?     @relation(fields: [material_catalog_id], references: [id], onDelete: SetNull)
+}
+
+model ScheduleTemplate {
+  id        String          @id @default(uuid())
+  category  String
+  section   ScheduleSection @default(MATERIAL)
+  is_active Boolean         @default(true)
+
+  @@unique([section, category])
+}
+
+enum TimelineStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
 
 enum Role {
   ADMIN
@@ -41,222 +382,59 @@ enum ProjectPriority {
   LOW
 }
 
-// ---------------------------------------------------------------------------
-// PRD 1 — CORE MODELS
-// ---------------------------------------------------------------------------
-
-model User {
-  id                   String    @id @default(uuid())
-  name                 String
-  email                String    @unique
-  password             String
-  role                 Role      @default(STAFF)
-  projects_as_designer Project[] @relation("Designer")
-  projects_as_drafter  Project[] @relation("Drafter")
-  assigned_cd_drawings CDList[]
-  comments             Comment[]
+enum PhaseStatus {
+  PENDING
+  IN_PROGRESS
+  ON_REVIEW_INTERNAL
+  APPROVED_INTERNAL
+  ON_REVIEW_CLIENT
+  READY_FOR_NEXT
+  COMPLETED
 }
 
-model Client {
-  id         String    @id @default(uuid())
-  name       String    @unique
-  address    String?
-  logo_url   String?
-  updated_at DateTime  @updatedAt
-  projects   Project[]
+enum RevisionStatus {
+  ACTIVE
+  COMPLETED
 }
 
-model Project {
-  id              String             @id @default(uuid())
-  name            String
-  pic_designer_id String
-  designer        User               @relation("Designer", fields: [pic_designer_id], references: [id])
-  pic_drafter_id  String
-  drafter         User               @relation("Drafter", fields: [pic_drafter_id], references: [id])
-  clientId        String?
-  client          Client?            @relation(fields: [clientId], references: [id])
-  opening_date    DateTime?
-  project_type    String             @default("RETAIL") // RETAIL, NON_RETAIL
-  status_progress ProjectStatus      @default(ACTIVE)
-  priority        ProjectPriority    @default(NORMAL)
-  client_contact  String?
-  address         String?
-  area            Float?
-  phases          Phase[]
-  checklists      ProjectChecklist[]
-  timelines       ProjectTimeline[]
-  schedules       ProjectSchedule[] // PRD 2
+enum ActivityStatus {
+  OPEN
+  COMPLETED
 }
 
-model Phase {
-  id          String             @id @default(uuid())
-  project_id  String
-  project     Project            @relation(fields: [project_id], references: [id])
-  name_enum   PhaseName
-  // PENDING | IN_PROGRESS | ON_REVIEW_INTERNAL | ON_REVIEW_CLIENT | READY_FOR_NEXT | COMPLETED
-  status_enum String             @default("PENDING")
-  order_index Int
-  is_locked   Boolean            @default(false)
-  revisions   Revision[]
-  checklists  ProjectChecklist[]
-  cd_lists    CDList[]
-  timelines   ProjectTimeline[]
-  comments    Comment[]
+enum ActivityMode {
+  TODO
+  FEEDBACK
 }
 
-model Revision {
-  id          String     @id @default(uuid())
-  phase_id    String
-  phase       Phase      @relation(fields: [phase_id], references: [id])
-  major       Int        @default(1)
-  minor       Int        @default(0)
-  // ACTIVE | COMPLETED
-  status_enum String     @default("ACTIVE")
-  activities  Activity[]
-  files       File[]
+enum CDItemStatus {
+  PENDING
+  IN_PROGRESS
+  FINISHED
 }
 
-model Activity {
-  id          String   @id @default(uuid())
-  revision_id String
-  revision    Revision @relation(fields: [revision_id], references: [id])
-  content     String
-  // TODO | FEEDBACK
-  mode        String
-  // OPEN | DONE
-  status      String   @default("OPEN")
+enum LibraryItemStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
-model File {
-  id          String   @id @default(uuid())
-  revision_id String
-  revision    Revision @relation(fields: [revision_id], references: [id])
-  file_url    String
-  file_name   String
-  file_type   String
-  uploaded_by String
-  link_url    String? // Untuk Google Drive link
-  is_external Boolean  @default(false) // True jika link_url diisi, False jika upload file lokal
-  created_at  DateTime @default(now())
+enum MaterialRequestStatus {
+  REQUESTED
+  ORDERED
+  SHIPPED
+  RECEIVED
+  UNAVAILABLE
+  CANCELLED
 }
 
-model AuditLog {
-  id          String   @id @default(uuid())
-  action      String
-  entity_type String
-  entity_id   String
-  user_id     String
-  details     Json?
-  created_at  DateTime @default(now())
+enum ScheduleOptionStatus {
+  DRAFT
+  APPROVED
+  NOT_USED
 }
 
-model ProjectTimeline {
-  id         String    @id @default(uuid())
-  project_id String
-  project    Project   @relation(fields: [project_id], references: [id])
-  // NOT_STARTED | IN_PROGRESS | COMPLETED
-  status     String    @default("NOT_STARTED")
-  start_date DateTime?
-  end_date   DateTime?
-  phase_id   String?
-  phase      Phase?    @relation(fields: [phase_id], references: [id])
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-}
-
-// ---------------------------------------------------------------------------
-// PRD 2 — EXTENSION MODELS
-// ---------------------------------------------------------------------------
-
-model GlobalLibrary {
-  id            String            @id @default(uuid())
-  // MATERIAL | FIXTURE
-  category_enum String
-  internal_code String            @unique
-  item_name     String
-  vendor_id     String?
-  vendor        Vendor?           @relation(fields: [vendor_id], references: [id])
-  price         Float
-  specs         Json // Key-Value pair
-  image_url     String?
-  // PENDING | APPROVED
-  status        String            @default("PENDING")
-  schedules     ProjectSchedule[]
-}
-
-model ProjectSchedule {
-  id                  String         @id @default(uuid())
-  project_id          String
-  project             Project        @relation(fields: [project_id], references: [id])
-  category_enum       String
-  data_snapshot       Json // LibrarySnapshot interface
-  original_library_id String?
-  library_master      GlobalLibrary? @relation(fields: [original_library_id], references: [id], onDelete: SetNull)
-  created_at          DateTime       @default(now())
-}
-
-// --- 1. SETTINGS & TEMPLATES ---
-model TimelineTemplate {
-  id            String @id @default(uuid())
-  phase_enum    String @unique // MOODBOARD, LAYOUT, dll
-  duration_days Int    @default(7)
-}
-
-model ChecklistTemplate {
-  id         String  @id @default(uuid())
-  phase_enum String? // MOODBOARD, LAYOUT, dll, or null for global
-  label      String
-  is_active  Boolean @default(true)
-}
-
-model SystemConfig {
-  id                     String  @id @default("default")
-  app_title              String  @default("StudioFlow")
-  is_auto_naming_enabled Boolean @default(true)
-  ui_settings            Json? // Dynamic UI Engine settings (radius, spacing, bg)
-}
-
-// --- 2. VENDOR RELATION ---
-model Vendor {
-  id             String          @id @default(uuid())
-  name           String
-  contact_person String?
-  phone          String?
-  address        String?
-  libraries      GlobalLibrary[] // Relasi 1-to-M ke GlobalLibrary
-}
-
-// --- 3. PROJECT CHECKLIST & CD LIST ---
-model ProjectChecklist {
-  id         String  @id @default(uuid())
-  project_id String
-  project    Project @relation(fields: [project_id], references: [id])
-  phase_id   String?
-  phase      Phase?  @relation(fields: [phase_id], references: [id])
-  label      String
-  is_checked Boolean @default(false)
-}
-
-model CDList {
-  id             String  @id @default(uuid())
-  phase_id       String // Harus mengarah ke Phase dengan name_enum = CD
-  phase          Phase   @relation(fields: [phase_id], references: [id])
-  group_code     String // misal: "ARS", "MEP", "INT"
-  drawing_name   String
-  status_enum    String  @default("PENDING") // PENDING, ON_PROGRESS, DELIVERED
-  assigned_to_id String? // Relasi ke User (DrIC)
-  assigned_to    User?   @relation(fields: [assigned_to_id], references: [id])
-}
-
-// --- 4. LIVE COLLABORATION (EXTENSION) ---
-model Comment {
-  id         String   @id @default(uuid())
-  content    String
-  author_id  String
-  author     User     @relation(fields: [author_id], references: [id])
-  phase_id   String
-  phase      Phase    @relation(fields: [phase_id], references: [id])
-  task_id    String? // Optional for future task-level links
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+enum ScheduleSection {
+  MATERIAL
+  FIXTURE
 }

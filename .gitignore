@@ -57,3 +57,10 @@ AGENTS.md
 CLAUDE.md
 *_LOG.md
 *_ANALYSIS.md
+# local development & backups
+/backups/
+/scratch/
+*.bak
+*.txt
+!README.md
+!MASTER_SSOT.md
