@@ -1,5 +1,10 @@
 import { NavInner } from "@/components/nav-inner";
 import { prisma } from "@/lib/db";
+import { ProjectLiveProvider } from "@/ui_engine";
+import { ProjectChatSidebar } from "@/extensions/live-collaboration/components/project-chat-sidebar";
+import { getProjectDiscussionSnapshot } from "@/lib/project-discussion";
+import { getSession } from "@/lib/auth";
+import { ErrorBoundary } from "@/components/shared/error-boundary";
 
 export const generateStaticParams = async () => {
   // This layout will be populated with data from the page components
@@ -18,7 +23,7 @@ export default async function ProjectLayout({
 
   // Fetch project and phases for the layout
   const project = await prisma.project.findUnique({
-    where: { id: projectId },
+    where: { id: projectId, deleted_at: null },
     select: { id: true, name: true },
   });
 
@@ -28,6 +33,13 @@ export default async function ProjectLayout({
       id: true,
       name_enum: true,
       status_enum: true,
+      _count: {
+        select: {
+          checklists: {
+            where: { is_checked: false }
+          }
+        }
+      }
     },
     orderBy: { order_index: "asc" },
   });
@@ -37,11 +49,11 @@ export default async function ProjectLayout({
     name_enum: phase.name_enum,
     label: phase.name_enum.replace("_", " "), // Simple label conversion
     status_enum: phase.status_enum,
+    unfinishedTodoCount: phase._count.checklists,
   }));
 
   if (!project) {
-    // Handle project not found - in a real app, we might redirect or show error
-    // For now, we'll render the layout with default values
+    // Handle project not found
     return (
       <div className="flex min-h-full flex-1">
         <NavInner 
@@ -56,16 +68,33 @@ export default async function ProjectLayout({
     );
   }
 
+  const session = await getSession();
+  const initialSnapshot = await getProjectDiscussionSnapshot(projectId);
+  const liveCollaborationEnabled = process.env.NEXT_PUBLIC_ENABLE_LIVE_COLLABORATION !== "false";
+
   return (
-    <div className="flex min-h-full flex-1">
-      <NavInner 
-        projectId={project.id} 
-        projectName={project.name} 
-        phases={navPhaseItems} 
-      />
-      <main className="min-w-1 flex-1">
-        {children}
-      </main>
-    </div>
+    <ProjectLiveProvider projectId={projectId} initialSnapshot={initialSnapshot}>
+      <div className="flex min-h-full flex-1">
+        <NavInner 
+          projectId={project.id} 
+          projectName={project.name} 
+          phases={navPhaseItems} 
+        />
+        <main className="min-w-1 flex-1">
+          {children}
+        </main>
+        
+        {session.userId && liveCollaborationEnabled && (
+          <ErrorBoundary name="Live Collaboration">
+            <ProjectChatSidebar 
+              projectId={project.id}
+              currentUserId={session.userId}
+              currentUserName={session.user?.name || "User"}
+              userRole={session.role as string}
+            />
+          </ErrorBoundary>
+        )}
+      </div>
+    </ProjectLiveProvider>
   );
 }

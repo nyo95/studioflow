@@ -27,7 +27,10 @@ export const createVendor = createAction(
     };
 
     return tx.vendor.create({
-      data: params,
+      data: {
+        brand_name: params.name,
+        address: params.address,
+      },
     });
   }
 );
@@ -38,7 +41,7 @@ export const addToProjectSchedule = createAction(
 
     await getProjectMembershipOrThrow(tx, params.projectId, ctx.userId, ctx.role);
 
-    const item = await tx.globalLibrary.findUniqueOrThrow({
+    const item = await tx.materialCatalog.findUniqueOrThrow({
       where: { id: params.libraryItemId },
       include: { vendor: true },
     });
@@ -46,21 +49,45 @@ export const addToProjectSchedule = createAction(
     if (item.status !== "APPROVED") throw new Error(ERR.ITEM_NOT_APPROVED);
 
     const snapshot = {
-      internal_code: item.internal_code,
-      item_name: item.item_name,
-      vendor_name: item.vendor?.name ?? null,
-      price_at_snapshot: item.price,
-      specs: item.specs as Record<string, string>,
-      image_url: item.image_url ?? null,
-      snapshot_timestamp: new Date().toISOString(),
+      source_kind: "catalog",
+      source_origin: "web_catalog",
+      material_catalog_id: item.id,
+      category: item.category,
+      sub_category: item.sub_category,
+      name: item.product_type,
+      brand: item.vendor?.brand_name ?? "Unknown",
+      price: item.price,
+      image_url: item.cover_url,
+      reference_url: item.original_url,
+      specs: {
+        product_type: item.product_type,
+        motif_or_color: item.motif_or_color,
+        tags: item.tags,
+        dimensions: `${item.dimension_p ?? ""} x ${item.dimension_l ?? ""} x ${item.dimension_t ?? ""}`,
+        color: item.color,
+        finishing: item.finishing,
+        digital_catalog_url: item.digital_catalog_url,
+        metadata: item.metadata,
+      },
+      captured_at: new Date().toISOString(),
     } as const;
 
-    const schedule = await tx.projectSchedule.create({
+    const schedule = await tx.projectScheduleEntry.create({
       data: {
         project_id: params.projectId,
-        category_enum: item.category_enum,
-        data_snapshot: snapshot,
-        original_library_id: item.id,
+        category: item.category,
+        code: "TEMP",
+        index_number: 1,
+        sort_order: 1,
+        section: item.category === "FIXTURE" ? "FIXTURE" : "MATERIAL",
+        options: {
+          create: {
+            option_label: "Standard",
+            is_final: true,
+            status: "APPROVED",
+            data_snapshot: snapshot as any,
+          }
+        }
       },
     });
 
@@ -83,7 +110,7 @@ export const updateGlobalItemStatus = createAction(
 
     const params = input as { libraryItemId: string; newStatus: "PENDING" | "APPROVED" };
 
-    return tx.globalLibrary.update({
+    return tx.materialCatalog.update({
       where: { id: params.libraryItemId },
       data: { status: params.newStatus },
     });
@@ -107,15 +134,14 @@ export const createLibraryItem = createAction(
 
     const status = ctx.role === "ADMIN" ? "APPROVED" : "PENDING";
 
-    return tx.globalLibrary.create({
+    return tx.materialCatalog.create({
       data: {
-        category_enum: params.category_enum,
-        internal_code: params.internal_code,
-        item_name: params.item_name,
-        vendor_id: params.vendor_id,
+        category: params.category_enum,
+        product_type: params.item_name,
+        vendor_id: params.vendor_id!,
         price: params.price,
-        specs: params.specs,
-        image_url: params.image_url,
+        metadata: params.specs,
+        cover_url: params.image_url,
         status,
       },
     });

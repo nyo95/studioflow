@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Calendar, LayoutGrid, Lock, Settings } from "lucide-react";
@@ -15,8 +15,8 @@ import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 import { cn } from "@/lib/utils";
 
 const coreItems = [
-  { icon: LayoutGrid, label: "Dashboard", href: "/" },
-  { icon: Calendar, label: "Today", href: "/today" },
+  { icon: LayoutGrid, label: "Projects", href: "/projects" },
+  { icon: Calendar, label: "Today", href: "/" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
@@ -145,3 +145,4 @@ export function NavOuter({ appTitle = "StudioFlow" }: { appTitle?: string }) {
     </TooltipProvider>
   );
 }
+

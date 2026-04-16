@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import Link from "next/link";
@@ -24,6 +24,7 @@ interface PhaseItem {
   name_enum: string;
   label: string;
   status_enum: string;
+  unfinishedTodoCount?: number;
 }
 
 interface NavInnerProps {
@@ -78,7 +79,7 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
         <h2 
           className={cn(
             DESIGN_SYSTEM_CONFIG.typography.h4.family,
-            "text-sm font-semibold text-slate-950 mt-1 line-clamp-2 leading-tight"
+            "text-sm font-semibold text-slate-900 mt-1 line-clamp-2 leading-tight"
           )}
           title={projectName}
         >
@@ -135,7 +136,15 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
                       )}
                     >
                       {PHASE_ICONS[phase.name_enum] || <Info className="w-4 h-4 mr-2" />}
-                      <span className="truncate">{formatPhaseLabel(phase.name_enum, phase.label)}</span>
+                      <span className="truncate flex-1">{formatPhaseLabel(phase.name_enum, phase.label)}</span>
+                      {phase.unfinishedTodoCount && phase.unfinishedTodoCount > 0 ? (
+                        <div className="flex items-center ml-2">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+                          </span>
+                        </div>
+                      ) : null}
                     </Link>
                   </li>
                 );
@@ -172,8 +181,13 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
               </li>
               <li>
                 <Link 
-                  href="#" 
-                  className="flex items-center px-3 py-2 text-sm font-sans text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-l-2 border-transparent transition-all rounded-r-lg"
+                  href={projectId ? `/projects/${projectId}/extensions/material-fixtures` : "#"} 
+                  className={cn(
+                    "flex items-center px-3 py-2 text-sm font-sans transition-all duration-200 border-l-2 rounded-r-lg",
+                    pathname.includes(`/projects/${projectId}/extensions/material-fixtures`)
+                      ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
+                      : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
+                  )}
                 >
                   <ShoppingBag className="w-4 h-4 mr-2" />
                   Material & Fixtures
@@ -186,3 +200,4 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
     </div>
   );
 }
+

@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import { 
+  Loader2, 
   Tag,
   Type, 
   Link as LinkIcon,
@@ -42,14 +43,12 @@ export function ScheduleSpecEditorModal({
   onSuccess
 }: ScheduleSpecEditorModalProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
   const [form, setForm] = React.useState({
     name: initialSnapshot.name || "",
     brand: initialSnapshot.brand || "",
     initials_type: initialSnapshot.initials_type || "",
     reference_url: initialSnapshot.reference_url || "",
-    contact_name: initialSnapshot.contact_name || "",
-    contact_phone: initialSnapshot.contact_phone || "",
-    contact_email: initialSnapshot.contact_email || "",
     product_type: initialSnapshot.specs?.product_type || "",
     motif_or_color: initialSnapshot.specs?.motif_or_color || "",
     color: initialSnapshot.specs?.color || "",
@@ -57,6 +56,7 @@ export function ScheduleSpecEditorModal({
     dimensions: initialSnapshot.specs?.dimensions || ""
   });
 
+  // Reset form when modal opens with new snapshot
   React.useEffect(() => {
     if (isOpen) {
       setForm({
@@ -64,9 +64,6 @@ export function ScheduleSpecEditorModal({
         brand: initialSnapshot.brand || "",
         initials_type: initialSnapshot.initials_type || "",
         reference_url: initialSnapshot.reference_url || "",
-        contact_name: initialSnapshot.contact_name || "",
-        contact_phone: initialSnapshot.contact_phone || "",
-        contact_email: initialSnapshot.contact_email || "",
         product_type: initialSnapshot.specs?.product_type || "",
         motif_or_color: initialSnapshot.specs?.motif_or_color || "",
         color: initialSnapshot.specs?.color || "",
@@ -86,10 +83,8 @@ export function ScheduleSpecEditorModal({
           brand: form.brand,
           initials_type: form.initials_type || null,
           reference_url: form.reference_url || null,
-          contact_name: form.contact_name || null,
-          contact_phone: form.contact_phone || null,
-          contact_email: form.contact_email || null,
           specs: {
+            ...initialSnapshot.specs,
             product_type: form.product_type,
             motif_or_color: form.motif_or_color || null,
             color: form.color || null,
@@ -98,6 +93,7 @@ export function ScheduleSpecEditorModal({
           }
         }
       }));
+
       toast.success("Specification updated successfully");
       onOpenChange(false);
       if (onSuccess) onSuccess();
@@ -110,43 +106,203 @@ export function ScheduleSpecEditorModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-3xl bg-white">
+      <DialogContent 
+        onKeyDown={(e) => e.stopPropagation()}
+        className="sm:max-w-[550px] p-0 overflow-hidden border-slate-100 rounded-3xl shadow-2xl backdrop-blur-sm bg-white/95"
+      >
         <DialogHeader className="p-8 pb-4">
-          <DialogTitle className="font-lora text-2xl font-medium text-slate-900 mb-1">Edit Specification</DialogTitle>
-          <DialogDescription className="text-xs font-inter text-slate-400">Update the immutable snapshot for this item.</DialogDescription>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shadow-slate-200">
+               <Tag className="h-5 w-5" />
+            </div>
+            <div>
+               <DialogTitle className="font-serif text-2xl font-medium text-slate-900 leading-none mb-1">
+                 Edit Specification
+               </DialogTitle>
+               <DialogDescription className="text-xs font-sans text-slate-400 font-medium tracking-tight">
+                 Update the immutable snapshot for this item.
+               </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
+
         <ScrollArea className="h-[450px] px-8 pb-8">
           <div className="space-y-6 pt-2">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Material Name</Label>
-                <Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} className="h-12 bg-slate-50 rounded-xl" />
+            {/* Basic Info */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="h-1 w-4 rounded-full bg-slate-900" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Core Identity</span>
               </div>
-              {/* ... other fields similarly ... */}
+              
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Material Name</Label>
+                  <div className="relative">
+                    <Type className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300" />
+                    <Input 
+                      value={form.name} 
+                      onChange={(e) => setForm({...form, name: e.target.value})}
+                      placeholder="e.g. Carrara Marble Tile" 
+                      className="pl-10 h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Brand</Label>
+                    <Input 
+                      value={form.brand} 
+                      onChange={(e) => setForm({...form, brand: e.target.value})}
+                      placeholder="e.g. Toto" 
+                      className="h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Reference Link</Label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300" />
+                      <Input 
+                        value={form.reference_url} 
+                        onChange={(e) => setForm({...form, reference_url: e.target.value})}
+                        placeholder="URL" 
+                        className="pl-10 h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Initials Type</Label>
+                    <Input
+                      value={form.initials_type}
+                      onChange={(e) => setForm({...form, initials_type: e.target.value})}
+                      placeholder="e.g. Pink Tua / Matte"
+                      className="h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all"
+                    />
+                  </div>
+                </div>
+
+              </div>
             </div>
+
+            {/* Technical Specs */}
+            <div className="space-y-4 pt-2">
+               <div className="flex items-center gap-2 mb-1">
+                <div className="h-1 w-4 rounded-full bg-slate-400" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Technical Details</span>
+              </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-2">
+                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Product Type</Label>
+                   <Input 
+                     value={form.product_type} 
+                     onChange={(e) => setForm({...form, product_type: e.target.value})}
+                     placeholder="e.g. Sanitary Ware" 
+                     className="h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all"
+                   />
+                 </div>
+                 <div className="space-y-2">
+                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Motif / Pattern</Label>
+                   <Input 
+                     value={form.motif_or_color} 
+                     onChange={(e) => setForm({...form, motif_or_color: e.target.value})}
+                     placeholder="e.g. Natural Grain" 
+                     className="h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all"
+                   />
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1">
+                      <Palette className="h-2.5 w-2.5" /> Color & Finishing
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input 
+                        value={form.color} 
+                        onChange={(e) => setForm({...form, color: e.target.value})}
+                        placeholder="White" 
+                        className="h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all"
+                      />
+                      <Input 
+                        value={form.finishing} 
+                        onChange={(e) => setForm({...form, finishing: e.target.value})}
+                        placeholder="Matte" 
+                        className="h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all"
+                      />
+                    </div>
+                 </div>
+                 <div className="space-y-2">
+                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1">
+                     <Maximize2 className="h-2.5 w-2.5" /> Dimensions
+                   </Label>
+                   <Input 
+                     value={form.dimensions} 
+                     onChange={(e) => setForm({...form, dimensions: e.target.value})}
+                     placeholder="e.g. 60 x 60 cm" 
+                     className="h-12 bg-slate-50 border-slate-100 rounded-xl focus:ring-slate-900 font-sans font-medium transition-all"
+                   />
+                 </div>
+               </div>
+            </div>
+
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex gap-3 items-start">
                <Info className="h-4 w-4 text-slate-400 mt-0.5" />
-               <p className="text-[10px] font-medium font-inter text-slate-500 leading-relaxed italic">Editing these values only affects this project catalog entry.</p>
+               <p className="text-[10px] font-medium font-sans text-slate-500 leading-relaxed">
+                 Editing these values will only affect this project catalog entry. It will not update the global material library.
+               </p>
             </div>
           </div>
         </ScrollArea>
+
         <div className="p-8 pt-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
-          <Button variant="outline" onClick={async () => {
-            const toastId = toast.loading("Requesting promotion...");
-            try {
-              unwrapActionResult(await promoteToLibraryAction({ optionId }));
-              toast.success("Promotion request sent!", { id: toastId });
-              if (onSuccess) onSuccess();
-            } catch (err: unknown) {
-              toast.error(err instanceof Error ? err.message : "Promotion failed", { id: toastId });
-            }
-          }} className="h-10 rounded-xl text-[10px] font-bold uppercase">Request Library Promotion</Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={async () => {
+                const toastId = toast.loading("Requesting promotion...");
+                try {
+                  unwrapActionResult(await promoteToLibraryAction({ optionId }));
+                  toast.success("Promotion request sent!", { id: toastId });
+                  if (onSuccess) onSuccess();
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : "Promotion failed", { id: toastId });
+                }
+              }}
+              className="h-10 rounded-xl border-slate-200 text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:border-slate-900 transition-all font-sans"
+            >
+              Request Library Promotion
+            </Button>
+          </div>
+
           <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={() => onOpenChange(false)} className="h-12 px-6 rounded-2xl font-inter font-bold text-xs uppercase tracking-widest">Cancel</Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting || !form.name || !form.brand} className="bg-slate-950 text-white rounded-2xl h-12 px-10">Save Changes</Button>
+            <Button 
+              variant="ghost" 
+              onClick={() => onOpenChange(false)}
+              className="h-12 px-6 rounded-2xl font-sans font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-all"
+            >
+              Cancel
+            </Button>
+            <Button 
+               onClick={handleSubmit} 
+               disabled={isSubmitting || !form.name || !form.brand}
+               className="bg-slate-950 hover:bg-slate-800 text-white rounded-2xl h-12 px-10 shadow-xl shadow-slate-200 transition-all font-sans font-bold text-xs uppercase tracking-widest gap-2"
+            >
+               {isSubmitting ? (
+                 <Loader2 className="h-4 w-4 animate-spin" />
+               ) : (
+                 <>
+                   <Save className="h-3.5 w-3.5" />
+                   Save Changes
+                 </>
+               )}
+            </Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+

@@ -1,12 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import { Blocks, Palette, Settings2, Users2 } from "lucide-react";
-import type { Role } from "@/generated/prisma";
+import { Blocks, Palette, Settings2, Users2, ShoppingBag } from "lucide-react";
+import type { Role, ScheduleSection } from "@/generated/prisma";
 import { TemplateManager } from "@/components/template-manager";
 import { UserManagement } from "@/components/user-management";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { UISettings } from "@/types/common";
 
 interface TimelineTemplate {
   phase_enum: string;
@@ -19,7 +20,21 @@ interface ChecklistTemplate {
   label: string;
 }
 
-type PanelKey = "general" | "team" | "project-engine" | "design-system";
+interface ScheduleTemplateConfig {
+  id: string;
+  category: string;
+  section: ScheduleSection;
+  is_active: boolean;
+}
+
+interface SchedulePrefixConfig {
+  id: string;
+  category: string;
+  prefix: string;
+  section: ScheduleSection;
+}
+
+type PanelKey = "general" | "team" | "project-engine" | "design-system" | "material-fixtures";
 
 const sections = [
   {
@@ -46,20 +61,13 @@ const sections = [
     description: "Timeline and checklist templates",
     icon: Blocks,
   },
+  {
+    key: "material-fixtures" as const,
+    label: "Material & Fixtures",
+    description: "Scheduler categories and prefixes",
+    icon: ShoppingBag,
+  },
 ];
-
-interface UISettings {
-  canvasBg?: string;
-  radiusCard?: string;
-  sectionPx?: string;
-  sectionPy?: string;
-  sidebarWidth?: string;
-  containerMaxWidth?: string;
-  fontSerif?: string;
-  appLogoUrl?: string;
-  rowPaddingY?: string;
-  [key: string]: string | undefined;
-}
 
 export function StudioSettingsPanel({
   allUsers,
@@ -67,6 +75,8 @@ export function StudioSettingsPanel({
   requesterRole,
   timelineTemplates,
   checklistTemplates,
+  scheduleTemplates,
+  schedulePrefixes,
   isAutoNamingEnabled,
   appTitleInitial = "StudioFlow",
   saveBranding,
@@ -78,6 +88,8 @@ export function StudioSettingsPanel({
   requesterRole: Role;
   timelineTemplates: TimelineTemplate[];
   checklistTemplates: ChecklistTemplate[];
+  scheduleTemplates: ScheduleTemplateConfig[];
+  schedulePrefixes: SchedulePrefixConfig[];
   isAutoNamingEnabled: boolean;
   appTitleInitial?: string;
   saveBranding: (formData: FormData) => Promise<void>;
@@ -103,6 +115,8 @@ export function StudioSettingsPanel({
       containerMaxWidth: "--ui-container-max-width",
       fontSerif: "--ui-font-serif",
       rowPaddingY: "--ui-row-padding-y",
+      pagePaddingY: "--ui-page-padding-y",
+      pageMaxWidth: "--ui-page-max-width",
     };
     
     if (variableMap[key]) {
@@ -122,9 +136,13 @@ export function StudioSettingsPanel({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+    <div className={cn(
+      "grid gap-6 lg:grid-cols-[256px_minmax(0,1fr)] lg:items-start transition-all duration-300",
+      activePanel === "material-fixtures" ? "max-w-none px-10" : localUISettings.containerMaxWidth || "max-w-7xl",
+      "mx-auto w-full"
+    )}>
       <aside className="rounded-3xl border border-slate-200 bg-white p-2 shadow-sm">
-        <nav className="flex gap-2 overflow-x-auto lg:flex-col">
+        <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
           {sections.map((section) => {
             const Icon = section.icon;
             const isActive = section.key === activePanel;
@@ -136,10 +154,10 @@ export function StudioSettingsPanel({
                 variant="ghost"
                 onClick={() => setActivePanel(section.key)}
                 className={cn(
-                  "h-auto min-w-fit justify-start rounded-2xl px-4 py-3 text-left",
+                  "h-auto w-full justify-start rounded-2xl px-4 py-3 text-left",
                   isActive
                     ? "bg-slate-900 text-white hover:bg-slate-900 hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 )}
               >
                 <Icon className="mt-0.5 h-4 w-4 shrink-0" />
@@ -167,7 +185,7 @@ export function StudioSettingsPanel({
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                 General
               </p>
-              <h3 className="font-serif text-2xl font-bold text-slate-950">Branding</h3>
+              <h3 className="font-serif text-2xl font-bold text-slate-900">Branding</h3>
               <p className="max-w-2xl text-sm text-slate-500">
                 Customize your website identity and naming rules.
               </p>
@@ -184,7 +202,7 @@ export function StudioSettingsPanel({
                     placeholder="StudioFlow"
                     className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
                   />
-                  <p className="text-[10px] text-slate-400 italic">Watermark "by BK" is preserved.</p>
+                  <p className="text-[10px] text-slate-400 italic">Watermark &quot;by BK&quot; is preserved.</p>
                 </div>
                 <div className="space-y-3">
                   <label className="text-sm font-semibold text-slate-900">App Logo URL</label>
@@ -238,14 +256,14 @@ export function StudioSettingsPanel({
                 </span>
                 <span
                   className={cn(
-                    "relative h-6 w-11 rounded-full transition-colors",
+                    "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200",
                     isAutoNamingEnabled ? "bg-slate-900" : "bg-slate-300"
                   )}
                 >
                   <span
                     className={cn(
-                      "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform",
-                      isAutoNamingEnabled ? "translate-x-5" : "translate-x-0.5"
+                      "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                      isAutoNamingEnabled ? "translate-x-5" : "translate-x-0"
                     )}
                   />
                 </span>
@@ -260,7 +278,7 @@ export function StudioSettingsPanel({
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                 UI Engine
               </p>
-              <h3 className="font-serif text-2xl font-bold text-slate-950">Design System</h3>
+              <h3 className="font-serif text-2xl font-bold text-slate-900">Design System</h3>
               <p className="max-w-2xl text-sm text-slate-500">
                 Tweak the Studioflow visual identity. Changes apply globally.
               </p>
@@ -355,13 +373,13 @@ export function StudioSettingsPanel({
                 <div className="space-y-4">
                   <label className="text-sm font-semibold text-slate-900">Heading Font (Serif)</label>
                   <select
-                    value={localUISettings?.fontSerif || "var(--font-lora-base)"}
+                    value={localUISettings?.fontSerif || "var(--font-serif-base)"}
                     onChange={(e) => handleUISettingChange("fontSerif", e.target.value)}
                     className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
                   >
-                    <option value="var(--font-lora-base)">Lora (StudioFlow Serif)</option>
+                    <option value="var(--font-serif-base)">Lora (StudioFlow Serif)</option>
                     <option value="ui-serif, Georgia, serif">System Serif</option>
-                    <option value="var(--font-inter-base)">Switch to Sans (All-Inter)</option>
+                    <option value="var(--font-sans-base)">Switch to Sans (All-Inter)</option>
                   </select>
                 </div>
  
@@ -379,6 +397,34 @@ export function StudioSettingsPanel({
                     <option value="2rem">Loose (32px)</option>
                   </select>
                   <p className="text-[10px] text-slate-400 italic">Controls internal spacing of lists and project rows.</p>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Page Vertical Padding</label>
+                  <select
+                    value={localUISettings?.pagePaddingY || "2.5rem"}
+                    onChange={(e) => handleUISettingChange("pagePaddingY", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="1.5rem">Compact (24px)</option>
+                    <option value="2.5rem">Standard (40px) - Default</option>
+                    <option value="3.5rem">Relaxed (56px)</option>
+                    <option value="5rem">Spacious (80px)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-slate-900">Page Max Width</label>
+                  <select
+                    value={localUISettings?.pageMaxWidth || "1280px"}
+                    onChange={(e) => handleUISettingChange("pageMaxWidth", e.target.value)}
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <option value="896px">Focused (896px)</option>
+                    <option value="1024px">Standard (1024px)</option>
+                    <option value="1280px">Wide (1280px) - Default</option>
+                    <option value="100%">Full Width</option>
+                  </select>
                 </div>
               </div>
 
@@ -408,8 +454,24 @@ export function StudioSettingsPanel({
         {activePanel === "project-engine" ? (
           <section className="rounded-3xl border border-slate-200 bg-slate-50/50 p-6">
             <TemplateManager
+              mode="project-engine"
               timelineTemplates={timelineTemplates}
               checklistTemplates={checklistTemplates}
+              scheduleTemplates={scheduleTemplates}
+              schedulePrefixes={schedulePrefixes}
+              userRole={requesterRole}
+            />
+          </section>
+        ) : null}
+        
+        {activePanel === "material-fixtures" ? (
+          <section className="rounded-3xl border border-slate-200 bg-slate-50/50 p-6">
+            <TemplateManager
+              mode="material-fixtures"
+              timelineTemplates={timelineTemplates}
+              checklistTemplates={checklistTemplates}
+              scheduleTemplates={scheduleTemplates}
+              schedulePrefixes={schedulePrefixes}
               userRole={requesterRole}
             />
           </section>
@@ -418,3 +480,4 @@ export function StudioSettingsPanel({
     </div>
   );
 }
+

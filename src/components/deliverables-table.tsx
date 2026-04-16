@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { AlertTriangle, ExternalLink, FileText, Link as LinkIcon, UploadCloud } from "lucide-react";
@@ -82,13 +82,7 @@ export function DeliverablesTable({
           Exactly one row per phase. Each row compares the latest uploaded deliverable against the current revision baseline.
         </p>
       </div>
-      <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right lg:block shrink-0">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Rows</p>
-        <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <UploadCloud className="h-4 w-4 text-slate-400" />
-          {rows.length} phases monitored
-        </p>
-      </div>
+
     </div>
   );
 
@@ -149,7 +143,7 @@ export function DeliverablesTable({
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
-                          <span className="text-slate-300">→</span>
+                          <span className="text-slate-300">â†’</span>
                           <Badge variant="outline" className="border-amber-200 bg-amber-50 font-mono text-[10px] font-bold text-amber-800 px-1.5 py-0">
                             {formatRevisionLabel(row.currentRevision.version)}
                           </Badge>
@@ -242,3 +236,4 @@ export function DeliverablesTable({
     </TableCard>
   );
 }
+

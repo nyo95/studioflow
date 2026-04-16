@@ -1,10 +1,12 @@
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { Role } from "@/generated/prisma";
 import { getSession, requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { updateUserName } from "@/actions/user-actions";
+import { ActionError } from "@/lib/error-types";
+import { invalidateCache } from "@/lib/revalidation";
+import { REVALIDATE_SETTINGS } from "@/lib/revalidation-tags";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -43,7 +45,7 @@ export default async function ProfileSettingsPage() {
     unwrapActionResult(await updateUserName({ userId: session.userId, newName: name }));
 
     if (!email) {
-      throw new Error("Email is required.");
+      throw new ActionError("Email is required.", "EMAIL_REQUIRED");
     }
 
     const existingUser = await prisma.user.findFirst({
@@ -55,7 +57,7 @@ export default async function ProfileSettingsPage() {
     });
 
     if (existingUser) {
-      throw new Error("Email is already in use.");
+      throw new ActionError("Email is already in use.", "EMAIL_IN_USE");
     }
 
     const data: { email: string; password?: string } = {
@@ -64,11 +66,11 @@ export default async function ProfileSettingsPage() {
 
     if (password || confirmPassword) {
       if (password.length < 8) {
-        throw new Error("New password must be at least 8 characters.");
+        throw new ActionError("New password must be at least 8 characters.", "PASSWORD_TOO_SHORT");
       }
 
       if (password !== confirmPassword) {
-        throw new Error("Password confirmation does not match.");
+        throw new ActionError("Password confirmation does not match.", "PASSWORD_CONFIRMATION_MISMATCH");
       }
 
       data.password = await bcrypt.hash(password, 12);
@@ -79,8 +81,7 @@ export default async function ProfileSettingsPage() {
       data,
     });
 
-    revalidatePath("/settings");
-    revalidatePath("/settings/profile");
+    invalidateCache({ scope: REVALIDATE_SETTINGS });
   }
   return (
     <SettingsShell
@@ -206,3 +207,4 @@ export default async function ProfileSettingsPage() {
     </SettingsShell>
   );
 }
+

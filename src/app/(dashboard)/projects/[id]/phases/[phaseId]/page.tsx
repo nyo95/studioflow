@@ -8,16 +8,34 @@ import { CDListTable } from "@/components/cd-list-table";
 import { PhaseChecklist } from "@/components/phase-checklist";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DashboardPageShell, PageBackLink, PageHeader, PhaseLiveProvider, Heading, SectionCard } from "@/ui_engine";
+import { DashboardPageShell, PageBackLink, PageHeader, PhaseLiveProvider, Heading, SectionCard, UI_ENGINE_PHASE_HEADER_CLASS } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { PhaseName, Role } from "@/generated/prisma";
-import { DiscussionBoard } from "@/extensions/live-collaboration/components/discussion-board";
+
 import { getPhaseHeartbeatSnapshot } from "@/lib/phase-heartbeat";
 import { HydrationGuard } from "@/ui_engine/components/HydrationGuard";
+import { AdminRevisionOverride } from "@/components/admin-revision-override";
+import { cn } from "@/lib/utils";
+import { evaluateAccess, PERMISSION } from "@/lib/rbac";
 
 export const generateStaticParams = async () => {
   return [];
 };
+
+function getBadgeStyles(status: string) {
+  switch (status) {
+    case "IN_PROGRESS":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "ON_REVIEW_INTERNAL":
+    case "ON_REVIEW_CLIENT":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "COMPLETED":
+    case "READY_FOR_NEXT":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+}
 
 export default async function PhaseDetailPage({
   params,
@@ -28,12 +46,13 @@ export default async function PhaseDetailPage({
   const { userId, role } = await getSession();
 
   const project = await prisma.project.findUnique({
-    where: { id: projectId },
+    where: { id: projectId, deleted_at: null },
     select: {
       id: true,
       name: true,
       pic_designer_id: true,
       pic_drafter_id: true,
+      status_progress: true,
       phases: {
         select: {
           order_index: true,
@@ -59,6 +78,7 @@ export default async function PhaseDetailPage({
           files: true,
         },
         orderBy: [
+          { created_at: "desc" },
           { major: "desc" },
           { minor: "desc" },
         ],
@@ -76,31 +96,29 @@ export default async function PhaseDetailPage({
     notFound();
   }
   if (phase.project_id !== projectId) {
-    throw new Error("PHASE_PROJECT_MISMATCH");
+    notFound();
   }
 
   const canManagePhase =
     role === Role.ADMIN ||
-    (phase.name_enum === "CD"
-      ? role === Role.DRIC && userId === project.pic_drafter_id
-      : role === Role.DIC && userId === project.pic_designer_id);
+    (role === Role.DIC && userId === project.pic_designer_id) ||
+    (phase.name_enum === "CD" && role === Role.DRIC && userId === project.pic_drafter_id);
   
   const canMutateContent =
     role === Role.ADMIN ||
     (phase.name_enum === "CD"
       ? (userId === project.pic_drafter_id || userId === project.pic_designer_id)
       : role === Role.DIC && userId === project.pic_designer_id);
+
+  const canOverride =
+    role === Role.ADMIN || (role === Role.DIC && userId === project.pic_designer_id);
   
   const initialSnapshot = await getPhaseHeartbeatSnapshot(phaseId);
   const session = await getSession();
   const currentUserName = session.user?.name || "User";
 
-  // Calculate if this phase is ready to start (previous phase COMPLETED/READY_FOR_NEXT)
-  const isReadyToStart = phase.order_index === 1 || 
-    project.phases.some(p => 
-      p.order_index === phase.order_index - 1 && 
-      (p.status_enum === "READY_FOR_NEXT" || p.status_enum === "COMPLETED")
-    );
+  // Calculate if this phase is ready to start (Project is ACTIVE)
+  const isReadyToStart = project.status_progress === "ACTIVE";
   const canMutateChecklist =
     role === Role.ADMIN ||
     (phase.name_enum === "CD"
@@ -109,6 +127,7 @@ export default async function PhaseDetailPage({
 
   const activeRevision = phase.revisions.find((revision) => revision.status_enum === "ACTIVE") || phase.revisions[0];
   const archivedRevisions = phase.revisions.filter((revision) => revision.id !== activeRevision?.id);
+  const hasOngoingTasks = activeRevision?.activities?.some((a) => a.status === "OPEN") ?? false;
 
   const reviewPanel = (
     <section className="space-y-8">
@@ -124,17 +143,16 @@ export default async function PhaseDetailPage({
             className="animate-in fade-in slide-in-from-bottom-4 duration-700"
             header={
               <>
-                <span className="font-serif text-xs font-black uppercase tracking-widest">Version {activeRevision.major}.{activeRevision.minor}</span>
-                <span className="text-[9px] font-mono uppercase tracking-widest opacity-60">{activeRevision.status_enum}</span>
+                <span className="font-serif text-xs font-black uppercase tracking-widest">Tasks & Action Items</span>
+                <span className="text-[9px] font-mono uppercase tracking-widest opacity-60">
+                  {activeRevision.status_enum}
+                </span>
               </>
             }
             headerVariant="dark"
           >
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6">
               <div className="space-y-6">
-                <Heading variant="uiMeta" level={4} className="border-b border-zinc-100 pb-3 opacity-80">
-                  Discussion & Action Items
-                </Heading>
                 <ActivityManager
                   revisionId={activeRevision.id}
                   isLocked={phase.is_locked || activeRevision.status_enum !== "ACTIVE"}
@@ -146,12 +164,7 @@ export default async function PhaseDetailPage({
                 />
               </div>
 
-              <DiscussionBoard
-                phaseId={phaseId}
-                currentUserId={userId}
-                currentUserName={currentUserName}
-                userRole={role}
-              />
+
             </div>
           </SectionCard>
         ) : (
@@ -170,7 +183,8 @@ export default async function PhaseDetailPage({
         <PageBackLink />
 
         <PageHeader
-          title={phase.name_enum.replace(/_/g, " ")}
+          title={`${phase.name_enum.replace(/_/g, " ")} ${activeRevision ? `${activeRevision.major}.${activeRevision.minor}` : ""}`}
+          titleClassName={UI_ENGINE_PHASE_HEADER_CLASS}
           action={
             <PhaseActions
               phaseId={phase.id}
@@ -181,13 +195,31 @@ export default async function PhaseDetailPage({
               userRole={role as Role}
               canMutate={canManagePhase}
               isReadyToStart={isReadyToStart}
+              hasHistory={phase.revisions.length > 0}
+              hasOngoingTasks={hasOngoingTasks}
             />
           }
           meta={
-            <>
-              <div className="inline-flex items-center rounded-sm bg-zinc-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-sm select-none">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "px-3 py-1 text-[10px] uppercase font-bold tracking-[0.2em] shadow-sm",
+                  getBadgeStyles(phase.status_enum)
+                )}
+              >
                 {phase.status_enum.replace(/_/g, " ")}
-              </div>
+              </Badge>
+              
+              {canOverride && activeRevision && activeRevision.activities.length === 0 && (
+                <AdminRevisionOverride 
+                  phaseId={phase.id}
+                  currentVersion={{
+                    major: activeRevision.major,
+                    minor: activeRevision.minor,
+                  }}
+                />
+              )}
               {phase.is_locked ? (
                 <div className="inline-flex items-center rounded-sm border border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-700 select-none">
                   LOCKED
@@ -205,7 +237,7 @@ export default async function PhaseDetailPage({
                   </DialogTrigger>
                   <DialogContent className="max-w-md border-zinc-100 bg-white">
                     <DialogHeader>
-                      <DialogTitle className="border-b border-zinc-100 pb-4 font-serif text-xl font-bold text-black">Revision History</DialogTitle>
+                      <DialogTitle className="border-b border-zinc-100 pb-4 font-serif text-xl font-bold text-slate-900">Revision History</DialogTitle>
                     </DialogHeader>
                     <div className="mt-4 flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-2">
                       {archivedRevisions.map((revision) => (
@@ -221,7 +253,7 @@ export default async function PhaseDetailPage({
                   </DialogContent>
                 </Dialog>
               ) : null}
-            </>
+            </div>
           }
         />
 

@@ -9,9 +9,10 @@ import { createComment, deleteComment } from "../actions/comment-actions";
 import { CommentForm } from "./comment-form";
 import { CommentItem } from "./comment-item";
 import { MessageSquare } from "lucide-react";
-import { usePhaseLive } from "@/ui_engine";
+import { useProjectLive } from "@/ui_engine";
 
 interface DiscussionBoardProps {
+  projectId: string;
   phaseId: string;
   currentUserId: string;
   currentUserName: string;
@@ -19,6 +20,7 @@ interface DiscussionBoardProps {
 }
 
 export function DiscussionBoard({ 
+  projectId,
   phaseId, 
   currentUserId,
   currentUserName,
@@ -27,7 +29,7 @@ export function DiscussionBoard({
   const [isPending, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { comments, addOptimisticComment, replaceComment, removeComment, syncNow } =
-    usePhaseLive();
+    useProjectLive();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -41,6 +43,7 @@ export function DiscussionBoard({
         id: `temp-${Date.now()}`,
         content,
         author_id: currentUserId,
+        project_id: projectId,
         phase_id: phaseId,
         task_id: null,
         created_at: new Date(),

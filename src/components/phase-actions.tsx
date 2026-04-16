@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,11 +12,13 @@ import {
   rejectPhase, 
   reopenPhase,
   completeSupervisionPhase,
-  activatePhase
+  activatePhase,
+  bypassPhaseToCompleted
 } from "@/actions/phase-actions";
-import { Loader2, CheckCircle2, XCircle, Unlock, Send, Play } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Unlock, Send, Play, FastForward } from "lucide-react";
 import { Role } from "@/generated/prisma";
 import { unwrapActionResult } from "@/lib/result";
+import { cn } from "@/lib/utils";
 
 interface PhaseActionsProps {
   phaseId: string;
@@ -27,6 +29,8 @@ interface PhaseActionsProps {
   userRole: Role;
   canMutate: boolean;
   isReadyToStart: boolean;
+  hasHistory: boolean;
+  hasOngoingTasks?: boolean;
 }
 
 export function PhaseActions({
@@ -34,10 +38,10 @@ export function PhaseActions({
   status,
   isLocked,
   nameEnum,
-  userId,
-  userRole,
   canMutate,
   isReadyToStart,
+  hasHistory,
+  hasOngoingTasks = false,
 }: PhaseActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const router = useRouter();
@@ -83,32 +87,77 @@ export function PhaseActions({
   return (
     <div className="flex flex-wrap items-center gap-3">
       {status === "PENDING" && canMutate && isReadyToStart && (
-        <Button
-          onClick={() => handleAction("Activate", async () => unwrapActionResult(await activatePhase({ phaseId })))}
-          disabled={loading !== null}
-          className="bg-amber-600 hover:bg-amber-700 text-white font-sans font-medium px-5"
-        >
-          {loading === "Activate" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-          Start Phase
-        </Button>
+        <>
+          <Button
+            onClick={() => handleAction(
+              hasHistory ? "Reopen" : "Activate", 
+              async () => unwrapActionResult(
+                hasHistory 
+                  ? await reopenPhase({ phaseId }) 
+                  : await activatePhase({ phaseId })
+              )
+            )}
+            disabled={loading !== null}
+            className={cn(
+              "text-white font-sans font-medium px-5 transition-all",
+              hasHistory ? "bg-slate-900 hover:bg-slate-800 shadow-md" : "bg-amber-600 hover:bg-amber-700"
+            )}
+          >
+            {loading === "Activate" || loading === "Reopen" ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              hasHistory ? <Unlock className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />
+            )}
+            {hasHistory ? "Reopen Phase" : "Start Phase"}
+          </Button>
+          {!hasHistory && (
+            <Button
+              variant="outline"
+              onClick={() => handleAction("Bypass to Completed", async () => unwrapActionResult(await bypassPhaseToCompleted({ phaseId })))}
+              disabled={loading !== null}
+              className="border-slate-200 text-slate-600 hover:bg-slate-100 font-sans font-medium px-5"
+            >
+              {loading === "Bypass to Completed" ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <FastForward className="w-4 h-4 mr-2 text-slate-400" />
+              )}
+              Bypass to Completed
+            </Button>
+          )}
+        </>
       )}
 
       {status === "IN_PROGRESS" && nameEnum !== "SUPERVISION" && (
-        <Button
-          onClick={() => handleAction("Submit Internal", async () => unwrapActionResult(await submitForInternalReview({ phaseId })))}
-          disabled={loading !== null}
-          className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-medium px-5"
-        >
-          {loading === "Submit Internal" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-          Submit for Internal Review
-        </Button>
+        <>
+          <Button
+            onClick={() => handleAction("Submit Internal", async () => unwrapActionResult(await submitForInternalReview({ phaseId })))}
+            disabled={loading !== null || hasOngoingTasks}
+            className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-medium px-5"
+            title={hasOngoingTasks ? "Complete all ongoing tasks first" : ""}
+          >
+            {loading === "Submit Internal" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+            Submit for Internal Review
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleAction("Submit Client", async () => unwrapActionResult(await submitForClientReview({ phaseId })))}
+            disabled={loading !== null || hasOngoingTasks}
+            className="border-slate-200 font-sans font-medium px-5"
+            title={hasOngoingTasks ? "Complete all ongoing tasks first" : ""}
+          >
+            {loading === "Submit Client" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+            Submit for Client Review
+          </Button>
+        </>
       )}
 
       {status === "IN_PROGRESS" && nameEnum === "SUPERVISION" && (
         <Button
           onClick={() => handleAction("Complete", async () => unwrapActionResult(await completeSupervisionPhase({ phaseId })))}
-          disabled={loading !== null}
+          disabled={loading !== null || hasOngoingTasks}
           className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-medium px-5"
+          title={hasOngoingTasks ? "Complete all ongoing tasks first" : ""}
         >
           {loading === "Complete" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
           Complete Project
@@ -133,6 +182,15 @@ export function PhaseActions({
           >
             {loading === "Approve Internal" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
             Approve Internal
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleAction("Submit Client", async () => unwrapActionResult(await submitForClientReview({ phaseId })))}
+            disabled={loading !== null}
+            className="border-slate-200 font-sans font-medium px-5"
+          >
+            {loading === "Submit Client" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+            Send to Client in Parallel
           </Button>
         </>
       )}
@@ -172,3 +230,4 @@ export function PhaseActions({
     </div>
   );
 }
+

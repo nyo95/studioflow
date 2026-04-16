@@ -1,69 +1,69 @@
 import { prisma } from "@/lib/db";
-import { CreateProjectDialog } from "@/components/create-project-dialog";
-import { ProjectListClient } from "@/components/project-list-client";
+import { Prisma, Role } from "@/generated/prisma";
+import { TodayQuickAddModal } from "@/components/today-quick-add-modal";
+import { TodayView } from "@/components/today-view";
+import {
+  DashboardPageShell,
+  PageHeader,
+} from "@/ui_engine";
 import { getSession } from "@/lib/auth";
-import { Role } from "@/generated/prisma";
-import { DashboardPageShell, PageHeader } from "@/ui_engine";
+import { CalendarCheck2 } from "lucide-react";
 
-export default async function DashboardPage() {
+function formatPhaseName(name: string) {
+  return name.replace(/_/g, " ");
+}
+
+export default async function HomePage() {
   const { userId, role } = await getSession();
-  const [systemConfig] = await prisma.$queryRaw<Array<{ is_auto_naming_enabled: boolean }>>`
-    SELECT "is_auto_naming_enabled"
-    FROM "SystemConfig"
-    WHERE "id" = 'default'
-    LIMIT 1
-  `;
+
+  const activePhaseStatuses = ["IN_PROGRESS", "ON_REVIEW_INTERNAL", "ON_REVIEW_CLIENT"];
+
+  const whereClause: Prisma.ProjectWhereInput = {
+    deleted_at: null,
+    phases: {
+      some: { status_enum: { in: activePhaseStatuses as any } },
+    },
+  };
+
+  if (role !== Role.ADMIN) {
+    whereClause.OR = [
+      { pic_designer_id: userId },
+      { pic_drafter_id: userId },
+    ];
+  }
 
   const projects = await prisma.project.findMany({
+    where: whereClause,
     select: {
       id: true,
       name: true,
       priority: true,
-      client: {
-        select: {
-          id: true,
-          name: true,
-          logo_url: true,
-        },
-      },
-      area: true,
-      pic_designer_id: true,
-      pic_drafter_id: true,
-      designer: {
-        select: {
-          id: true,
-          name: true,
-          role: true,
-        },
-      },
-      drafter: {
-        select: {
-          id: true,
-          name: true,
-          role: true,
-        },
-      },
       phases: {
+        where: { status_enum: { in: activePhaseStatuses as any } },
         select: {
           id: true,
           name_enum: true,
           status_enum: true,
           order_index: true,
           revisions: {
-            select: {
-              major: true,
-              minor: true,
-            },
-            orderBy: [
-              { major: "desc" },
-              { minor: "desc" },
-            ],
+            where: { status_enum: "ACTIVE" },
             take: 1,
+            select: {
+              id: true,
+              activities: {
+                where: { mode: { in: ["TODO", "FEEDBACK"] } },
+                orderBy: { id: "asc" },
+                select: {
+                  id: true,
+                  content: true,
+                  status: true,
+                  mode: true,
+                },
+              },
+            },
           },
         },
-        orderBy: {
-          order_index: "asc",
-        },
+        orderBy: { order_index: "asc" },
       },
     },
     orderBy: [
@@ -72,45 +72,66 @@ export default async function DashboardPage() {
     ],
   });
 
-  const users = await prisma.user.findMany({
-    select: {
-      id: true,
-      name: true,
-      role: true,
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
+  // Filter projects/phases with 0 tasks and transform
+  const projectsWithTasks = projects.map((project) => {
+    const phasesWithTasks = project.phases.map((phase) => {
+      const activeRevision = phase.revisions[0];
+      const tasks = activeRevision?.activities || [];
+      return {
+        id: phase.id,
+        name: formatPhaseName(phase.name_enum),
+        status: phase.status_enum,
+        revisionId: activeRevision?.id,
+        tasks: tasks.map(t => ({
+          id: t.id,
+          content: t.content,
+          status: t.status,
+          mode: t.mode,
+          projectName: project.name,
+          phaseName: formatPhaseName(phase.name_enum),
+          isUrgent: project.priority === "URGENT"
+        }))
+      };
+    }).filter(p => p.tasks.length > 0 || p.revisionId);
 
-  const designers = users.filter(
-    (user) => user.role === Role.ADMIN || user.role === Role.DIC || user.role === Role.STAFF
-  );
-  const drafters = users.filter(
-    (user) => user.role === Role.STAFF || user.role === Role.DRIC
-  );
+    return {
+      id: project.id,
+      name: project.name,
+      isUrgent: project.priority === "URGENT",
+      phases: phasesWithTasks
+    };
+  }).filter(p => p.phases.length > 0);
+
+  const modalProjects = projects.map((project) => ({
+    projectId: project.id,
+    projectName: project.name,
+    phases: project.phases.map((phase) => ({
+      phaseId: phase.id,
+      activeRevisionId: phase.revisions[0]?.id,
+      phaseName: formatPhaseName(phase.name_enum),
+    })),
+  }));
 
   return (
     <DashboardPageShell>
       <PageHeader
-        title="DASHBOARD"
-        description="Monitor and manage all studio projects in one place."
-        action={
-          role === Role.ADMIN ? (
-            <CreateProjectDialog
-              designers={designers}
-              drafters={drafters}
-              isAutoNamingEnabled={systemConfig?.is_auto_naming_enabled ?? true}
-            />
-          ) : null
-        }
+        eyebrow="Daily Pulse"
+        title="Today's View"
+        description="All active phases across your projects in one place."
+        action={<TodayQuickAddModal projects={modalProjects} />}
       />
 
-      <ProjectListClient
-        initialProjects={projects}
-        userId={userId}
-        userRole={role}
-      />
+      {projectsWithTasks.length === 0 ? (
+        <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 text-center">
+          <CalendarCheck2 className="h-10 w-10 text-slate-200" />
+          <div className="space-y-1">
+            <h3 className="font-sans text-sm font-medium text-slate-400">No open tasks today.</h3>
+            <p className="text-xs text-slate-300">Active phases and feedback items will appear here.</p>
+          </div>
+        </div>
+      ) : (
+        <TodayView projects={projectsWithTasks as any} />
+      )}
     </DashboardPageShell>
   );
 }

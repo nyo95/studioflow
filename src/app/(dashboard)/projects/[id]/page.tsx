@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
@@ -8,8 +9,12 @@ import { canEditProjectMetadata } from "@/lib/permissions";
 import { ProjectOverviewForm } from "@/components/project-overview-form";
 import { ProjectChecklistOverview } from "@/components/project-checklist-overview";
 import { Button } from "@/components/ui/button";
-import { DashboardPageShell, PageBackLink, PageHeader, Heading } from "@/ui_engine";
+import { DashboardPageShell, PageBackLink, PageHeader, Heading, UI_ENGINE_PROJECT_HEADER_CLASS } from "@/ui_engine";
 import { getProjectProgress, formatPhaseName } from "@/lib/project-progress";
+import { ProjectAdminActions } from "@/components/project-admin-actions";
+import { PROJECT_MEMBER_FETCH_LIMIT } from "@/lib/constants";
+import { ClipboardList, PackageSearch } from "lucide-react";
+// Removed ProjectScheduleMain as it's now a dedicated extension page
 
 export const generateStaticParams = async () => {
   return [];
@@ -17,17 +22,21 @@ export const generateStaticParams = async () => {
 
 export default async function ProjectOverviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { id: projectId } = await params;
+  const { tab: activeTab } = await searchParams;
   const { userId, role } = await getSession();
 
   const project = await prisma.project.findUnique({
-    where: { id: projectId },
+    where: { id: projectId, deleted_at: null },
     select: {
       id: true,
       name: true,
+      status_progress: true,
       client: {
         select: {
           id: true,
@@ -67,6 +76,17 @@ export default async function ProjectOverviewPage({
           order_index: "asc",
         },
       },
+      activities: {
+        where: { revision_id: null },
+        select: {
+          id: true,
+          content: true,
+          status: true,
+          mode: true,
+          phase_id: true,
+          deferred_from_version: true
+        }
+      },
       checklists: {
         where: {
           phase_id: { equals: null },
@@ -93,6 +113,7 @@ export default async function ProjectOverviewPage({
     orderBy: {
       name: "asc",
     },
+    take: PROJECT_MEMBER_FETCH_LIMIT,
   });
   const clients = await prisma.client.findMany({
     select: {
@@ -100,6 +121,7 @@ export default async function ProjectOverviewPage({
       name: true,
     },
     orderBy: { name: "asc" },
+    take: PROJECT_MEMBER_FETCH_LIMIT,
   });
 
   const designers = users.filter(
@@ -122,152 +144,79 @@ export default async function ProjectOverviewPage({
     : "";
 
   return (
-    <DashboardPageShell>
-        <PageBackLink />
-
-        {/* Progress Banner */}
-        {(() => {
-          const progress = getProjectProgress(project.phases);
-          
-          if (progress.type === 'PROJECT_DONE') {
-            return (
-              <div className="mb-10 overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
-                <div className="flex flex-col items-center justify-between gap-6 p-8 md:flex-row">
-                  <div className="flex items-center gap-6">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-100">
-                      <CheckCircle2 className="h-7 w-7" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-400 text-opacity-80">Final State</p>
-                      <Heading level={2} className="mt-1">PROJECT COMPLETED ✓</Heading>
-                    </div>
-                  </div>
-                </div>
-                <div className="h-1 w-full bg-emerald-500" />
-              </div>
-            );
-          }
-
-          if (progress.type === 'READY_FOR') {
-            return (
-              <div className="mb-10 overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-sm">
-                <div className="flex flex-col items-center justify-between gap-6 p-8 md:flex-row">
-                  <div className="flex items-center gap-6">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-lg shadow-amber-100">
-                      <CheckCircle2 className="h-7 w-7 opacity-50" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-500 text-opacity-80">Next Step</p>
-                      <Heading level={2} className="mt-1">
-                        READY FOR {formatPhaseName(progress.nextPhaseName)}
-                      </Heading>
-                    </div>
-                  </div>
-                  <Link href={`/projects/${projectId}/phases/${project.phases.find(p => p.name_enum === progress.nextPhaseName)?.id}`}>
-                    <Button variant="secondary" className="h-12 rounded-xl bg-amber-50 px-8 text-xs font-bold uppercase tracking-widest text-amber-700 hover:bg-amber-100 border-none">
-                      Go to Phase
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-                <div className="h-1 w-full bg-amber-200" />
-              </div>
-            );
-          }
-
-          const firstActivePhase = project.phases.find(p => p.name_enum === progress.phases[0].name);
-
-          return (
-            <div className="mb-10 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md">
-              <div className="flex flex-col items-center justify-between gap-6 p-8 md:flex-row">
-                <div className="flex items-center gap-6">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-200">
-                    <CheckCircle2 className="h-7 w-7" />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Current Progress</p>
-                    <div className="flex flex-wrap gap-x-6 gap-y-2">
-                      {progress.phases.map((p, idx: number) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <Heading level={2}>
-                            {formatPhaseName(p.name)}
-                          </Heading>
-                          <span className="text-sm font-light text-slate-400">
-                            v{p.major}.{p.minor}
-                          </span>
-                          {idx < progress.phases.length - 1 && <span className="ml-3 text-slate-200">|</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {firstActivePhase && (
-                  <Link href={`/projects/${projectId}/phases/${firstActivePhase.id}`}>
-                    <Button className="h-12 rounded-xl bg-slate-900 px-8 text-xs font-bold uppercase tracking-widest text-white hover:bg-slate-800">
-                      Jump to Active Phase
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                )}
-              </div>
-              <div className="h-1 w-full bg-slate-100">
-                <div 
-                  className="h-full bg-slate-900 transition-all duration-1000" 
-                  style={{ 
-                    width: `${((project.phases.findIndex(p => p.name_enum === progress.phases[progress.phases.length - 1].name) + 1) / project.phases.length) * 100}%` 
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })()}
-
-        <PageHeader
-          eyebrow="Project Workspace"
-          title={project.name}
-          description={project.client?.name}
-          divider={false}
-          titleClassName="mt-2 normal-case"
-          descriptionClassName="mt-4 font-sans text-base font-medium text-slate-600"
-        />
-
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <ProjectOverviewForm
-              project={{
-                id: project.id,
-                name: project.name,
-                client: project.client,
-                area: project.area,
-                opening_date: project.opening_date,
-                opening_date_display: openingDateDisplay,
-                opening_date_input_value: openingDateInputValue,
-                pic_designer_id: project.pic_designer_id,
-                pic_drafter_id: project.pic_drafter_id,
-                designer_name: project.designer.name,
-                drafter_name: project.drafter.name,
-              }}
-              designers={designers}
-              drafters={drafters}
-              clients={clients}
-              role={role as Role}
-              canEdit={canEdit}
-            />
+    <DashboardPageShell className="animate-in fade-in duration-700">
+      <PageBackLink />
+      <PageHeader
+        title={project.name}
+        titleClassName={UI_ENGINE_PROJECT_HEADER_CLASS}
+        description={`${project.client?.name || "No Client"} — ${project.area || "No area"} SQM`}
+        meta={
+          <div className="flex items-center gap-2">
+            <span className={cn(
+               "px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] rounded-full border",
+               project.status_progress === "COMPLETED" 
+                 ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                 : "border-slate-200 bg-white text-slate-500"
+            )}>
+              {project.status_progress}
+            </span>
+            {project.opening_date && (
+              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                Opening {openingDateDisplay}
+              </span>
+            )}
           </div>
+        }
+      />
 
-          <div className="lg:col-span-1">
-            <ProjectChecklistOverview
-              projectId={project.id}
-              checklists={globalChecklists.map((item) => ({
-                id: item.id,
-                label: item.label,
-                completed: item.is_checked,
-                phase_id: item.phase_id,
-              }))}
-              canEdit={canEdit}
-            />
-          </div>
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ProjectOverviewForm
+            project={{
+              id: project.id,
+              name: project.name,
+              client: project.client,
+              area: project.area,
+              opening_date: project.opening_date,
+              opening_date_display: openingDateDisplay,
+              opening_date_input_value: openingDateInputValue,
+              pic_designer_id: project.pic_designer_id,
+              pic_drafter_id: project.pic_drafter_id,
+              designer_name: project.designer.name,
+              drafter_name: project.drafter.name,
+            }}
+            designers={designers}
+            drafters={drafters}
+            clients={clients}
+            role={role as Role}
+            canEdit={canEdit}
+            currentProgress={getProjectProgress(project.phases)}
+            phases={project.phases}
+            deferredActivities={project.activities as any}
+          />
         </div>
+
+        <div className="lg:col-span-1 space-y-6 text-sm font-sans">
+          {role === Role.ADMIN && (
+            <ProjectAdminActions
+              projectId={project.id}
+              projectName={project.name}
+              isCompleted={project.status_progress === "COMPLETED"}
+            />
+          )}
+          
+          <ProjectChecklistOverview
+            projectId={project.id}
+            checklists={globalChecklists.map((item) => ({
+              id: item.id,
+              label: item.label,
+              completed: item.is_checked,
+              phase_id: item.phase_id,
+            }))}
+            canEdit={canEdit}
+          />
+        </div>
+      </div>
     </DashboardPageShell>
   );
 }

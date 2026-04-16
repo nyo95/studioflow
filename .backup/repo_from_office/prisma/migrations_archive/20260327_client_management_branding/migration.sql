@@ -1,0 +1,1 @@
+-- Migration archived into initial_state

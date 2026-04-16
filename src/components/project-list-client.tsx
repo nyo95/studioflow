@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -11,7 +11,6 @@ import { DeleteProjectButton } from "@/components/delete-button";
 import { getProjectProgress, formatPhaseName } from "@/lib/project-progress";
 import { ClientBranding } from "@/components/client-branding";
 import { 
-  Heading, 
   TableCard, 
   TableCardHeader, 
   TableCardHead, 
@@ -111,8 +110,8 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
       // 2. Column-based Sort (if priorities are equal)
       if (!sortColumnId) return 0;
 
-      let left: any;
-      let right: any;
+      let left: string | number = "";
+      let right: string | number = "";
 
       if (sortColumnId === "name") {
         left = leftRow.name;
@@ -123,6 +122,8 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
       } else if (sortColumnId === "area") {
         left = leftRow.area ?? Number.POSITIVE_INFINITY;
         right = rightRow.area ?? Number.POSITIVE_INFINITY;
+      } else {
+        return 0;
       }
 
       if (left === right) return 0;
@@ -299,6 +300,9 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
                               className="bg-indigo-50 border-indigo-200 text-indigo-700 text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-md"
                             >
                               {formatPhaseName(p.name)} <span className="ml-1 opacity-60">v{p.major}.{p.minor}</span>
+                              {p.status_enum === 'ON_REVIEW_INTERNAL' && <span className="ml-1.5 border-l border-indigo-200 pl-1.5 text-indigo-500 font-medium">ON INTERNAL REVIEW</span>}
+                              {p.status_enum === 'ON_REVIEW_CLIENT' && <span className="ml-1.5 border-l border-indigo-200 pl-1.5 text-orange-500 font-medium">ON CLIENT REVIEW</span>}
+                              {p.status_enum === 'APPROVED_INTERNAL' && <span className="ml-1.5 border-l border-indigo-200 pl-1.5 text-emerald-500 font-medium">APPROVED INTERNAL</span>}
                             </Badge>
                           ))}
                         </div>
@@ -316,7 +320,7 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
                           variant="outline" 
                           className="bg-emerald-50 border-emerald-200 text-emerald-700 text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-md"
                         >
-                          PROJECT DONE ✓
+                          PROJECT DONE âœ“
                         </Badge>
                       )}
                     </TableCardCell>
@@ -363,3 +367,4 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
     </div>
   );
 }
+

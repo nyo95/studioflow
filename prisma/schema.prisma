@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -56,6 +55,7 @@ model Project {
   schedule_entries  ProjectScheduleEntry[]
   timelines         ProjectTimeline[]
   activities        Activity[]
+  deleted_at        DateTime?
 }
 
 model Phase {
@@ -88,18 +88,18 @@ model Revision {
 
 model Activity {
   id                    String         @id @default(uuid())
-  project_id            String?
+  project_id            String
   revision_id           String?
   content               String
   mode                  ActivityMode   @default(TODO)
   status                ActivityStatus @default(OPEN)
   assigned_to_id        String?
-  origin_phase_id       String?
+  phase_id              String?
   deferred_from_version String?
   created_at            DateTime       @default(now())
   updated_at            DateTime?      @updatedAt
 
-  project Project? @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   revision    Revision? @relation(fields: [revision_id], references: [id], onDelete: Cascade)
   assigned_to User?     @relation(fields: [assigned_to_id], references: [id])

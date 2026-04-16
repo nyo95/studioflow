@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -49,7 +49,7 @@ export function LoginForm({ appTitle }: LoginFormProps) {
   return (
     <Card className="w-full max-w-md border-slate-200 bg-white shadow-sm">
       <CardHeader className="space-y-3 text-center">
-        <CardTitle className="font-serif text-3xl font-bold text-slate-950">{appTitle}</CardTitle>
+        <CardTitle className="font-serif text-3xl font-bold text-slate-900">{appTitle}</CardTitle>
         <CardDescription className="text-sm text-slate-500">
           Sign in with your studio email and password.
         </CardDescription>
@@ -96,3 +96,4 @@ export function LoginForm({ appTitle }: LoginFormProps) {
     </Card>
   );
 }
+

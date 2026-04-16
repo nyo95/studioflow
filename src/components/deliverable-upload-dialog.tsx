@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { cn } from "@/lib/utils";
 
 import { useState } from "react";
@@ -33,8 +33,6 @@ interface DeliverableUploadDialogProps {
 
 export function DeliverableUploadDialog({
   revisionId,
-  userId,
-  userRole,
   canMutate,
   phaseLabel,
   revisionLabel,
@@ -175,3 +173,4 @@ export function DeliverableUploadDialog({
     </Dialog>
   );
 }
+

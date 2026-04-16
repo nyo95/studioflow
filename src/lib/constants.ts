@@ -1,0 +1,6 @@
+export const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+export const DEFAULT_DATE_RANGE_DAYS = 30;
+export const DEFAULT_PAGINATION_LIMIT = 50;
+export const PROJECT_MEMBER_FETCH_LIMIT = 100;
+export const ACTIVITY_FETCH_LIMIT = 100;
+export const AUDIT_LOG_LIMIT = 500;

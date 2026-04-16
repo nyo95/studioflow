@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -29,8 +29,6 @@ import {
   TableCardCell,
   Heading
 } from "@/ui_engine";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import { unwrapActionResult } from "@/lib/result";
 
 interface CDItem {
@@ -127,8 +125,6 @@ function buildGroupedRows(items: CDItem[]) {
 export function CDListTable({
   phaseId,
   items,
-  userRole,
-  userId,
   canMutate,
 }: CDListTableProps) {
   const [loading, setLoading] = useState<string | null>(null);
@@ -424,3 +420,4 @@ export function CDListTable({
     </SectionCard>
   );
 }
+

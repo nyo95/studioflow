@@ -1,0 +1,9 @@
+export const FONT_HEADING = "font-serif font-extrabold uppercase tracking-widest";
+export const FONT_BODY = "font-sans font-light";
+export const TEXT_H1 = "text-4xl";
+export const TEXT_H2 = "text-3xl";
+export const TEXT_H3 = "text-2xl";
+export const TEXT_H4 = "text-lg";
+export const TEXT_SIZE_BODY = "text-[13px]";
+export const TEXT_SIZE_BADGE = "text-[10px]";
+export const TEXT_SIZE_HEADING_MAIN = "text-4xl";

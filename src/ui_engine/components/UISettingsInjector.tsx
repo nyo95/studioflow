@@ -38,8 +38,8 @@ export async function UISettingsInjector() {
     settings.rowPaddingY && `--ui-row-padding-y: ${settings.rowPaddingY};`,
     settings.sidebarWidth && `--ui-sidebar-width: ${settings.sidebarWidth};`,
     settings.containerMaxWidth && `--ui-container-max-width: ${settings.containerMaxWidth};`,
-    settings.fontSerif && `--ui-font-serif: ${settings.fontSerif.replace('--font-lora', '--font-lora-base')};`,
-    settings.fontSans && `--ui-font-sans: ${settings.fontSans.replace('--font-inter', '--font-inter-base')};`,
+    settings.fontSerif && `--ui-font-serif: ${settings.fontSerif};`,
+    settings.fontSans && `--ui-font-sans: ${settings.fontSans};`,
   ].filter(Boolean);
 
   if (variables.length === 0) {

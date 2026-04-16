@@ -1,26 +1,28 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
-import { 
-  Plus, 
-  Search, 
-  Loader2, 
-  X,
-  ChevronRight
-} from "lucide-react";
+import { Search, Plus, Loader2, X, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  addScheduleEntryWithMaterialAction,
-  addScheduleEntryInstantAction,
-  getScheduleCategoriesAction,
-  updateScheduleOptionSnapshotAction
-} from "@/actions/schedule-actions";
-import { searchMaterials } from "../../library/actions/material-actions";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
+import { ScheduleSection } from "@/generated/prisma";
+import { getMaterialsAction } from "@/extensions/library/actions/library-actions";
+import { 
+  addScheduleEntryWithMaterialAction, 
+  addScheduleEntryInstantAction,
+  updateScheduleOptionSnapshotAction,
+  getScheduleCategoriesAction 
+} from "@/actions/schedule-actions";
 import { cn } from "@/lib/utils";
-import { MaterialCatalog, ScheduleSection } from "@/generated/prisma";
+import type { MaterialCatalogWithRelations } from "@/extensions/library/types";
+
+// UI Engine Search Bar Tokens (Pillar 2) - design.md compliant
+const UI_ENGINE_SEARCH_INPUT_CLASS = "flex-1 bg-transparent border-none outline-none text-sm font-medium text-slate-900 placeholder:text-slate-400";
+const UI_ENGINE_SEARCH_CATEGORY_CLASS = "text-sm font-medium text-slate-900 uppercase tracking-tight";
+const UI_ENGINE_SEARCH_RESULT_NAME_CLASS = "text-sm font-semibold text-slate-900 truncate group-hover:text-slate-950";
+const UI_ENGINE_SEARCH_EMPTY_CLASS = "text-sm text-slate-400 italic";
 
 interface ScheduleSearchBarProps {
   projectId: string;
@@ -30,74 +32,82 @@ interface ScheduleSearchBarProps {
 
 export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSearchBarProps) {
   const [query, setQuery] = React.useState("");
-  const [showResults, setShowResults] = React.useState(false);
   const [isSearching, setIsSearching] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
-  const [materials, setMaterials] = React.useState<any[]>([]);
-  const [categories, setCategories] = React.useState<string[]>([]);
+  const [materials, setMaterials] = React.useState<MaterialCatalogWithRelations[]>([]);
+  const [showResults, setShowResults] = React.useState(false);
+  
+  // Creation Flow State
   const [step, setStep] = React.useState<"SEARCH" | "CATEGORY">("SEARCH");
   const [newMaterialName, setNewMaterialName] = React.useState("");
+  const [categories, setCategories] = React.useState<string[]>([]);
   const [categoryQuery, setCategoryQuery] = React.useState("");
-  
+
   const searchRef = React.useRef<HTMLDivElement>(null);
 
+  // Close results on click outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setShowResults(false);
+        if (step === "CATEGORY") reset();
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [step]);
 
-  const reset = () => {
-    setQuery("");
-    setCategoryQuery("");
-    setNewMaterialName("");
-    setStep("SEARCH");
-    setShowResults(false);
-  };
-
-  const handleSearch = React.useCallback(async (q: string) => {
-    if (q.length < 2) {
+  const loadMaterials = React.useCallback(async (q: string) => {
+    if (!q.trim()) {
       setMaterials([]);
       return;
     }
     setIsSearching(true);
     try {
-      const results = await searchMaterials({ query: q, limit: 10 });
+      const results = unwrapActionResult(await getMaterialsAction({ 
+        search: q,
+        limit: 10 
+      })) as MaterialCatalogWithRelations[];
       setMaterials(results);
-    } catch (error) {
-      console.error("Search failed:", error);
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsSearching(false);
     }
   }, []);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      if (step === "SEARCH") handleSearch(query);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query, handleSearch, step]);
-
   const loadCategories = async () => {
     try {
-      const result = unwrapActionResult(await getScheduleCategoriesAction({ section }));
-      setCategories(result.map(c => c.category));
-    } catch (e) {
-      console.error(e);
+      const results = unwrapActionResult(await getScheduleCategoriesAction({ section })) as { category: string }[];
+      setCategories(results.map(r => r.category));
+    } catch (error) {
+      console.error("Failed to load categories:", error);
     }
   };
 
-  const handleSelectMaterial = async (material: any) => {
+  React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (query && step === "SEARCH") loadMaterials(query);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [query, loadMaterials, step]);
+
+  const reset = () => {
+    setQuery("");
+    setMaterials([]);
+    setShowResults(false);
+    setStep("SEARCH");
+    setNewMaterialName("");
+    setCategoryQuery("");
+  };
+
+  const handleSelectMaterial = async (material: MaterialCatalogWithRelations) => {
     setIsCreating(true);
     try {
       await addScheduleEntryWithMaterialAction({
         projectId,
+        materialId: material.id,
         section,
-        materialId: material.id
       });
       toast.success(`Added: ${material.product_type}`);
       reset();
@@ -163,7 +173,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
             }}
             onFocus={() => setShowResults(true)}
             placeholder="Search material libraries or type new name to add..."
-            className="flex-1 bg-transparent border-none outline-none text-sm font-medium text-slate-900 placeholder:text-slate-400"
+            className={UI_ENGINE_SEARCH_INPUT_CLASS}
           />
         ) : (
           <div className="flex-1 flex items-center gap-2 overflow-hidden">
@@ -176,7 +186,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
               value={categoryQuery}
               onChange={(e) => setCategoryQuery(e.target.value)}
               placeholder="Type or select category..."
-              className="flex-1 bg-transparent border-none outline-none text-sm font-medium text-slate-900 placeholder:text-slate-400"
+              className={UI_ENGINE_SEARCH_INPUT_CLASS}
             />
           </div>
         )}
@@ -193,6 +203,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
         {isCreating && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
       </div>
 
+      {/* Results Dropdown */}
       {showResults && (
         <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           <ScrollArea className="max-h-[400px]">
@@ -218,11 +229,11 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-slate-900 truncate group-hover:text-slate-950">
+                            <div className={UI_ENGINE_SEARCH_RESULT_NAME_CLASS}>
                               {m.product_type}
                             </div>
                             <div className="text-[11px] text-slate-500 truncate">
-                              {m.vendor?.brand_name || "Unknown Brand"} • {m.category}
+                              {m.vendor?.brand_name || "Unknown Brand"} â€¢ {m.category}
                             </div>
                           </div>
                         </button>
@@ -260,7 +271,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
                       onClick={() => handleFinalizeCreate(cat)}
                       className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-slate-50 transition-colors group"
                     >
-                      <span className="text-sm font-medium text-slate-900 uppercase tracking-tight">{cat}</span>
+                      <span className={UI_ENGINE_SEARCH_CATEGORY_CLASS}>{cat}</span>
                       <Plus className="h-4 w-4 text-slate-300 group-hover:text-slate-900" />
                     </button>
                   ))}
@@ -282,3 +293,4 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
     </div>
   );
 }
+

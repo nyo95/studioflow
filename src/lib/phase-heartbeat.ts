@@ -1,76 +1,56 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
-import { CommentWithAuthor } from "@/extensions/live-collaboration/types/comment";
+import { ACTIVITY_FETCH_LIMIT, MILLISECONDS_PER_DAY } from "@/lib/constants";
+import type { PhaseHeartbeatSnapshot } from "@/types/common";
 
-export interface PhaseHeartbeatChecklistItem {
-  id: string;
-  label: string;
-  is_checked: boolean;
-  phase_id: string | null;
-}
-
-export interface Activity {
-  id: string;
-  content: string;
-  mode: string;
-  status: string;
-}
-
-export interface PhaseHeartbeatSnapshot {
-  comments: CommentWithAuthor[];
-  checklistItems: PhaseHeartbeatChecklistItem[];
-  activities: Activity[];
-}
+export type {
+  PhaseHeartbeatActivity as Activity,
+  PhaseHeartbeatChecklistItem,
+  PhaseHeartbeatSnapshot,
+} from "@/types/common";
 
 export async function getPhaseHeartbeatSnapshot(
   phaseId: string
 ): Promise<PhaseHeartbeatSnapshot> {
-  const commentsSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-  const [comments, checklistItems, activeRevision] = await Promise.all([
-    prisma.comment.findMany({
-      where: {
-        phase_id: phaseId,
-        created_at: {
-          gte: commentsSince,
+  try {
+    const [checklistItems, activeRevision] = await Promise.all([
+      prisma.projectChecklist.findMany({
+        where: { phase_id: phaseId },
+        select: {
+          id: true,
+          label: true,
+          is_checked: true,
+          phase_id: true,
         },
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        orderBy: { id: "asc" },
+      }),
+      prisma.revision.findFirst({
+        where: { phase_id: phaseId, status_enum: "ACTIVE" },
+        include: {
+          activities: {
+            select: {
+              id: true,
+              content: true,
+              mode: true,
+              status: true,
+              phase_id: true,
+              deferred_from_version: true
+            },
+            orderBy: { id: "asc" },
+            take: ACTIVITY_FETCH_LIMIT,
           },
         },
-      },
-      orderBy: { created_at: "asc" },
-    }),
-    prisma.projectChecklist.findMany({
-      where: { phase_id: phaseId },
-      select: {
-        id: true,
-        label: true,
-        is_checked: true,
-        phase_id: true,
-      },
-      orderBy: { id: "asc" },
-    }),
-    prisma.revision.findFirst({
-      where: { phase_id: phaseId, status_enum: "ACTIVE" },
-      include: {
-        activities: {
-          orderBy: { id: "asc" },
-        },
-      },
-      orderBy: [{ major: "desc" }, { minor: "desc" }],
-    }),
-  ]);
+        orderBy: [{ major: "desc" }, { minor: "desc" }],
+      }),
+    ]);
 
-  return {
-    comments,
-    checklistItems,
-    activities: activeRevision?.activities ?? [],
-  };
+    return {
+      checklistItems,
+      activities: activeRevision?.activities ?? [],
+    };
+  } catch (error) {
+    console.error(`[HEARTBEAT_FAILURE] for phase ${phaseId}:`, error);
+    throw error; // Re-throw to inform the API route
+  }
 }

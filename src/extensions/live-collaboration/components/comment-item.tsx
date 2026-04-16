@@ -1,4 +1,4 @@
-import { CommentWithAuthor } from "../types/comment";
+﻿import { CommentWithAuthor } from "../types/comment";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRelativeTime } from "@/hooks/use-hydration";
@@ -44,3 +44,4 @@ export function CommentItem({ comment, onDelete, isDeleting, canDelete }: Commen
     </div>
   );
 }
+

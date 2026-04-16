@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { CalendarCheck2, CircleDashed } from "lucide-react";
 import { prisma } from "@/lib/db";
@@ -257,9 +257,12 @@ export default async function TodayPage() {
 
                             {phase.revisionId ? (
                               <TodayInlineAdd
-                                phaseId={phase.phaseId}
-                                revisionId={phase.revisionId}
-                                phaseName={phase.phaseName}
+                                phases={group.phases.map(p => ({
+                                  id: p.phaseId,
+                                  name: p.phaseName,
+                                  revisionId: p.revisionId!,
+                                  status: p.phaseStatus
+                                }))}
                                 className="pt-4"
                                 buttonLabel={`Add todo${group.phases.length > 1 ? ` to ${phase.phaseName}` : ""}`}
                                 placeholder={`Add todo to ${phase.phaseName}...`}
@@ -287,3 +290,4 @@ export default async function TodayPage() {
     </DashboardPageShell>
   );
 }
+

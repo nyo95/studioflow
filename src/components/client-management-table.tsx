@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -278,7 +278,7 @@ export function ClientManagementTable({ clients }: ClientManagementTableProps) {
         <DialogContent className="sm:max-w-[480px]">
           <form onSubmit={handleSubmit} className="space-y-6">
             <DialogHeader>
-              <DialogTitle className="font-serif text-xl font-bold text-slate-950">Edit Client Branding</DialogTitle>
+              <DialogTitle className="font-serif text-xl font-bold text-slate-900">Edit Client Branding</DialogTitle>
               <DialogDescription>
                 Update the client address and logo URL used across the app.
               </DialogDescription>
@@ -357,7 +357,7 @@ export function ClientManagementTable({ clients }: ClientManagementTableProps) {
         <DialogContent className="sm:max-w-[520px]">
           <form onSubmit={handleMerge} className="space-y-6">
             <DialogHeader>
-              <DialogTitle className="font-serif text-xl font-bold text-slate-950">
+              <DialogTitle className="font-serif text-xl font-bold text-slate-900">
                 Merge Clients
               </DialogTitle>
               <DialogDescription>
@@ -427,3 +427,4 @@ export function ClientManagementTable({ clients }: ClientManagementTableProps) {
     </>
   );
 }
+

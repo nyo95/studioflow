@@ -13,7 +13,7 @@ export default async function DeliverablesTrackingPage({
   const session = await getSession();
 
   const project = await prisma.project.findUnique({
-    where: { id: projectId },
+    where: { id: projectId, deleted_at: null },
     select: {
       id: true,
       name: true,

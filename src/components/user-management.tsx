@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Role } from "@/generated/prisma";
 import {
@@ -61,7 +61,7 @@ export function UserManagement({
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div className="space-y-1">
-          <h2 className="font-serif text-2xl font-bold text-slate-950">User Management</h2>
+          <h2 className="font-serif text-2xl font-bold text-slate-900">User Management</h2>
           <p className="text-[11px] font-medium text-slate-400 uppercase tracking-widest">Studio Roster & Roles</p>
         </div>
         
@@ -154,3 +154,4 @@ export function UserManagement({
     </div>
   );
 }
+
