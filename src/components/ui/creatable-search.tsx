@@ -74,20 +74,20 @@ export function CreatableSearch({
     // Don't clear search when value is unset - let user keep typing
   }, [value, allOptions]);
 
-  const filterOptions = (opts: Option[]) => {
+  const filterOptions = React.useCallback((opts: Option[]) => {
     const normalized = search.trim().toLowerCase();
     if (!normalized) return opts;
     return opts.filter((o) => o.name.toLowerCase().includes(normalized));
-  };
+  }, [search]);
 
-  const filteredFlat = React.useMemo(() => filterOptions(allOptions), [search, allOptions]);
+  const filteredFlat = React.useMemo(() => filterOptions(allOptions), [filterOptions, allOptions]);
 
   const filteredGroups = React.useMemo(() => {
     if (!groups) return null;
     return groups
       .map((g) => ({ ...g, options: filterOptions(g.options) }))
       .filter((g) => g.options.length > 0);
-  }, [search, groups]);
+  }, [filterOptions, groups]);
 
   const showCreateOption = React.useMemo(() => {
     const normalized = search.trim();

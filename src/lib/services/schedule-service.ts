@@ -119,7 +119,7 @@ export async function buildScheduleSnapshot(
         catalog_reference_url: item.catalog_reference_url,
         metadata: (item.metadata as Record<string, unknown>) || {},
       },
-      snapshot_source_payload: null,
+      snapshot_source_payload: undefined,
       snapshot_captured_at: new Date().toISOString(),
     };
   }
@@ -156,7 +156,7 @@ export async function buildScheduleSnapshot(
       catalog_reference_url: manualData?.specs?.catalog_reference_url ?? null,
       metadata: (manualData?.specs?.metadata as Record<string, unknown>) || {},
     },
-    snapshot_source_payload: manualData?.snapshot_source_payload ?? null,
+    snapshot_source_payload: manualData?.snapshot_source_payload || undefined,
     snapshot_captured_at: new Date().toISOString(),
   };
 }
@@ -738,11 +738,7 @@ export class ScheduleService {
   ) {
     const entry = await tx.projectScheduleEntry.update({
       where: { id: entryId },
-      data: {
-        ...(data.schedule_qty !== undefined ? { qty: data.schedule_qty } : {}),
-        ...(data.schedule_unit !== undefined ? { unit: data.schedule_unit } : {}),
-        ...(data.schedule_location !== undefined ? { schedule_location: data.schedule_location } : {}),
-      },
+      data,
     });
 
     if (userId) {
@@ -774,6 +770,8 @@ export class ScheduleService {
         schedule_code: entry.schedule_code,
       });
     }
+
+    await this.normalizeCodes(tx, entry.project_id, entry.section, entry.schedule_category);
 
     return entry;
   }
@@ -1005,7 +1003,68 @@ export class ScheduleService {
    * @param category Category name.
    * @param section Schedule section.
    */
-  static async normalizeAllProjectsCodesForCategory(tx: PrismaTransaction, category: string, section: ScheduleSection) {
+  /**
+   * Moves an entry from one category to another and re-normalizes both.
+   */
+  static async moveEntryToCategory(
+    tx: PrismaTransaction,
+    entryId: string,
+    targetCategory: string,
+    newSortOrder: number,
+    userId?: string
+  ) {
+    const entry = await tx.projectScheduleEntry.findUniqueOrThrow({
+      where: { id: entryId },
+    });
+
+    const sourceCategory = entry.schedule_category;
+    const normalizedTarget = targetCategory.trim().toUpperCase();
+
+    if (sourceCategory === normalizedTarget) {
+      // Just a reorder within same category, though usually handled by reorderEntries
+      await tx.projectScheduleEntry.update({
+        where: { id: entryId },
+        data: { schedule_sort_order: newSortOrder }
+      });
+      await this.normalizeCodes(tx, entry.project_id, entry.section, normalizedTarget);
+      return;
+    }
+
+    // Find prefix for target category
+    const prefixRef = await tx.prefixDictionary.findUnique({
+      where: { 
+        section_schedule_category: {
+          section: entry.section,
+          schedule_category: normalizedTarget
+        }
+      }
+    });
+
+    // Update entry
+    await tx.projectScheduleEntry.update({
+      where: { id: entryId },
+      data: {
+        schedule_category: normalizedTarget,
+        prefix_id: prefixRef?.id || null,
+        schedule_sort_order: newSortOrder
+      }
+    });
+
+    // Normalize both
+    await this.normalizeCodes(tx, entry.project_id, entry.section, sourceCategory);
+    await this.normalizeCodes(tx, entry.project_id, entry.section, normalizedTarget);
+
+    if (userId) {
+      await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_ENTRY, "ProjectScheduleEntry", entryId, userId, {
+        project_id: entry.project_id,
+        from_category: sourceCategory,
+        to_category: normalizedTarget,
+        action: "MOVE_CATEGORY"
+      });
+    }
+  }
+
+  static async normalizeAllProjectsCodesForCategory(tx: PrismaTransaction, category: string, section: ScheduleSection, userId?: string) {
     const normalizedCategory = category.trim().toUpperCase();
     const projectIds = await tx.projectScheduleEntry.findMany({
       where: { schedule_category: normalizedCategory, section },
@@ -1015,6 +1074,14 @@ export class ScheduleService {
 
     for (const { project_id } of projectIds) {
       await this.normalizeCodes(tx, project_id, section, normalizedCategory);
+    }
+
+    if (userId) {
+      await insertAuditLog(tx, AUDIT_ACTIONS.SYSTEM_MAINTENANCE, "ProjectScheduleEntry", "BULK_NORMALIZE", userId, {
+        category: normalizedCategory,
+        section,
+        project_count: projectIds.length
+      });
     }
   }
 

@@ -1,0 +1,107 @@
+"use client";
+
+import React from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { ScheduleTableHeader } from "./ScheduleTableHeader";
+import { ScheduleRow } from "./ScheduleRow";
+import { cn } from "@/lib/utils";
+import type { ProjectScheduleSheetPayload } from "../../types";
+import type { ScheduleSection } from "@/generated/prisma";
+
+interface ScheduleTableProps {
+  sheet: ProjectScheduleSheetPayload;
+  section?: ScheduleSection;
+  onEditEntry?: (entry: any) => void;
+  onDeleteEntry?: (id: string) => void;
+  onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
+  onAddAlternative?: (entryId: string, category: string) => void;
+}
+
+export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUpdateLocation, onAddAlternative }: ScheduleTableProps) {
+  const isFixture = section === "FIXTURE";
+  const [collapsedCategories, setCollapsedCategories] = React.useState<Set<string>>(new Set());
+
+  const toggleCategory = (category: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="w-full bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <ScheduleTableHeader isFixture={isFixture} />
+          <tbody>
+            {sheet.groups.map((group) => {
+              const isCollapsed = collapsedCategories.has(group.schedule_category);
+
+              return (
+                <React.Fragment key={group.schedule_category}>
+                  {/* Category Divider Row */}
+                  <tr 
+                    className="group/category bg-slate-50/50 hover:bg-slate-50 border-b border-slate-200/80 cursor-pointer transition-colors"
+                    onClick={() => toggleCategory(group.schedule_category)}
+                  >
+                    <td colSpan={isFixture ? 5 : 4} className="px-5 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-400 group-hover/category:text-slate-600 transition-colors">
+                          {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                        </div>
+                        <span className="font-lora text-xs font-bold text-slate-700 uppercase tracking-[0.18em]">
+                          {group.schedule_category}
+                        </span>
+                        <span className="font-sans text-[10px] font-black bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full leading-none">
+                          {group.entries.length}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {!isCollapsed && (
+                    group.entries.length > 0 ? (
+                      group.entries.map((entry) => (
+                        <ScheduleRow
+                          key={entry.id}
+                          entry={entry}
+                          section={isFixture ? "FIXTURE" : "MATERIAL"}
+                          onEdit={onEditEntry}
+                          onDelete={onDeleteEntry}
+                          onUpdateLocation={onUpdateLocation}
+                          onAddAlternative={() => onAddAlternative?.(entry.id, group.schedule_category)}
+                        />
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={isFixture ? 5 : 4} className="px-5 py-8 text-center text-slate-400 font-sans text-xs italic">
+                          No items in this category
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </React.Fragment>
+              );
+            })}
+
+            {sheet.groups.length === 0 && (
+              <tr>
+                <td colSpan={isFixture ? 5 : 4} className="px-6 py-24 text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="font-lora text-lg text-slate-400">No entries found</p>
+                    <p className="font-sans text-sm text-slate-400">Start by adding a material or importing CSV data.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

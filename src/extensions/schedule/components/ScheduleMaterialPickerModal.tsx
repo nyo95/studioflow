@@ -113,7 +113,7 @@ export function ScheduleMaterialPickerModal({
     setIsSearching(true);
     try {
       const res = unwrapActionResult(await getMaterialsAction({ search: searchQuery }));
-      setMaterials(res);
+      setMaterials(res.items);
     } catch (error) {
       toast.error("Failed to fetch library catalog");
     } finally {
@@ -140,7 +140,7 @@ export function ScheduleMaterialPickerModal({
             search: searchQuery.trim() || undefined,
           }),
         );
-        if (isMounted) setMaterials(results);
+        if (isMounted) setMaterials(results.items);
       } catch (error) {
         console.error("Search failed:", error);
       } finally {

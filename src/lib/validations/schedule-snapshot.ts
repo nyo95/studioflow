@@ -25,9 +25,9 @@ export const ScheduleSnapshotSchema = z.object({
     catalog_color: z.string().nullable().optional(),
     catalog_finishing: z.string().nullable().optional(),
     catalog_reference_url: z.string().nullable().optional(),
-    metadata: z.any().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   }),
-  snapshot_source_payload: z.any().optional(),
+  snapshot_source_payload: z.record(z.string(), z.unknown()).optional(),
   snapshot_captured_at: z.string().datetime().or(z.string()), 
 });
 

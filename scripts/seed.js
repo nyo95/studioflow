@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { PrismaClient } = require("../src/generated/prisma");
 const { Pool } = require('pg');
 const { PrismaPg } = require('@prisma/adapter-pg');

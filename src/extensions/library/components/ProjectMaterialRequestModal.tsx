@@ -59,7 +59,7 @@ export function ProjectMaterialRequestModal({
     setLoading(true);
     try {
       const result = unwrapActionResult(await getMaterialsAction({ search, status: 'APPROVED' }));
-      setMaterials(result);
+      setMaterials(result.items);
     } catch (error) {
       toast.error("Failed to fetch library catalog");
     } finally {

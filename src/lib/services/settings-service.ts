@@ -1,3 +1,5 @@
+import { Prisma, ScheduleSection } from "@/generated/prisma";
+import { ScheduleService } from "./schedule-service";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { SYSTEM_CONFIG_ID, GLOBAL_CHECKLIST_PHASE } from "@/lib/permissions";
@@ -5,8 +7,6 @@ import { insertAuditLog } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/lib/services/audit";
 import { sanitizeUISettings } from "@/lib/ui-settings";
 import type { UISettings } from "@/types/common";
-import { ScheduleSection } from "@/generated/prisma";
-import { ScheduleService } from "./schedule-service";
 
 /**
  * Functional Service Layer for Settings operations.
@@ -127,10 +127,10 @@ export const settingsService = {
 
     const result = await tx.systemConfig.upsert({
       where: { id: SYSTEM_CONFIG_ID },
-      update: data as any,
+      update: data as Prisma.SystemConfigUpdateInput,
       create: {
         id: SYSTEM_CONFIG_ID,
-        ...(data as any),
+        ...(data as Prisma.SystemConfigCreateInput),
       },
     });
 

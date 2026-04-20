@@ -132,23 +132,21 @@ export function TopHeader({
   }, [projectSearchItems, query]);
 
   useEffect(() => {
-    setIsOpen(false);
+    if (isOpen) setTimeout(() => setIsOpen(false), 0);
   }, [pathname]);
 
+  // Re-sync active index when query or filtered list changes
   useEffect(() => {
-    setActiveIndex(0);
+    if (activeIndex !== 0) setTimeout(() => setActiveIndex(0), 0);
   }, [query]);
 
-  useEffect(() => {
-    if (activeIndex > filteredProjects.length - 1) {
-      setActiveIndex(0);
-    }
-  }, [activeIndex, filteredProjects]);
+  // Ensure index is within bounds of filtered list
+  const effectiveActiveIndex = activeIndex > filteredProjects.length - 1 ? 0 : activeIndex;
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
-      if (!searchContainerRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
+      if (!searchContainerRef.current?.contains(event.target as Node) && isOpen) {
+        setTimeout(() => setIsOpen(false), 0);
       }
     }
 
@@ -156,7 +154,7 @@ export function TopHeader({
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
     };
-  }, []);
+  }, [isOpen]);
 
   function handleProjectSelect(projectId: string) {
     setIsOpen(false);

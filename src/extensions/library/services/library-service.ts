@@ -159,8 +159,16 @@ export class LibraryService {
    */
   static async getAllMaterials(
     tx: PrismaTransaction,
-    filters?: { category?: string; vendorId?: string; search?: string; hasPhysicalOnly?: boolean; status?: LibraryItemStatus }
-  ) {
+    filters?: { 
+      category?: string; 
+      vendorId?: string; 
+      search?: string; 
+      hasPhysicalOnly?: boolean; 
+      status?: LibraryItemStatus;
+      page?: number;
+      pageSize?: number;
+    }
+  ): Promise<{ items: any[]; total: number }> {
     const where: Prisma.MaterialCatalogWhereInput = {
       deleted_at: null
     };
@@ -172,24 +180,25 @@ export class LibraryService {
       where.physical_samples = { some: {} };
     }
 
-    if (filters?.search) {
-      where.OR = [
-        { catalog_sku: { contains: filters.search, mode: "insensitive" } },
-        { catalog_product_name: { contains: filters.search, mode: "insensitive" } },
-        { catalog_motif: { contains: filters.search, mode: "insensitive" } },
-        { catalog_category: { contains: filters.search, mode: "insensitive" } },
-        { vendor: { brand_name: { contains: filters.search, mode: "insensitive" } } },
-      ];
-    }
+    const page = filters?.page || 1;
+    const pageSize = filters?.pageSize || 24;
+    const skip = (page - 1) * pageSize;
 
-    return tx.materialCatalog.findMany({
-      where,
-      include: { 
-        vendor: { include: { contacts: true } },
-        physical_samples: true
-      },
-      orderBy: [{ catalog_sku: "asc" }, { created_at: "desc" }],
-    });
+    const [items, total] = await Promise.all([
+      tx.materialCatalog.findMany({
+        where,
+        include: { 
+          vendor: { include: { contacts: true } },
+          physical_samples: true
+        },
+        orderBy: [{ catalog_sku: "asc" }, { created_at: "desc" }],
+        skip,
+        take: pageSize,
+      }),
+      tx.materialCatalog.count({ where }),
+    ]);
+
+    return { items, total };
   }
 
   /**
@@ -226,9 +235,9 @@ export class LibraryService {
         data: { brand_name: normalized }
       });
       return created.id;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Race condition fallback: if another request created it in between
-      if (error.code === "P2002") {
+      if (error instanceof Error && (error as { code?: string }).code === "P2002") {
         const fallback = await tx.vendor.findFirst({
           where: { brand_name: { equals: normalized, mode: "insensitive" } }
         });
@@ -417,7 +426,7 @@ export class LibraryService {
 
     // Skip system-reserved brands from being created as vendors
     if (brand === "PENDING" || brand === "RESERVED" || brand === "[RESERVED]") {
-      return null as any; // Return null to indicate no material was synced
+      return null; // Return null to indicate no material was synced
     }
 
     // 1. Resolve Vendor (Refactored for Anti-Ghosting)
@@ -653,6 +662,8 @@ export class LibraryService {
       data: {
         project_id: data.project_id,
         material_id: materialId || undefined,
+        schedule_entry_id: data.schedule_entry_id || undefined,
+        schedule_option_id: data.schedule_option_id || undefined,
         custom_material_name: this.normalizeOptional(data.custom_material_name),
         reference_url: this.normalizeOptional(data.reference_url),
         requested_by_id: userId,

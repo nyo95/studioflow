@@ -162,12 +162,12 @@ export async function importScheduleFromCsv(
     if (existing) {
       await upsertApprovedOption(tx, existing.id, snapshotJson);
 
-      if (row.qty !== undefined || row.unit !== undefined || row.location !== undefined) {
+      if (row.schedule_qty !== undefined || row.schedule_unit !== undefined || row.location !== undefined) {
         await tx.projectScheduleEntry.update({
           where: { id: existing.id },
           data: {
-            ...(row.qty !== undefined ? { qty: row.qty } : {}),
-            ...(row.unit !== undefined ? { unit: row.unit } : {}),
+            ...(row.schedule_qty !== undefined ? { schedule_qty: row.schedule_qty } : {}),
+            ...(row.schedule_unit !== undefined ? { schedule_unit: row.schedule_unit } : {}),
             ...(row.location !== undefined ? { schedule_location: row.location } : {}),
           },
         });
@@ -210,8 +210,8 @@ export async function importScheduleFromCsv(
         prefix_id: prefixDict.id,
         schedule_sort_order: (lastEntry?.schedule_sort_order ?? 0) + 1,
         index_number: (lastEntry?.index_number ?? 0) + 1,
-        qty: row.qty ?? null,
-        unit: row.unit ?? null,
+        schedule_qty: row.schedule_qty ?? null,
+        schedule_unit: row.schedule_unit ?? null,
         schedule_location: row.location ?? null,
       },
     });

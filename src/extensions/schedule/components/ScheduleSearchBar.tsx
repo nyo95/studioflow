@@ -58,11 +58,10 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
     }
     setIsSearching(true);
     try {
-      const results = unwrapActionResult(await getMaterialsAction({ 
+      const result = unwrapActionResult(await getMaterialsAction({ 
         search: q,
-        limit: 10 
-      })) as MaterialCatalogWithRelations[];
-      setMaterials(results);
+      }));
+      setMaterials(result.items);
     } catch (err) {
       console.error(err);
     } finally {

@@ -84,6 +84,8 @@ export type MaterialCatalogInput = {
 export type ProjectMaterialRequestInput = {
   project_id: string;
   material_id?: string;
+  schedule_entry_id?: string;
+  schedule_option_id?: string;
   custom_material_name?: string;
   reference_url?: string;
   cover_url?: string;

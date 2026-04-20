@@ -133,8 +133,8 @@ function parseGSheetsRow(row: Record<string, string>, section: "MATERIAL" | "FIX
     contactName: contactInfo.name,
     contactPhone: contactInfo.phone,
     contactEmail: contactInfo.email,
-    qty: parseNumber(row.qty),
-    unit: row.unit || undefined,
+    schedule_qty: parseNumber(row.qty),
+    schedule_unit: row.unit || undefined,
     sourcePayload: row,
   };
 }

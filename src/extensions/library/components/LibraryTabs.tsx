@@ -12,8 +12,10 @@ import { PhysicalInventoryTable } from "./PhysicalInventoryTable";
 import { LibraryFormModal } from "./LibraryFormModal";
 import { MaterialCatalogWithRelations, LibraryVendor, ProjectMaterialRequestWithDetails } from "../types";
 import { MaterialTable } from "./MaterialTable";
+import { MaterialGrid } from "./catalog/MaterialGrid";
 import { MaterialRequestTable } from "./MaterialRequestTable";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { deleteMaterialAction, updateMaterialAction } from "../actions/library-actions";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
@@ -26,6 +28,10 @@ import { ErrorFallback } from "@/components/shared/error-fallback";
 interface LibraryTabsProps {
   vendors: LibraryVendor[];
   materials: MaterialCatalogWithRelations[];
+  totalMaterials: number;
+  currentPage: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
   categories: string[];
   materialCategories?: string[];
   fixtureCategories?: string[];
@@ -39,11 +45,18 @@ interface LibraryTabsProps {
   setShowPhysicalOnly: (val: boolean) => void;
   userRole: string;
   requests: ProjectMaterialRequestWithDetails[];
+  isRefreshing?: boolean;
+  activeTab: string;
+  onTabChange: (val: string) => void;
 }
 
 export function LibraryTabs({
   vendors,
   materials,
+  totalMaterials,
+  currentPage,
+  pageSize,
+  onPageChange,
   categories,
   materialCategories = [],
   fixtureCategories = [],
@@ -56,28 +69,25 @@ export function LibraryTabs({
   showPhysicalOnly,
   setShowPhysicalOnly,
   userRole,
-  requests
+  requests,
+  isRefreshing,
+  activeTab,
+  onTabChange
 }: LibraryTabsProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   
-  const currentTab = searchParams.get("tab") || "catalog";
-  const [activeTab, setActiveTab] = React.useState(currentTab);
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [modalMode, setModalMode] = React.useState<"CREATE" | "EDIT">("CREATE");
-  const [selectedData, setSelectedData] = React.useState<LibraryVendor | MaterialCatalogWithRelations | null>(null);
-
-  // Sync state with URL
-  React.useEffect(() => {
-    setActiveTab(currentTab);
-  }, [currentTab]);
-
   const handleTabChange = (val: string) => {
     const params = new URLSearchParams(searchParams);
     params.set("tab", val);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    onTabChange(val);
   };
+
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [modalMode, setModalMode] = React.useState<"CREATE" | "EDIT">("CREATE");
+  const [selectedData, setSelectedData] = React.useState<LibraryVendor | MaterialCatalogWithRelations | null>(null);
 
   const retryTab = () => router.refresh();
 
@@ -257,16 +267,25 @@ export function LibraryTabs({
               name="Library Catalog"
               fallback={<ErrorFallback title="Catalog Failed" message="Catalog section failed to render." onRetry={retryTab} />}
             >
-              <MaterialTable 
-                materials={materials.filter(m => m.status === 'APPROVED')}
-                userRole={userRole}
-                onEdit={(data) => {
-                  setModalMode("EDIT");
-                  setSelectedData(data);
-                  setIsModalOpen(true);
-                }}
-                onDelete={handleDeleteMaterial}
-              />
+              {isRefreshing ? (
+                <div className="flex items-center justify-center py-24">
+                  <Loader2 className="h-8 w-8 animate-spin text-slate-200" />
+                </div>
+              ) : (
+                <MaterialGrid 
+                  materials={materials}
+                  totalItems={totalMaterials}
+                  currentPage={currentPage}
+                  pageSize={pageSize}
+                  onPageChange={onPageChange}
+                  onEdit={(data) => {
+                    setModalMode("EDIT");
+                    setSelectedData(data);
+                    setIsModalOpen(true);
+                  }}
+                  onDelete={handleDeleteMaterial}
+                />
+              )}
             </ErrorBoundary>
           </TabsContent>
 
@@ -285,19 +304,19 @@ export function LibraryTabs({
               name="Library Queue"
               fallback={<ErrorFallback title="Queue Failed" message="Queue section failed to render." onRetry={retryTab} />}
             >
-              <MaterialTable 
-                materials={materials.filter(m => m.status === 'PENDING')}
-                userRole={userRole}
-                isQueueMode={true}
-                onApprove={handleApproveMaterial}
-                onReject={handleRejectMaterial}
-                onEdit={(data) => {
-                  setModalMode("EDIT");
-                  setSelectedData(data);
-                  setIsModalOpen(true);
-                }}
-                onDelete={handleDeleteMaterial}
-              />
+                <MaterialTable 
+                  materials={materials}
+                  userRole={userRole}
+                  isQueueMode={true}
+                  onApprove={handleApproveMaterial}
+                  onReject={handleRejectMaterial}
+                  onEdit={(data) => {
+                    setModalMode("EDIT");
+                    setSelectedData(data);
+                    setIsModalOpen(true);
+                  }}
+                  onDelete={handleDeleteMaterial}
+                />
             </ErrorBoundary>
           </TabsContent>
           
@@ -319,16 +338,14 @@ export function LibraryTabs({
               name="Physical Inventory"
               fallback={<ErrorFallback title="Inventory Failed" message="Inventory section failed to render." onRetry={retryTab} />}
             >
-              <TableCard>
-                <PhysicalInventoryTable 
-                  materials={materials} 
-                  onEdit={(data) => {
-                    setModalMode("EDIT");
-                    setSelectedData(data);
-                    setIsModalOpen(true);
-                  }} 
-                />
-              </TableCard>
+              <PhysicalInventoryTable 
+                materials={materials} 
+                onEdit={(data) => {
+                  setModalMode("EDIT");
+                  setSelectedData(data);
+                  setIsModalOpen(true);
+                }} 
+              />
             </ErrorBoundary>
           </TabsContent>
 
@@ -337,16 +354,14 @@ export function LibraryTabs({
               name="Vendor Table"
               fallback={<ErrorFallback title="Vendors Failed" message="Vendor section failed to render." onRetry={retryTab} />}
             >
-              <TableCard>
-                <VendorTable 
-                  vendors={vendors} 
-                  onEdit={(data) => {
-                    setModalMode("EDIT");
-                    setSelectedData(data);
-                    setIsModalOpen(true);
-                  }} 
-                />
-              </TableCard>
+              <VendorTable 
+                vendors={vendors} 
+                onEdit={(data) => {
+                  setModalMode("EDIT");
+                  setSelectedData(data);
+                  setIsModalOpen(true);
+                }} 
+              />
             </ErrorBoundary>
           </TabsContent>
         </main>

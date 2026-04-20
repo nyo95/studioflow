@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </h2>
           
           <p className="text-sm text-slate-500 font-inter font-medium tracking-tight mb-8 max-w-md mx-auto">
-            {this.props.name ? `The ${this.props.name} extension` : "This component"} encountered an unexpected error. Don't worry, your data is safe.
+            {this.props.name ? `The ${this.props.name} extension` : "This component"} encountered an unexpected error. Don&apos;t worry, your data is safe.
           </p>
 
           <div className="flex items-center gap-3">

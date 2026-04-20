@@ -4,7 +4,6 @@ import * as React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  FileText,
   GripVertical,
   MoreHorizontal,
   Trash2,
@@ -12,14 +11,16 @@ import {
   Loader2,
   FileUp,
   Globe,
-  ChevronUp,
-  ChevronDown
+  ChevronLeft,
+  ChevronRight,
+  Package
 } from "lucide-react";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { Button } from "@/components/ui/button";
 import { 
   deleteScheduleEntryAction, 
+  deleteScheduleOptionAction,
   updateScheduleOptionSnapshotAction, 
   promoteToLibraryAction 
 } from "@/actions/schedule-actions";
@@ -34,6 +35,7 @@ import {
 import { ProjectScheduleEntryWithRelations, ScheduleOptionSnapshot } from "../types";
 import { ScheduleMaterialPickerModal } from "./ScheduleMaterialPickerModal";
 import { ScheduleSpecEditorModal } from "./ScheduleSpecEditorModal";
+import { ScheduleSampleRequestModal } from "./ScheduleSampleRequestModal";
 import { uploadLibraryImage } from "../../library/lib/upload-client";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +59,7 @@ export function ScheduleEntryRow({
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
   const [isPromoting, setIsPromoting] = React.useState(false);
+  const [isSampleModalOpen, setIsSampleModalOpen] = React.useState(false);
   const [previewImage, setPreviewImage] = React.useState<string | undefined>(undefined);
   
   // Navigation State
@@ -95,19 +98,27 @@ export function ScheduleEntryRow({
     setActiveOptionId(entry.options[prevIndex].id);
   };
 
-  const handleDeleteEntry = async (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      unwrapActionResult(
+      if (entry.options.length > 1) {
+        // Delete only the active alternative option
+        await deleteScheduleOptionAction({
+          projectId: entry.project_id,
+          optionId: activeOption?.id || ''
+        });
+        toast.success('Deleted alternative');
+      } else {
+        // Only one option – delete the whole entry
         await deleteScheduleEntryAction({
           projectId: entry.project_id,
-          entryId: entry.id,
-        })
-      );
-      toast.success(`Deleted ${entry.schedule_code}`);
+          entryId: entry.id
+        });
+        toast.success(`Deleted ${entry.schedule_code}`);
+      }
       onRefresh();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete entry");
+      toast.error(error instanceof Error ? error.message : 'Failed to delete');
     }
   };
 
@@ -156,7 +167,7 @@ export function ScheduleEntryRow({
     }
   };
 
-  const getValidString = (val: any) => {
+  const getValidString = (val: unknown) => {
     if (!val) return null;
     const clean = String(val).trim().toUpperCase();
     // Reject empty strings, literal dashes, N/A, and dummy dimension placeholders
@@ -172,9 +183,6 @@ export function ScheduleEntryRow({
   const materialName = getValidString(snapshot?.catalog_product_name);
   const productSku = getValidString(snapshot?.specs?.catalog_sku);
   const isReservedValue = materialName === "[RESERVED]";
-  let primaryTitleParts = [];
-  if (!isReservedValue && materialName) primaryTitleParts.push(materialName);
-  if (productSku) primaryTitleParts.push(`[${productSku}]`);
 
   // Substitution logic
   let displayTitle = "";
@@ -254,23 +262,6 @@ export function ScheduleEntryRow({
       <TableCell className="w-20 px-4 py-2 align-middle relative">
         <div className="flex items-center gap-2 group/code h-full">
 
-          {hasMultipleOptions && (
-            <div className="flex flex-col items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-              <button 
-                onClick={handlePrevOption}
-                className="p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-900 transition-colors"
-              >
-                <ChevronUp className="h-3 w-3" />
-              </button>
-              <button 
-                onClick={handleNextOption}
-                className="p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-900 transition-colors"
-              >
-                <ChevronDown className="h-3 w-3" />
-              </button>
-            </div>
-          )}
-          
           <div className="flex-1 flex items-center justify-center relative gap-2">
             <div className="font-inter text-base font-black tracking-tighter text-slate-950 uppercase leading-none">{entry.schedule_code}</div>
             
@@ -366,7 +357,7 @@ export function ScheduleEntryRow({
       {/* 3. PRODUCT INFO (flex-1) */}
       <TableCell className="px-6 py-2 align-middle flex-1 min-w-[350px]">
         <div className="flex flex-col gap-1 truncate">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-1">
             <div className={cn(
               "font-lora font-semibold text-[15px] truncate leading-tight", // Premium serif heading
               isReservedValue ? "text-slate-300 italic" : "text-slate-900",
@@ -381,10 +372,53 @@ export function ScheduleEntryRow({
               </div>
             )}
           </div>
-          <div className="text-slate-400 text-[11px] font-medium uppercase tracking-wider truncate flex items-center gap-2">
+          <div className="text-slate-400 text-[11px] font-medium uppercase tracking-wider truncate flex items-center gap-2 mb-1.5">
             <span className="shrink-0 text-slate-900 px-1 py-0.5 bg-slate-100 rounded text-[9px] font-black">{snapshot?.schedule_category}</span>
             <span className="truncate">{displayMeta}</span>
           </div>
+          
+          {/* Option Pill Navigation */}
+          {!isReservedValue && (hasMultipleOptions || activeOption) && (
+            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+              {hasMultipleOptions ? (
+                <div className="flex items-center gap-1 px-1 py-0.5 bg-slate-100/80 hover:bg-slate-200/80 rounded border border-slate-200/50 transition-colors shadow-sm">
+                  <button 
+                    onClick={handlePrevOption}
+                    className="p-0.5 rounded-sm hover:bg-white text-slate-400 hover:text-slate-900 transition-all shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                  </button>
+                  <span className="text-[10px] font-bold text-slate-700 px-2 uppercase tracking-wide">
+                    {activeOption?.option_label || "Option"}
+                    {activeOption?.is_final && <span className="ml-1 text-emerald-600">(Approved)</span>}
+                  </span>
+                  <button 
+                    onClick={handleNextOption}
+                    className="p-0.5 rounded-sm hover:bg-white text-slate-400 hover:text-slate-900 transition-all shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 rounded border border-slate-100 shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                    {activeOption?.option_label || "Option"}
+                    {activeOption?.is_final && <span className="ml-1 text-emerald-600">(Approved)</span>}
+                  </span>
+                </div>
+              )}
+              
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openPicker(entry.id);
+                }}
+                className="flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors rounded uppercase tracking-wider opacity-0 group-hover/row:opacity-100"
+              >
+                <Plus className="h-3 w-3" /> Add Alternative
+              </button>
+            </div>
+          )}
         </div>
       </TableCell>
 
@@ -400,32 +434,45 @@ export function ScheduleEntryRow({
       {/* 5. ACTIONS (w-16) */}
       <TableCell className="w-16 px-4 py-2 text-right align-middle">
         <div className="flex items-center justify-end opacity-0 group-hover/row:opacity-100 transition-opacity duration-200">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-slate-900 focus-visible:ring-0">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[180px] rounded-xl">
-              <DropdownMenuItem 
-                className="cursor-pointer" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openPicker(entry.id);
-                }}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Alternative
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="cursor-pointer text-rose-500 focus:text-rose-600"
-                onClick={handleDeleteEntry}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Entry
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {activeOption && !isReservedValue && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsSampleModalOpen(true);
+              }}
+              title="Request sample"
+              className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
+            >
+              <Package size={14} />
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(e as unknown as React.MouseEvent);
+            }}
+            title="Delete alternative or entry"
+            className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={14} />
+          </button>
+          
+          {isSampleModalOpen && activeOption && (
+            <div onClick={e => e.stopPropagation()}>
+              <ScheduleSampleRequestModal
+                isOpen={isSampleModalOpen}
+                onOpenChange={setIsSampleModalOpen}
+                projectId={entry.project_id}
+                scheduleEntryId={entry.id}
+                scheduleOptionId={activeOption.id}
+                materialNameFallback={displayTitle}
+                materialCatalogId={activeOption.material_catalog_id || undefined}
+                defaultLocation={entry.schedule_location || undefined}
+                onSuccess={() => onRefresh()}
+              />
+            </div>
+          )}
+
         </div>
       </TableCell>
 

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { Prisma, Role } from "@/generated/prisma";
+import { Prisma, Role, PhaseStatus } from "@/generated/prisma";
 import { TodayQuickAddModal } from "@/components/today-quick-add-modal";
 import { TodayView } from "@/components/today-view";
 import {
@@ -17,11 +17,11 @@ function formatPhaseName(name: string) {
 export default async function HomePage() {
   const { userId, role } = await getSession();
 
-  const activePhaseStatuses = ["IN_PROGRESS", "ON_REVIEW_INTERNAL", "ON_REVIEW_CLIENT"];
+  const activePhaseStatuses: PhaseStatus[] = ["IN_PROGRESS", "ON_REVIEW_INTERNAL", "ON_REVIEW_CLIENT"];
 
   const whereClause: Prisma.ProjectWhereInput = {
     phases: {
-      some: { status_enum: { in: activePhaseStatuses as any } },
+      some: { status_enum: { in: activePhaseStatuses } },
     },
   };
 
@@ -34,36 +34,22 @@ export default async function HomePage() {
 
   const projects = await prisma.project.findMany({
     where: whereClause,
-    select: {
-      id: true,
-      name: true,
-      priority: true,
+    include: {
       phases: {
-        where: { status_enum: { in: activePhaseStatuses as any } },
-        select: {
-          id: true,
-          name_enum: true,
-          status_enum: true,
-          order_index: true,
+        where: { status_enum: { in: activePhaseStatuses } },
+        orderBy: { order_index: "asc" },
+        include: {
           revisions: {
             where: { status_enum: "ACTIVE" },
             take: 1,
-            select: {
-              id: true,
+            include: {
               activities: {
                 where: { mode: { in: ["TODO", "FEEDBACK"] } },
                 orderBy: { id: "asc" },
-                select: {
-                  id: true,
-                  content: true,
-                  status: true,
-                  mode: true,
-                },
               },
             },
           },
         },
-        orderBy: { order_index: "asc" },
       },
     },
     orderBy: [
@@ -124,11 +110,11 @@ export default async function HomePage() {
       {projectsWithTasks.length === 0 ? (
         <SectionCard className="min-h-[320px]">
           <div className="flex min-h-[260px] flex-col items-center justify-center gap-4 text-center">
-          <CalendarCheck2 className="h-10 w-10 text-slate-200" />
-          <div className="space-y-1">
-            <h3 className="font-sans text-sm font-medium text-slate-400">No open tasks today.</h3>
-            <p className="text-xs text-slate-300">Active phases and feedback items will appear here.</p>
-          </div>
+            <CalendarCheck2 className="h-10 w-10 text-slate-200" />
+            <div className="space-y-1">
+              <h3 className="font-sans text-sm font-medium text-slate-400">No open tasks today.</h3>
+              <p className="text-xs text-slate-300">Active phases and feedback items will appear here.</p>
+            </div>
           </div>
         </SectionCard>
       ) : (

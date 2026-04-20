@@ -245,6 +245,7 @@ model ProjectMaterialRequest {
   project_id           String
   material_id          String?
   schedule_entry_id    String?
+  schedule_option_id   String?
   custom_material_name String?
   reference_url        String?
   requested_by_id      String
@@ -257,6 +258,7 @@ model ProjectMaterialRequest {
   updated_at           DateTime              @updatedAt
   material             MaterialCatalog?      @relation(fields: [material_id], references: [id])
   schedule_entry       ProjectScheduleEntry? @relation(fields: [schedule_entry_id], references: [id], onDelete: SetNull)
+  schedule_option      ProjectScheduleOption? @relation(fields: [schedule_option_id], references: [id], onDelete: SetNull)
   project              Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requested_by         User                  @relation(fields: [requested_by_id], references: [id])
 }
@@ -283,17 +285,31 @@ model CDList {
 }
 
 model Comment {
+  id               String                @id @default(uuid())
+  content          String
+  author_id        String
+  project_id       String
+  phase_id         String?
+  task_id          String?
+  created_at       DateTime              @default(now())
+  updated_at       DateTime              @updatedAt
+  author           User                  @relation(fields: [author_id], references: [id])
+  phase            Phase?                @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+  project          Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  temp_attachments TemporaryAttachment[]
+}
+
+model TemporaryAttachment {
   id         String   @id @default(uuid())
-  content    String
-  author_id  String
-  project_id String
-  phase_id   String?
-  task_id    String?
+  filename   String
+  url        String
+  file_type  String
+  expires_at DateTime
   created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  author     User     @relation(fields: [author_id], references: [id])
-  phase      Phase?   @relation(fields: [phase_id], references: [id], onDelete: Cascade)
-  project    Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  comment_id String?
+  comment    Comment? @relation(fields: [comment_id], references: [id], onDelete: Cascade)
+
+  @@index([expires_at])
 }
 
 model PrefixDictionary {
@@ -313,8 +329,8 @@ model ProjectScheduleEntry {
   schedule_code     String
   index_number      Int
   schedule_sort_order Int
-  qty               Float?
-  unit              String?
+  schedule_qty     Float?
+  schedule_unit    String?
   schedule_location String?
   section           ScheduleSection          @default(MATERIAL)
   prefix_id         String?
@@ -341,6 +357,7 @@ model ProjectScheduleOption {
   updated_at          DateTime             @updatedAt
   entry               ProjectScheduleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
   material_catalog    MaterialCatalog?     @relation(fields: [material_catalog_id], references: [id], onDelete: SetNull)
+  material_requests   ProjectMaterialRequest[]
 }
 
 model ScheduleTemplate {

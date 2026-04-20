@@ -35,7 +35,7 @@ export function ProjectChatSidebar({
     }
   }, [comments, isSidebarOpen]);
 
-  const handlePost = async (content: string) => {
+  const handlePost = async (content: string, attachmentIds?: string[]) => {
     startTransition(async () => {
       const tempComment: CommentWithAuthor = {
         id: `temp-${Date.now()}`,
@@ -51,12 +51,13 @@ export function ProjectChatSidebar({
           name: currentUserName,
           email: "",
         },
+        temp_attachments: [], // Simplified for optimistic UI
       };
 
       addOptimisticComment(tempComment);
 
       try {
-        const savedComment = await createComment(projectId, content);
+        const savedComment = await createComment(projectId, content, attachmentIds);
         replaceComment(tempComment.id, savedComment);
       } catch (error) {
         removeComment(tempComment.id);

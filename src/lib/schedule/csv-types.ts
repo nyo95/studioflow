@@ -9,8 +9,8 @@ export const GSheetsMaterialRowSchema = z.object({
   image: z.string().optional().nullable(),
   location: z.string().optional().nullable(),
   contact: z.string().optional().nullable(),
-  qty: z.number().optional().nullable(),
-  unit: z.string().optional().nullable(),
+  schedule_qty: z.number().optional().nullable(),
+  schedule_unit: z.string().optional().nullable(),
 });
 
 export const GSheetsFixtureRowSchema = z.object({
@@ -21,8 +21,8 @@ export const GSheetsFixtureRowSchema = z.object({
   image: z.string().optional().nullable(),
   location: z.string().optional().nullable(),
   contact: z.string().optional().nullable(),
-  qty: z.number().optional().nullable(),
-  unit: z.string().optional().nullable(),
+  schedule_qty: z.number().optional().nullable(),
+  schedule_unit: z.string().optional().nullable(),
 });
 
 export type GSheetsMaterialRow = z.infer<typeof GSheetsMaterialRowSchema>;
@@ -37,8 +37,8 @@ export interface ScheduleCsvExportRow {
   image?: string | null;
   location?: string | null;
   contact?: string | null;
-  qty?: number | null;
-  unit?: string | null;
+  schedule_qty?: number | null;
+  schedule_unit?: string | null;
 }
 
 export interface ScheduleCsvImportRow {
@@ -54,8 +54,8 @@ export interface ScheduleCsvImportRow {
   contactPhone?: string;
   contactEmail?: string;
   price?: number;
-  qty?: number;
-  unit?: string;
+  schedule_qty?: number;
+  schedule_unit?: string;
   referenceUrl?: string;
   sourceExternalId?: string;
   sourcePayload?: unknown;

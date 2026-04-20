@@ -334,6 +334,14 @@ export const ReorderScheduleSchema = z.object({
   })),
 });
 
+export const MoveBetweenCategoriesSchema = z.object({
+  projectId: IdSchema,
+  entryId: IdSchema,
+  fromCategory: z.string(),
+  toCategory: z.string(),
+  newIndex: z.number().int().min(0),
+});
+
 export const UpdateScheduleOptionSnapshotSchema = z.object({
   optionId: IdSchema,
   data: z.object({
@@ -353,6 +361,7 @@ export const UpdateScheduleOptionSnapshotSchema = z.object({
       .nullable()
       .transform((v) => (v && v.length > 0 ? v : null)),
     catalog_price: z.number().nullable().optional(),
+    catalog_sub_category: z.string().trim().optional().nullable(),
     catalog_contact_name: z.string().trim().optional().nullable(),
     catalog_contact_phone: z.string().trim().optional().nullable(),
     catalog_contact_email: z

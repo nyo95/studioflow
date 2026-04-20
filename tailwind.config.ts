@@ -16,6 +16,9 @@ export default {
       colors: {
         border: {
           subtle: "rgb(226, 232, 240)", // slate-200
+        },
+        accent: {
+          primary: "#14b8a6", // teal-500
         }
       }
     },

@@ -5,11 +5,12 @@ import { Role } from "@/generated/prisma";
 import { ActionResult, PrismaTransaction } from "@/types/common";
 import { z } from "zod";
 
-function isRedirectError(error: any): boolean {
+function isRedirectError(error: unknown): boolean {
   if (typeof error !== "object" || error === null || !("digest" in error)) {
     return false;
   }
-  return typeof error.digest === "string" && error.digest.startsWith("NEXT_REDIRECT");
+  const errObj = error as { digest: unknown };
+  return typeof errObj.digest === "string" && errObj.digest.startsWith("NEXT_REDIRECT");
 }
 
 interface ActionContextUser {

@@ -23,14 +23,16 @@ export async function insertAuditLog(
     detailsEntry = cleanObject as Prisma.InputJsonValue;
   }
 
+  const detailsObj = detailsEntry as Record<string, unknown> | null;
+
   const inferredProjectId =
-    typeof (detailsEntry as any)?.project_id === "string" 
-      ? (detailsEntry as any).project_id 
+    detailsObj && typeof detailsObj.project_id === "string" 
+      ? (detailsObj.project_id as string)
       : undefined;
       
   const inferredPhaseId =
-    typeof (detailsEntry as any)?.phase_id === "string" 
-      ? (detailsEntry as any).phase_id 
+    detailsObj && typeof detailsObj.phase_id === "string" 
+      ? (detailsObj.phase_id as string) 
       : undefined;
 
   await tx.auditLog.create({

@@ -64,8 +64,16 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
 // --- MATERIAL CATALOG ACTIONS ---
 
 export const getMaterialsAction = createAction<
-  { category?: string; vendorId?: string; search?: string; hasPhysicalOnly?: boolean; status?: LibraryItemStatus } | undefined,
-  MaterialCatalogWithRelations[]
+  { 
+    category?: string; 
+    vendorId?: string; 
+    search?: string; 
+    hasPhysicalOnly?: boolean; 
+    status?: LibraryItemStatus;
+    page?: number;
+    pageSize?: number;
+  } | undefined,
+  { items: MaterialCatalogWithRelations[]; total: number }
 >(
   async ({ input, tx }) => {
     return LibraryService.getAllMaterials(tx, input);

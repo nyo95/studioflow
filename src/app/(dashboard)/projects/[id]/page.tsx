@@ -1,6 +1,3 @@
-import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -8,12 +5,10 @@ import { Role } from "@/generated/prisma";
 import { canEditProjectMetadata } from "@/lib/permissions";
 import { ProjectOverviewForm } from "@/components/project-overview-form";
 import { ProjectChecklistOverview } from "@/components/project-checklist-overview";
-import { Button } from "@/components/ui/button";
-import { DashboardPageShell, PageBackLink, PageHeader, Heading, StatusBadge, ActionSidebar, ActionSidebarSection } from "@/ui_engine";
-import { getProjectProgress, formatPhaseName } from "@/lib/project-progress";
+import { DashboardPageShell, PageBackLink, PageHeader, StatusBadge, ActionSidebar, ActionSidebarSection } from "@/ui_engine";
+import { getProjectProgress } from "@/lib/project-progress";
 import { ProjectAdminActions } from "@/components/project-admin-actions";
 import { PROJECT_MEMBER_FETCH_LIMIT } from "@/lib/constants";
-import { ClipboardList, PackageSearch } from "lucide-react";
 // Removed ProjectScheduleMain as it's now a dedicated extension page
 
 export const generateStaticParams = async () => {
@@ -184,7 +179,7 @@ export default async function ProjectOverviewPage({
             canEdit={canEdit}
             currentProgress={getProjectProgress(project.phases)}
             phases={project.phases}
-            deferredActivities={project.activities as any}
+            deferredActivities={project.activities as React.ComponentProps<typeof ProjectOverviewForm>["deferredActivities"]}
           />
         </div>
 

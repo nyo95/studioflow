@@ -27,7 +27,7 @@ export async function getComments(projectId: string): Promise<CommentWithAuthor[
   return snapshot.comments;
 }
 
-export async function createComment(projectId: string, content: string) {
+export async function createComment(projectId: string, content: string, attachmentIds?: string[]) {
   const { userId, role } = await getSession();
 
   if (!userId) {
@@ -42,18 +42,22 @@ export async function createComment(projectId: string, content: string) {
   );
 
   const normalizedContent = content?.trim();
-  if (!normalizedContent) {
+  // Allow empty content if there are attachments
+  if (!normalizedContent && (!attachmentIds || attachmentIds.length === 0)) {
     throwActionError("Comment cannot be empty", "EMPTY_COMMENT");
   }
-  if (normalizedContent.length > 5000) {
+  if (normalizedContent && normalizedContent.length > 5000) {
     throwActionError("Comment too long (max 5000 chars)", "COMMENT_TOO_LONG");
   }
 
   const comment = await prisma.comment.create({
     data: {
-      content: normalizedContent,
+      content: normalizedContent || "",
       project_id: projectId,
       author_id: userId,
+      temp_attachments: attachmentIds ? {
+        connect: attachmentIds.map(id => ({ id }))
+      } : undefined,
     },
     include: {
       author: {
@@ -63,6 +67,7 @@ export async function createComment(projectId: string, content: string) {
           email: true,
         },
       },
+      temp_attachments: true,
     },
   });
 

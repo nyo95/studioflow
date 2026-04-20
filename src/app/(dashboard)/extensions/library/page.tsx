@@ -4,32 +4,56 @@ import * as React from "react";
 import { DashboardPageShell, PageHeader } from "@/ui_engine";
 import { LibraryTabs } from "@/extensions/library/components/LibraryTabs";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
-import { getVendorsAction, getMaterialsAction, getLibraryCategoriesAction, getMyRoleAction, getMaterialMetadataAction, getGroupedCategoriesAction, getAllMaterialRequestsAction } from "@/extensions/library/actions/library-actions";
+import { 
+  getVendorsAction, 
+  getMaterialsAction, 
+  getLibraryCategoriesAction, 
+  getMyRoleAction, 
+  getMaterialMetadataAction, 
+  getGroupedCategoriesAction, 
+  getAllMaterialRequestsAction 
+} from "@/extensions/library/actions/library-actions";
 import { toast } from "sonner";
 import { MaterialCatalogWithRelations, LibraryVendor, ProjectMaterialRequestWithDetails } from "@/extensions/library/types";
+import { unwrapActionResult } from "@/lib/result";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useSearchParams } from "next/navigation";
 
 export default function LibraryPage() {
   const [vendors, setVendors] = React.useState<LibraryVendor[]>([]);
   const [materials, setMaterials] = React.useState<MaterialCatalogWithRelations[]>([]);
+  const [totalMaterials, setTotalMaterials] = React.useState(0);
   const [requests, setRequests] = React.useState<ProjectMaterialRequestWithDetails[]>([]);
+  
   const [categories, setCategories] = React.useState<string[]>([]);
   const [materialCategories, setMaterialCategories] = React.useState<string[]>([]);
   const [fixtureCategories, setFixtureCategories] = React.useState<string[]>([]);
   const [subCategories, setSubCategories] = React.useState<string[]>([]);
   const [finishings, setFinishings] = React.useState<string[]>([]);
+  
+  const searchParams = useSearchParams();
+  const currentTab = searchParams.get("tab") || "catalog";
+  
   const [searchQuery, setSearchQuery] = React.useState("");
+  const debouncedSearch = useDebounce(searchQuery, 400);
+  
+  const [activeTab, setActiveTab] = React.useState(currentTab);
   const [selectedCategory, setSelectedCategory] = React.useState("all");
   const [showPhysicalOnly, setShowPhysicalOnly] = React.useState(false);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize] = React.useState(24);
+  
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isRefreshingMaterials, setIsRefreshingMaterials] = React.useState(false);
   const [role, setRole] = React.useState<string>("STAFF");
 
+  // Initial Data Load (Vendors, Metadata, Categories, Requests)
   React.useEffect(() => {
     async function init() {
       setIsLoading(true);
       try {
-        const [vendorsRes, materialsRes, catsRes, roleRes, metaRes, groupedCatsRes, requestsRes] = await Promise.all([
+        const [vendorsRes, catsRes, roleRes, metaRes, groupedCatsRes, requestsRes] = await Promise.all([
           getVendorsAction(undefined),
-          getMaterialsAction(undefined),
           getLibraryCategoriesAction(undefined),
           getMyRoleAction(undefined),
           getMaterialMetadataAction(undefined),
@@ -38,7 +62,6 @@ export default function LibraryPage() {
         ]);
 
         if (vendorsRes.success) setVendors(vendorsRes.data);
-        if (materialsRes.success) setMaterials(materialsRes.data);
         if (requestsRes.success) setRequests(requestsRes.data);
         if (catsRes.success) setCategories(catsRes.data);
         if (roleRes.success) setRole(roleRes.data);
@@ -51,7 +74,7 @@ export default function LibraryPage() {
           setFixtureCategories(groupedCatsRes.data.fixture);
         }
       } catch {
-        toast.error("Failed to load library data");
+        toast.error("Failed to load library metadata");
       } finally {
         setIsLoading(false);
       }
@@ -59,36 +82,40 @@ export default function LibraryPage() {
     init();
   }, []);
 
-  const filteredMaterials = React.useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return materials.filter((m) => {
-      const matchesSearch =
-        query.length === 0 ||
-        m.catalog_product_name?.toLowerCase().includes(query) ||
-        m.vendor?.brand_name?.toLowerCase().includes(query) ||
-        m.catalog_category?.toLowerCase().includes(query) ||
-        m.catalog_sub_category?.toLowerCase().includes(query) ||
-        m.catalog_motif?.toLowerCase().includes(query) ||
-        (m.tags && m.tags.some(tag => tag.toLowerCase().includes(query)));
+  // Material Data Load (Triggered by filters/pagination)
+  const fetchMaterials = React.useCallback(async () => {
+    setIsRefreshingMaterials(true);
+    try {
+      const statusFilter = activeTab === "queue" ? "PENDING" : activeTab === "catalog" ? "APPROVED" : undefined;
       
-      const matchesCategory = selectedCategory === "all" || m.catalog_category === selectedCategory;
-      const matchesPhysical = !showPhysicalOnly || (m.physical_samples && m.physical_samples.length > 0);
-      
-      return matchesSearch && matchesCategory && matchesPhysical;
-    });
-  }, [materials, searchQuery, selectedCategory, showPhysicalOnly]);
+      const res = await getMaterialsAction({
+        search: debouncedSearch,
+        category: selectedCategory === "all" ? undefined : selectedCategory,
+        hasPhysicalOnly: showPhysicalOnly,
+        status: statusFilter,
+        page: currentPage,
+        pageSize: pageSize,
+      });
 
-  const filteredVendors = React.useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return vendors.filter((vendor) => {
-      if (query.length === 0) return true;
-      return (
-        vendor.brand_name?.toLowerCase().includes(query) ||
-        vendor.company_name?.toLowerCase().includes(query) ||
-        (vendor.contacts && vendor.contacts.some(c => c.contact_person?.toLowerCase().includes(query)))
-      );
-    });
-  }, [vendors, searchQuery]);
+      if (res.success) {
+        setMaterials(res.data.items);
+        setTotalMaterials(res.data.total);
+      }
+    } catch {
+      toast.error("Failed to refresh catalog data");
+    } finally {
+      setIsRefreshingMaterials(false);
+    }
+  }, [debouncedSearch, selectedCategory, showPhysicalOnly, currentPage, pageSize, activeTab]);
+
+  React.useEffect(() => {
+    fetchMaterials();
+  }, [fetchMaterials]);
+
+  // Reset page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, selectedCategory, showPhysicalOnly, activeTab]);
 
   return (
     <DashboardPageShell className="max-w-[min(var(--ui-page-max-width,1280px),96rem)]">
@@ -109,8 +136,12 @@ export default function LibraryPage() {
         ) : (
           <ErrorBoundary name="Library">
             <LibraryTabs
-              vendors={filteredVendors}
-              materials={filteredMaterials}
+              vendors={vendors}
+              materials={materials}
+              totalMaterials={totalMaterials}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
               categories={categories}
               materialCategories={materialCategories}
               fixtureCategories={fixtureCategories}
@@ -124,6 +155,9 @@ export default function LibraryPage() {
               showPhysicalOnly={showPhysicalOnly}
               setShowPhysicalOnly={setShowPhysicalOnly}
               userRole={role}
+              isRefreshing={isRefreshingMaterials}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
             />
           </ErrorBoundary>
         )}

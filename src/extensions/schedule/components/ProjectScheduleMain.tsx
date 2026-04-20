@@ -11,8 +11,13 @@ import {
   getProjectScheduleAction, 
   importScheduleAction,
   reorderScheduleEntriesAction,
+  moveEntryToCategoryAction,
+  deleteScheduleEntryAction,
   bulkDeleteScheduleEntriesAction,
+  updateScheduleEntryAction,
 } from "@/actions/schedule-actions";
+import { ScheduleBoard } from "./board/ScheduleBoard";
+import { ScheduleTable } from "./table/ScheduleTable";
 import { ScheduleCategorySection } from "./ScheduleCategorySection";
 import { ScheduleSearchBar } from "./ScheduleSearchBar";
 import { ScheduleMaterialPickerModal } from "./ScheduleMaterialPickerModal";
@@ -22,6 +27,8 @@ import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ErrorFallback } from "@/components/shared/error-fallback";
 import { ProjectScheduleProvider } from "../context/ProjectScheduleContext";
 import { PageHeader, TableCard } from "@/ui_engine";
+import { LayoutGrid, List } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { 
   TableHeader, 
@@ -52,6 +59,7 @@ export function ProjectScheduleMain({
   const [sheet, setSheet] = React.useState<ProjectScheduleSheetPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [activeSection, setActiveSection] = React.useState<ScheduleSection>(ScheduleSection.MATERIAL);
+  const [viewMode, setViewMode] = React.useState<"board" | "table">("table");
   const [importing, setImporting] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [selectionAnchorId, setSelectionAnchorId] = React.useState<string | null>(null);
@@ -182,37 +190,46 @@ export function ProjectScheduleMain({
     })
   );
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id || !sheet) return;
-
-    // Find which group contains the active and over items
-    const activeGroup = sheet.groups.find(g => g.entries.some(e => e.id === active.id));
-    const overGroup = sheet.groups.find(g => g.entries.some(e => e.id === over.id));
-
-    // Only allow reordering within the same category
-    if (!activeGroup || !overGroup || activeGroup.schedule_category !== overGroup.schedule_category) return;
-
-    const entries = activeGroup.entries;
-    const oldIndex = entries.findIndex((item) => item.id === active.id);
-    const newIndex = entries.findIndex((item) => item.id === over.id);
-    
-    const newArray = arrayMove(entries, oldIndex, newIndex);
-    const updateData = newArray.map((item, index) => ({
-      id: item.id,
-      schedule_sort_order: index + 1
-    }));
-
+  const handleReorder = async (category: string, items: { id: string; schedule_sort_order: number }[]) => {
+    if (!sheet) return;
     try {
       unwrapActionResult(await reorderScheduleEntriesAction({
-        projectId: projectId,
+        projectId,
         section: activeSection,
-        category: activeGroup.schedule_category,
-        items: updateData
+        schedule_category: category,
+        items
       }));
       fetchSchedule(activeSection);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to reorder items");
+    }
+  };
+
+  const handleUpdateLocation = async (entryId: string, location: string) => {
+    try {
+      unwrapActionResult(await updateScheduleEntryAction({
+        projectId,
+        entryId,
+        data: { schedule_location: location || null }
+      }));
+      fetchSchedule(activeSection);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to update location");
+    }
+  };
+
+  const handleMoveBetweenCategories = async (entryId: string, fromCategory: string, toCategory: string, newIndex: number) => {
+    try {
+      unwrapActionResult(await moveEntryToCategoryAction({
+        projectId,
+        entryId,
+        fromCategory,
+        toCategory,
+        newIndex
+      }));
+      fetchSchedule(activeSection);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to move item");
     }
   };
 
@@ -328,6 +345,32 @@ export function ProjectScheduleMain({
               </Button>
             )}
 
+            <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200 mr-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-9 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
+                  viewMode === "table" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+                onClick={() => setViewMode("table")}
+              >
+                <List className="h-3.5 w-3.5 mr-2" />
+                Table
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-9 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
+                  viewMode === "board" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+                onClick={() => setViewMode("board")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5 mr-2" />
+                Board
+              </Button>
+            </div>
 
             <Button
               variant="outline"
@@ -373,66 +416,56 @@ export function ProjectScheduleMain({
           />
         </div>
 
-        <div ref={containerRef} className="mt-6 w-full">
-          <DndContext 
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <TableCard className="w-full">
-              <TableHeader className="sticky top-0 z-30 bg-white border-b border-slate-200">
-                <TableRow className="hover:bg-transparent transition-none border-b border-slate-100">
-                  <TableHead className="w-20 px-4 py-2 text-slate-400 text-[10px] font-medium uppercase tracking-wider text-center">Code</TableHead>
-                  <TableHead className="w-16 px-4 py-2 text-slate-400 text-[10px] font-medium uppercase tracking-wider text-center">Image</TableHead>
-                  <TableHead className="flex-1 px-4 py-2 text-slate-400 text-[10px] font-medium uppercase tracking-wider">Product Information</TableHead>
-                  <TableHead className="w-32 px-4 py-2 text-slate-400 text-[10px] font-medium uppercase tracking-wider">Location</TableHead>
-                  <TableHead className="w-16 px-4 py-2 text-right"></TableHead>
-                </TableRow>
-              </TableHeader>
-
-              {groups.map((group) => (
-                <ErrorBoundary
-                  key={group.schedule_category}
-                  name={`Schedule ${group.schedule_category}`}
-                  fallback={
-                    <tbody>
-                      <tr>
-                        <td colSpan={11} className="p-4">
-                          <ErrorFallback
-                            title={`Failed to render ${group.schedule_category}`}
-                            message="Please retry loading this category section."
-                            onRetry={() => fetchSchedule(activeSection)}
-                          />
-                        </td>
-                      </tr>
-                    </tbody>
-                  }
-                >
-                  <ScheduleCategorySection
-                    projectId={projectId}
-                    category={group.schedule_category}
-                    section={group.schedule_section}
-                    entries={group.entries}
-                    onRefresh={() => fetchSchedule(activeSection)}
-                    selectedIds={selectedIds}
-                    onRowClick={handleRowClick}
-                    onClearSelection={() => {
-                       setSelectedIds(new Set());
-                       setSelectionAnchorId(null);
-                    }}
-                    openPicker={(entryId) => setPickerModal({ 
+        <div ref={containerRef} className="mt-8">
+          {sheet && (
+            viewMode === "board" ? (
+              <ScheduleBoard 
+                sheet={sheet}
+                section={activeSection}
+                onReorder={handleReorder}
+                onMoveBetweenCategories={handleMoveBetweenCategories}
+                onAddEntry={(category) => setPickerModal({ 
+                  isOpen: true, 
+                  category,
+                  section: activeSection
+                })}
+                onEditEntry={(entry) => {
+                  const finalOption = entry.options.find((o: any) => o.is_final) || entry.options[0];
+                  if (finalOption) {
+                    setEditorModal({ 
                       isOpen: true, 
-                      entryId,
-                      category: group.schedule_category,
-                      section: activeSection
-                    })}
-
-                    openEditor={(optionId, snapshot) => setEditorModal({ isOpen: true, optionId, initialSnapshot: snapshot })}
-                  />
-                </ErrorBoundary>
-              ))}
-            </TableCard>
-          </DndContext>
+                      optionId: finalOption.id, 
+                      initialSnapshot: finalOption.data_snapshot 
+                    });
+                  }
+                }}
+                onDeleteEntry={() => fetchSchedule(activeSection)}
+              />
+            ) : (
+              <ScheduleTable 
+                sheet={sheet}
+                section={activeSection}
+                onUpdateLocation={handleUpdateLocation}
+                onEditEntry={(entry) => {
+                  const finalOption = entry.options.find((o: any) => o.is_final) || entry.options[0];
+                  if (finalOption) {
+                    setEditorModal({ 
+                      isOpen: true, 
+                      optionId: finalOption.id, 
+                      initialSnapshot: finalOption.data_snapshot 
+                    });
+                  }
+                }}
+                onDeleteEntry={() => fetchSchedule(activeSection)}
+                onAddAlternative={(entryId, category) => setPickerModal({
+                  isOpen: true,
+                  entryId,
+                  category,
+                  section: activeSection
+                })}
+              />
+            )
+          )}
         </div>
       </Tabs>
 

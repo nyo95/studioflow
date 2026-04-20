@@ -29,11 +29,6 @@ export default async function MaterialFixturesPage({ params }: MaterialFixturesP
   return (
     <DashboardPageShell>
       <PageBackLink />
-      <PageHeader
-        eyebrow="Project Extension"
-        title="Material & Fixtures Schedule"
-        description="Project-specific material selection, procurement sequencing, and schedule coordination."
-      />
       <ErrorBoundary name="Schedule">
         <ProjectScheduleMain projectId={projectId} />
       </ErrorBoundary>

@@ -59,7 +59,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
   }
 
   return (
-    <div className="rounded-md border border-slate-100 bg-white">
+    <div className="rounded-xl border border-slate-100 bg-white overflow-hidden shadow-sm">
       <Table>
         <TableHeader>
           <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">

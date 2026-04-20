@@ -10,10 +10,12 @@ import {
   Maximize2,
   Save,
   Info,
-  AlertCircle
+  AlertCircle,
+  ImageIcon
 } from "lucide-react";
 import { TagInput } from "@/components/ui/tag-input";
 import { cn } from "@/lib/utils";
+import { UniversalImageUploader } from "@/components/ui/universal-image-uploader";
 import { 
   Dialog, 
   DialogContent, 
@@ -78,6 +80,7 @@ export function ScheduleSpecEditorModal({
     catalog_product_name: initialSnapshot.catalog_product_name === "[RESERVED]" ? "" : (initialSnapshot.catalog_product_name || ""),
     catalog_brand: initialSnapshot.catalog_brand || "",
     catalog_reference_url: initialSnapshot.catalog_reference_url || "",
+    catalog_image_url: initialSnapshot.catalog_image_url || "",
     catalog_sku: initialSnapshot.specs?.catalog_sku || "",
     catalog_sub_category: initialSnapshot.catalog_sub_category || "",
     catalog_motif: initialSnapshot.specs?.catalog_motif || "",
@@ -110,6 +113,7 @@ export function ScheduleSpecEditorModal({
         catalog_product_name: initialSnapshot.catalog_product_name === "[RESERVED]" ? "" : (initialSnapshot.catalog_product_name || ""),
         catalog_brand: initialSnapshot.catalog_brand || "",
         catalog_reference_url: initialSnapshot.catalog_reference_url || "",
+        catalog_image_url: initialSnapshot.catalog_image_url || "",
         catalog_sku: initialSnapshot.specs?.catalog_sku || "",
         catalog_sub_category: initialSnapshot.catalog_sub_category || "",
         catalog_motif: initialSnapshot.specs?.catalog_motif || "",
@@ -128,6 +132,7 @@ export function ScheduleSpecEditorModal({
         catalog_product_name: form.catalog_product_name || undefined,
         catalog_brand: form.catalog_brand || undefined,
         catalog_reference_url: form.catalog_reference_url || null,
+        catalog_image_url: form.catalog_image_url || undefined,
         catalog_sub_category: form.catalog_sub_category || undefined,
         specs: {
           catalog_sku: form.catalog_sku,
@@ -171,14 +176,41 @@ export function ScheduleSpecEditorModal({
                  Edit Specification
                </DialogTitle>
                <DialogDescription className="text-xs font-inter text-slate-400 font-medium tracking-tight">
-                 Changes are local to this project and won't affect the Global Library.
+                 Changes are local to this project and won&apos;t affect the Global Library.
                </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <ScrollArea className="h-[550px] px-8 pb-8">
+        <ScrollArea className="h-[580px] px-8 pb-8">
           <div className="space-y-8 pt-2">
+
+            {/* 0. PRODUCT IMAGE */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="h-1 w-4 rounded-full bg-slate-200" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Cover Image</span>
+              </div>
+              <div className="flex items-start gap-5">
+                <div className="w-[140px] flex-shrink-0">
+                  <UniversalImageUploader
+                    initialImageUrl={form.catalog_image_url}
+                    onUploadComplete={({ cover }) => setForm(prev => ({ ...prev, catalog_image_url: cover }))}
+                    label="Upload 1:1 Image"
+                    aspectRatio={1}
+                  />
+                </div>
+                <div className="flex-1 space-y-2 pt-1">
+                  <p className="font-sans text-[10px] text-slate-400 leading-relaxed">
+                    Upload a project-specific image for this material entry. Supports JPG/PNG up to 5MB. The image will be cropped to a 1:1 square ratio.
+                  </p>
+                  <p className="font-sans text-[9px] text-slate-300 italic">
+                    This image is local to this project entry and won&apos;t affect the global library.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* 1. PRODUCT IDENTITY */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-1">

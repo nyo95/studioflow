@@ -29,8 +29,16 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ?? new PrismaClient({ adapter });
+export const prisma = (() => {
+  if (process.env.NODE_ENV !== "production") {
+    // If the existing global client is missing the new model, force a new one
+    if (globalForPrisma.prisma && !("temporaryAttachment" in globalForPrisma.prisma)) {
+      console.log("[DB_REFRESH] Forcing fresh PrismaClient for new models...");
+      globalForPrisma.prisma = new PrismaClient({ adapter });
+    }
+  }
+  return globalForPrisma.prisma ?? new PrismaClient({ adapter });
+})();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
@@ -53,7 +61,8 @@ export async function ensureDbSchemaPreflight() {
       "VendorContact",
       "PhysicalSample",
       "ProjectMaterialRequest",
-      "AuditLog"
+      "AuditLog",
+      "TemporaryAttachment"
     ];
 
     const tableCheck = await prisma.$queryRaw<{ table_name: string }[]>`
@@ -67,7 +76,7 @@ export async function ensureDbSchemaPreflight() {
     const missingTables = requiredTables.filter(t => !foundTables.includes(t));
 
     if (missingTables.length > 0) {
-      throw new Error(`Critical DB tables missing: ${missingTables.join(", ")}. Please run migrations.`);
+      throw new Error(`Critical DB tables missing: ${missingTables.join(", ")}. Please run migrations or db push.`);
     }
 
     // 2. Check for required columns in AuditLog (MF-08 alignment)

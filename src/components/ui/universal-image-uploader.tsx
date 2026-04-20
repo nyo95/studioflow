@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Upload, Loader2, Crop, X, Check, Image as ImageIcon } from "lucide-react";
-import Cropper from "react-easy-crop";
+import Cropper, { type Area, type Point } from "react-easy-crop";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -27,9 +27,9 @@ export function UniversalImageUploader({
 }: UniversalImageUploaderProps) {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imageSrc, setImageSrc] = React.useState<string | null>(null);
-  const [crop, setCrop] = React.useState({ x: 0, y: 0 });
+  const [crop, setCrop] = React.useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = React.useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<any>(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<Area | null>(null);
   const [showCropper, setShowCropper] = React.useState(false);
   const [uploadStatus, setUploadStatus] = React.useState<"IDLE" | "COMPRESSING" | "UPLOADING" | "SUCCESS">("IDLE");
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(initialImageUrl || null);
@@ -47,7 +47,7 @@ export function UniversalImageUploader({
     }
   };
 
-  const onCropComplete = (_: any, pixelCrop: any) => {
+  const onCropComplete = (_: Area, pixelCrop: Area) => {
     setCroppedAreaPixels(pixelCrop);
   };
 
@@ -81,9 +81,10 @@ export function UniversalImageUploader({
       setUploadStatus("IDLE");
       setShowCropper(false);
       toast.success("Image uploaded successfully");
-    } catch (error: any) {
+    } catch (error) {
       setUploadStatus("IDLE");
-      toast.error(error.message || "Upload failed");
+      const message = error instanceof Error ? error.message : "Upload failed";
+      toast.error(message);
     }
   };
 

@@ -12,6 +12,7 @@ import {
   DeleteScheduleEntrySchema,
   UpdateScheduleEntrySchema, 
   ReorderScheduleSchema,
+  MoveBetweenCategoriesSchema,
   UpdateScheduleOptionSnapshotSchema,
   IdSchema,
   BulkDeleteScheduleSchema,
@@ -273,6 +274,35 @@ export const updateScheduleOptionSnapshotAction = createAction(
 );
 
 
+export const deleteScheduleOptionAction = createAction(
+  async ({ input, ctx, tx }) => {
+    await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
+    RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
+    assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_DELETE);
+
+    const option = await tx.projectScheduleOption.findUniqueOrThrow({
+      where: { id: input.optionId },
+      include: { entry: true },
+    });
+
+    // Delete the option
+    await tx.projectScheduleOption.delete({ where: { id: input.optionId } });
+
+    // Audit log
+    await insertAuditLog(
+      tx,
+      AUDIT_ACTIONS.SCHEDULE_DELETE_OPTION,
+      "ProjectScheduleOption",
+      input.optionId,
+      ctx.userId,
+      { project_id: option.entry.project_id, entry_id: option.entry_id }
+    );
+
+    return { success: true };
+  },
+  { schema: z.object({ projectId: IdSchema, optionId: IdSchema }) }
+);
+
 export const deleteScheduleEntryAction = createAction(
   async ({ input, ctx, tx }) => {
     await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
@@ -320,6 +350,26 @@ export const reorderScheduleEntriesAction = createAction(
     return { success: true };
   },
   { schema: ReorderScheduleSchema }
+);
+
+export const moveEntryToCategoryAction = createAction(
+  async ({ input, ctx, tx }) => {
+    await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
+    RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
+    assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
+
+    await ScheduleService.moveEntryToCategory(
+      tx,
+      input.entryId,
+      input.toCategory,
+      input.newIndex + 1, // normalize to 1-based sort order
+      ctx.userId
+    );
+
+    invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
+    return { success: true };
+  },
+  { schema: MoveBetweenCategoriesSchema }
 );
 
 const ImportScheduleSchema = z.object({
