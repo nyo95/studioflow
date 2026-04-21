@@ -25,6 +25,7 @@ async function main() {
     where: { email: adminEmail },
     update: { password: adminPassword },
     create: {
+      id: "00000000-0000-4000-8000-000000000001",
       email: adminEmail,
       name: "Admin Rad",
       password: adminPassword,
@@ -40,6 +41,7 @@ async function main() {
     where: { email: dicEmail },
     update: { password: dicPassword },
     create: {
+      id: "00000000-0000-4000-8000-000000000002",
       email: dicEmail,
       name: "Designer DIC",
       password: dicPassword,
@@ -55,6 +57,7 @@ async function main() {
     where: { email: drafterEmail },
     update: { password: drafterPassword },
     create: {
+      id: "00000000-0000-4000-8000-000000000003",
       email: drafterEmail,
       name: "Drafter Rad",
       password: drafterPassword,
@@ -63,12 +66,27 @@ async function main() {
   });
   console.log(`✅ Created/Ensured Drafter user: ${drafter.email} (Password: drafter123)`);
 
+  // 4. Create Staff
+  const staffEmail = "staff.rad@gmail.com";
+  const staffPassword = await bcrypt.hash("staff123", 10);
+  const staff = await prisma.user.upsert({
+    where: { email: staffEmail },
+    update: { password: staffPassword },
+    create: {
+      id: "00000000-0000-4000-8000-000000000004",
+      email: staffEmail,
+      name: "Staff Rad",
+      password: staffPassword,
+      role: "STAFF",
+    },
+  });
+  console.log(`✅ Created/Ensured Staff user: ${staff.email} (Password: staff123)`);
 
-  // 4. Cleanup existing projects to start fresh
+  // 5. Cleanup existing projects to start fresh
   console.log("Cleaning up old projects...");
   await prisma.project.deleteMany({});
 
-  // 5. Seed Projects
+  // 6. Seed Projects
   const projectsData = [
     { id: "e1e1e1e1-e1e1-4e11-8e11-e1e1e1e1e1e1", name: "2025-412-Shoes Area Yogya Tasikmalaya", start: "2025-07-07", opening: null, status: "ACTIVE" },
     { id: "e2e2e2e2-e2e2-4e22-8e22-e2e2e2e2e2e2", name: "2025-429-Heloskin Cimanggu", start: "2026-01-28", opening: null, status: "ACTIVE" },
@@ -99,20 +117,24 @@ async function main() {
     });
 
     const PHASE_ORDER = [
-      { name: "MOODBOARD", index: 1 },
-      { name: "LAYOUT", index: 2 },
-      { name: "DESIGN_3D", index: 3 },
-      { name: "CD", index: 4 },
-      { name: "SUPERVISION", index: 5 },
+      { name: "MOODBOARD", index: 1, allowParallel: false },
+      { name: "LAYOUT", index: 2, allowParallel: true },
+      { name: "DESIGN_3D", index: 3, allowParallel: true },
+      { name: "CD", index: 4, allowParallel: true },
+      { name: "SUPERVISION", index: 5, allowParallel: false },
     ];
 
     for (const p of PHASE_ORDER) {
+      // Use stable IDs derived from project ID to avoid duplicates on re-run
       const phaseId = `${project.id.substring(0, 8)}-${p.index}000-4000-8000-${project.id.substring(24)}`;
       const revId = `${project.id.substring(0, 8)}-${p.index}001-4001-8001-${project.id.substring(24)}`;
 
       const phase = await prisma.phase.upsert({
         where: { id: phaseId },
-        update: {},
+        update: {
+          allow_parallel: p.allowParallel,
+          status_enum: p.index === 1 ? "IN_PROGRESS" : "PENDING",
+        },
         create: {
           id: phaseId,
           project_id: project.id,
@@ -120,13 +142,15 @@ async function main() {
           status_enum: p.index === 1 ? "IN_PROGRESS" : "PENDING",
           order_index: p.index,
           is_locked: false,
+          allow_parallel: p.allowParallel,
         },
       });
       
+      // If it's the first phase, ensure it has an active revision
       if (p.index === 1) {
         await prisma.revision.upsert({
           where: { id: revId },
-          update: {},
+          update: { status_enum: "ACTIVE" },
           create: {
             id: revId,
             phase_id: phase.id,

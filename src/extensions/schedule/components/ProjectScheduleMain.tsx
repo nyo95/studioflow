@@ -17,10 +17,9 @@ import {
   updateScheduleEntryAction,
 } from "@/actions/schedule-actions";
 import { ScheduleBoard } from "./board/ScheduleBoard";
-import { ScheduleTable } from "./table/ScheduleTable";
-import { ScheduleCategorySection } from "./ScheduleCategorySection";
+import { VisualTable } from "./table/VisualTable";
 import { ScheduleSearchBar } from "./ScheduleSearchBar";
-import { ScheduleMaterialPickerModal } from "./ScheduleMaterialPickerModal";
+import { ScheduleProductPickerModal } from "./ScheduleProductPickerModal";
 import { ScheduleSpecEditorModal } from "./ScheduleSpecEditorModal";
 import type { ProjectScheduleSheetPayload } from "../types";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
@@ -51,10 +50,12 @@ import {
 
 interface ProjectScheduleMainProps {
   projectId: string;
+  userRole?: string;
 }
 
 export function ProjectScheduleMain({
   projectId,
+  userRole = "STAFF",
 }: ProjectScheduleMainProps) {
   const [sheet, setSheet] = React.useState<ProjectScheduleSheetPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -205,6 +206,75 @@ export function ProjectScheduleMain({
     }
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !sheet) return;
+
+    // Find source and target groups
+    let sourceGroup: any = null;
+    let targetGroup: any = null;
+    let activeEntry: any = null;
+
+    for (const group of sheet.groups) {
+      const entry = group.entries.find(e => e.id === active.id);
+      if (entry) {
+        sourceGroup = group;
+        activeEntry = entry;
+      }
+      if (group.entries.some(e => e.id === over.id)) {
+        targetGroup = group;
+      }
+    }
+
+    if (!sourceGroup || !targetGroup) return;
+
+    if (sourceGroup.schedule_category === targetGroup.schedule_category) {
+      // Same category: Reorder
+      const oldIndex = sourceGroup.entries.findIndex((e: any) => e.id === active.id);
+      const newIndex = targetGroup.entries.findIndex((e: any) => e.id === over.id);
+
+      const newEntries = arrayMove(sourceGroup.entries, oldIndex, newIndex) as typeof sourceGroup.entries;
+      const reorderItems = newEntries.map((e: any, idx: number) => ({
+        id: e.id,
+        schedule_sort_order: idx + 1
+      }));
+
+      // Optimistic update
+      const updatedGroups = sheet.groups.map(g => 
+        g.schedule_category === sourceGroup.schedule_category 
+          ? { ...g, entries: newEntries } 
+          : g
+      );
+      setSheet({ ...sheet, groups: updatedGroups });
+
+      await handleReorder(sourceGroup.schedule_category, reorderItems);
+    } else {
+      // Different category: Move
+      const newIndex = targetGroup.entries.findIndex((e: any) => e.id === over.id);
+      
+      // Optimistic update
+      const updatedGroups = sheet.groups.map(g => {
+        if (g.schedule_category === sourceGroup.schedule_category) {
+          return { ...g, entries: g.entries.filter((e: any) => e.id !== active.id) };
+        }
+        if (g.schedule_category === targetGroup.schedule_category) {
+          const next = [...g.entries];
+          next.splice(newIndex, 0, activeEntry);
+          return { ...g, entries: next };
+        }
+        return g;
+      });
+      setSheet({ ...sheet, groups: updatedGroups });
+
+      await handleMoveBetweenCategories(
+        active.id as string, 
+        sourceGroup.schedule_category, 
+        targetGroup.schedule_category, 
+        newIndex
+      );
+    }
+  };
+
   const handleUpdateLocation = async (entryId: string, location: string) => {
     try {
       unwrapActionResult(await updateScheduleEntryAction({
@@ -215,6 +285,19 @@ export function ProjectScheduleMain({
       fetchSchedule(activeSection);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to update location");
+    }
+  };
+
+  const handleUpdateQty = async (entryId: string, qty: number) => {
+    try {
+      unwrapActionResult(await updateScheduleEntryAction({
+        projectId,
+        entryId,
+        data: { schedule_qty: qty }
+      }));
+      fetchSchedule(activeSection);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to update quantity");
     }
   };
 
@@ -317,7 +400,7 @@ export function ProjectScheduleMain({
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <PageHeader
         eyebrow="Specifications"
-        title="Material & Fixtures Schedule"
+        title="Product & Fixtures Schedule"
         description="Detailed procurement and technical schedule."
         titleClassName="font-lora text-4xl normal-case tracking-tight text-slate-900"
         descriptionClassName="mt-1 font-inter text-sm text-slate-500 max-w-2xl"
@@ -398,7 +481,7 @@ export function ProjectScheduleMain({
             value={ScheduleSection.MATERIAL}
             className="flex-1 rounded-lg py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
           >
-            Material Schedule
+            Product Schedule
           </TabsTrigger>
           <TabsTrigger
             value={ScheduleSection.FIXTURE}
@@ -429,7 +512,7 @@ export function ProjectScheduleMain({
                   category,
                   section: activeSection
                 })}
-                onEditEntry={(entry) => {
+                onEditEntry={(entry: any) => {
                   const finalOption = entry.options.find((o: any) => o.is_final) || entry.options[0];
                   if (finalOption) {
                     setEditorModal({ 
@@ -442,28 +525,37 @@ export function ProjectScheduleMain({
                 onDeleteEntry={() => fetchSchedule(activeSection)}
               />
             ) : (
-              <ScheduleTable 
-                sheet={sheet}
-                section={activeSection}
-                onUpdateLocation={handleUpdateLocation}
-                onEditEntry={(entry) => {
-                  const finalOption = entry.options.find((o: any) => o.is_final) || entry.options[0];
-                  if (finalOption) {
-                    setEditorModal({ 
-                      isOpen: true, 
-                      optionId: finalOption.id, 
-                      initialSnapshot: finalOption.data_snapshot 
-                    });
-                  }
-                }}
-                onDeleteEntry={() => fetchSchedule(activeSection)}
-                onAddAlternative={(entryId, category) => setPickerModal({
-                  isOpen: true,
-                  entryId,
-                  category,
-                  section: activeSection
-                })}
-              />
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <VisualTable 
+                  sheet={sheet}
+                  section={activeSection}
+                  onUpdateLocation={handleUpdateLocation}
+                  onUpdateQty={handleUpdateQty}
+                  onEditEntry={(entry: any) => {
+                    const finalOption = entry.options.find((o: any) => o.is_final) || entry.options[0];
+                    if (finalOption) {
+                      setEditorModal({ 
+                        isOpen: true, 
+                        optionId: finalOption.id, 
+                        initialSnapshot: finalOption.data_snapshot 
+                      });
+                    }
+                  }}
+                  onDeleteEntry={() => fetchSchedule(activeSection)}
+                  onAddAlternative={(entryId, category) => setPickerModal({
+                    isOpen: true,
+                    entryId,
+                    category,
+                    section: activeSection
+                  })}
+                  selectedIds={selectedIds}
+                  onRowClick={handleRowClick}
+                />
+              </DndContext>
             )
           )}
         </div>
@@ -476,10 +568,11 @@ export function ProjectScheduleMain({
             projectId,
             category: pickerModal.category,
             section: pickerModal.section,
+            userRole,
             onSuccess: handleRefresh
           }}
         >
-          <ScheduleMaterialPickerModal
+          <ScheduleProductPickerModal
             entryId={pickerModal.entryId}
             isOpen={pickerModal.isOpen}
             onOpenChange={(open) => setPickerModal({ ...pickerModal, isOpen: open })}
@@ -496,6 +589,7 @@ export function ProjectScheduleMain({
           isOpen={editorModal.isOpen}
           onOpenChange={(open) => setEditorModal(open ? editorModal : null)}
           onRefresh={handleRefresh}
+          userRole={userRole}
         />
       )}
     </div>

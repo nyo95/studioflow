@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 
 import { SectionCard } from "./section-card";
+import { DESIGN_SYSTEM_CONFIG } from "../design-system.config";
 
 interface TableCardProps {
   children: ReactNode;
@@ -66,7 +67,13 @@ export function TableCardHead({
   return (
     <TableHead
       className={cn(
-        "px-[var(--ui-section-px,1.5rem)] py-4 font-sans text-[10px] font-black uppercase tracking-[0.2em] text-slate-500",
+        "px-[var(--ui-section-px,1.5rem)] py-4",
+        DESIGN_SYSTEM_CONFIG.typography.uiMeta.family,
+        DESIGN_SYSTEM_CONFIG.typography.uiMeta.size,
+        DESIGN_SYSTEM_CONFIG.typography.uiMeta.weight,
+        DESIGN_SYSTEM_CONFIG.typography.uiMeta.tracking,
+        DESIGN_SYSTEM_CONFIG.typography.uiMeta.uppercase ? "uppercase" : "",
+        "text-slate-500",
         alignClass,
         className
       )}

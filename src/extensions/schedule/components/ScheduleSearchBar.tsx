@@ -8,15 +8,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { ScheduleSection } from "@/generated/prisma";
-import { getMaterialsAction } from "@/extensions/library/actions/library-actions";
+import { getProductsAction } from "@/extensions/library/actions/library-actions";
 import { 
-  addScheduleEntryWithMaterialAction, 
+  addScheduleEntryWithProductAction, 
   addScheduleEntryInstantAction,
   updateScheduleOptionSnapshotAction,
   getScheduleCategoriesAction 
 } from "@/actions/schedule-actions";
 import { cn } from "@/lib/utils";
-import type { MaterialCatalogWithRelations } from "@/extensions/library/types";
+import type { ProductCatalogWithRelations } from "@/extensions/library/types";
 
 interface ScheduleSearchBarProps {
   projectId: string;
@@ -28,12 +28,12 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
   const [query, setQuery] = React.useState("");
   const [isSearching, setIsSearching] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
-  const [materials, setMaterials] = React.useState<MaterialCatalogWithRelations[]>([]);
+  const [products, setProducts] = React.useState<ProductCatalogWithRelations[]>([]);
   const [showResults, setShowResults] = React.useState(false);
   
   // Creation Flow State
   const [step, setStep] = React.useState<"SEARCH" | "CATEGORY">("SEARCH");
-  const [newMaterialName, setNewMaterialName] = React.useState("");
+  const [newProductName, setNewProductName] = React.useState("");
   const [categories, setCategories] = React.useState<string[]>([]);
   const [categoryQuery, setCategoryQuery] = React.useState("");
 
@@ -53,15 +53,15 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
 
   const loadMaterials = React.useCallback(async (q: string) => {
     if (!q.trim()) {
-      setMaterials([]);
+      setProducts([]);
       return;
     }
     setIsSearching(true);
     try {
-      const result = unwrapActionResult(await getMaterialsAction({ 
+      const result = unwrapActionResult(await getProductsAction({ 
         search: q,
-      }));
-      setMaterials(result.items);
+      })) as { items: ProductCatalogWithRelations[] };
+      setProducts(result.items);
     } catch (err) {
       console.error(err);
     } finally {
@@ -87,22 +87,22 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
 
   const reset = () => {
     setQuery("");
-    setMaterials([]);
+    setProducts([]);
     setShowResults(false);
     setStep("SEARCH");
-    setNewMaterialName("");
+    setNewProductName("");
     setCategoryQuery("");
   };
 
-  const handleSelectMaterial = async (material: MaterialCatalogWithRelations) => {
+  const handleSelectMaterial = async (product: ProductCatalogWithRelations) => {
     setIsCreating(true);
     try {
-      await addScheduleEntryWithMaterialAction({
+      await addScheduleEntryWithProductAction({
         projectId,
-        materialId: material.id,
+        product_catalog_id: product.id,
         section,
       });
-      toast.success(`Added: ${material.catalog_product_name}`);
+      toast.success(`Added: ${product.catalog_product_name}`);
       reset();
       onSuccess();
     } catch (error) {
@@ -113,7 +113,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
   };
 
   const handleStartCreateNew = () => {
-    setNewMaterialName(query);
+    setNewProductName(query);
     setStep("CATEGORY");
     loadCategories();
     setCategoryQuery("");
@@ -131,11 +131,11 @@ const entry = unwrapActionResult(await addScheduleEntryInstantAction({
         if (entry?.options?.[0]) {
           await updateScheduleOptionSnapshotAction({
             optionId: entry.options[0].id,
-            data: { catalog_product_name: newMaterialName }
+            data: { catalog_product_name: newProductName }
           });
       }
 
-      toast.success(`Created: ${newMaterialName}`);
+      toast.success(`Created: ${newProductName}`);
       reset();
       onSuccess();
     } catch (error) {
@@ -171,7 +171,7 @@ const entry = unwrapActionResult(await addScheduleEntryInstantAction({
         ) : (
           <div className="flex-1 flex items-center gap-2 overflow-hidden">
             <span className="shrink-0 px-2 py-0.5 rounded-md bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider">
-              NEW: {newMaterialName}
+              NEW: {newProductName}
             </span>
             <ChevronRight className="h-3 w-3 text-slate-300 shrink-0" />
             <input
@@ -203,12 +203,12 @@ const entry = unwrapActionResult(await addScheduleEntryInstantAction({
             <div className="p-2 space-y-1">
               {step === "SEARCH" ? (
                 <>
-                  {materials.length > 0 ? (
+                  {products.length > 0 ? (
                     <>
                       <div className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                         From Library
                       </div>
-                      {materials.map((m) => (
+                      {products.map((m) => (
                         <button
                           key={m.id}
                           onClick={() => handleSelectMaterial(m)}
@@ -256,7 +256,7 @@ const entry = unwrapActionResult(await addScheduleEntryInstantAction({
               ) : (
                 <>
                   <div className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Select Category for &quot;{newMaterialName}&quot;
+                    Select Category for &quot;{newProductName}&quot;
                   </div>
                   {filteredCategories.map((cat) => (
                     <button

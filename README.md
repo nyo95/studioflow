@@ -51,3 +51,15 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 - Security checklist for new extension actions: `src/extensions/SECURITY_CHECKLIST.md`
 - Standardized extension error handling: `src/extensions/ERROR_HANDLING.md`
+
+## Design System & Standards
+
+### Typography
+- **Headings**: Use `font-serif` (mapped to **Lora**) for a premium, editorial feel.
+- **UI/Functional**: Use `font-sans` (mapped to **Inter**) for clarity and accessibility.
+- Configuration: `src/ui_engine/design-system.config.ts`.
+
+### Refresh Protocol
+- **DILARANG** menggunakan `window.location.reload()`.
+- **Gunakan** `router.refresh()` dari `next/navigation` untuk revalidasi data tanpa memicu full page reload.
+

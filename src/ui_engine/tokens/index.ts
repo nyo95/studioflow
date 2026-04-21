@@ -41,14 +41,19 @@ export const UI_ENGINE_BORDER_COLOR = colors.BORDER_COLOR || "border-slate-200";
 
 // 3. Typography Tokens
 export const TYPE_H1 = typography.TEXT_H1;
-export const TYPE_H2 = "text-2xl font-bold tracking-tight text-slate-950";
+export const TYPE_H2 = cn(
+  DESIGN_SYSTEM_CONFIG.typography.h2.size,
+  DESIGN_SYSTEM_CONFIG.typography.h2.weight,
+  DESIGN_SYSTEM_CONFIG.typography.h2.tracking,
+  DESIGN_SYSTEM_CONFIG.typography.h2.color
+);
 export const TYPE_BODY = typography.TEXT_SIZE_BODY;
 export const TYPE_META = typography.TEXT_SIZE_BADGE;
 
 export const UI_ENGINE_FONT_SANS = typography.FONT_BODY;
 export const UI_ENGINE_FONT_SERIF = typography.FONT_HEADING;
 export const UI_ENGINE_TYPE_H1 = typography.TEXT_H1;
-export const UI_ENGINE_TYPE_H2 = "text-2xl font-bold tracking-tight text-slate-950 text-wrap";
+export const UI_ENGINE_TYPE_H2 = cn(TYPE_H2, "text-wrap");
 
 export const UI_ENGINE_TYPE_BODY = typography.TEXT_SIZE_BODY;
 export const UI_ENGINE_TYPE_META = typography.TEXT_SIZE_BADGE;

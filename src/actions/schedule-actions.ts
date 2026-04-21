@@ -6,7 +6,7 @@ import { ScheduleService } from "@/lib/services/schedule-service";
 import { 
   AddScheduleEntrySchema, 
   AddScheduleEntryInstantSchema,
-  AddScheduleEntryWithMaterialSchema,
+  AddScheduleEntryWithProductSchema,
   AddScheduleOptionSchema, 
   ApproveScheduleOptionSchema, 
   DeleteScheduleEntrySchema,
@@ -16,6 +16,7 @@ import {
   UpdateScheduleOptionSnapshotSchema,
   IdSchema,
   BulkDeleteScheduleSchema,
+  SwapScheduleEntriesSchema
 } from "@/lib/validations";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_PROJECT } from "@/lib/revalidation-tags";
@@ -129,23 +130,23 @@ export const addScheduleEntryInstantAction = createAction(
   { schema: AddScheduleEntryInstantSchema }
 );
 
-export const addScheduleEntryWithMaterialAction = createAction(
+export const addScheduleEntryWithProductAction = createAction(
   async ({ input, ctx, tx }) => {
     await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_ADD);
 
-    // Get material from catalog
-    const material = await tx.materialCatalog.findUniqueOrThrow({
-      where: { id: input.materialId },
+    // Get product from catalog
+    const product = await tx.productCatalog.findUniqueOrThrow({
+      where: { id: input.product_catalog_id },
       include: { vendor: true },
     });
 
-    // Create entry with category from material (in same transaction)
+    // Create entry with category from product (in same transaction)
     const { entry } = await ScheduleService.addEntryToSchedule(
       tx,
       input.projectId,
-      material.catalog_category,
+      product.catalog_category,
       "reserve",
       undefined,
       undefined,
@@ -163,22 +164,22 @@ export const addScheduleEntryWithMaterialAction = createAction(
       throw new ActionError("Failed to create option for entry", "CREATION_FAILED");
     }
 
-    // Update option with material data in same transaction
+    // Update option with product data in same transaction
     await ScheduleService.updateOptionSnapshot(
       tx,
       option.id,
       {
-        catalog_product_name: material.catalog_product_name || "Unnamed Material",
-        catalog_brand: material.vendor?.brand_name || "Generic",
+        catalog_product_name: product.catalog_product_name || "Unnamed Product",
+        catalog_brand: product.vendor?.brand_name || "Generic",
         specs: {
-          catalog_sku: material.catalog_sku,
-          catalog_color: material.catalog_color || undefined,
-          catalog_finishing: material.catalog_finishing || undefined,
-          catalog_product_name: material.catalog_motif || undefined,
+          catalog_sku: product.catalog_sku,
+          catalog_color: product.catalog_color || undefined,
+          catalog_finishing: product.catalog_finishing || undefined,
+          catalog_product_name: product.catalog_motif || undefined,
         },
-        catalog_image_url: material.catalog_image_url || undefined,
-        catalog_reference_url: material.catalog_reference_url || undefined,
-        catalog_price: material.catalog_price || undefined,
+        catalog_image_url: product.catalog_image_url || undefined,
+        catalog_reference_url: product.catalog_reference_url || undefined,
+        catalog_price: product.catalog_price || undefined,
       },
       ctx.userId
     );
@@ -191,7 +192,7 @@ export const addScheduleEntryWithMaterialAction = createAction(
       include: { options: true },
     });
   },
-  { schema: AddScheduleEntryWithMaterialSchema }
+  { schema: AddScheduleEntryWithProductSchema }
 );
 
 export const addScheduleOptionAction = createAction(
@@ -416,25 +417,49 @@ export const promoteToLibraryAction = createAction(
     
     await getProjectMembershipOrThrow(tx, option.entry.project_id, ctx.userId, ctx.role);
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
-    
-    const result = await ScheduleService.executePromoteToLibrary(tx, input.optionId, ctx.userId);
 
+    const snapshot = option.data_snapshot;
+    if (!snapshot) {
+      throw new ActionError("Cannot promote option without snapshot data", "SNAPSHOT_MISSING");
+    }
+
+    const existingRequest = await tx.promotionRequest.findFirst({
+      where: {
+        schedule_option_id: input.optionId,
+        status: "PENDING"
+      }
+    });
+
+    if (existingRequest) {
+      throw new ActionError("There's already a pending request for this option", "DUPLICATE_REQUEST");
+    }
+
+    const result = await tx.promotionRequest.create({
+      data: {
+        project_id: option.entry.project_id,
+        schedule_option_id: input.optionId,
+        requested_by_id: ctx.userId,
+        snapshot_data: snapshot as any,
+        notes: input.notes,
+        status: "PENDING",
+      }
+    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
-    return result;
+    return { success: true, requestId: result.id, message: "Promotion request submitted for approval" };
   },
-  { schema: z.object({ optionId: IdSchema }) }
+  { schema: z.object({ optionId: IdSchema, notes: z.string().optional() }) }
 );
 
 export const getScheduleSuggestionsAction = createAction(
   async ({ input, tx }) => {
-    const [vendors, materials] = await Promise.all([
+    const [vendors, products] = await Promise.all([
       tx.vendor.findMany({
         where: { deleted_at: null },
         select: { id: true, brand_name: true },
         orderBy: { brand_name: "asc" }
       }),
-      tx.materialCatalog.findMany({
+      tx.productCatalog.findMany({
         where: { 
           deleted_at: null,
           status: "APPROVED" 
@@ -449,14 +474,14 @@ export const getScheduleSuggestionsAction = createAction(
         id: v.id,
         name: v.brand_name
       })),
-      products: materials.map(m => {
+      products: products.map(m => {
         const sku = m.catalog_sku || "";
         const name = m.catalog_product_name || "";
         
         // Logical Format: [SKU] - [Name] or fallback
         let label = "";
         if (sku && name) label = `[${sku}] - ${name}`;
-        else label = sku || name || "Unnamed Material";
+        else label = sku || name || "Unnamed Product";
 
         return {
           id: m.id,
@@ -478,3 +503,18 @@ export const getScheduleSuggestionsAction = createAction(
   },
   { schema: z.object({ projectId: IdSchema.optional() }) }
 );
+
+export const swapScheduleEntriesAction = createAction(
+  async ({ input, ctx, tx }) => {
+    await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
+    RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
+    assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
+
+    await ScheduleService.swapEntries(tx, input.projectId, input.idA, input.idB, ctx.userId);
+
+    invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
+    return { success: true };
+  },
+  { schema: SwapScheduleEntriesSchema }
+);
+

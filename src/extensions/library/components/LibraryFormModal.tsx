@@ -17,10 +17,10 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { createVendorAction, updateVendorAction, createMaterialAction, updateMaterialAction } from "../actions/library-actions";
+import { createVendorAction, updateVendorAction, createProductAction, updateProductAction } from "../actions/library-actions";
 import { TagInput } from "@/components/ui/tag-input";
 import { CreatableSearch } from "@/components/ui/creatable-search";
-import { LibraryVendor, MaterialCatalogWithRelations, LibraryVendorInput, MaterialCatalogInput } from "../types";
+import { LibraryVendor, ProductCatalogWithRelations, LibraryVendorInput, ProductCatalogInput } from "../types";
 import { LibraryItemStatus } from "@/generated/prisma";
 import { toast } from "sonner";
 import { Loader2, Image as ImageIcon, Link as LinkIcon, Info, Warehouse, Users, Crop, Palette, Layers, ChevronDown, ChevronUp } from "lucide-react";
@@ -28,7 +28,7 @@ import { unwrapActionResult } from "@/lib/result";
 import { cn } from "@/lib/utils";
 import { UniversalImageUploader } from "@/components/ui/universal-image-uploader";
 
-type FormType = "VENDOR" | "MATERIAL";
+type FormType = "VENDOR" | "PRODUCT";
 
 const CONTACT_ROLES = ["Sales", "Marketing", "Admin", "Technical Support", "Procurement", "Other"];
 const FINISHING_PRESETS = ["Matte", "Glossy", "Polished", "Semi-Gloss", "Satin", "Rough", "Textured", "Brushed"];
@@ -42,8 +42,8 @@ interface LibraryFormModalProps {
   vendors?: LibraryVendor[];
   /** Flat list of category strings (all sections combined), used for filter UI */
   categories?: string[];
-  /** Categories belonging to the MATERIAL section from PrefixDictionary */
-  materialCategories?: string[];
+  /** Categories belonging to the PRODUCT section from PrefixDictionary */
+  productCategories?: string[];
   /** Categories belonging to the FIXTURE section from PrefixDictionary */
   fixtureCategories?: string[];
   /** Unique sub_category values from existing catalog entries */
@@ -61,7 +61,7 @@ export function LibraryFormModal({
   initialData,
   vendors = [],
   categories = [],
-  materialCategories = [],
+  productCategories = [],
   fixtureCategories = [],
   subCategories = [],
   finishings = [],
@@ -82,10 +82,11 @@ export function LibraryFormModal({
   });
 
   // Section for grouped category picker (MATERIAL or FIXTURE)
-  const [materialSection, setMaterialSection] = React.useState<"MATERIAL" | "FIXTURE">("MATERIAL");
+  // Must align with Prisma `ScheduleSection` enum.
+  const [productSection, setProductSection] = React.useState<"MATERIAL" | "FIXTURE">("MATERIAL");
 
-  // Material Form State (Catalog + Single Physical Sample for ease of use)
-  const [materialData, setMaterialData] = React.useState<MaterialCatalogInput>({
+  // Product Form State (Catalog + Single Physical Sample for ease of use)
+  const [productData, setProductData] = React.useState<ProductCatalogInput>({
     vendor_id: "",
     catalog_category: "HPL",
     catalog_sub_category: "",
@@ -103,12 +104,10 @@ export function LibraryFormModal({
     catalog_image_original_url: "",
     catalog_reference_url: "",
     catalog_folder_url: "",
-    catalog_rak_location: "",
-    catalog_box_number: "",
     catalog_price: null,
     metadata: undefined,
     status: "APPROVED" as LibraryItemStatus,
-    physical_samples: [{ location_rak: "", container_box: "", notes: "" }]
+    physical_samples: [{ rack_number: "", box_number: "", notes: "" }]
   });
 
   const [showAdvanced, setShowAdvanced] = React.useState(false);
@@ -134,46 +133,44 @@ export function LibraryFormModal({
             : [{ contact_person: "", contact_role: "Sales" }],
         });
       } else {
-        const materialInitial = initialData as MaterialCatalogWithRelations;
-        const physical = materialInitial.physical_samples?.[0] || { location_rak: "", container_box: "", notes: "" };
-        setMaterialData({
-          vendor_id: materialInitial.vendor_id || "",
-          catalog_category: materialInitial.catalog_category || "",
-          catalog_sub_category: materialInitial.catalog_sub_category || "",
-          catalog_sku: materialInitial.catalog_sku || "",
-          catalog_product_name: materialInitial.catalog_product_name || "",
-          catalog_motif: materialInitial.catalog_motif || "",
-          tags: materialInitial.tags || [],
-          catalog_dimension_p: materialInitial.catalog_dimension_p || "",
-          catalog_dimension_l: materialInitial.catalog_dimension_l || "",
-          catalog_dimension_t: materialInitial.catalog_dimension_t || "",
-          catalog_dimension_unit: materialInitial.catalog_dimension_unit || "cm",
-          catalog_color: materialInitial.catalog_color || "",
-          catalog_finishing: materialInitial.catalog_finishing || "",
-          catalog_image_url: materialInitial.catalog_image_url || "",
-          catalog_image_original_url: materialInitial.catalog_image_original_url || "",
-          catalog_reference_url: materialInitial.catalog_reference_url || "",
-          catalog_folder_url: materialInitial.catalog_folder_url || "",
-          catalog_rak_location: materialInitial.catalog_rak_location || "",
-          catalog_box_number: materialInitial.catalog_box_number || "",
-          catalog_price: materialInitial.catalog_price || null,
-          metadata: (materialInitial.metadata as Record<string, unknown> | null) || undefined,
-          status: materialInitial.status || "APPROVED",
+        const productInitial = initialData as ProductCatalogWithRelations;
+        const physical = productInitial.physical_samples?.[0] || { rack_number: "", box_number: "", notes: "" };
+        setProductData({
+          vendor_id: productInitial.vendor_id || "",
+          catalog_category: productInitial.catalog_category || "",
+          catalog_sub_category: productInitial.catalog_sub_category || "",
+          catalog_sku: productInitial.catalog_sku || "",
+          catalog_product_name: productInitial.catalog_product_name || "",
+          catalog_motif: productInitial.catalog_motif || "",
+          tags: productInitial.tags || [],
+          catalog_dimension_p: productInitial.catalog_dimension_p || "",
+          catalog_dimension_l: productInitial.catalog_dimension_l || "",
+          catalog_dimension_t: productInitial.catalog_dimension_t || "",
+          catalog_dimension_unit: productInitial.catalog_dimension_unit || "cm",
+          catalog_color: productInitial.catalog_color || "",
+          catalog_finishing: productInitial.catalog_finishing || "",
+          catalog_image_url: productInitial.catalog_image_url || "",
+          catalog_image_original_url: productInitial.catalog_image_original_url || "",
+          catalog_reference_url: productInitial.catalog_reference_url || "",
+          catalog_folder_url: productInitial.catalog_folder_url || "",
+          catalog_price: productInitial.catalog_price || null,
+          metadata: (productInitial.metadata as Record<string, unknown> | null) || undefined,
+          status: productInitial.status || "APPROVED",
           physical_samples: [{ 
-            location_rak: physical.location_rak || "", 
-            container_box: physical.container_box || "", 
+            rack_number: physical.rack_number || "", 
+            box_number: physical.box_number || "", 
             notes: physical.notes || "" 
           }]
         });
 
         // Auto-show advanced if data exists
         const hasAdvancedData = Boolean(
-          materialInitial.catalog_sub_category || 
-          materialInitial.catalog_motif || 
-          materialInitial.catalog_color || 
-          materialInitial.catalog_finishing || 
-          materialInitial.catalog_dimension_p || 
-          (materialInitial.tags && materialInitial.tags.length > 0)
+          productInitial.catalog_sub_category || 
+          productInitial.catalog_motif || 
+          productInitial.catalog_color || 
+          productInitial.catalog_finishing || 
+          productInitial.catalog_dimension_p || 
+          (productInitial.tags && productInitial.tags.length > 0)
         );
         setShowAdvanced(hasAdvancedData);
       }
@@ -188,9 +185,9 @@ export function LibraryFormModal({
         instagram_url: "",
         contacts: [{ contact_person: "", contact_role: "Sales" }],
       });
-      setMaterialData({
+      setProductData({
         vendor_id: vendors[0]?.id || "",
-        catalog_category: "HPL",
+        catalog_category: "GENERAL",
         catalog_sub_category: "",
         catalog_sku: "",
         catalog_product_name: "",
@@ -202,18 +199,12 @@ export function LibraryFormModal({
         catalog_dimension_unit: "cm",
         catalog_color: "",
         catalog_finishing: "",
-        catalog_image_url: "",
-        catalog_image_original_url: "",
-        catalog_reference_url: "",
-        catalog_folder_url: "",
-        catalog_rak_location: "",
-        catalog_box_number: "",
         catalog_price: null,
         metadata: undefined,
         status: "APPROVED",
-        physical_samples: [{ location_rak: "", container_box: "", notes: "" }]
+        physical_samples: [{ rack_number: "", box_number: "", notes: "" }]
       });
-      setMaterialSection("MATERIAL");
+      setProductSection("MATERIAL");
       setShowAdvanced(false);
     }
   }, [isOpen, initialData, type, vendors]);
@@ -243,16 +234,16 @@ export function LibraryFormModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (type === "MATERIAL") {
-      if (!materialData.vendor_id && !materialData.vendor_name?.trim()) {
+    if (type === "PRODUCT") {
+      if (!productData.vendor_id && !productData.vendor_name?.trim()) {
         toast.error("Brand/Vendor is required");
         return;
       }
-      if (!materialData.catalog_category?.trim()) {
+      if (!productData.catalog_category?.trim()) {
         toast.error("Category is required");
         return;
       }
-      if (!materialData.catalog_sku?.trim()) {
+      if (!productData.catalog_sku?.trim()) {
         toast.error("Type / SKU is required");
         return;
       }
@@ -272,24 +263,27 @@ export function LibraryFormModal({
         }
       } else {
         // Clean up empty physical sample if not fully filled
-        const finalMaterial: MaterialCatalogInput = {
-          ...materialData,
-          section: materialSection,
-          catalog_category: materialData.catalog_category.trim(),
-          catalog_sku: materialData.catalog_sku.trim(),
-          vendor_name: materialData.vendor_name?.trim() || undefined,
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/cd158293-dca0-40ab-802e-0d83dd59ba8f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H2',location:'src/extensions/library/components/LibraryFormModal.tsx:handleSubmit',message:'Submitting product form',data:{productSection,type,mode},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion agent log
+        const finalProduct: ProductCatalogInput = {
+          ...productData,
+          section: productSection,
+          catalog_category: productData.catalog_category.trim(),
+          catalog_sku: productData.catalog_sku.trim(),
+          vendor_name: productData.vendor_name?.trim() || undefined,
         };
-        if (!finalMaterial.physical_samples?.[0]?.location_rak && !finalMaterial.physical_samples?.[0]?.container_box) {
-            finalMaterial.physical_samples = [];
+        if (!finalProduct.physical_samples?.[0]?.rack_number && !finalProduct.physical_samples?.[0]?.box_number) {
+            finalProduct.physical_samples = [];
         }
 
         if (mode === "CREATE") {
-          unwrapActionResult(await createMaterialAction(finalMaterial));
-          toast.success("Material created successfully");
+          unwrapActionResult(await createProductAction(finalProduct));
+          toast.success("Product created successfully");
         } else {
-          if (!editingId) throw new Error("Material id is missing");
-          unwrapActionResult(await updateMaterialAction({ id: editingId, data: finalMaterial }));
-          toast.success("Material updated successfully");
+          if (!editingId) throw new Error("Product id is missing");
+          unwrapActionResult(await updateProductAction({ id: editingId, data: finalProduct }));
+          toast.success("Product updated successfully");
         }
       }
       onSuccess?.();
@@ -308,7 +302,7 @@ export function LibraryFormModal({
           <DialogHeader className="p-6 bg-slate-900 text-white">
             <DialogTitle className="font-lora text-2xl font-medium tracking-tight">
               {mode === "CREATE" ? "New" : "Edit"}{" "}
-              {type === "VENDOR" ? "Vendor Account" : "Material Listing"}
+              {type === "VENDOR" ? "Vendor Account" : "Product Listing"}
             </DialogTitle>
             <p className="text-slate-400 text-xs font-inter uppercase tracking-[0.2em] font-bold mt-1">
               StudioFlow Library Management
@@ -466,9 +460,9 @@ export function LibraryFormModal({
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="md:col-span-1">
                         <UniversalImageUploader
-                          initialImageUrl={materialData.catalog_image_url}
+                          initialImageUrl={productData.catalog_image_url}
                           onUploadComplete={({ original, cover }) => {
-                            setMaterialData(prev => ({
+                            setProductData(prev => ({
                               ...prev,
                               catalog_image_original_url: original,
                               catalog_image_url: cover
@@ -483,8 +477,8 @@ export function LibraryFormModal({
                           <div className="grid gap-2">
                             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Tokopedia / PDF Catalog URL</Label>
                             <Input
-                              value={materialData.catalog_reference_url || ""}
-                              onChange={(e) => setMaterialData({ ...materialData, catalog_reference_url: e.target.value })}
+                              value={productData.catalog_reference_url || ""}
+                              onChange={(e) => setProductData({ ...productData, catalog_reference_url: e.target.value })}
                               placeholder="https://..."
                               className="bg-slate-50 border-none focus-visible:ring-slate-900 h-10 text-sm"
                             />
@@ -492,8 +486,8 @@ export function LibraryFormModal({
                           <div className="grid gap-2">
                             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Google Drive Folder URL</Label>
                             <Input
-                              value={materialData.catalog_folder_url || ""}
-                              onChange={(e) => setMaterialData({ ...materialData, catalog_folder_url: e.target.value })}
+                              value={productData.catalog_folder_url || ""}
+                              onChange={(e) => setProductData({ ...productData, catalog_folder_url: e.target.value })}
                               placeholder="https://drive..."
                               className="bg-slate-50 border-none focus-visible:ring-slate-900 h-10 text-sm"
                             />
@@ -513,12 +507,12 @@ export function LibraryFormModal({
                         <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Select Brand *</Label>
                         <CreatableSearch
                           options={vendors.map(v => ({ id: v.id, name: v.brand_name }))}
-                          value={materialData.vendor_id}
+                          value={productData.vendor_id}
                           onSelect={(id, name) => {
-                            setMaterialData({ ...materialData, vendor_id: id, vendor_name: name !== vendors.find(v => v.id === id)?.brand_name ? name : undefined });
+                            setProductData({ ...productData, vendor_id: id, vendor_name: name !== vendors.find(v => v.id === id)?.brand_name ? name : undefined });
                           }}
                           onCreate={(name) => {
-                            setMaterialData({ ...materialData, vendor_id: "", vendor_name: name });
+                            setProductData({ ...productData, vendor_id: "", vendor_name: name });
                           }}
                           allowFreeText
                           placeholder="Search existing or type new brand..."
@@ -528,31 +522,31 @@ export function LibraryFormModal({
                         <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Category *</Label>
                         <CreatableSearch
                           groups={[
-                            ...(materialCategories.length > 0 ? [{
-                              label: "Material",
-                              options: materialCategories.map(cat => ({ id: `MATERIAL:${cat}`, name: cat }))
+                            ...(productCategories.length > 0 ? [{
+                              label: "Product",
+                              options: productCategories.map(cat => ({ id: `MATERIAL:${cat}`, name: cat }))
                             }] : []),
                             ...(fixtureCategories.length > 0 ? [{
                               label: "Fixture",
                               options: fixtureCategories.map(cat => ({ id: `FIXTURE:${cat}`, name: cat }))
                             }] : []),
-                            // Fallback: if no grouped data yet, show categories flat under Material
-                            ...(materialCategories.length === 0 && fixtureCategories.length === 0 ? [{
-                              label: "Material",
+                            // Fallback: if no grouped data yet, show categories flat
+                            ...(productCategories.length === 0 && fixtureCategories.length === 0 ? [{
+                              label: "Product",
                               options: categories.map(cat => ({ id: `MATERIAL:${cat}`, name: cat }))
                             }] : []),
                           ]}
-                          value={materialData.catalog_category ? `${materialSection}:${materialData.catalog_category}` : undefined}
+                          value={productData.catalog_category ? `${productSection}:${productData.catalog_category}` : undefined}
                           onSelect={(id, name) => {
                             const parts = id.split(":");
                             const section = (parts[0] || "MATERIAL") as "MATERIAL" | "FIXTURE";
                             const cat = parts.slice(1).join(":") || name;
-                            setMaterialSection(section);
-                            setMaterialData({ ...materialData, catalog_category: cat });
+                            setProductSection(section);
+                            setProductData({ ...productData, catalog_category: cat });
                           }}
                           onCreate={(name) => {
                             // New categories default to the currently selected section
-                            setMaterialData({ ...materialData, catalog_category: name.toUpperCase() });
+                            setProductData({ ...productData, catalog_category: name.toUpperCase() });
                           }}
                           placeholder="Search or type new category..."
                         />
@@ -560,8 +554,8 @@ export function LibraryFormModal({
                       <div className="grid gap-2">
                         <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Type / SKU *</Label>
                         <Input
-                          value={materialData.catalog_sku}
-                          onChange={(e) => setMaterialData({ ...materialData, catalog_sku: e.target.value })}
+                          value={productData.catalog_sku}
+                          onChange={(e) => setProductData({ ...productData, catalog_sku: e.target.value })}
                           className="bg-slate-50 border-none h-10"
                           placeholder="e.g. Model SKU"
                           required
@@ -573,8 +567,8 @@ export function LibraryFormModal({
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rp</span>
                           <Input
                             type="number"
-                            value={materialData.catalog_price || ""}
-                            onChange={(e) => setMaterialData({ ...materialData, catalog_price: e.target.value ? Number(e.target.value) : null })}
+                            value={productData.catalog_price || ""}
+                            onChange={(e) => setProductData({ ...productData, catalog_price: e.target.value ? Number(e.target.value) : null })}
                             className="bg-slate-50 border-none h-10 pl-9"
                             placeholder="Optional..."
                           />
@@ -612,18 +606,18 @@ export function LibraryFormModal({
                               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Sub Category</Label>
                               <CreatableSearch
                                 options={subCategories.map(s => ({ id: s, name: s }))}
-                                value={materialData.catalog_sub_category || ""}
+                                value={productData.catalog_sub_category || ""}
                                 allowFreeText
-                                onSelect={(_, name) => setMaterialData({ ...materialData, catalog_sub_category: name })}
-                                onCreate={(name) => setMaterialData({ ...materialData, catalog_sub_category: name })}
+                                onSelect={(_, name) => setProductData({ ...productData, catalog_sub_category: name })}
+                                onCreate={(name) => setProductData({ ...productData, catalog_sub_category: name })}
                                 placeholder="Select or type sub category..."
                               />
                             </div>
                             <div className="grid gap-2">
                               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Pattern / Motif</Label>
                               <Input
-                                value={materialData.catalog_motif || ""}
-                                onChange={(e) => setMaterialData({ ...materialData, catalog_motif: e.target.value })}
+                                value={productData.catalog_motif || ""}
+                                onChange={(e) => setProductData({ ...productData, catalog_motif: e.target.value })}
                                 placeholder="e.g. Marble"
                                 className="bg-slate-50 border-none h-10"
                               />
@@ -633,8 +627,8 @@ export function LibraryFormModal({
                                 <Palette className="h-3 w-3" /> Color
                               </Label>
                               <Input
-                                value={materialData.catalog_color || ""}
-                                onChange={(e) => setMaterialData({ ...materialData, catalog_color: e.target.value })}
+                                value={productData.catalog_color || ""}
+                                onChange={(e) => setProductData({ ...productData, catalog_color: e.target.value })}
                                 placeholder="e.g. Charcoal"
                                 className="bg-white border-slate-100 h-10"
                               />
@@ -648,10 +642,10 @@ export function LibraryFormModal({
                                   ...FINISHING_PRESETS,
                                   ...finishings.filter(f => !FINISHING_PRESETS.some(p => p.toLowerCase() === f.toLowerCase()))
                                 ].map(f => ({ id: f, name: f }))}
-                                value={materialData.catalog_finishing || ""}
+                                value={productData.catalog_finishing || ""}
                                 allowFreeText
-                                onSelect={(_, name) => setMaterialData({ ...materialData, catalog_finishing: name })}
-                                onCreate={(name) => setMaterialData({ ...materialData, catalog_finishing: name })}
+                                onSelect={(_, name) => setProductData({ ...productData, catalog_finishing: name })}
+                                onCreate={(name) => setProductData({ ...productData, catalog_finishing: name })}
                                 placeholder="Select or type finishing..."
                               />
                             </div>
@@ -665,8 +659,8 @@ export function LibraryFormModal({
                               <div className="grid gap-1.5">
                                 <Label className="text-[9px] font-bold text-slate-400 uppercase text-center">P</Label>
                                 <Input 
-                                  value={materialData.catalog_dimension_p || ""} 
-                                  onChange={(e) => setMaterialData({...materialData, catalog_dimension_p: e.target.value})}
+                                  value={productData.catalog_dimension_p || ""} 
+                                  onChange={(e) => setProductData({...productData, catalog_dimension_p: e.target.value})}
                                   placeholder="60"
                                   className="bg-slate-50 border-none h-9 text-sm text-center"
                                 />
@@ -674,8 +668,8 @@ export function LibraryFormModal({
                               <div className="grid gap-1.5">
                                 <Label className="text-[9px] font-bold text-slate-400 uppercase text-center">L</Label>
                                 <Input 
-                                  value={materialData.catalog_dimension_l || ""} 
-                                  onChange={(e) => setMaterialData({...materialData, catalog_dimension_l: e.target.value})}
+                                  value={productData.catalog_dimension_l || ""} 
+                                  onChange={(e) => setProductData({...productData, catalog_dimension_l: e.target.value})}
                                   placeholder="60"
                                   className="bg-slate-50 border-none h-9 text-sm text-center"
                                 />
@@ -683,8 +677,8 @@ export function LibraryFormModal({
                               <div className="grid gap-1.5">
                                 <Label className="text-[9px] font-bold text-slate-400 uppercase text-center">T</Label>
                                 <Input 
-                                  value={materialData.catalog_dimension_t || ""} 
-                                  onChange={(e) => setMaterialData({...materialData, catalog_dimension_t: e.target.value})}
+                                  value={productData.catalog_dimension_t || ""} 
+                                  onChange={(e) => setProductData({...productData, catalog_dimension_t: e.target.value})}
                                   placeholder="1"
                                   className="bg-slate-50 border-none h-9 text-sm text-center"
                                 />
@@ -692,8 +686,8 @@ export function LibraryFormModal({
                               <div className="grid gap-1.5">
                                 <Label className="text-[9px] font-bold text-slate-400 uppercase text-center">Unit</Label>
                                 <Select 
-                                  value={materialData.catalog_dimension_unit} 
-                                  onValueChange={(val) => setMaterialData({...materialData, catalog_dimension_unit: val})}
+                                  value={productData.catalog_dimension_unit} 
+                                  onValueChange={(val) => setProductData({...productData, catalog_dimension_unit: val})}
                                 >
                                   <SelectTrigger className="bg-slate-50 border-none h-9 text-xs font-bold px-2">
                                     <SelectValue />
@@ -712,8 +706,8 @@ export function LibraryFormModal({
                               <Info className="h-3.5 w-3.5 text-slate-400" /> Search Tags
                             </Label>
                             <TagInput
-                              tags={materialData.tags || []}
-                              onChange={(newTags) => setMaterialData({ ...materialData, tags: newTags })}
+                              tags={productData.tags || []}
+                              onChange={(newTags) => setProductData({ ...productData, tags: newTags })}
                               placeholder="Type and press enter..."
                             />
                           </div>
@@ -731,9 +725,11 @@ export function LibraryFormModal({
                       <div className="grid gap-2">
                         <Label className="text-[10px] font-bold uppercase text-slate-500">Rak Location</Label>
                         <Input
-                          value={materialData.catalog_rak_location || ""}
+                          value={productData.physical_samples?.[0]?.rack_number || ""}
                           onChange={(e) => {
-                            setMaterialData({ ...materialData, catalog_rak_location: e.target.value });
+                            const newSamples = [...(productData.physical_samples || [{ rack_number: "", box_number: "", notes: "" }])];
+                            newSamples[0] = { ...newSamples[0], rack_number: e.target.value };
+                            setProductData({ ...productData, physical_samples: newSamples });
                           }}
                           placeholder="Loc..."
                           className="bg-white border-none h-9 text-sm"
@@ -742,9 +738,11 @@ export function LibraryFormModal({
                       <div className="grid gap-2">
                         <Label className="text-[10px] font-bold uppercase text-slate-500">Box Number</Label>
                         <Input
-                          value={materialData.catalog_box_number || ""}
+                          value={productData.physical_samples?.[0]?.box_number || ""}
                           onChange={(e) => {
-                            setMaterialData({ ...materialData, catalog_box_number: e.target.value });
+                            const newSamples = [...(productData.physical_samples || [{ rack_number: "", box_number: "", notes: "" }])];
+                            newSamples[0] = { ...newSamples[0], box_number: e.target.value };
+                            setProductData({ ...productData, physical_samples: newSamples });
                           }}
                           placeholder="Box..."
                           className="bg-white border-none h-9 text-sm"
@@ -752,11 +750,11 @@ export function LibraryFormModal({
                       </div>
                     </div>
                     <Input
-                      value={materialData.physical_samples?.[0]?.notes || ""}
+                      value={productData.physical_samples?.[0]?.notes || ""}
                       onChange={(e) => {
-                        const newSamples = [...(materialData.physical_samples || [])];
-                        newSamples[0].notes = e.target.value;
-                        setMaterialData({ ...materialData, physical_samples: newSamples });
+                        const newSamples = [...(productData.physical_samples || [{ rack_number: "", box_number: "", notes: "" }])];
+                        newSamples[0] = { ...newSamples[0], notes: e.target.value };
+                        setProductData({ ...productData, physical_samples: newSamples });
                       }}
                       placeholder="Internal notes..."
                       className="bg-white border-none h-9 text-xs italic"
@@ -774,8 +772,8 @@ export function LibraryFormModal({
                        <div className="grid gap-2">
                          <Label className="text-[10px] font-bold text-orange-900 uppercase">Current Asset Status</Label>
                          <Select 
-                            value={materialData.status} 
-                            onValueChange={(val) => setMaterialData({...materialData, status: val as LibraryItemStatus})}
+                            value={productData.status} 
+                            onValueChange={(val) => setProductData({...productData, status: val as LibraryItemStatus})}
                          >
                             <SelectTrigger className="bg-white border-orange-200 h-10 text-sm font-bold text-slate-900 shadow-sm transition-all focus:ring-orange-500">
                               <SelectValue />

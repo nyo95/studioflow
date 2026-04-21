@@ -68,7 +68,7 @@ interface TemplateManagerProps {
   scheduleTemplates: ScheduleTemplateConfig[];
   schedulePrefixes: SchedulePrefixConfig[];
   userRole: Role;
-  mode?: "project-engine" | "material-fixtures";
+  mode?: "project-engine" | "product-catalog";
 }
 
 const PHASES = ["MOODBOARD", "LAYOUT", "DESIGN_3D", "CD", "SUPERVISION"];
@@ -450,7 +450,7 @@ export function TemplateManager({
         </>
       )}
 
-      {mode === "material-fixtures" && (
+      {mode === "product-catalog" && (
         <>
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -468,7 +468,7 @@ export function TemplateManager({
             <div className="mt-8 grid gap-6 xl:grid-cols-2">
               {schedulerSections.map((section) => {
                 const configs = getSchedulerConfigs(section);
-                const sectionLabel = section === ScheduleSection.MATERIAL ? "Material" : "Fixture";
+                const sectionLabel = section === ScheduleSection.MATERIAL ? "Product" : "Fixture";
 
                 return (
                   <div key={section} className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/30">
@@ -553,7 +553,7 @@ export function TemplateManager({
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle className="font-serif text-xl">
-                  {modalMode === "add" ? `Add ${activeSection === ScheduleSection.MATERIAL ? "Material" : "Fixture"} Category` : "Edit Prefix"}
+                  {modalMode === "add" ? `Add ${activeSection === ScheduleSection.MATERIAL ? "Product" : "Fixture"} Category` : "Edit Prefix"}
                 </DialogTitle>
               </DialogHeader>
               <div className="grid gap-6 py-4">

@@ -233,7 +233,7 @@ export const settingsService = {
    */
   async getAvailableCategories(tx: PrismaTransaction) {
     const [catalogCats, dictionaryCats] = await Promise.all([
-      tx.materialCatalog.findMany({
+      tx.productCatalog.findMany({
         select: { catalog_category: true },
         distinct: ["catalog_category"],
       }),

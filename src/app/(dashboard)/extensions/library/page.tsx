@@ -6,27 +6,29 @@ import { LibraryTabs } from "@/extensions/library/components/LibraryTabs";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { 
   getVendorsAction, 
-  getMaterialsAction, 
+  getProductsAction, 
   getLibraryCategoriesAction, 
   getMyRoleAction, 
-  getMaterialMetadataAction, 
+  getProductMetadataAction, 
   getGroupedCategoriesAction, 
-  getAllMaterialRequestsAction 
+  getAllProductRequestsAction,
+  getPromotionRequestsAction 
 } from "@/extensions/library/actions/library-actions";
 import { toast } from "sonner";
-import { MaterialCatalogWithRelations, LibraryVendor, ProjectMaterialRequestWithDetails } from "@/extensions/library/types";
+import { ProductCatalogWithRelations, LibraryVendor, ProjectProductRequestWithDetails } from "@/extensions/library/types";
 import { unwrapActionResult } from "@/lib/result";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useSearchParams } from "next/navigation";
 
 export default function LibraryPage() {
   const [vendors, setVendors] = React.useState<LibraryVendor[]>([]);
-  const [materials, setMaterials] = React.useState<MaterialCatalogWithRelations[]>([]);
-  const [totalMaterials, setTotalMaterials] = React.useState(0);
-  const [requests, setRequests] = React.useState<ProjectMaterialRequestWithDetails[]>([]);
+  const [products, setProducts] = React.useState<ProductCatalogWithRelations[]>([]);
+  const [totalProducts, setTotalProducts] = React.useState(0);
+  const [requests, setRequests] = React.useState<ProjectProductRequestWithDetails[]>([]);
+  const [promotionRequests, setPromotionRequests] = React.useState<any[]>([]);
   
   const [categories, setCategories] = React.useState<string[]>([]);
-  const [materialCategories, setMaterialCategories] = React.useState<string[]>([]);
+  const [productCategories, setProductCategories] = React.useState<string[]>([]);
   const [fixtureCategories, setFixtureCategories] = React.useState<string[]>([]);
   const [subCategories, setSubCategories] = React.useState<string[]>([]);
   const [finishings, setFinishings] = React.useState<string[]>([]);
@@ -44,7 +46,7 @@ export default function LibraryPage() {
   const [pageSize] = React.useState(24);
   
   const [isLoading, setIsLoading] = React.useState(true);
-  const [isRefreshingMaterials, setIsRefreshingMaterials] = React.useState(false);
+  const [isRefreshingProducts, setIsRefreshingProducts] = React.useState(false);
   const [role, setRole] = React.useState<string>("STAFF");
 
   // Initial Data Load (Vendors, Metadata, Categories, Requests)
@@ -52,17 +54,19 @@ export default function LibraryPage() {
     async function init() {
       setIsLoading(true);
       try {
-        const [vendorsRes, catsRes, roleRes, metaRes, groupedCatsRes, requestsRes] = await Promise.all([
+        const [vendorsRes, catsRes, roleRes, metaRes, groupedCatsRes, requestsRes, promoRes] = await Promise.all([
           getVendorsAction(undefined),
           getLibraryCategoriesAction(undefined),
           getMyRoleAction(undefined),
-          getMaterialMetadataAction(undefined),
+          getProductMetadataAction(undefined),
           getGroupedCategoriesAction(undefined),
-          getAllMaterialRequestsAction(undefined),
+          getAllProductRequestsAction(undefined),
+          getPromotionRequestsAction(undefined),
         ]);
 
         if (vendorsRes.success) setVendors(vendorsRes.data);
         if (requestsRes.success) setRequests(requestsRes.data);
+        if (promoRes.success) setPromotionRequests(promoRes.data);
         if (catsRes.success) setCategories(catsRes.data);
         if (roleRes.success) setRole(roleRes.data);
         if (metaRes.success) {
@@ -70,7 +74,7 @@ export default function LibraryPage() {
           setFinishings(metaRes.data.finishings);
         }
         if (groupedCatsRes.success) {
-          setMaterialCategories(groupedCatsRes.data.material);
+          setProductCategories(groupedCatsRes.data.material);
           setFixtureCategories(groupedCatsRes.data.fixture);
         }
       } catch {
@@ -82,13 +86,13 @@ export default function LibraryPage() {
     init();
   }, []);
 
-  // Material Data Load (Triggered by filters/pagination)
-  const fetchMaterials = React.useCallback(async () => {
-    setIsRefreshingMaterials(true);
+  // Product Data Load (Triggered by filters/pagination)
+  const fetchProducts = React.useCallback(async () => {
+    setIsRefreshingProducts(true);
     try {
       const statusFilter = activeTab === "queue" ? "PENDING" : activeTab === "catalog" ? "APPROVED" : undefined;
       
-      const res = await getMaterialsAction({
+      const res = await getProductsAction({
         search: debouncedSearch,
         category: selectedCategory === "all" ? undefined : selectedCategory,
         hasPhysicalOnly: showPhysicalOnly,
@@ -98,19 +102,19 @@ export default function LibraryPage() {
       });
 
       if (res.success) {
-        setMaterials(res.data.items);
-        setTotalMaterials(res.data.total);
+        setProducts(res.data.items);
+        setTotalProducts(res.data.total);
       }
     } catch {
       toast.error("Failed to refresh catalog data");
     } finally {
-      setIsRefreshingMaterials(false);
+      setIsRefreshingProducts(false);
     }
   }, [debouncedSearch, selectedCategory, showPhysicalOnly, currentPage, pageSize, activeTab]);
 
   React.useEffect(() => {
-    fetchMaterials();
-  }, [fetchMaterials]);
+    fetchProducts();
+  }, [fetchProducts]);
 
   // Reset page when filters change
   React.useEffect(() => {
@@ -137,17 +141,18 @@ export default function LibraryPage() {
           <ErrorBoundary name="Library">
             <LibraryTabs
               vendors={vendors}
-              materials={materials}
-              totalMaterials={totalMaterials}
+              products={products}
+              totalProducts={totalProducts}
               currentPage={currentPage}
               pageSize={pageSize}
               onPageChange={setCurrentPage}
               categories={categories}
-              materialCategories={materialCategories}
+              productCategories={productCategories}
               fixtureCategories={fixtureCategories}
               subCategories={subCategories}
               finishings={finishings}
               requests={requests}
+              promotionRequests={promotionRequests}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               selectedCategory={selectedCategory}
@@ -155,7 +160,7 @@ export default function LibraryPage() {
               showPhysicalOnly={showPhysicalOnly}
               setShowPhysicalOnly={setShowPhysicalOnly}
               userRole={role}
-              isRefreshing={isRefreshingMaterials}
+              isRefreshing={isRefreshingProducts}
               activeTab={activeTab}
               onTabChange={setActiveTab}
             />

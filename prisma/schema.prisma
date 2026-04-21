@@ -18,7 +18,7 @@ model User {
   comments             Comment[]
   projects_as_designer Project[]                @relation("Designer")
   projects_as_drafter  Project[]                @relation("Drafter")
-  material_requests    ProjectMaterialRequest[]
+  product_requests     ProjectProductRequest[]
   assigned_activities  Activity[]
 }
 
@@ -51,7 +51,7 @@ model Project {
   designer          User                     @relation("Designer", fields: [pic_designer_id], references: [id])
   drafter           User                     @relation("Drafter", fields: [pic_drafter_id], references: [id])
   checklists        ProjectChecklist[]
-  material_requests ProjectMaterialRequest[]
+  product_requests  ProjectProductRequest[]
   schedule_entries  ProjectScheduleEntry[]
   timelines         ProjectTimeline[]
   activities        Activity[]
@@ -63,14 +63,15 @@ model Phase {
   name_enum   PhaseName
   status_enum PhaseStatus        @default(PENDING)
   order_index Int
-  is_locked   Boolean            @default(false)
-  audit_logs  AuditLog[]
-  cd_lists    CDList[]
-  comments    Comment[]
-  project     Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  checklists  ProjectChecklist[]
-  timelines   ProjectTimeline[]
-  revisions   Revision[]
+  is_locked      Boolean            @default(false)
+  allow_parallel Boolean            @default(false)
+  audit_logs     AuditLog[]
+  cd_lists       CDList[]
+  comments       Comment[]
+  project        Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  checklists     ProjectChecklist[]
+  timelines      ProjectTimeline[]
+  revisions      Revision[]
 }
 
 model Revision {
@@ -175,7 +176,7 @@ model Vendor {
   website_url   String?
   instagram_url String?
   deleted_at    DateTime?
-  materials     MaterialCatalog[]
+  products      ProductCatalog[]
   contacts      VendorContact[]
 }
 
@@ -190,7 +191,7 @@ model VendorContact {
   vendor         Vendor  @relation(fields: [vendor_id], references: [id])
 }
 
-model MaterialCatalog {
+model ProductCatalog {
   id                  String                   @id @default(uuid())
   vendor_id           String
   catalog_category    String
@@ -206,8 +207,6 @@ model MaterialCatalog {
   catalog_dimension_unit String?               @default("cm")
   catalog_color       String?
   catalog_finishing   String?
-  catalog_rak_location String?
-  catalog_box_number  String?
   catalog_image_url   String?
   catalog_image_original_url String?
   catalog_reference_url String?
@@ -219,7 +218,7 @@ model MaterialCatalog {
   deleted_at          DateTime?
   vendor              Vendor                   @relation(fields: [vendor_id], references: [id])
   physical_samples    PhysicalSample[]
-  material_requests   ProjectMaterialRequest[]
+  product_requests    ProjectProductRequest[]
   schedule_options    ProjectScheduleOption[]
 
   @@index([vendor_id])
@@ -229,38 +228,51 @@ model MaterialCatalog {
 
 model PhysicalSample {
   id            String          @id @default(uuid())
-  material_id   String
-  location_rak  String
-  container_box String
+  product_id    String
+  rack_number   String
+  box_number    String
   notes         String?
   created_at    DateTime        @default(now())
   updated_at    DateTime        @updatedAt
-  material      MaterialCatalog @relation(fields: [material_id], references: [id], onDelete: Cascade)
+  product       ProductCatalog  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  movements     SampleMovementLog[]
 
-  @@index([material_id])
+  @@index([product_id])
 }
 
-model ProjectMaterialRequest {
-  id                   String                @id @default(uuid())
+model SampleMovementLog {
+  id         String       @id @default(uuid())
+  sample_id  String
+  action     SampleAction
+  notes      String?
+  user_id    String
+  created_at DateTime     @default(now())
+  sample     PhysicalSample @relation(fields: [sample_id], references: [id], onDelete: Cascade)
+
+  @@index([sample_id])
+}
+
+model ProjectProductRequest {
+  id                   String               @id @default(uuid())
   project_id           String
-  material_id          String?
+  product_catalog_id   String?
   schedule_entry_id    String?
   schedule_option_id   String?
-  custom_material_name String?
+  custom_product_name  String?
   reference_url        String?
   requested_by_id      String
-  status               MaterialRequestStatus @default(REQUESTED)
+  status               ProductRequestStatus @default(REQUESTED)
   area_location        String?
-  is_scheduled         Boolean               @default(true)
+  is_scheduled         Boolean              @default(true)
   notes                String?
   staff_name_override  String?
-  created_at           DateTime              @default(now())
-  updated_at           DateTime              @updatedAt
-  material             MaterialCatalog?      @relation(fields: [material_id], references: [id])
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+  product_catalog      ProductCatalog?      @relation(fields: [product_catalog_id], references: [id])
   schedule_entry       ProjectScheduleEntry? @relation(fields: [schedule_entry_id], references: [id], onDelete: SetNull)
   schedule_option      ProjectScheduleOption? @relation(fields: [schedule_option_id], references: [id], onDelete: SetNull)
-  project              Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  requested_by         User                  @relation(fields: [requested_by_id], references: [id])
+  project              Project              @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  requested_by         User                 @relation(fields: [requested_by_id], references: [id])
 }
 
 model ProjectChecklist {
@@ -339,15 +351,14 @@ model ProjectScheduleEntry {
   prefix_ref        PrefixDictionary?        @relation(fields: [prefix_id], references: [id])
   project           Project                  @relation(fields: [project_id], references: [id], onDelete: Cascade)
   options           ProjectScheduleOption[]
-  material_requests ProjectMaterialRequest[]
-
+  product_requests  ProjectProductRequest[]
   @@unique([project_id, section, schedule_code])
 }
 
 model ProjectScheduleOption {
   id                  String               @id @default(uuid())
   entry_id            String
-  material_catalog_id String?
+  product_catalog_id  String?
   manual_data         Json?
   data_snapshot       Json?
   option_label        String
@@ -356,8 +367,8 @@ model ProjectScheduleOption {
   created_at          DateTime             @default(now())
   updated_at          DateTime             @updatedAt
   entry               ProjectScheduleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
-  material_catalog    MaterialCatalog?     @relation(fields: [material_catalog_id], references: [id], onDelete: SetNull)
-  material_requests   ProjectMaterialRequest[]
+  product_catalog     ProductCatalog?      @relation(fields: [product_catalog_id], references: [id], onDelete: SetNull)
+  product_requests    ProjectProductRequest[]
 }
 
 model ScheduleTemplate {
@@ -367,6 +378,20 @@ model ScheduleTemplate {
   is_active         Boolean         @default(true)
 
   @@unique([section, schedule_category])
+}
+
+model PromotionRequest {
+  id               String    @id @default(uuid())
+  project_id       String
+  schedule_option_id String
+  requested_by_id   String
+  snapshot_data    Json?
+  notes            String?
+  status           String    @default("PENDING")
+  reviewed_by_id   String?
+  reviewed_at      DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
 }
 
 enum TimelineStatus {
@@ -439,7 +464,7 @@ enum LibraryItemStatus {
   REJECTED
 }
 
-enum MaterialRequestStatus {
+enum ProductRequestStatus {
   REQUESTED
   ORDERED
   SHIPPED
@@ -457,4 +482,14 @@ enum ScheduleOptionStatus {
 enum ScheduleSection {
   MATERIAL
   FIXTURE
+}
+
+enum SampleAction {
+  IN
+  OUT
+  TRANSFER
+  REJECT
+  CHECK_IN
+  CHECK_OUT
+  AUDITED
 }

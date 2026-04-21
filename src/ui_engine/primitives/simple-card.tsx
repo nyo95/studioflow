@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { UI_ENGINE_RADIUS_CARD } from "@/ui_engine/tokens";
+import { DESIGN_SYSTEM_CONFIG } from "../design-system.config";
 
 const SimpleCard = React.forwardRef<
   HTMLDivElement,
@@ -62,7 +63,14 @@ const SimpleCardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn("text-sm font-semibold text-slate-950", className)}
+    className={cn(
+      DESIGN_SYSTEM_CONFIG.typography.h6.family,
+      DESIGN_SYSTEM_CONFIG.typography.h6.size,
+      DESIGN_SYSTEM_CONFIG.typography.h6.weight,
+      DESIGN_SYSTEM_CONFIG.typography.h6.tracking,
+      DESIGN_SYSTEM_CONFIG.typography.h6.color,
+      className
+    )}
     {...props}
   />
 ));

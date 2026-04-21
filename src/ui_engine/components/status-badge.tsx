@@ -1,9 +1,18 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
+import { DESIGN_SYSTEM_CONFIG } from "../design-system.config";
 
 const statusBadgeVariants = cva(
-  "inline-flex items-center px-3 py-1 text-[10px] uppercase font-bold tracking-[0.2em] shadow-sm rounded-full border",
+  cn(
+    "inline-flex items-center px-3 py-1 shadow-sm rounded-full border",
+    DESIGN_SYSTEM_CONFIG.typography.uiMeta.family,
+    DESIGN_SYSTEM_CONFIG.typography.uiMeta.size,
+    DESIGN_SYSTEM_CONFIG.typography.uiMeta.weight,
+    DESIGN_SYSTEM_CONFIG.typography.uiMeta.tracking,
+    DESIGN_SYSTEM_CONFIG.typography.uiMeta.uppercase ? "uppercase" : "",
+    "leading-none"
+  ),
   {
     variants: {
       variant: {

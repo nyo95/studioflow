@@ -34,7 +34,12 @@ export const phaseService = {
         },
       });
 
-      if (prevPhase && prevPhase.status_enum !== PhaseStatus.READY_FOR_NEXT) {
+      if (
+        prevPhase && 
+        prevPhase.status_enum !== PhaseStatus.READY_FOR_NEXT && 
+        prevPhase.status_enum !== PhaseStatus.COMPLETED &&
+        !phase.allow_parallel
+      ) {
         throw new ActionError(
           `Cannot activate "${phase.name_enum}". Previous phase "${prevPhase.name_enum}" must be READY_FOR_NEXT first.`,
           "SEQUENTIAL_VIOLATION"

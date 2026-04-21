@@ -57,10 +57,10 @@ export async function ensureDbSchemaPreflight() {
   try {
     // 1. Check for required extension tables
     const requiredTables = [
-      "MaterialCatalog",
+      "ProductCatalog",
       "VendorContact",
       "PhysicalSample",
-      "ProjectMaterialRequest",
+      "ProjectProductRequest",
       "AuditLog",
       "TemporaryAttachment"
     ];

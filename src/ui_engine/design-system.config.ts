@@ -7,7 +7,7 @@
 export const DESIGN_SYSTEM_CONFIG = {
   typography: {
     h1: {
-      family: "font-serif",
+      family: "font-serif", // Primary Heading: Lora
       size: "text-4xl",
       weight: "font-bold",
       tracking: "tracking-tight",
@@ -21,14 +21,14 @@ export const DESIGN_SYSTEM_CONFIG = {
       color: "text-slate-950",
     },
     h3: {
-      family: "font-serif",
+      family: "font-serif", // Tertiary Heading: Lora
       size: "text-2xl",
       weight: "font-bold",
       tracking: "tracking-tight",
       color: "text-slate-950",
     },
     h4: {
-      family: "font-sans",
+      family: "font-sans", // Functional UI Heading: Inter
       size: "text-lg",
       weight: "font-semibold",
       tracking: "tracking-tight",
@@ -49,7 +49,7 @@ export const DESIGN_SYSTEM_CONFIG = {
       color: "text-slate-900",
     },
     body: {
-      family: "font-sans",
+      family: "font-sans", // Primary UI/Body: Inter
       size: "text-sm",
       weight: "font-normal",
       tracking: "tracking-normal",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, LayoutGrid, Lock, Settings } from "lucide-react";
+import { Calendar, LayoutGrid, Lock, Settings, ShieldAlert } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -19,12 +19,14 @@ const coreItems = [
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
-export function NavOuter({ appTitle = "StudioFlow" }: { appTitle?: string }) {
+export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appTitle?: string; userRole?: string }) {
   const pathname = useStablePathname();
   const { close, isOpen } = useSidebar();
 
   const items = [
     ...coreItems.slice(0, 2),
+    // Admin Hub - RBAC Protection
+    ...(userRole === "ADMIN" ? [{ icon: ShieldAlert, label: "Admin", href: "/admin" }] : []),
     // for extension: library //
     ...EXTENSIONS,
     ...coreItems.slice(2),
@@ -59,6 +61,7 @@ export function NavOuter({ appTitle = "StudioFlow" }: { appTitle?: string }) {
                   : "h-12 w-12 justify-center opacity-45"
               )}
               title={tooltipLabel}
+              key={item.href}
             >
               <div className="relative">
                 <Icon className="h-5 w-5" />
@@ -71,6 +74,7 @@ export function NavOuter({ appTitle = "StudioFlow" }: { appTitle?: string }) {
             </div>
           ) : (
             <Link
+              key={item.href}
               href={item.href}
               onClick={close}
               className={cn(

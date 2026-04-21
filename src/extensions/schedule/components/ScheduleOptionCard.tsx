@@ -51,7 +51,7 @@ export function ScheduleOptionCard({ option, entryId, onRefresh }: ScheduleOptio
         {option.option_label}
       </div>
 
-      {option.material_catalog_id && (
+      {option.product_catalog_id && (
         <div 
           className="absolute top-2 right-6 z-20 h-4 w-4 rounded-full bg-slate-900 border-2 border-white flex items-center justify-center shadow-lg transform transition-transform group-hover/opt:scale-110"
           title="Gold Standard Library Item"
@@ -60,16 +60,18 @@ export function ScheduleOptionCard({ option, entryId, onRefresh }: ScheduleOptio
         </div>
       )}
 
-      {/* Sample Ready Indicator (Loose Coupling Bridge) */}
-      {option.material_catalog?.material_requests?.some(r => r.status === 'RECEIVED') && (
+      {/* Sample Ready Indicator (Loose Coupling Bridge - Live Catalog Tracking) */}
+      {option.product_catalog?.product_requests?.some(r => r.status === 'RECEIVED') && (
         <div 
-          className="absolute top-7 right-2 z-20 flex items-center gap-1 bg-emerald-500 text-white text-[7px] font-black px-1 py-0.5 rounded-full shadow-lg border-2 border-white animate-in zoom-in duration-500"
-          title="Physical Sample Ready"
+          className="absolute top-7 right-2 z-20 flex items-center gap-1 bg-emerald-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-full shadow-lg border-2 border-white animate-in zoom-in duration-500"
+          title="Physical Sample Ready (Live Library Status)"
         >
+          <div className="h-1 w-1 rounded-full bg-white animate-pulse" />
           <CheckCircle2 className="h-2 w-2" />
-          <span className="pr-0.5">READY</span>
+          <span className="pr-0.5">LIVE READY</span>
         </div>
       )}
+
 
       {/* Content */}
       <div className="w-full h-full flex flex-col items-center justify-center">

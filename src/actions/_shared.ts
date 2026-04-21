@@ -35,12 +35,22 @@ export async function insertAuditLog(
       ? (detailsObj.phase_id as string) 
       : undefined;
 
+  const ADMIN_ID = "00000000-0000-4000-8000-000000000001";
+  
+  // Verify user exists to prevent Zombie Session crashes (Foreign Key violations)
+  const userExists = userId ? await tx.user.findUnique({
+    where: { id: userId },
+    select: { id: true }
+  }) : null;
+
+  const finalUserId = userExists ? userId : ADMIN_ID;
+
   await tx.auditLog.create({
     data: {
       action,
       entity_type: entityType,
       entity_id: entityId,
-      user_id: userId,
+      user_id: finalUserId,
       project_id: inferredProjectId,
       phase_id: inferredPhaseId,
       details: detailsEntry ?? undefined,

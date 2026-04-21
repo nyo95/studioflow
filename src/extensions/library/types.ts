@@ -1,4 +1,4 @@
-import { Prisma, Vendor, VendorContact, LibraryItemStatus, ScheduleSection } from "@/generated/prisma";
+import { Prisma, Vendor, VendorContact, LibraryItemStatus, ScheduleSection, PromotionRequest } from "@/generated/prisma";
 import { z } from "zod";
 
 
@@ -6,16 +6,16 @@ export type LibraryVendor = Vendor & {
   contacts?: VendorContact[];
 };
 
-export type MaterialCatalogWithRelations = Prisma.MaterialCatalogGetPayload<{
+export type ProductCatalogWithRelations = Prisma.ProductCatalogGetPayload<{
   include: { 
     vendor: { include: { contacts: true } },
     physical_samples: true
   };
 }>;
 
-export type ProjectMaterialRequestWithDetails = Prisma.ProjectMaterialRequestGetPayload<{
+export type ProjectProductRequestWithDetails = Prisma.ProjectProductRequestGetPayload<{
   include: { 
-    material: { 
+    product_catalog: { 
       include: { 
         vendor: { include: { contacts: true } },
         physical_samples: true
@@ -46,12 +46,12 @@ export type LibraryVendorInput = {
 
 export type PhysicalSampleInput = {
   id?: string;
-  location_rak: string;
-  container_box: string;
+  rack_number: string;
+  box_number: string;
   notes?: string;
 };
 
-export type MaterialCatalogInput = {
+export type ProductCatalogInput = {
   vendor_id?: string;
   vendor_name?: string;
   catalog_category: string;
@@ -68,8 +68,6 @@ export type MaterialCatalogInput = {
   catalog_dimension_unit?: string;
   catalog_color?: string;
   catalog_finishing?: string;
-  catalog_rak_location?: string;
-  catalog_box_number?: string;
   catalog_image_url?: string;
   catalog_image_original_url?: string;
   catalog_reference_url?: string;
@@ -81,12 +79,12 @@ export type MaterialCatalogInput = {
   physical_samples?: PhysicalSampleInput[];
 };
 
-export type ProjectMaterialRequestInput = {
+export type ProjectProductRequestInput = {
   project_id: string;
-  material_id?: string;
+  product_catalog_id?: string;
   schedule_entry_id?: string;
   schedule_option_id?: string;
-  custom_material_name?: string;
+  custom_product_name?: string;
   reference_url?: string;
   cover_url?: string;
   original_url?: string;
@@ -95,5 +93,7 @@ export type ProjectMaterialRequestInput = {
   notes?: string;
 };
 
-export const MaterialMetadataSchema = z.record(z.string(), z.unknown());
+export const ProductMetadataSchema = z.record(z.string(), z.unknown());
 export const LibraryItemStatusSchema = z.nativeEnum(LibraryItemStatus);
+
+export type PromotionRequestWithDetails = PromotionRequest;

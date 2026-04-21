@@ -393,7 +393,7 @@ export const projectService = {
     await tx.phase.deleteMany({ where: { id: { in: phaseIds } } });
 
     // Cascade Delete Extensions (MF-02 Alignment)
-    await tx.projectMaterialRequest.deleteMany({ where: { project_id: projectId } });
+    await tx.projectProductRequest.deleteMany({ where: { project_id: projectId } });
     await tx.projectScheduleEntry.deleteMany({ where: { project_id: projectId } });
     
     // As per SSOT Section 17, purge audit logs related to this project

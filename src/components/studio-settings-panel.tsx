@@ -34,7 +34,7 @@ interface SchedulePrefixConfig {
   section: ScheduleSection;
 }
 
-type PanelKey = "general" | "team" | "project-engine" | "design-system" | "material-fixtures";
+type PanelKey = "general" | "team" | "project-engine" | "design-system" | "product-catalog";
 
 const sections = [
   {
@@ -62,8 +62,8 @@ const sections = [
     icon: Blocks,
   },
   {
-    key: "material-fixtures" as const,
-    label: "Material & Fixtures",
+    key: "product-catalog" as const,
+    label: "Product & Fixtures",
     description: "Scheduler categories and prefixes",
     icon: ShoppingBag,
   },
@@ -140,7 +140,7 @@ export function StudioSettingsPanel({
   return (
     <div className={cn(
       "grid gap-6 lg:grid-cols-[256px_minmax(0,1fr)] lg:items-start transition-all duration-300",
-      activePanel === "material-fixtures" ? "max-w-none px-10" : localUISettings.containerMaxWidth || "max-w-7xl",
+      activePanel === "product-catalog" ? "max-w-none px-10" : localUISettings.containerMaxWidth || "max-w-7xl",
       "mx-auto w-full"
     )}>
       <aside className="rounded-3xl border border-slate-200 bg-white p-2 shadow-sm">
@@ -492,10 +492,10 @@ export function StudioSettingsPanel({
           </section>
         ) : null}
         
-        {activePanel === "material-fixtures" ? (
+        {activePanel === "product-catalog" ? (
           <section className="rounded-3xl border border-slate-200 bg-slate-50/50 p-6">
             <TemplateManager
-              mode="material-fixtures"
+              mode="product-catalog"
               timelineTemplates={timelineTemplates}
               checklistTemplates={checklistTemplates}
               scheduleTemplates={scheduleTemplates}

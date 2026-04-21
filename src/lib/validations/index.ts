@@ -257,9 +257,9 @@ export const AddScheduleEntryInstantSchema = z.object({
   section: z.nativeEnum(ScheduleSection).optional().default(ScheduleSection.MATERIAL),
 });
 
-export const AddScheduleEntryWithMaterialSchema = z.object({
+export const AddScheduleEntryWithProductSchema = z.object({
   projectId: IdSchema,
-  materialId: IdSchema,
+  product_catalog_id: IdSchema,
   section: z.nativeEnum(ScheduleSection).optional().default(ScheduleSection.MATERIAL),
 });
 
@@ -340,6 +340,12 @@ export const MoveBetweenCategoriesSchema = z.object({
   fromCategory: z.string(),
   toCategory: z.string(),
   newIndex: z.number().int().min(0),
+});
+
+export const SwapScheduleEntriesSchema = z.object({
+  projectId: IdSchema,
+  idA: IdSchema,
+  idB: IdSchema
 });
 
 export const UpdateScheduleOptionSnapshotSchema = z.object({

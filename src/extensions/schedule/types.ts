@@ -1,11 +1,32 @@
-import { ProjectScheduleEntry, ProjectScheduleOption, PrefixDictionary, ScheduleSection, MaterialCatalog } from "@/generated/prisma";
+import { ProjectScheduleEntry, ProjectScheduleOption, PrefixDictionary, ScheduleSection, ProductCatalog } from "@/generated/prisma";
 
+export type GradualFormCustomData = {
+  // Step 1: Primary
+  catalog_sku: string;
+  catalog_product_name: string;
+  // Step 2: Physical Identity (Color mandatory per Point 11)
+  catalog_color: string;
+  catalog_motif: string;
+  catalog_finishing: string;
+  // Step 3: Metadata & Brand
+  catalog_brand: string;
+  catalog_sub_category: string;
+  catalog_dimensions: string;
+  catalog_reference_url: string;
+};
+
+export type GradualFormData = {
+  selectedId: string;
+  customData: GradualFormCustomData;
+};
+
+export type GradualFormMaterials = Pick<ProductCatalog, "id" | "catalog_sku" | "catalog_product_name" | "catalog_brand" | "catalog_image_url">[];
 
 export type ScheduleOptionSnapshot = {
   snapshot_source_kind: "catalog" | "manual";
   snapshot_source_origin?: "web_catalog" | "web_manual" | "gsheets_import" | "sketchup_plugin";
   snapshot_source_external_id?: string | null;
-  material_catalog_id: string | null;
+  product_catalog_id: string | null;
   schedule_category: string;
   catalog_sub_category?: string | null;
   catalog_product_name: string;
@@ -33,8 +54,8 @@ export type ScheduleOptionSnapshot = {
 };
 
 export type ProjectScheduleOptionWithMaterial = ProjectScheduleOption & {
-  material_catalog?: (MaterialCatalog & {
-    material_requests?: {
+  product_catalog?: (ProductCatalog & {
+    product_requests?: {
       status: string;
       project_id: string;
     }[];

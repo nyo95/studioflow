@@ -11,18 +11,42 @@ import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/actions/schedule-actions";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { ProjectScheduleEntryWithRelations } from "../../types";
 
 interface ScheduleRowProps {
-  entry: any;
-  onEdit?: (entry: any) => void;
+  entry: ProjectScheduleEntryWithRelations;
+  onEdit?: (entry: ProjectScheduleEntryWithRelations) => void;
   onDelete?: (id: string) => void;
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
+  onUpdateQty?: (entryId: string, qty: number) => Promise<void>;
   onAddAlternative?: () => void;
   section?: "MATERIAL" | "FIXTURE";
 }
 
-export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onAddAlternative, section = "MATERIAL" }: ScheduleRowProps) {
+export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdateQty, onAddAlternative, section = "MATERIAL" }: ScheduleRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: entry.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : "auto",
+    position: isDragging ? "relative" as const : "static" as const,
+  };
+
   const [activeOptionIndex, setActiveOptionIndex] = React.useState(() => {
+
     const finalIndex = entry.options.findIndex((o: any) => o.is_final);
     return finalIndex >= 0 ? finalIndex : 0;
   });
@@ -95,15 +119,64 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onAddAl
     if (e.key === "Escape") { setLocationValue(entry.schedule_location || ""); setEditingLocation(false); }
   };
 
+  // Inline Qty edit state
+  const [editingQty, setEditingQty] = React.useState(false);
+  const [qtyValue, setQtyValue] = React.useState(String(entry.schedule_qty ?? 0));
+  const [isSavingQty, setIsSavingQty] = React.useState(false);
+  const qtyInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (editingQty) qtyInputRef.current?.focus();
+  }, [editingQty]);
+
+  const handleSaveQty = async () => {
+    if (!onUpdateQty) { setEditingQty(false); return; }
+    const num = parseFloat(qtyValue);
+    if (isNaN(num)) {
+      toast.error("Invalid quantity");
+      setQtyValue(String(entry.schedule_qty ?? 0));
+      setEditingQty(false);
+      return;
+    }
+    setIsSavingQty(true);
+    try {
+      await onUpdateQty(entry.id, num);
+    } finally {
+      setIsSavingQty(false);
+      setEditingQty(false);
+    }
+  };
+
+  const handleQtyKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleSaveQty();
+    if (e.key === "Escape") { setQtyValue(String(entry.schedule_qty ?? 0)); setEditingQty(false); }
+  };
+
   const isFixture = section === "FIXTURE";
 
   return (
-    <tr className="group border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
-      {/* Code */}
+    <tr 
+      ref={setNodeRef} 
+      style={style} 
+      className={cn(
+        "group border-b border-slate-100 hover:bg-slate-50/60 transition-colors",
+        isDragging && "bg-slate-50 shadow-sm"
+      )}
+    >
+      {/* Drag Handle & Code */}
       <td className="px-5 py-3">
-        <Badge variant="outline" className="font-sans text-[10px] font-bold tracking-tighter uppercase px-1.5 py-0 border-slate-200 bg-slate-50 text-slate-500">
-          {entry.schedule_code}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <div 
+            {...attributes} 
+            {...listeners}
+            className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 rounded transition-colors"
+          >
+            <GripVertical size={14} />
+          </div>
+          <Badge variant="outline" className="font-sans text-[10px] font-bold tracking-tighter uppercase px-1.5 py-0 border-slate-200 bg-slate-50 text-slate-500">
+            {entry.schedule_code}
+          </Badge>
+        </div>
       </td>
 
       {/* Product Details – with prominent image */}
@@ -234,11 +307,38 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onAddAl
       {/* Qty (fixture only) */}
       {isFixture && (
         <td className="px-5 py-3 text-center">
-          <span className="font-sans text-sm font-bold text-slate-700">
-            {entry.schedule_qty ?? 0}
-          </span>
-          {entry.schedule_unit && (
-            <span className="ml-1 font-sans text-[10px] text-slate-400">{entry.schedule_unit}</span>
+          {editingQty ? (
+            <div className="flex items-center justify-center gap-1">
+              <input
+                ref={qtyInputRef}
+                type="number"
+                step="any"
+                value={qtyValue}
+                onChange={(e) => setQtyValue(e.target.value)}
+                onKeyDown={handleQtyKeyDown}
+                className="h-7 w-16 text-xs font-bold text-center text-slate-900 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-slate-900"
+              />
+              {isSavingQty ? (
+                <Loader2 size={12} className="animate-spin text-slate-400" />
+              ) : (
+                <div className="flex flex-col gap-0.5">
+                  <button onClick={handleSaveQty} className="p-0.5 hover:bg-emerald-50 rounded text-emerald-500"><Check size={10} /></button>
+                  <button onClick={() => { setQtyValue(String(entry.schedule_qty ?? 0)); setEditingQty(false); }} className="p-0.5 hover:bg-red-50 rounded text-red-400"><X size={10} /></button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button 
+              onClick={() => { setQtyValue(String(entry.schedule_qty ?? 0)); setEditingQty(true); }}
+              className="group/qty px-3 py-1 hover:bg-slate-100 rounded-lg transition-colors inline-flex items-center gap-1.5"
+            >
+              <span className="font-sans text-sm font-bold text-slate-700 group-hover/qty:text-slate-900 transition-colors">
+                {entry.schedule_qty ?? 0}
+              </span>
+              {entry.schedule_unit && (
+                <span className="font-sans text-[10px] text-slate-400 group-hover/qty:text-slate-500 transition-colors">{entry.schedule_unit}</span>
+              )}
+            </button>
           )}
         </td>
       )}
@@ -319,8 +419,8 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onAddAl
         projectId={entry.project_id}
         scheduleEntryId={entry.id}
         scheduleOptionId={activeOption?.id}
-        materialNameFallback={snapshot?.catalog_product_name || "Unspecified Material"}
-        materialCatalogId={activeOption?.library_item_id || undefined}
+        productNameFallback={snapshot?.catalog_product_name || "Unspecified Material"}
+        productCatalogId={activeOption?.product_catalog_id || undefined}
       />
     </tr>
   );

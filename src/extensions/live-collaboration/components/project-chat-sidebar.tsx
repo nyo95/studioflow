@@ -7,7 +7,8 @@ import { CommentWithAuthor } from "../types/comment";
 import { createComment, deleteComment } from "../actions/comment-actions";
 import { CommentForm } from "./comment-form";
 import { CommentItem } from "./comment-item";
-import { MessageSquare, X } from "lucide-react";
+import { MessageSquare, X, Upload } from "lucide-react";
+import React from "react";
 import { useProjectLive } from "@/ui_engine";
 import { toast } from "sonner";
 
@@ -28,12 +29,41 @@ export function ProjectChatSidebar({
   const scrollRef = useRef<HTMLDivElement>(null);
   const { comments, addOptimisticComment, replaceComment, removeComment, syncNow, isSidebarOpen, toggleSidebar } =
     useProjectLive();
+  const [isDragOver, setIsDragOver] = React.useState(false);
+
+
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current && isSidebarOpen) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [comments, isSidebarOpen]);
+
+  // Click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isSidebarOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        // Find if we clicked the toggle button
+        const isToggle = (event.target as HTMLElement).closest('button')?.contains((event.target as HTMLElement)) && 
+                         (event.target as HTMLElement).closest('button')?.className.includes("fixed bottom-6 right-6");
+        
+        if (!isToggle) {
+          toggleSidebar();
+        }
+      }
+    };
+
+    if (isSidebarOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isSidebarOpen, toggleSidebar]);
+
+  // Removed transition/ref misuse
+
 
   const handlePost = async (content: string, attachmentIds?: string[]) => {
     startTransition(async () => {
@@ -114,14 +144,87 @@ export function ProjectChatSidebar({
     </button>
   );
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      // Trigger the child CommentForm upload logic if possible, 
+      // or implement local upload logic.
+      // For now, I'll notify the user or try to find a way to pass this to the form.
+      // A better way is to move the upload logic to a shared hook.
+      toast.info("Uploading dropped files...");
+      
+      const file = files[0];
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const res = await fetch("/api/upload/temp", {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const attachment = await res.json();
+        
+        // This is tricky because the state is in CommentForm.
+        // I'll emit a custom event or use an ID-based strategy.
+        // For now, I'll just post a message with this attachment immediately if it's a quick drop,
+        // OR better: use a singleton/context for the current comment being drafted.
+        
+        await handlePost(`Attached file: ${attachment.filename}`, [attachment.id]);
+        toast.success("File uploaded and posted");
+      } catch (error) {
+        toast.error("Failed to upload dropped file");
+      }
+    }
+  };
+
   return (
     <>
       {toggleButton}
       <HydrationGuard>
         {isSidebarOpen && (
-          <aside className={cn(
-            "fixed bottom-0 right-0 top-0 z-50 flex w-96 flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-in-out translate-x-0"
-          )}>
+          <div
+            className="fixed inset-0 z-40 bg-slate-950/20 lg:hidden"
+            onClick={toggleSidebar}
+          />
+        )}
+        {isSidebarOpen && (
+          <aside 
+            ref={sidebarRef}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "fixed bottom-0 right-0 top-0 z-50 flex w-[min(100vw,24rem)] flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-in-out translate-x-0",
+              isDragOver && "ring-4 ring-indigo-500 ring-inset"
+            )}
+          >
+            {isDragOver && (
+              <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-indigo-600/10 backdrop-blur-[2px] pointer-events-none">
+                <div className="rounded-2xl bg-white p-6 shadow-xl border-2 border-dashed border-indigo-500 flex flex-col items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+                    <Upload className="h-6 w-6" />
+                  </div>
+                  <p className="font-serif text-sm font-bold text-slate-900">Drop to share media</p>
+                </div>
+              </div>
+            )}
             <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/80 px-6 backdrop-blur-md">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">

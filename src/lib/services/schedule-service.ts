@@ -52,6 +52,7 @@ export interface ScheduleCatalogCreateInput {
   catalog_image_url?: string | null;
   catalog_reference_url?: string | null;
   catalog_price?: number | null;
+  catalog_dimension?: string | null;
 }
 
 
@@ -65,7 +66,7 @@ function calculateInitialsType(data: { catalog_motif?: string | null; catalog_co
 }
 
 /**
- * Builds an immutable snapshot from a MaterialCatalog item or manual data
+ * Builds an immutable snapshot from a ProductCatalog item or manual data
  */
 export async function buildScheduleSnapshot(
   tx: PrismaTransaction,
@@ -74,7 +75,7 @@ export async function buildScheduleSnapshot(
   sourceOrigin: SourceOrigin = "web_catalog"
 ): Promise<ScheduleSnapshot> {
   if (catalogId) {
-    const item = await tx.materialCatalog.findUnique({
+    const item = await tx.productCatalog.findUnique({
       where: { id: catalogId },
       include: { 
         vendor: {
@@ -92,7 +93,7 @@ export async function buildScheduleSnapshot(
       snapshot_source_kind: "catalog",
       snapshot_source_origin: sourceOrigin,
       snapshot_source_external_id: null,
-      material_catalog_id: item.id,
+      product_catalog_id: item.id,
       schedule_category: item.catalog_category,
       catalog_sub_category: item.catalog_sub_category,
       catalog_product_name: item.catalog_product_name || item.catalog_sku,
@@ -129,7 +130,7 @@ export async function buildScheduleSnapshot(
     snapshot_source_kind: "manual",
     snapshot_source_origin: sourceOrigin === "web_catalog" ? "web_manual" : sourceOrigin,
     snapshot_source_external_id: manualData?.snapshot_source_external_id ?? null,
-    material_catalog_id: null,
+    product_catalog_id: null,
     schedule_category: manualData?.schedule_category ?? "",
     catalog_sub_category: manualData?.catalog_sub_category ?? null,
     catalog_product_name: manualData?.catalog_product_name || "Manual Item",
@@ -196,7 +197,7 @@ async function resolveCatalogItemForMode(
     tx
   );
 
-  const created = await LibraryService.createMaterial(
+  const created = await LibraryService.createProduct(
     {
       vendor_id: vendor.id,
       catalog_category: category,
@@ -228,7 +229,7 @@ async function resolveCatalogItemForMode(
  * Part of the Pillar 2 "Auto-Harvesting" workflow.
  */
 async function syncOptionToLibrary(tx: PrismaTransaction, optionId: string, snapshot: ScheduleSnapshot, userId?: string) {
-  const syncedMaterial = await LibraryService.ensureMaterialInLibrary(tx, {
+  const syncedProduct = await LibraryService.ensureProductInLibrary(tx, {
     catalog_product_name: snapshot.catalog_product_name,
     catalog_brand: snapshot.catalog_brand,
     catalog_category: snapshot.schedule_category,
@@ -239,29 +240,29 @@ async function syncOptionToLibrary(tx: PrismaTransaction, optionId: string, snap
     catalog_motif: snapshot.catalog_product_name,
   });
 
-  // Skip if material could not be synced (e.g., reserved brands)
-  if (!syncedMaterial) {
-    console.warn(`[syncOptionToLibrary] Skipped syncing reserved/pending material for option=${optionId}`);
+  // Skip if product could not be synced (e.g., reserved brands)
+  if (!syncedProduct) {
+    console.warn(`[syncOptionToLibrary] Skipped syncing reserved/pending product for option=${optionId}`);
     return null;
   }
 
   // Update original option if the link was established or updated
   const updatedSnapshot = {
     ...snapshot,
-    material_catalog_id: syncedMaterial.id
+    product_catalog_id: syncedProduct.id
   };
 
   const updatedOption = await tx.projectScheduleOption.update({
     where: { id: optionId },
     data: {
-      material_catalog_id: syncedMaterial.id,
+      product_catalog_id: syncedProduct.id,
       data_snapshot: updatedSnapshot as unknown as Prisma.InputJsonValue
     },
     include: { entry: true }
   });
 
-  if (userId && syncedMaterial.status === "PENDING") {
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_PROMOTE_TO_LIBRARY, "MaterialCatalog", syncedMaterial.id, userId, {
+  if (userId && syncedProduct.status === "PENDING") {
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_PROMOTE_TO_LIBRARY, "ProductCatalog", syncedProduct.id, userId, {
       harvested_from_option: optionId,
       project_id: updatedOption.entry.project_id
     });
@@ -302,13 +303,13 @@ export class ScheduleService {
     const updatedOption = await syncOptionToLibrary(tx, optionId, snapshot);
 
     if (!updatedOption) {
-      throw new ActionError("Cannot promote reserved/pending material to library", "PROMOTION_FAILED");
+      throw new ActionError("Cannot promote reserved/pending product to library", "PROMOTION_FAILED");
     }
 
     await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_PROMOTE_TO_LIBRARY, "ProjectScheduleOption", optionId, userId, {
       project_id: option.entry.project_id,
       entry_id: option.entry_id,
-      catalog_id: updatedOption.material_catalog_id,
+      catalog_id: updatedOption.product_catalog_id,
       brand: snapshot.catalog_brand,
       name: snapshot.catalog_product_name
     });
@@ -366,9 +367,9 @@ export class ScheduleService {
           options: {
             orderBy: { option_label: "asc" },
             include: { 
-              material_catalog: {
+              product_catalog: {
                 include: {
-                  material_requests: {
+                  product_requests: {
                     where: { project_id: projectId },
                     select: { status: true, project_id: true }
                   }
@@ -574,7 +575,7 @@ export class ScheduleService {
     const option = await tx.projectScheduleOption.create({
       data: {
         entry_id: entry.id,
-        material_catalog_id: resolvedCatalogId,
+        product_catalog_id: resolvedCatalogId,
         data_snapshot: validatedSnapshot as unknown as Prisma.InputJsonValue,
         option_label: "A",
         is_final: isFinal,
@@ -658,7 +659,7 @@ export class ScheduleService {
     const option = await tx.projectScheduleOption.create({
       data: {
         entry_id: entryId,
-        material_catalog_id: resolvedCatalogId,
+        product_catalog_id: resolvedCatalogId,
         data_snapshot: validatedSnapshot as unknown as Prisma.InputJsonValue,
         option_label: nextLabel,
         is_final: false,
@@ -1083,6 +1084,79 @@ export class ScheduleService {
         project_count: projectIds.length
       });
     }
+  }
+
+  /**
+   * FORCED UPDATE: propagation of library changes to all linked project snapshots
+   * @param tx Prisma transaction client.
+   * @param productId Master product catalog id.
+   * @param userId Actor user id for audit.
+   */
+  static async updateLinkedSnapshots(tx: PrismaTransaction, productId: string, userId: string) {
+    const product = await tx.productCatalog.findUnique({
+      where: { id: productId },
+      include: { vendor: true }
+    });
+    if (!product) return;
+
+    const options = await tx.projectScheduleOption.findMany({
+      where: { 
+        product_catalog_id: productId
+      }
+    });
+
+    if (options.length === 0) return;
+
+    console.log(`[ForcedUpdate] Refreshing ${options.length} snapshots for product=${productId}`);
+
+    await Promise.all(options.map(option => 
+      this.updateOptionSnapshot(tx, option.id, {
+        catalog_product_name: product.catalog_product_name || undefined,
+        catalog_brand: product.catalog_brand || product.vendor?.brand_name || undefined,
+        catalog_image_url: product.catalog_image_url,
+        catalog_price: product.catalog_price,
+        specs: {
+          catalog_sku: product.catalog_sku,
+          catalog_motif: product.catalog_motif,
+          catalog_color: product.catalog_color,
+          catalog_finishing: product.catalog_finishing,
+          ...((product.metadata as any) || {})
+        }
+      }, userId)
+    ));
+  }
+
+  /**
+   * Swaps two entries in the same category.
+   * @param tx Prisma transaction client.
+   * @param projectId Project id.
+   * @param idA First entry id.
+   * @param idB Second entry id.
+   * @param userId Actor user id for audit.
+   */
+  static async swapEntries(tx: PrismaTransaction, projectId: string, idA: string, idB: string, userId?: string) {
+    const [entryA, entryB] = await Promise.all([
+      tx.projectScheduleEntry.findUnique({ where: { id: idA } }),
+      tx.projectScheduleEntry.findUnique({ where: { id: idB } })
+    ]);
+
+    if (!entryA || !entryB) {
+      throw new Error("One or both entries not found");
+    }
+
+    const sortOrderA = entryA.schedule_sort_order;
+    const sortOrderB = entryB.schedule_sort_order;
+
+    await Promise.all([
+      tx.projectScheduleEntry.update({
+        where: { id: idA },
+        data: { schedule_sort_order: sortOrderB }
+      }),
+      tx.projectScheduleEntry.update({
+        where: { id: idB },
+        data: { schedule_sort_order: sortOrderA }
+      })
+    ]);
   }
 
 

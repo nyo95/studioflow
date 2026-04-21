@@ -3,37 +3,32 @@
 import * as React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Package, Search, Filter, Warehouse, Plus, LayoutGrid, ArrowRightCircle } from "lucide-react";
+import { Users, Search, Filter, Warehouse, Plus, LayoutGrid, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { VendorTable } from "./VendorTable";
 import { PhysicalInventoryTable } from "./PhysicalInventoryTable";
 import { LibraryFormModal } from "./LibraryFormModal";
-import { MaterialCatalogWithRelations, LibraryVendor, ProjectMaterialRequestWithDetails } from "../types";
-import { MaterialTable } from "./MaterialTable";
-import { MaterialGrid } from "./catalog/MaterialGrid";
-import { MaterialRequestTable } from "./MaterialRequestTable";
+import { ProductDetailModal } from "./modals/ProductDetailModal";
+import { ProductCatalogWithRelations, LibraryVendor, ProjectProductRequestWithDetails } from "../types";
+import { ProductGrid } from "./catalog/ProductGrid";
+import { PromotionQueueTable } from "./PromotionQueueTable";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { deleteMaterialAction, updateMaterialAction } from "../actions/library-actions";
 import { toast } from "sonner";
-import { unwrapActionResult } from "@/lib/result";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Heading, ActionSidebar, ActionSidebarSection, ActionSidebarItem, TableCard } from "@/ui_engine";
+import { ActionSidebar, ActionSidebarSection, ActionSidebarItem } from "@/ui_engine";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ErrorFallback } from "@/components/shared/error-fallback";
 
 interface LibraryTabsProps {
   vendors: LibraryVendor[];
-  materials: MaterialCatalogWithRelations[];
-  totalMaterials: number;
+  products: ProductCatalogWithRelations[];
+  totalProducts: number;
   currentPage: number;
   pageSize: number;
   onPageChange: (page: number) => void;
   categories: string[];
-  materialCategories?: string[];
+  productCategories?: string[];
   fixtureCategories?: string[];
   subCategories?: string[];
   finishings?: string[];
@@ -44,7 +39,8 @@ interface LibraryTabsProps {
   showPhysicalOnly: boolean;
   setShowPhysicalOnly: (val: boolean) => void;
   userRole: string;
-  requests: ProjectMaterialRequestWithDetails[];
+  requests: ProjectProductRequestWithDetails[];
+  promotionRequests?: any[];
   isRefreshing?: boolean;
   activeTab: string;
   onTabChange: (val: string) => void;
@@ -52,13 +48,13 @@ interface LibraryTabsProps {
 
 export function LibraryTabs({
   vendors,
-  materials,
-  totalMaterials,
+  products,
+  totalProducts,
   currentPage,
   pageSize,
   onPageChange,
   categories,
-  materialCategories = [],
+  productCategories = [],
   fixtureCategories = [],
   subCategories = [],
   finishings = [],
@@ -70,6 +66,7 @@ export function LibraryTabs({
   setShowPhysicalOnly,
   userRole,
   requests,
+  promotionRequests = [],
   isRefreshing,
   activeTab,
   onTabChange
@@ -85,9 +82,10 @@ export function LibraryTabs({
     onTabChange(val);
   };
 
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
   const [modalMode, setModalMode] = React.useState<"CREATE" | "EDIT">("CREATE");
-  const [selectedData, setSelectedData] = React.useState<LibraryVendor | MaterialCatalogWithRelations | null>(null);
+  const [selectedData, setSelectedData] = React.useState<LibraryVendor | ProductCatalogWithRelations | null>(null);
 
   const retryTab = () => router.refresh();
 
@@ -95,39 +93,18 @@ export function LibraryTabs({
     router.refresh(); 
   };
 
-  const handleDeleteMaterial = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this material?")) return;
-    
-    try {
-      unwrapActionResult(await deleteMaterialAction({ id }));
-      toast.success("Material deleted successfully");
-      router.refresh();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete material");
-    }
+  const openDetail = (product: ProductCatalogWithRelations) => {
+    setSelectedData(product);
+    setIsDetailModalOpen(true);
   };
 
-  const handleApproveMaterial = async (id: string) => {
-    const material = materials.find(m => m.id === id);
-    if (!material) return;
-    try {
-       unwrapActionResult(await updateMaterialAction({ id, data: { status: "APPROVED" } }));
-       toast.success("Material approved and moved to catalog");
-       router.refresh();
-    } catch (error: unknown) {
-       toast.error(error instanceof Error ? error.message : "Failed to approve material");
-    }
+  const openVendorEdit = (vendor: LibraryVendor) => {
+    setSelectedData(vendor);
+    setModalMode("EDIT");
+    setIsFormModalOpen(true);
   };
 
-  const handleRejectMaterial = async (id: string) => {
-    try {
-       unwrapActionResult(await updateMaterialAction({ id, data: { status: "REJECTED" } }));
-       toast.success("Material request rejected");
-       router.refresh();
-    } catch (error: unknown) {
-       toast.error(error instanceof Error ? error.message : "Failed to reject material");
-    }
-  };
+  const isAdmin = userRole === "ADMIN";
 
   return (
     <Tabs 
@@ -137,31 +114,31 @@ export function LibraryTabs({
       className="w-full"
     >
       <div className="flex flex-col lg:flex-row gap-10 items-start">
-        {/* Left Column: Sticky Sidebar (Fixed Width), Project Details Style */}
+        {/* Left Column: Designers/Staff optimized sidebar */}
         <ActionSidebar>
-          <ActionSidebarSection title="Library Tools" subtitle="Search & Filters">
-              <ActionSidebarItem label="Quick Search">
+          <ActionSidebarSection title="Experience" subtitle="Search & Refine">
+              <ActionSidebarItem label="Product Name">
                  <div className="relative group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
                     <Input
-                      placeholder="Find materials..."
-                      className="pl-9 w-full bg-white border-slate-200 focus:border-slate-400 focus:ring-0 h-10 font-inter text-sm shadow-none rounded-md transition-all"
+                      placeholder="Search catalog..."
+                      className="pl-9 w-full bg-slate-50/50 border-slate-100 focus:bg-white focus:border-slate-200 focus:ring-0 h-10 font-inter text-xs shadow-none rounded-xl transition-all"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                  </div>
               </ActionSidebarItem>
 
-              <ActionSidebarItem label="Filter Category">
+              <ActionSidebarItem label="Collection Category">
                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger className="w-full h-10 border-slate-200 font-inter text-sm focus:ring-0 shadow-none rounded-md transition-all">
+                    <SelectTrigger className="w-full h-10 border-slate-100 bg-slate-50/50 font-inter text-xs focus:ring-0 shadow-none rounded-xl transition-all">
                       <div className="flex items-center gap-2">
-                        <Filter className="h-3.5 w-3.5 text-slate-400" />
+                        <Filter className="h-3 w-3 text-slate-400" />
                         <SelectValue placeholder="All Categories" />
                       </div>
                     </SelectTrigger>
-                    <SelectContent className="font-inter text-sm rounded-md border-slate-200 shadow-lg">
-                      <SelectItem value="all">All Categories</SelectItem>
+                    <SelectContent className="font-inter text-xs rounded-xl border-slate-100 shadow-2xl">
+                      <SelectItem value="all">Every Category</SelectItem>
                       {categories.map((cat) => (
                         <SelectItem key={cat} value={cat}>
                           {cat}
@@ -171,11 +148,11 @@ export function LibraryTabs({
                  </Select>
               </ActionSidebarItem>
 
-              <ActionSidebarItem label="Availability">
-                 <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-md border border-slate-100 transition-all hover:border-slate-200">
+              <ActionSidebarItem label="Discovery Settings">
+                 <div className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-50 transition-all hover:border-slate-100">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[11px] font-bold text-slate-700 font-inter">Physical Only</span>
-                      <span className="text-[9px] text-slate-400 font-inter">Hide digital assets</span>
+                      <span className="text-[10px] font-black text-slate-900 font-inter uppercase tracking-widest">Physical Only</span>
+                      <span className="text-[9px] text-slate-400 font-inter">Filter items with samples</span>
                     </div>
                     <label htmlFor="physical-toggle" className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -191,194 +168,130 @@ export function LibraryTabs({
               </ActionSidebarItem>
           </ActionSidebarSection>
 
+          {isAdmin && (
             <Button 
               onClick={() => {
                 setModalMode("CREATE");
                 setSelectedData(null);
-                setIsModalOpen(true);
+                setIsFormModalOpen(true);
               }}
-              disabled={activeTab === "requests"}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-inter text-xs h-11 px-4 rounded-[calc(var(--ui-radius-card,1rem)-0.25rem)] shadow-sm flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-inter text-[10px] font-black uppercase tracking-widest h-12 px-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Plus className="h-4 w-4" />
-              <span>Add {activeTab === "vendors" ? "Vendor" : "Material"}</span>
+              <span>Add to Catalog</span>
             </Button>
+          )}
         </ActionSidebar>
 
-        {/* Right Column: Dynamic Content Grid (75% on LG) */}
-        <main className="flex-1 w-full animate-in fade-in slide-in-from-right-4 duration-1000">
-          <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-4">
-             <TabsList className="bg-transparent border-none h-auto p-0 flex gap-6">
-                <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-2 transition-all group">
-                  <div className="flex items-center gap-2">
+        {/* Right Column: Premium Storefront Grid */}
+        <main className="flex-1 w-full animate-in fade-in slide-in-from-right-4 duration-1500">
+          <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-0.5">
+             <TabsList className="bg-transparent border-none h-auto p-0 flex gap-8">
+                <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                  <div className="flex items-center gap-3">
                     <LayoutGrid className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-sm md:text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Catalog</span>
+                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Storefront</span>
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="inventory" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-2 transition-all group">
-                  <div className="flex items-center gap-2">
+                <TabsTrigger value="inventory" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                  <div className="flex items-center gap-3">
                     <Warehouse className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-sm md:text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Inventory</span>
+                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Physical Inventory</span>
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="vendors" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-2 transition-all group">
-                  <div className="flex items-center gap-2">
+                <TabsTrigger value="vendors" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                  <div className="flex items-center gap-3">
                     <Users className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-sm md:text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Vendors</span>
+                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Partner Brands</span>
                   </div>
                 </TabsTrigger>
-                
-                {(userRole === "ADMIN" || userRole === "STAFF") && (
-                  <>
-                    <TabsTrigger value="requests" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-2 transition-all group shrink-0">
-                      <div className="flex items-center gap-2">
-                        <ArrowRightCircle className="h-4 w-4 text-slate-400 group-data-[state=active]:text-blue-500" />
-                        <span className="font-lora text-sm md:text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Requests</span>
-                        {requests.filter(r => r.status === 'REQUESTED').length > 0 && (
-                          <Badge className="h-4 min-w-[16px] px-1 bg-blue-500 text-white border-none text-[8px] font-black">
-                            {requests.filter(r => r.status === 'REQUESTED').length}
-                          </Badge>
-                        )}
-                      </div>
-                    </TabsTrigger>
-                    <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-2 transition-all group shrink-0">
-                      <div className="flex items-center gap-2">
-                        <div className="relative">
-                          <Package className="h-4 w-4 text-slate-400 group-data-[state=active]:text-orange-500" />
-                          <span className="absolute -top-1 -right-1 h-1.5 w-1.5 bg-orange-500 rounded-full animate-pulse" />
-                        </div>
-                        <span className="font-lora text-sm md:text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900 underline decoration-orange-200 decoration-2 underline-offset-4">Queue</span>
-                      </div>
-                    </TabsTrigger>
-                  </>
+                {isAdmin && (
+                  <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <Clock className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
+                      <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Approval Queue</span>
+                    </div>
+                  </TabsTrigger>
                 )}
              </TabsList>
              
-             <div className="hidden lg:flex text-[10px] font-black uppercase tracking-widest text-slate-300">
-                {activeTab === "catalog" ? materials.filter(m => m.status === 'APPROVED').length : 
-                 activeTab === "queue" ? materials.filter(m => m.status === 'PENDING').length :
-                 activeTab === "inventory" ? materials.length :
-                 vendors.length} Items Total
+             <div className="hidden lg:flex text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
+                {products.length} Active Items 
              </div>
           </div>
 
           <TabsContent value="catalog" className="mt-0 focus-visible:outline-none focus-visible:ring-0 min-h-[500px]">
             <ErrorBoundary
               name="Library Catalog"
-              fallback={<ErrorFallback title="Catalog Failed" message="Catalog section failed to render." onRetry={retryTab} />}
+              fallback={<ErrorFallback title="Storefront Error" message="Unable to load catalog storefront." onRetry={retryTab} />}
             >
               {isRefreshing ? (
                 <div className="flex items-center justify-center py-24">
-                  <Loader2 className="h-8 w-8 animate-spin text-slate-200" />
+                  <Loader2 className="h-10 w-10 animate-spin text-slate-100" />
                 </div>
               ) : (
-                <MaterialGrid 
-                  materials={materials}
-                  totalItems={totalMaterials}
+                <ProductGrid 
+                  products={products}
+                  totalItems={totalProducts}
                   currentPage={currentPage}
                   pageSize={pageSize}
                   onPageChange={onPageChange}
-                  onEdit={(data) => {
-                    setModalMode("EDIT");
-                    setSelectedData(data);
-                    setIsModalOpen(true);
+                  onEdit={(data) => openDetail(data)}
+                  onAddToSchedule={(product) => {
+                     toast.success(`${product.catalog_product_name} ready to be added.`);
                   }}
-                  onDelete={handleDeleteMaterial}
                 />
               )}
             </ErrorBoundary>
           </TabsContent>
 
-          <TabsContent value="queue" className="mt-0 focus-visible:outline-none focus-visible:ring-0 min-h-[500px]">
-            <div className="mb-6 p-4 bg-orange-50/50 border border-orange-100 rounded-lg flex items-center gap-4 animate-in slide-in-from-top-2 duration-500">
-              <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-                <Package className="h-5 w-5 text-orange-600" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-orange-900 font-inter">Material Review Queue</span>
-                <p className="text-[11px] text-orange-700/80 font-medium font-inter">These items were auto-saved from project schedules or requests. Review and set to &quot;Approved&quot; to finalize in catalog.</p>
-              </div>
-            </div>
-
-            <ErrorBoundary
-              name="Library Queue"
-              fallback={<ErrorFallback title="Queue Failed" message="Queue section failed to render." onRetry={retryTab} />}
-            >
-                <MaterialTable 
-                  materials={materials}
-                  userRole={userRole}
-                  isQueueMode={true}
-                  onApprove={handleApproveMaterial}
-                  onReject={handleRejectMaterial}
-                  onEdit={(data) => {
-                    setModalMode("EDIT");
-                    setSelectedData(data);
-                    setIsModalOpen(true);
-                  }}
-                  onDelete={handleDeleteMaterial}
-                />
-            </ErrorBoundary>
-          </TabsContent>
-          
-          <TabsContent value="requests" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-             <ErrorBoundary
-               name="Material Requests"
-               fallback={<ErrorFallback title="Requests Failed" message="Request table failed to render." onRetry={retryTab} />}
-             >
-               <MaterialRequestTable 
-                 requests={requests}
-                 userRole={userRole}
-                 onRefresh={() => router.refresh()}
-               />
-             </ErrorBoundary>
-          </TabsContent>
-
           <TabsContent value="inventory" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-            <ErrorBoundary
-              name="Physical Inventory"
-              fallback={<ErrorFallback title="Inventory Failed" message="Inventory section failed to render." onRetry={retryTab} />}
-            >
+            <ErrorBoundary name="Physical Inventory">
               <PhysicalInventoryTable 
-                materials={materials} 
-                onEdit={(data) => {
-                  setModalMode("EDIT");
-                  setSelectedData(data);
-                  setIsModalOpen(true);
-                }} 
+                products={products} 
+                userRole={userRole}
+                onEdit={(data) => openDetail(data)}
               />
             </ErrorBoundary>
           </TabsContent>
 
           <TabsContent value="vendors" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-            <ErrorBoundary
-              name="Vendor Table"
-              fallback={<ErrorFallback title="Vendors Failed" message="Vendor section failed to render." onRetry={retryTab} />}
-            >
-              <VendorTable 
-                vendors={vendors} 
-                onEdit={(data) => {
-                  setModalMode("EDIT");
-                  setSelectedData(data);
-                  setIsModalOpen(true);
-                }} 
-              />
+            <ErrorBoundary name="Vendor Table">
+              <VendorTable vendors={vendors} onEdit={openVendorEdit} />
             </ErrorBoundary>
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="queue" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+              <ErrorBoundary name="Promotion Queue">
+                <PromotionQueueTable
+                  requests={promotionRequests}
+                  userRole={userRole}
+                  onRefresh={retryTab}
+                />
+              </ErrorBoundary>
+            </TabsContent>
+          )}
         </main>
       </div>
 
+      {/* Detail Modal (RBAC Enabled) */}
+      <ProductDetailModal
+        isOpen={isDetailModalOpen}
+        onOpenChange={setIsDetailModalOpen}
+        product={selectedData as ProductCatalogWithRelations}
+        userRole={userRole}
+      />
+
+      {/* Global Form Modal (Creation) */}
       <LibraryFormModal
-        isOpen={isModalOpen}
-        onOpenChange={setIsModalOpen}
-        type={activeTab === "vendors" ? "VENDOR" : "MATERIAL"}
+        isOpen={isFormModalOpen}
+        onOpenChange={setIsFormModalOpen}
+        type={activeTab === "vendors" ? "VENDOR" : "PRODUCT"}
         mode={modalMode}
         initialData={selectedData}
         vendors={vendors}
         categories={categories}
-        materialCategories={materialCategories}
-        fixtureCategories={fixtureCategories}
-        subCategories={subCategories}
-        finishings={finishings}
         onSuccess={handleSuccess}
       />
     </Tabs>

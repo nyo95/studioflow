@@ -7,6 +7,7 @@ interface ProjectScheduleContextType {
   projectId: string;
   category: string;
   section: ScheduleSection;
+  userRole?: string;
   onSuccess?: () => void;
 }
 

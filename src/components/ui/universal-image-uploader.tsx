@@ -34,6 +34,12 @@ export function UniversalImageUploader({
   const [uploadStatus, setUploadStatus] = React.useState<"IDLE" | "COMPRESSING" | "UPLOADING" | "SUCCESS">("IDLE");
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(initialImageUrl || null);
 
+  // Sync internal state when prop changes (e.g. after a save and refresh cycle)
+  React.useEffect(() => {
+    setPreviewUrl(initialImageUrl || null);
+  }, [initialImageUrl]);
+
+
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];

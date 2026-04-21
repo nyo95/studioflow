@@ -20,7 +20,7 @@ import {
   MoreHorizontal
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { MaterialCatalogWithRelations } from "../types";
+import { ProductCatalogWithRelations } from "../types";
 import { Button } from "@/components/ui/button";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import {
@@ -36,9 +36,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface MaterialTableProps {
-  materials: MaterialCatalogWithRelations[];
-  onEdit: (material: MaterialCatalogWithRelations) => void;
+interface ProductTableProps {
+  products: ProductCatalogWithRelations[];
+  onEdit: (product: ProductCatalogWithRelations) => void;
   onDelete?: (id: string) => void;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
@@ -46,10 +46,10 @@ interface MaterialTableProps {
   isQueueMode?: boolean;
 }
 
-export function MaterialTable({ materials, onEdit, onDelete, onApprove, onReject, userRole, isQueueMode }: MaterialTableProps) {
+export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, userRole, isQueueMode }: ProductTableProps) {
   const [selectedImage, setSelectedImage] = React.useState<{ src: string; alt: string; } | undefined>(undefined);
 
-  if (materials.length === 0) {
+  if (products.length === 0) {
     return (
       <div className="py-24 text-center animate-in fade-in duration-500">
         <div className="h-16 w-16 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-4">
@@ -76,7 +76,7 @@ export function MaterialTable({ materials, onEdit, onDelete, onApprove, onReject
           </TableRow>
         </TableHeader>
         <TableBody>
-          {materials.map((m) => (
+          {products.map((m) => (
             <TableRow key={m.id} className="hover:bg-slate-50/30 group transition-colors border-slate-50 h-20">
               <TableCell className="pl-6">
                 {m.catalog_image_url ? (

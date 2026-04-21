@@ -1,24 +1,24 @@
 "use client";
 
 import React from "react";
-import { MaterialCard } from "./MaterialCard";
-import { MaterialCatalogWithRelations } from "../../types";
+import { ProductCard } from "./ProductCard";
+import { ProductCatalogWithRelations } from "../../types";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, PackageOpen } from "lucide-react";
 
-interface MaterialGridProps {
-  materials: MaterialCatalogWithRelations[];
+interface ProductGridProps {
+  products: ProductCatalogWithRelations[];
   totalItems: number;
   currentPage: number;
   pageSize: number;
   onPageChange: (page: number) => void;
-  onEdit?: (material: MaterialCatalogWithRelations) => void;
+  onEdit?: (product: ProductCatalogWithRelations) => void;
   onDelete?: (id: string) => void;
-  onAddToSchedule?: (material: MaterialCatalogWithRelations) => void;
+  onAddToSchedule?: (product: ProductCatalogWithRelations) => void;
 }
 
-export function MaterialGrid({
-  materials,
+export function ProductGrid({
+  products,
   totalItems,
   currentPage,
   pageSize,
@@ -26,16 +26,16 @@ export function MaterialGrid({
   onEdit,
   onDelete,
   onAddToSchedule,
-}: MaterialGridProps) {
+}: ProductGridProps) {
   const totalPages = Math.ceil(totalItems / pageSize);
 
-  if (materials.length === 0) {
+  if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <div className="h-16 w-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
           <PackageOpen className="h-8 w-8 text-slate-200" />
         </div>
-        <h3 className="font-lora text-lg font-medium text-slate-900">No materials found</h3>
+        <h3 className="font-lora text-lg font-medium text-slate-900">No products found</h3>
         <p className="text-sm text-slate-500 font-inter mt-1">Try adjusting your filters or search query.</p>
       </div>
     );
@@ -45,10 +45,10 @@ export function MaterialGrid({
     <div className="space-y-10">
       {/* Grid Layout */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
-        {materials.map((m) => (
-          <MaterialCard
-            key={m.id}
-            material={m}
+        {products.map((p) => (
+          <ProductCard
+            key={p.id}
+            product={p}
             onEdit={onEdit}
             onDelete={onDelete}
             onAddToSchedule={onAddToSchedule}

@@ -1,6 +1,5 @@
-import { NavInner } from "@/components/nav-inner";
 import { prisma } from "@/lib/db";
-import { ProjectLiveProvider } from "@/ui_engine";
+import { ProjectLayoutShell, ProjectLiveProvider } from "@/ui_engine";
 import { ProjectChatSidebar } from "@/extensions/live-collaboration/components/project-chat-sidebar";
 import { getProjectDiscussionSnapshot } from "@/lib/project-discussion";
 import { getSession } from "@/lib/auth";
@@ -55,16 +54,13 @@ export default async function ProjectLayout({
   if (!project) {
     // Handle project not found
     return (
-      <div className="flex min-h-full flex-1">
-        <NavInner 
-          projectId={projectId} 
-          projectName="Project Not Found" 
-          phases={[]} 
-        />
-        <main className="min-w-0 flex-1">
-          {children}
-        </main>
-      </div>
+      <ProjectLayoutShell
+        projectId={projectId}
+        projectName="Project Not Found"
+        phases={[]}
+      >
+        {children}
+      </ProjectLayoutShell>
     );
   }
 
@@ -74,27 +70,25 @@ export default async function ProjectLayout({
 
   return (
     <ProjectLiveProvider projectId={projectId} initialSnapshot={initialSnapshot}>
-      <div className="flex min-h-full flex-1">
-        <NavInner 
-          projectId={project.id} 
-          projectName={project.name} 
-          phases={navPhaseItems} 
-        />
-        <main className="min-w-1 flex-1">
-          {children}
-        </main>
-        
-        {session.userId && liveCollaborationEnabled && (
-          <ErrorBoundary name="Live Collaboration">
-            <ProjectChatSidebar 
-              projectId={project.id}
-              currentUserId={session.userId}
-              currentUserName={session.user?.name || "User"}
-              userRole={session.role as string}
-            />
-          </ErrorBoundary>
-        )}
-      </div>
+      <ProjectLayoutShell
+        projectId={project.id}
+        projectName={project.name}
+        phases={navPhaseItems}
+        rightSidebar={
+          session.userId && liveCollaborationEnabled ? (
+            <ErrorBoundary name="Live Collaboration">
+              <ProjectChatSidebar
+                projectId={project.id}
+                currentUserId={session.userId}
+                currentUserName={session.user?.name || "User"}
+                userRole={session.role as string}
+              />
+            </ErrorBoundary>
+          ) : null
+        }
+      >
+        {children}
+      </ProjectLayoutShell>
     </ProjectLiveProvider>
   );
 }

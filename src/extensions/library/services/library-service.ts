@@ -1,19 +1,42 @@
-import { Prisma, MaterialRequestStatus, LibraryItemStatus, ScheduleSection } from "@/generated/prisma";
+import { Prisma, ProductRequestStatus, LibraryItemStatus, ScheduleSection, SampleAction } from "@/generated/prisma";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { settingsService } from "@/lib/services/settings-service";
 import { 
-  MaterialCatalogInput, 
+  ProductCatalogInput, 
   LibraryVendorInput, 
-  ProjectMaterialRequestInput 
+  ProjectProductRequestInput 
 } from "../types";
 import { insertAuditLog } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/lib/services/audit/types";
+
 
 export class LibraryService {
   private static normalizeOptional(value?: string | null) {
     const normalized = value?.trim();
     return normalized ? normalized : null;
+  }
+
+  /**
+   * Records a movement or change in the physical inventory logs.
+   */
+  static async logSampleAction(
+    tx: PrismaTransaction,
+    data: {
+      sample_id: string;
+      action: SampleAction;
+      notes?: string | null;
+      userId: string;
+    }
+  ) {
+    return tx.sampleMovementLog.create({
+      data: {
+        sample_id: data.sample_id,
+        user_id: data.userId,
+        action: data.action,
+        notes: data.notes
+      }
+    });
   }
 
   /**
@@ -38,7 +61,7 @@ export class LibraryService {
   static async getVendorById(id: string, tx: PrismaTransaction) {
     return tx.vendor.findFirst({
       where: { id, deleted_at: null },
-      include: { materials: true, contacts: true },
+      include: { products: true, contacts: true },
     });
   }
 
@@ -120,21 +143,22 @@ export class LibraryService {
   }
 
   /**
-   * Soft-deletes a vendor after orphan-safety check and writes audit log.
+   * Performs a soft-delete on a vendor after orphan-safety check.
+   * COMPLIANCE: Adheres to SSOT §7.1 Soft Delete Policy to prevent orphaned historical records.
    * @param id Vendor id.
    * @param userId Actor user id for audit.
    * @param tx Prisma transaction client.
-   * @throws {ActionError} VENDOR_HAS_ITEMS when vendor still owns materials.
+   * @throws {ActionError} VENDOR_HAS_ITEMS when vendor still owns active materials.
    * @returns Soft-deleted vendor row.
    */
   static async deleteVendor(id: string, userId: string, tx: PrismaTransaction) {
-    const [materialCount] = await Promise.all([
-      tx.materialCatalog.count({ where: { vendor_id: id, deleted_at: null } }),
+    const [productCount] = await Promise.all([
+      tx.productCatalog.count({ where: { vendor_id: id, deleted_at: null } }),
     ]);
 
-    if (materialCount > 0) {
+    if (productCount > 0) {
       throw new ActionError(
-        "Cannot delete vendor with associated materials. Move or delete materials first.",
+        "Cannot delete vendor with associated products. Move or delete products first.",
         "VENDOR_HAS_ITEMS"
       );
     }
@@ -157,7 +181,7 @@ export class LibraryService {
    * @param filters Optional list filters.
    * @returns Material catalog rows with vendor and physical samples.
    */
-  static async getAllMaterials(
+  static async getAllProducts(
     tx: PrismaTransaction,
     filters?: { 
       category?: string; 
@@ -169,13 +193,22 @@ export class LibraryService {
       pageSize?: number;
     }
   ): Promise<{ items: any[]; total: number }> {
-    const where: Prisma.MaterialCatalogWhereInput = {
+    const where: Prisma.ProductCatalogWhereInput = {
       deleted_at: null
     };
 
     if (filters?.status) where.status = filters.status;
     if (filters?.category && filters.category !== "all") where.catalog_category = filters.category;
     if (filters?.vendorId) where.vendor_id = filters.vendorId;
+    
+    if (filters?.search) {
+      where.OR = [
+        { catalog_product_name: { contains: filters.search, mode: "insensitive" } },
+        { catalog_brand: { contains: filters.search, mode: "insensitive" } },
+        { catalog_sku: { contains: filters.search, mode: "insensitive" } },
+        { catalog_sub_category: { contains: filters.search, mode: "insensitive" } },
+      ];
+    }
     if (filters?.hasPhysicalOnly) {
       where.physical_samples = { some: {} };
     }
@@ -185,7 +218,7 @@ export class LibraryService {
     const skip = (page - 1) * pageSize;
 
     const [items, total] = await Promise.all([
-      tx.materialCatalog.findMany({
+      tx.productCatalog.findMany({
         where,
         include: { 
           vendor: { include: { contacts: true } },
@@ -195,7 +228,7 @@ export class LibraryService {
         skip,
         take: pageSize,
       }),
-      tx.materialCatalog.count({ where }),
+      tx.productCatalog.count({ where }),
     ]);
 
     return { items, total };
@@ -255,7 +288,7 @@ export class LibraryService {
    * @throws {ActionError} when required vendor/category/product type is missing.
    * @returns Created material with relations.
    */
-  static async createMaterial(data: MaterialCatalogInput, userId: string, tx: PrismaTransaction) {
+  static async createProduct(data: ProductCatalogInput, userId: string, tx: PrismaTransaction) {
     let resolvedVendorId = data.vendor_id;
 
     // Handle On-the-Go Vendor Creation (Refactored for Anti-Ghosting)
@@ -275,9 +308,9 @@ export class LibraryService {
       catalogBrand = vendor?.brand_name || "Unknown Brand";
     }
 
-    // NOTE: Category registration moved to updateMaterial (on APPROVE) to prevent ghost categories.
+    // NOTE: Category registration moved to updateProduct (on APPROVE) to prevent ghost categories.
 
-    const material = await tx.materialCatalog.create({
+    const product = await tx.productCatalog.create({
       data: {
         vendor_id: resolvedVendorId,
         catalog_category: data.catalog_category.trim(),
@@ -297,14 +330,12 @@ export class LibraryService {
         catalog_image_original_url: this.normalizeOptional(data.catalog_image_original_url),
         catalog_reference_url: this.normalizeOptional(data.catalog_reference_url),
         catalog_folder_url: this.normalizeOptional(data.catalog_folder_url),
-        catalog_rak_location: this.normalizeOptional(data.catalog_rak_location),
-        catalog_box_number: this.normalizeOptional(data.catalog_box_number),
         catalog_price: data.catalog_price ?? null,
         metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
         physical_samples: data.physical_samples ? {
           create: data.physical_samples.map(s => ({
-            location_rak: s.location_rak,
-            container_box: s.container_box,
+            rack_number: s.rack_number,
+            box_number: s.box_number,
             notes: this.normalizeOptional(s.notes)
           }))
         } : undefined
@@ -315,13 +346,13 @@ export class LibraryService {
       },
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_MATERIAL, "MaterialCatalog", material.id, userId, {
-      catalog_sku: material.catalog_sku,
-      catalog_category: material.catalog_category,
-      brand: material.vendor.brand_name
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_PRODUCT, "ProductCatalog", product.id, userId, {
+      catalog_sku: product.catalog_sku,
+      catalog_category: product.catalog_category,
+      brand: product.vendor.brand_name
     });
 
-    return material;
+    return product;
   }
 
   /**
@@ -333,7 +364,7 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Updated material with relations.
    */
-  static async updateMaterial(id: string, data: Partial<MaterialCatalogInput>, userId: string, tx: PrismaTransaction) {
+  static async updateProduct(id: string, data: Partial<ProductCatalogInput>, userId: string, tx: PrismaTransaction) {
     if (data.catalog_category !== undefined && !data.catalog_category.trim()) throw new ActionError("Category is required.", "CATEGORY_REQUIRED");
     if (data.catalog_sku !== undefined && !data.catalog_sku.trim()) throw new ActionError("Product type is required.", "PRODUCT_TYPE_REQUIRED");
 
@@ -341,13 +372,13 @@ export class LibraryService {
     const sampleOps = data.physical_samples ? {
       deleteMany: {},
       create: data.physical_samples.map(s => ({
-        location_rak: s.location_rak,
-        container_box: s.container_box,
+        rack_number: s.rack_number,
+        box_number: s.box_number,
         notes: this.normalizeOptional(s.notes)
       }))
     } : undefined;
 
-    const updated = await tx.materialCatalog.update({
+    const updated = await tx.productCatalog.update({
       where: { id },
       data: {
         ...(data.vendor_id ? { vendor: { connect: { id: data.vendor_id } } } : {}),
@@ -368,8 +399,6 @@ export class LibraryService {
         ...(data.catalog_image_original_url !== undefined ? { catalog_image_original_url: this.normalizeOptional(data.catalog_image_original_url) } : {}),
         ...(data.catalog_reference_url !== undefined ? { catalog_reference_url: this.normalizeOptional(data.catalog_reference_url) } : {}),
         ...(data.catalog_folder_url !== undefined ? { catalog_folder_url: this.normalizeOptional(data.catalog_folder_url) } : {}),
-        ...(data.catalog_rak_location !== undefined ? { catalog_rak_location: this.normalizeOptional(data.catalog_rak_location) } : {}),
-        ...(data.catalog_box_number !== undefined ? { catalog_box_number: this.normalizeOptional(data.catalog_box_number) } : {}),
         ...(data.catalog_price !== undefined ? { catalog_price: data.catalog_price } : {}),
         ...(data.metadata !== undefined ? { metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : Prisma.JsonNull } : {}),
         status: data.status,
@@ -381,7 +410,19 @@ export class LibraryService {
       },
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_MATERIAL, "MaterialCatalog", id, userId, {
+    // Record Inventory Logs for new samples
+    if (data.physical_samples) {
+      await Promise.all(updated.physical_samples.map(sample => 
+        this.logSampleAction(tx, {
+          sample_id: sample.id,
+          action: SampleAction.CHECK_IN,
+          notes: `Inventory updated/synced: Rack ${sample.rack_number}, Box ${sample.box_number}`,
+          userId
+        })
+      ));
+    }
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_PRODUCT, "ProductCatalog", id, userId, {
       catalog_sku: updated.catalog_sku,
       status: updated.status
     });
@@ -395,6 +436,11 @@ export class LibraryService {
       });
     }
 
+    // FORCED UPDATE: propagation of library changes to all linked project snapshots
+    // COMPLIANCE: Uses Promise.all inside transaction via ScheduleService.
+    const { ScheduleService } = await import("@/lib/services/schedule-service");
+    await ScheduleService.updateLinkedSnapshots(tx, id, userId);
+
     return updated;
   }
 
@@ -402,7 +448,7 @@ export class LibraryService {
    * Syncs a schedule item to the library, ensuring no duplicates.
    * Based on Brand + Name match.
    */
-  static async ensureMaterialInLibrary(tx: PrismaTransaction, data: {
+  static async ensureProductInLibrary(tx: PrismaTransaction, data: {
     catalog_product_name: string;
     catalog_brand: string;
     catalog_category: string;
@@ -435,8 +481,8 @@ export class LibraryService {
 
     // 2. Resolve Material (Deduplication) - Use try-catch to handle race conditions
     try {
-      // First, check if material exists
-      const existingMaterial = await tx.materialCatalog.findFirst({
+      // First, check if product exists
+      const existingProduct = await tx.productCatalog.findFirst({
         where: {
           vendor_id: vendorId,
           catalog_sku: { equals: name, mode: "insensitive" }, // Treat name as SKU/Key in this sync context
@@ -444,32 +490,32 @@ export class LibraryService {
         }
       });
 
-      if (existingMaterial) {
-        if (existingMaterial.status === "APPROVED") {
+      if (existingProduct) {
+        if (existingProduct.status === "APPROVED") {
           // High-End Hardening: Never mutate approved items
-          return existingMaterial;
+          return existingProduct;
         }
 
         // Update existing item to sync latest project data
         // If it was REJECTED, reset it to PENDING so admin can review again
-        return tx.materialCatalog.update({
-          where: { id: existingMaterial.id },
+        return tx.productCatalog.update({
+          where: { id: existingProduct.id },
           data: {
             catalog_category: data.catalog_category,
-            catalog_image_url: data.catalog_image_url || existingMaterial.catalog_image_url,
-            catalog_price: data.catalog_price ?? existingMaterial.catalog_price,
-            catalog_image_original_url: data.catalog_image_original_url || existingMaterial.catalog_image_original_url,
-            catalog_color: data.catalog_color || existingMaterial.catalog_color,
-            catalog_finishing: data.catalog_finishing || existingMaterial.catalog_finishing,
-            catalog_motif: data.catalog_motif || existingMaterial.catalog_motif,
-            catalog_product_name: data.catalog_product_name || existingMaterial.catalog_product_name,
-            status: existingMaterial.status === "REJECTED" ? "PENDING" : existingMaterial.status
+            catalog_image_url: data.catalog_image_url || existingProduct.catalog_image_url,
+            catalog_price: data.catalog_price ?? existingProduct.catalog_price,
+            catalog_image_original_url: data.catalog_image_original_url || existingProduct.catalog_image_original_url,
+            catalog_color: data.catalog_color || existingProduct.catalog_color,
+            catalog_finishing: data.catalog_finishing || existingProduct.catalog_finishing,
+            catalog_motif: data.catalog_motif || existingProduct.catalog_motif,
+            catalog_product_name: data.catalog_product_name || existingProduct.catalog_product_name,
+            status: existingProduct.status === "REJECTED" ? "PENDING" : existingProduct.status
           }
         });
       }
 
-      // Create new material - race condition possible if concurrent request
-      return await tx.materialCatalog.create({
+      // Create new product - race condition possible if concurrent request
+      return await tx.productCatalog.create({
         data: {
           vendor_id: vendorId,
           catalog_category: data.catalog_category,
@@ -487,7 +533,7 @@ export class LibraryService {
     } catch (error: unknown) {
       // Handle unique constraint violation (P2002) - race condition fallback
       if (error instanceof Error && error.message.includes("Unique constraint")) {
-        const foundMaterial = await tx.materialCatalog.findFirst({
+        const foundProduct = await tx.productCatalog.findFirst({
           where: {
             vendor_id: vendorId,
             catalog_sku: { equals: name, mode: "insensitive" },
@@ -495,21 +541,21 @@ export class LibraryService {
           }
         });
         
-        if (foundMaterial) {
-          if (foundMaterial.status === "APPROVED") {
-            return foundMaterial;
+        if (foundProduct) {
+          if (foundProduct.status === "APPROVED") {
+            return foundProduct;
           }
-          return tx.materialCatalog.update({
-            where: { id: foundMaterial.id },
+          return tx.productCatalog.update({
+            where: { id: foundProduct.id },
             data: {
             catalog_category: data.catalog_category,
-            catalog_image_url: data.catalog_image_url || foundMaterial.catalog_image_url,
-            catalog_price: data.catalog_price ?? foundMaterial.catalog_price,
-            catalog_image_original_url: data.catalog_image_original_url || foundMaterial.catalog_image_original_url,
-            catalog_color: data.catalog_color || foundMaterial.catalog_color,
-            catalog_finishing: data.catalog_finishing || foundMaterial.catalog_finishing,
-            catalog_motif: data.catalog_motif || foundMaterial.catalog_motif,
-            catalog_product_name: data.catalog_product_name || foundMaterial.catalog_product_name
+            catalog_image_url: data.catalog_image_url || foundProduct.catalog_image_url,
+            catalog_price: data.catalog_price ?? foundProduct.catalog_price,
+            catalog_image_original_url: data.catalog_image_original_url || foundProduct.catalog_image_original_url,
+            catalog_color: data.catalog_color || foundProduct.catalog_color,
+            catalog_finishing: data.catalog_finishing || foundProduct.catalog_finishing,
+            catalog_motif: data.catalog_motif || foundProduct.catalog_motif,
+            catalog_product_name: data.catalog_product_name || foundProduct.catalog_product_name
             }
           });
         }
@@ -519,26 +565,27 @@ export class LibraryService {
   }
 
   /**
-   * Soft-deletes one material and writes audit log.
+   * Performs a soft-delete on one material catalog item.
+   * COMPLIANCE: Adheres to SSOT §7.1 Soft Delete Policy. Force soft-delete is allowed per policy.
    * @param id Material id.
    * @param userId Actor user id for audit.
    * @param tx Prisma transaction client.
-   * @returns Soft-deleted material with vendor.
+   * @returns Soft-deleted material with vendor info.
    */
-  static async deleteMaterial(id: string, userId: string, tx: PrismaTransaction) {
+  static async deleteProduct(id: string, userId: string, tx: PrismaTransaction) {
     // Soft Delete Implementation - Force Soft Delete allowed per SSOT policy
-    const material = await tx.materialCatalog.update({ 
+    const product = await tx.productCatalog.update({ 
       where: { id },
       data: { deleted_at: new Date() },
       include: { vendor: true }
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_DELETE_MATERIAL, "MaterialCatalog", id, userId, {
-      catalog_sku: material.catalog_sku,
-      brand: material.vendor.brand_name
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_DELETE_PRODUCT, "ProductCatalog", id, userId, {
+      catalog_sku: product.catalog_sku,
+      brand: product.vendor.brand_name
     });
 
-    return material;
+    return product;
   }
 
   /**
@@ -555,10 +602,10 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Request rows with material, requester, and project.
    */
-  static async getAllMaterialRequests(tx: PrismaTransaction) {
-    return tx.projectMaterialRequest.findMany({
+  static async getAllProductRequests(tx: PrismaTransaction) {
+    return tx.projectProductRequest.findMany({
       include: {
-        material: { 
+        product_catalog: { 
           include: { 
             vendor: { include: { contacts: true } },
             physical_samples: true
@@ -579,11 +626,11 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Project-scoped request rows.
    */
-  static async getProjectMaterialRequests(projectId: string, tx: PrismaTransaction) {
-    return tx.projectMaterialRequest.findMany({
+  static async getProjectProductRequests(projectId: string, tx: PrismaTransaction) {
+    return tx.projectProductRequest.findMany({
       where: { project_id: projectId },
       include: {
-        material: { 
+        product_catalog: { 
           include: { 
             vendor: { include: { contacts: true } },
             physical_samples: true
@@ -604,20 +651,21 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Created request with related entities.
    */
-  static async createProjectMaterialRequest(
-    data: ProjectMaterialRequestInput,
+  static async createProjectProductRequest(
+    data: ProjectProductRequestInput,
     userId: string,
     tx: PrismaTransaction
   ) {
-    let materialId = data.material_id;
+    let productCatalogId = data.product_catalog_id;
 
     // AUTO-HARVESTING: If it's a custom request, create a PENDING catalog item
-    if (!materialId && data.custom_material_name) {
+    if (!data.product_catalog_id && data.custom_product_name) {
       // 1. Ensure "Project Harvested" vendor exists
       let vendorId: string;
       const customVendor = await tx.vendor.findFirst({
         where: { brand_name: { equals: "PROJECT_HARVESTED", mode: "insensitive" } }
       });
+
 
       if (customVendor) {
         vendorId = customVendor.id;
@@ -636,13 +684,13 @@ export class LibraryService {
         });
       }
 
-      // 2. Create skeletal PENDING material
-      const newMaterial = await tx.materialCatalog.create({
+      // 2. Create skeletal PENDING product
+      const newProduct = await tx.productCatalog.create({
         data: {
           vendor_id: vendorId,
           catalog_category: "UNCATEGORIZED", // Default for harvested requests
-          catalog_sku: data.custom_material_name.trim(),
-          catalog_product_name: data.custom_material_name.trim(),
+          catalog_sku: data.custom_product_name.trim(),
+          catalog_product_name: data.custom_product_name.trim(),
           status: "PENDING",
           catalog_image_url: this.normalizeOptional(data.cover_url),
           catalog_image_original_url: this.normalizeOptional(data.original_url),
@@ -650,30 +698,30 @@ export class LibraryService {
           metadata: { harvested_from: "PROJECT_REQUEST", project_id: data.project_id }
         }
       });
-      materialId = newMaterial.id;
+      data.product_catalog_id = newProduct.id;
 
-      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_MATERIAL, "MaterialCatalog", materialId, userId, {
-        catalog_sku: newMaterial.catalog_sku,
+      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_PRODUCT, "ProductCatalog", data.product_catalog_id, userId, {
+        catalog_sku: newProduct.catalog_sku,
         harvested_from_project: data.project_id
       });
     }
 
-    const request = await tx.projectMaterialRequest.create({
+    const request = await tx.projectProductRequest.create({
       data: {
         project_id: data.project_id,
-        material_id: materialId || undefined,
+        product_catalog_id: data.product_catalog_id || undefined,
         schedule_entry_id: data.schedule_entry_id || undefined,
         schedule_option_id: data.schedule_option_id || undefined,
-        custom_material_name: this.normalizeOptional(data.custom_material_name),
+        custom_product_name: this.normalizeOptional(data.custom_product_name),
         reference_url: this.normalizeOptional(data.reference_url),
         requested_by_id: userId,
-        status: MaterialRequestStatus.REQUESTED,
+        status: ProductRequestStatus.REQUESTED,
         area_location: this.normalizeOptional(data.area_location),
         is_scheduled: data.is_scheduled ?? true,
         notes: this.normalizeOptional(data.notes),
       },
       include: {
-        material: { 
+        product_catalog: { 
           include: { 
             vendor: { include: { contacts: true } },
             physical_samples: true
@@ -684,9 +732,9 @@ export class LibraryService {
       },
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_REQUEST, "ProjectMaterialRequest", request.id, userId, {
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_REQUEST, "ProjectProductRequest", request.id, userId, {
       project_id: data.project_id,
-      material_id: materialId
+      product_catalog_id: data.product_catalog_id
     });
 
     return request;
@@ -701,21 +749,21 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Updated request with related entities.
    */
-  static async updateProjectMaterialRequestStatus(
+  static async updateProjectProductRequestStatus(
     id: string,
-    status: MaterialRequestStatus,
+    status: ProductRequestStatus,
     staffName: string | null,
     userId: string,
     tx: PrismaTransaction
   ) {
-    const req = await tx.projectMaterialRequest.update({
+    const req = await tx.projectProductRequest.update({
       where: { id },
       data: {
         status: status,
         staff_name_override: this.normalizeOptional(staffName),
       },
       include: {
-        material: { 
+        product_catalog: { 
           include: { 
             vendor: { include: { contacts: true } },
             physical_samples: true
@@ -726,7 +774,7 @@ export class LibraryService {
       },
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_REQUEST_STATUS, "ProjectMaterialRequest", id, userId, {
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_REQUEST_STATUS, "ProjectProductRequest", id, userId, {
       status,
       project_id: req.project_id,
       staff_name: staffName || "Logged-in User",
@@ -742,11 +790,11 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Deleted request with related entities.
    */
-  static async deleteProjectMaterialRequest(id: string, userId: string, tx: PrismaTransaction) {
-    const request = await tx.projectMaterialRequest.delete({
+  static async deleteProjectProductRequest(id: string, userId: string, tx: PrismaTransaction) {
+    const request = await tx.projectProductRequest.delete({
       where: { id },
       include: {
-        material: { 
+        product_catalog: { 
           include: { 
             vendor: { include: { contacts: true } },
             physical_samples: true
@@ -754,14 +802,100 @@ export class LibraryService {
         },
         requested_by: true,
         project: true,
-      }
+      },
     });
 
     await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_DELETE_REQUEST, "ProjectMaterialRequest", id, userId, {
       project_id: request.project_id,
-      material_id: request.material_id
+      product_catalog_id: request.product_catalog_id
     });
 
     return request;
+  }
+
+  // --- PROMOTION REQUESTS (APPROVAL QUEUE) ---
+
+  static async getPromotionRequests(tx: PrismaTransaction) {
+    return tx.promotionRequest.findMany({
+      orderBy: { created_at: "desc" },
+    });
+  }
+
+  static async getPromotionRequestsWithDetails(tx: PrismaTransaction) {
+    const requests = await tx.promotionRequest.findMany({
+      orderBy: { created_at: "desc" },
+    });
+
+    const scheduleOptionIds = requests.map(r => r.schedule_option_id);
+    const projectIds = requests.map(r => r.project_id);
+    const userIds = [...requests.map(r => r.requested_by_id), ...requests.filter(r => r.reviewed_by_id).map(r => r.reviewed_by_id!)];
+
+    const [scheduleOptions, projects, users] = await Promise.all([
+      scheduleOptionIds.length > 0 ? tx.projectScheduleOption.findMany({
+        where: { id: { in: scheduleOptionIds } },
+        include: {
+          entry: true,
+          product_catalog: { include: { vendor: { include: { contacts: true } } } }
+        }
+      }) : Promise.resolve([]),
+      projectIds.length > 0 ? tx.project.findMany({
+        where: { id: { in: [...new Set(projectIds)] } }
+      }) : Promise.resolve([]),
+      userIds.length > 0 ? tx.user.findMany({
+        where: { id: { in: [...new Set(userIds)] } }
+      }) : Promise.resolve([])
+    ]);
+
+    const projectMap = new Map(projects.map(p => [p.id, p]));
+    const userMap = new Map(users.map(u => [u.id, u]));
+    const optionMap = new Map(scheduleOptions.map(o => [o.id, o]));
+
+    return requests.map(req => ({
+      ...req,
+      project: projectMap.get(req.project_id),
+      schedule_option: optionMap.get(req.schedule_option_id),
+      requested_by: userMap.get(req.requested_by_id),
+      reviewed_by: userMap.get(req.reviewed_by_id || ""),
+    }));
+  }
+
+  static async createPromotionRequest(
+    tx: PrismaTransaction,
+    data: {
+      project_id: string;
+      schedule_option_id: string;
+      requested_by_id: string;
+      snapshot_data: unknown;
+      notes?: string;
+    }
+  ) {
+    return tx.promotionRequest.create({
+      data: {
+        project_id: data.project_id,
+        schedule_option_id: data.schedule_option_id,
+        requested_by_id: data.requested_by_id,
+        snapshot_data: data.snapshot_data as Prisma.InputJsonValue,
+        notes: this.normalizeOptional(data.notes),
+        status: "PENDING",
+      },
+    });
+  }
+
+  static async reviewPromotionRequest(
+    tx: PrismaTransaction,
+    requestId: string,
+    status: "APPROVED" | "REJECTED",
+    userId: string,
+    notes?: string
+  ) {
+    return tx.promotionRequest.update({
+      where: { id: requestId },
+      data: {
+        status,
+        reviewed_by_id: userId,
+        reviewed_at: new Date(),
+        notes: notes ? this.normalizeOptional(notes) : undefined,
+      },
+    });
   }
 }

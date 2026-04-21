@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { MaterialRequestStatus } from "@/generated/prisma";
+import { ProductRequestStatus } from "@/generated/prisma";
 import type { LucideIcon } from "lucide-react";
 import { 
   Table, 
@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ProjectMaterialRequestWithDetails } from "../types";
-import { updateMaterialRequestStatusAction, deleteProjectMaterialRequestAction } from "../actions/library-actions";
+import { ProjectProductRequestWithDetails } from "../types";
+import { updateProductRequestStatusAction, deleteProjectProductRequestAction } from "../actions/library-actions";
 import { unwrapActionResult } from "@/lib/result";
 import { toast } from "sonner";
 import { 
@@ -37,13 +37,13 @@ import {
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 
-interface MaterialRequestTableProps {
-  requests: ProjectMaterialRequestWithDetails[];
+interface ProductRequestTableProps {
+  requests: ProjectProductRequestWithDetails[];
   userRole: string;
   onRefresh: () => void;
 }
 
-const STATUS_CONFIG: Record<MaterialRequestStatus, { label: string; color: string; icon: LucideIcon }> = {
+const STATUS_CONFIG: Record<ProductRequestStatus, { label: string; color: string; icon: LucideIcon }> = {
   REQUESTED: { label: "Requested", color: "bg-blue-50 text-blue-700 border-blue-100", icon: ArrowRightCircle },
   ORDERED: { label: "Ordered", color: "bg-amber-50 text-amber-700 border-amber-100", icon: History },
   SHIPPED: { label: "Shipped", color: "bg-purple-50 text-purple-700 border-purple-100", icon: Box },
@@ -52,13 +52,13 @@ const STATUS_CONFIG: Record<MaterialRequestStatus, { label: string; color: strin
   CANCELLED: { label: "Cancelled", color: "bg-slate-100 text-slate-700 border-slate-200", icon: AlertCircle },
 };
 
-export function MaterialRequestTable({ requests, userRole, onRefresh }: MaterialRequestTableProps) {
+export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRequestTableProps) {
   const [updatingId, setUpdatingId] = React.useState<string | null>(null);
 
-  async function handleStatusUpdate(id: string, newStatus: MaterialRequestStatus) {
+  async function handleStatusUpdate(id: string, newStatus: ProductRequestStatus) {
     setUpdatingId(id);
     try {
-      unwrapActionResult(await updateMaterialRequestStatusAction({ id, status: newStatus }));
+      unwrapActionResult(await updateProductRequestStatusAction({ id, status: newStatus }));
       toast.success(`Status updated to ${newStatus}`);
       onRefresh();
     } catch (error: unknown) {
@@ -72,7 +72,7 @@ export function MaterialRequestTable({ requests, userRole, onRefresh }: Material
     if (!confirm("Are you sure you want to delete this request?")) return;
     setUpdatingId(id);
     try {
-      unwrapActionResult(await deleteProjectMaterialRequestAction({ id }));
+      unwrapActionResult(await deleteProjectProductRequestAction({ id }));
       toast.success("Request deleted");
       onRefresh();
     } catch (error: unknown) {
@@ -89,7 +89,7 @@ export function MaterialRequestTable({ requests, userRole, onRefresh }: Material
           <Box className="h-6 w-6 text-slate-200" />
         </div>
         <h3 className="font-lora text-lg text-slate-900 mb-1">No requests active</h3>
-        <p className="text-sm text-slate-400 font-inter font-medium tracking-tight">Project material requests will appear here for review.</p>
+        <p className="text-sm text-slate-400 font-inter font-medium tracking-tight">Project product requests will appear here for review.</p>
       </div>
     );
   }
@@ -100,7 +100,7 @@ export function MaterialRequestTable({ requests, userRole, onRefresh }: Material
         <TableHeader>
           <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 h-14">
             <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400 pl-6">Project Context</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Material Requested</TableHead>
+            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Product Requested</TableHead>
             <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Requestor</TableHead>
             <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Spec Status</TableHead>
             <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400 text-right pr-6">Actions</TableHead>
@@ -110,7 +110,7 @@ export function MaterialRequestTable({ requests, userRole, onRefresh }: Material
           {requests.map((req) => {
             const config = STATUS_CONFIG[req.status] || STATUS_CONFIG.REQUESTED;
             const StatusIcon = config.icon;
-            const mat = req.material;
+            const mat = req.product_catalog;
 
             return (
               <TableRow key={req.id} className="hover:bg-slate-50/30 group transition-colors border-slate-50 min-h-[70px]">
@@ -138,7 +138,7 @@ export function MaterialRequestTable({ requests, userRole, onRefresh }: Material
                     </div>
                     <div className="flex flex-col">
                       <span className="font-lora font-medium text-slate-900 text-xs">
-                        {mat?.catalog_sku || req.custom_material_name || "Custom Material"}
+                        {mat?.catalog_sku || req.custom_product_name || "Custom Product"}
                         {!mat && <Badge className="ml-2 bg-amber-50 text-amber-600 border-none text-[8px] h-4 px-1">Manual</Badge>}
                       </span>
                       <span className="text-[10px] text-slate-400 font-inter uppercase tracking-widest font-bold">
@@ -199,7 +199,7 @@ export function MaterialRequestTable({ requests, userRole, onRefresh }: Material
                       <DropdownMenuContent align="end" className="w-[180px] rounded-xl shadow-2xl border-slate-100 p-2 font-inter bg-white">
                         <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black px-2 py-2">Set Status</DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-slate-50" />
-                        {(Object.keys(STATUS_CONFIG) as MaterialRequestStatus[]).map((status) => (
+                        {(Object.keys(STATUS_CONFIG) as ProductRequestStatus[]).map((status) => (
                           <DropdownMenuItem 
                             key={status}
                             onClick={() => handleStatusUpdate(req.id, status)}

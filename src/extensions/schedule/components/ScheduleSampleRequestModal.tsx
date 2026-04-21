@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Package } from "lucide-react";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
-import { createProjectMaterialRequestAction } from "@/extensions/library/actions/library-actions";
+import { createProjectProductRequestAction } from "@/extensions/library/actions/library-actions";
 
 interface ScheduleSampleRequestModalProps {
   isOpen: boolean;
@@ -22,8 +22,8 @@ interface ScheduleSampleRequestModalProps {
   projectId: string;
   scheduleEntryId: string;
   scheduleOptionId: string;
-  materialNameFallback: string; // Used if there's no library ID
-  materialCatalogId?: string; // If the option is already linked to the library
+  productNameFallback: string; // Used if there's no library ID
+  productCatalogId?: string; // If the option is already linked to the library
   defaultLocation?: string; // Passed automatically from schedule row
   onSuccess?: () => void;
 }
@@ -34,8 +34,8 @@ export function ScheduleSampleRequestModal({
   projectId,
   scheduleEntryId,
   scheduleOptionId,
-  materialNameFallback,
-  materialCatalogId,
+  productNameFallback,
+  productCatalogId,
   defaultLocation,
   onSuccess,
 }: ScheduleSampleRequestModalProps) {
@@ -52,12 +52,12 @@ export function ScheduleSampleRequestModal({
     setSubmitting(true);
     try {
       unwrapActionResult(
-        await createProjectMaterialRequestAction({
+        await createProjectProductRequestAction({
           project_id: projectId,
           schedule_entry_id: scheduleEntryId,
           schedule_option_id: scheduleOptionId,
-          material_id: materialCatalogId || undefined,
-          custom_material_name: materialCatalogId ? undefined : materialNameFallback,
+          product_catalog_id: productCatalogId || undefined,
+          custom_product_name: productCatalogId ? undefined : productNameFallback,
           area_location: defaultLocation || undefined,
           is_scheduled: true,
           notes: notes || undefined,
@@ -79,10 +79,10 @@ export function ScheduleSampleRequestModal({
         <DialogHeader>
           <DialogTitle className="font-lora text-xl font-medium flex items-center gap-2">
             <Package className="h-5 w-5 text-blue-600" />
-            Request Material Sample
+            Request Product Sample
           </DialogTitle>
           <p className="text-sm text-slate-500 font-inter mt-1">
-            Requesting sample for <strong className="text-slate-900">{materialNameFallback}</strong>.
+            Requesting sample for <strong className="text-slate-900">{productNameFallback}</strong>.
           </p>
         </DialogHeader>
 

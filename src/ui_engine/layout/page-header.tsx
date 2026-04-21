@@ -41,10 +41,7 @@ export function PageHeader({
             {eyebrow}
           </Heading>
         ) : null}
-        <Heading 
-          level={1} 
-          className={cn("select-none text-3xl sm:text-4xl", titleClassName)}
-        >
+        <Heading level={1} className={cn("select-none", titleClassName)}>
           {title}
         </Heading>
         {description ? (

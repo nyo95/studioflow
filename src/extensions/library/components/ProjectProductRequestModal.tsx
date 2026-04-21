@@ -21,31 +21,31 @@ import {
 } from "@/components/ui/table";
 import { Search, Loader2, Plus, Box, MapPin, ImageIcon, CheckCircle2, Building2 } from "lucide-react";
 
-import { getMaterialsAction, createProjectMaterialRequestAction } from "../actions/library-actions";
-import { MaterialCatalogWithRelations } from "../types";
+import { getProductsAction as getProductsAction, createProjectProductRequestAction } from "../actions/library-actions";
+import { ProductCatalogWithRelations } from "../types";
 import { unwrapActionResult } from "@/lib/result";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { UniversalImageUploader } from "@/components/ui/universal-image-uploader";
 
-interface ProjectMaterialRequestModalProps {
+interface ProjectProductRequestModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   onSuccess?: () => void;
 }
 
-export function ProjectMaterialRequestModal({
+export function ProjectProductRequestModal({
   isOpen,
   onOpenChange,
   projectId,
   onSuccess,
-}: ProjectMaterialRequestModalProps) {
-  const [materials, setMaterials] = React.useState<MaterialCatalogWithRelations[]>([]);
+}: ProjectProductRequestModalProps) {
+  const [products, setProducts] = React.useState<ProductCatalogWithRelations[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
-  const [selectedMaterialId, setSelectedMaterialId] = React.useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = React.useState<string | null>(null);
   const [isManualEntry, setIsManualEntry] = React.useState(false);
   const [customName, setCustomName] = React.useState("");
   const [referenceUrl, setReferenceUrl] = React.useState("");
@@ -55,11 +55,11 @@ export function ProjectMaterialRequestModal({
   const [coverUrl, setCoverUrl] = React.useState("");
   const [originalUrl, setOriginalUrl] = React.useState("");
 
-  const fetchMaterials = React.useCallback(async () => {
+  const fetchProducts = React.useCallback(async () => {
     setLoading(true);
     try {
-      const result = unwrapActionResult(await getMaterialsAction({ search, status: 'APPROVED' }));
-      setMaterials(result.items);
+      const result = unwrapActionResult(await getProductsAction({ search, status: 'APPROVED' }));
+      setProducts(result.items);
     } catch (error) {
       toast.error("Failed to fetch library catalog");
     } finally {
@@ -78,27 +78,27 @@ export function ProjectMaterialRequestModal({
       setOriginalUrl("");
     }
     if (isOpen) {
-      fetchMaterials();
+      fetchProducts();
     }
-  }, [isOpen, fetchMaterials]);
+  }, [isOpen, fetchProducts]);
 
   async function handleSubmit() {
-    if (!isManualEntry && !selectedMaterialId) {
-      toast.error("Please select a material first or use Manual Entry");
+    if (!isManualEntry && !selectedProductId) {
+      toast.error("Please select a product first or use Manual Entry");
       return;
     }
 
     if (isManualEntry && !customName.trim()) {
-      toast.error("Please enter a material name for manual entry");
+      toast.error("Please enter a product name for manual entry");
       return;
     }
     
     setSubmitting(true);
     try {
-      unwrapActionResult(await createProjectMaterialRequestAction({
+      unwrapActionResult(await createProjectProductRequestAction({
         project_id: projectId,
-        material_id: isManualEntry ? undefined : (selectedMaterialId || undefined),
-        custom_material_name: isManualEntry ? customName.trim() : undefined,
+        product_catalog_id: isManualEntry ? undefined : (selectedProductId || undefined),
+        custom_product_name: isManualEntry ? customName.trim() : undefined,
         reference_url: isManualEntry ? referenceUrl.trim() : undefined,
         cover_url: isManualEntry ? coverUrl : undefined,
         original_url: isManualEntry ? originalUrl : undefined,
@@ -106,7 +106,7 @@ export function ProjectMaterialRequestModal({
         is_scheduled: true, // Default to true as per requirements
         notes: notes || undefined
       }));
-      toast.success("Material added to schedule");
+      toast.success("Product added to schedule");
       onSuccess?.();
       onOpenChange(false);
     } catch (error: unknown) {
@@ -120,7 +120,7 @@ export function ProjectMaterialRequestModal({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[85vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
         <DialogHeader className="p-6 border-b border-slate-100 bg-white">
-          <DialogTitle className="font-lora text-2xl font-medium">Request Project Material</DialogTitle>
+          <DialogTitle className="font-lora text-2xl font-medium">Request Project Product</DialogTitle>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-slate-400 font-inter uppercase tracking-widest">
               Standardized procurement workflow
@@ -134,19 +134,19 @@ export function ProjectMaterialRequestModal({
              <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Search Catalog or Type Custom *</Label>
                 <CreatableSearch
-                  options={materials.map(m => ({ 
+                  options={products.map(m => ({ 
                     id: m.id, 
                     name: `${m.catalog_product_name} • ${m.vendor?.brand_name || "Custom"}`,
                     badge: m.status === 'APPROVED' ? "Gold" : "Queue"
                   }))}
-                  value={selectedMaterialId || undefined}
+                  value={selectedProductId || undefined}
                   onSelect={(id, name) => {
-                    setSelectedMaterialId(id);
+                    setSelectedProductId(id);
                     setIsManualEntry(false);
                     setCustomName("");
                   }}
                   onCreate={(name) => {
-                    setSelectedMaterialId(null);
+                    setSelectedProductId(null);
                     setIsManualEntry(true);
                     setCustomName(name);
                   }}
@@ -205,7 +205,7 @@ export function ProjectMaterialRequestModal({
                   </div>
                   <div className="md:col-span-2 space-y-6">
                       <div className="space-y-2">
-                          <Label htmlFor="custom_name" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Custom Material Name & Brand</Label>
+                          <Label htmlFor="custom_name" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Custom Product Name & Brand</Label>
                           <Input
                             id="custom_name"
                             placeholder="e.g. Roman Tile Granit G6022..."
@@ -229,9 +229,9 @@ export function ProjectMaterialRequestModal({
             </div>
           )}
 
-          {!isManualEntry && selectedMaterialId && (
+          {!isManualEntry && selectedProductId && (
             <div className="py-6 animate-in zoom-in-95 duration-300">
-{materials.filter(m => m.id === selectedMaterialId).map(m => (
+{products.filter(m => m.id === selectedProductId).map(m => (
                   <div key={m.id} className="flex items-start gap-6 p-6 rounded-[2rem] bg-slate-50 border border-slate-100 shadow-sm transition-all hover:shadow-md">
                      <div className="h-24 w-24 rounded-2xl bg-white shadow-inner overflow-hidden flex-shrink-0 border border-slate-100">
                        {m.catalog_image_url ? (
@@ -271,12 +271,12 @@ export function ProjectMaterialRequestModal({
             </div>
           )}
 
-          {!isManualEntry && !selectedMaterialId && (
+          {!isManualEntry && !selectedProductId && (
             <div className="py-20 text-center opacity-30 flex flex-col items-center gap-4 animate-in fade-in duration-500">
                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center">
                   <Search className="h-6 w-6 text-slate-400" />
                </div>
-               <p className="text-sm font-medium font-inter">Search the archives to fetch material specs...</p>
+               <p className="text-sm font-medium font-inter">Search the archives to fetch product specs...</p>
             </div>
           )}
         </div>
@@ -291,7 +291,7 @@ export function ProjectMaterialRequestModal({
           </Button>
           <Button 
             onClick={handleSubmit}
-            disabled={(!isManualEntry && !selectedMaterialId) || (isManualEntry && !customName.trim()) || submitting}
+            disabled={(!isManualEntry && !selectedProductId) || (isManualEntry && !customName.trim()) || submitting}
             className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl h-11 px-8 shadow-lg shadow-slate-200 font-inter text-xs uppercase tracking-widest font-bold ml-2"
           >
             {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}

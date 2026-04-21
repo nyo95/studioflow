@@ -31,6 +31,9 @@ interface NavInnerProps {
   projectId?: string;
   projectName?: string;
   phases?: PhaseItem[];
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  onNavigate?: () => void;
 }
 
 const PHASE_ICONS: Record<string, React.ReactNode> = {
@@ -53,10 +56,21 @@ function formatPhaseLabel(name_enum: string, fallback: string) {
   return PHASE_LABELS[name_enum] || fallback;
 }
 
-export function NavInner({ projectId, projectName = "Project Name", phases = [] }: NavInnerProps) {
+export function NavInner({
+  projectId,
+  projectName = "Project Name",
+  phases = [],
+  collapsed = false,
+  onToggleCollapsed,
+  onNavigate,
+}: NavInnerProps) {
   const pathname = useStablePathname();
   const [isOpenPhases, setIsOpenPhases] = React.useState(true);
   const [isOpenExtensions, setIsOpenExtensions] = React.useState(true);
+
+  function handleNavigate() {
+    onNavigate?.();
+  }
 
   // Typical phases if not provided
   const defaultPhases: PhaseItem[] = [
@@ -70,40 +84,73 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
   const items = phases.length > 0 ? phases : defaultPhases;
 
   return (
-    <div 
-      className="min-h-full bg-white border-r border-zinc-100 flex flex-col py-6 px-4"
-      style={{ width: DESIGN_SYSTEM_CONFIG.rails.innerWidth }}
+    <div
+      className={cn(
+        "min-h-full bg-white border-r border-slate-200 flex flex-col py-6",
+        collapsed ? "px-2" : "px-4"
+      )}
+      style={{ width: "100%" }}
     >
-      <div className="mb-6 px-2">
-        <Heading level={6} variant="uiMeta">Project</Heading>
-        <h2 
-          className={cn(
-            DESIGN_SYSTEM_CONFIG.typography.h4.family,
-            "text-sm font-semibold text-slate-950 mt-1 line-clamp-2 leading-tight"
+      <div className={cn("mb-6", collapsed ? "px-0" : "px-2")}>
+        <div className={cn("flex items-start justify-between gap-3", collapsed && "justify-center")}>
+          {collapsed ? null : (
+            <div className="min-w-0">
+              <Heading level={6} variant="uiMeta">
+                Project
+              </Heading>
+              <h2
+                className={cn(
+                  DESIGN_SYSTEM_CONFIG.typography.h4.family,
+                  "mt-1 line-clamp-2 text-sm font-semibold leading-tight text-slate-950"
+                )}
+                title={projectName}
+              >
+                {projectName}
+              </h2>
+            </div>
           )}
-          title={projectName}
-        >
-          {projectName}
-        </h2>
+
+          {onToggleCollapsed ? (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              className={cn(
+                "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900",
+                collapsed && "h-10 w-10"
+              )}
+              aria-label={collapsed ? "Expand project sidebar" : "Collapse project sidebar"}
+              title={collapsed ? "Expand" : "Collapse"}
+            >
+              <ChevronDown className={cn("h-4 w-4", collapsed ? "rotate-90" : "-rotate-90")} />
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <nav className="flex-1 space-y-8 overflow-y-auto pr-2 scrollbar-none">
+      <nav className={cn("flex-1 space-y-8 overflow-y-auto scrollbar-none", collapsed ? "pr-0" : "pr-2")}>
         {/* GROUP: GENERAL */}
         <div>
-          <Heading level={6} variant="uiMeta" className="mb-3 px-2">Project</Heading>
+          {collapsed ? null : (
+            <Heading level={6} variant="uiMeta" className="mb-3 px-2">
+              Project
+            </Heading>
+          )}
           <ul className="flex flex-col gap-1">
             <li>
               <Link
                 href={projectId ? `/projects/${projectId}` : "#"}
+                onClick={handleNavigate}
                 className={cn(
-                  "flex items-center px-3 py-2 text-sm transition-all duration-200 border-l-2 rounded-r-lg",
+                  "flex items-center text-sm transition-colors duration-150 border-l-2 rounded-r-lg",
+                  collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
                   projectId && pathname === `/projects/${projectId}`
                     ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
                     : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
                 )}
+                title="Overview"
               >
-                <LayoutDashboard className="w-4 h-4 mr-2" />
-                Overview
+                <LayoutDashboard className={cn("h-4 w-4", collapsed ? "" : "mr-2")} />
+                {collapsed ? null : "Overview"}
               </Link>
             </li>
           </ul>
@@ -113,10 +160,20 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
         <div>
           <button 
             onClick={() => setIsOpenPhases(!isOpenPhases)}
-            className="w-full flex items-center justify-between mb-3 px-2 group"
+            className={cn(
+              "w-full flex items-center justify-between mb-3 group",
+              collapsed ? "px-0 justify-center" : "px-2"
+            )}
+            title="Phases"
           >
-            <Heading level={6} variant="uiMeta">PHASES</Heading>
-            <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", !isOpenPhases && "-rotate-90")} />
+            {collapsed ? null : <Heading level={6} variant="uiMeta">PHASES</Heading>}
+            <ChevronDown
+              className={cn(
+                "w-3 h-3 transition-transform duration-200",
+                !isOpenPhases && "-rotate-90",
+                collapsed && "hidden"
+              )}
+            />
           </button>
           
           {isOpenPhases && (
@@ -128,23 +185,27 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
                   <li key={phase.id}>
                     <Link
                       href={projectId ? `/projects/${projectId}/phases/${phase.id}` : "#"}
+                      onClick={handleNavigate}
                       className={cn(
-                        "flex items-center px-3 py-2 text-sm transition-all duration-200 border-l-2 rounded-r-lg",
+                        "flex items-center text-sm transition-colors duration-150 border-l-2 rounded-r-lg",
+                        collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
                         isActive
                           ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
                           : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
                       )}
+                      title={formatPhaseLabel(phase.name_enum, phase.label)}
                     >
-                      {PHASE_ICONS[phase.name_enum] || <Info className="w-4 h-4 mr-2" />}
-                      <span className="truncate flex-1">{formatPhaseLabel(phase.name_enum, phase.label)}</span>
-                      {phase.unfinishedTodoCount && phase.unfinishedTodoCount > 0 ? (
-                        <div className="flex items-center ml-2">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
-                          </span>
-                        </div>
-                      ) : null}
+                      {PHASE_ICONS[phase.name_enum] || (
+                        <Info className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
+                      )}
+                      {collapsed ? null : (
+                        <>
+                          <span className="truncate flex-1">{formatPhaseLabel(phase.name_enum, phase.label)}</span>
+                          {phase.unfinishedTodoCount && phase.unfinishedTodoCount > 0 ? (
+                            <span className="ml-2 inline-flex h-2 w-2 rounded-full bg-indigo-600" />
+                          ) : null}
+                        </>
+                      )}
                     </Link>
                   </li>
                 );
@@ -157,10 +218,20 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
         <div>
           <button 
             onClick={() => setIsOpenExtensions(!isOpenExtensions)}
-            className="w-full flex items-center justify-between mb-3 px-2 group"
+            className={cn(
+              "w-full flex items-center justify-between mb-3 group",
+              collapsed ? "px-0 justify-center" : "px-2"
+            )}
+            title="Extensions"
           >
-            <Heading level={6} variant="uiMeta">EXTENSIONS</Heading>
-            <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", !isOpenExtensions && "-rotate-90")} />
+            {collapsed ? null : <Heading level={6} variant="uiMeta">EXTENSIONS</Heading>}
+            <ChevronDown
+              className={cn(
+                "w-3 h-3 transition-transform duration-200",
+                !isOpenExtensions && "-rotate-90",
+                collapsed && "hidden"
+              )}
+            />
           </button>
 
           {isOpenExtensions && (
@@ -168,29 +239,35 @@ export function NavInner({ projectId, projectName = "Project Name", phases = [] 
               <li>
                 <Link 
                   href={projectId ? `/projects/${projectId}/deliverables` : "#"} 
+                  onClick={handleNavigate}
                   className={cn(
-                    "flex items-center px-3 py-2 text-sm font-sans transition-all duration-200 border-l-2 rounded-r-lg",
+                    "flex items-center text-sm font-sans transition-colors duration-150 border-l-2 rounded-r-lg",
+                    collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
                     pathname.endsWith("/deliverables")
                       ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
                       : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
                   )}
+                  title="Deliverables"
                 >
-                  <FolderCheck className="w-4 h-4 mr-2" />
-                  Deliverables
+                  <FolderCheck className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
+                  {collapsed ? null : "Deliverables"}
                 </Link>
               </li>
               <li>
                 <Link 
-                  href={projectId ? `/projects/${projectId}/extensions/material-fixtures` : "#"} 
+                  href={projectId ? `/projects/${projectId}/extensions/product-catalog` : "#"} 
+                  onClick={handleNavigate}
                   className={cn(
-                    "flex items-center px-3 py-2 text-sm font-sans transition-all duration-200 border-l-2 rounded-r-lg",
-                    pathname.includes(`/projects/${projectId}/extensions/material-fixtures`)
+                    "flex items-center text-sm font-sans transition-colors duration-150 border-l-2 rounded-r-lg",
+                    collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
+                    pathname.includes(`/projects/${projectId}/extensions/product-catalog`)
                       ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
                       : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
                   )}
+                  title="Product & Fixtures"
                 >
-                  <ShoppingBag className="w-4 h-4 mr-2" />
-                  Material & Fixtures
+                  <ShoppingBag className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
+                  {collapsed ? null : "Product & Fixtures"}
                 </Link>
               </li>
             </ul>

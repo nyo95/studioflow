@@ -2,22 +2,55 @@
 
 import { createAction } from "@/lib/action-wrapper";
 import { LibraryService } from "../services/library-service";
-import { MaterialCatalog } from "@/generated/prisma";
+import { ProductCatalog } from "@/generated/prisma";
 import { assertAdmin, assertAdminOrStaff } from "@/lib/permissions";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_CUSTOM } from "@/lib/revalidation-tags";
 import { 
-  MaterialCatalogInput, 
-  MaterialCatalogWithRelations, 
+  ProductCatalogInput, 
+  ProductCatalogWithRelations, 
   LibraryVendor, 
   LibraryVendorInput,
-  ProjectMaterialRequestWithDetails,
-  ProjectMaterialRequestInput,
-  MaterialMetadataSchema,
-  LibraryItemStatusSchema
+  ProjectProductRequestWithDetails,
+  ProjectProductRequestInput,
+  ProductMetadataSchema,
+  LibraryItemStatusSchema,
+  PromotionRequestWithDetails
 } from "../types";
-import { MaterialRequestStatus, LibraryItemStatus } from "@/generated/prisma";
+import { ProductRequestStatus, LibraryItemStatus, SampleAction } from "@/generated/prisma";
 import { REVALIDATE_LIBRARY } from "@/lib/revalidation-tags";
+
+interface PromotionRequestWithRelations {
+  id: string;
+  project_id: string;
+  schedule_option_id: string;
+  requested_by_id: string;
+  snapshot_data: unknown;
+  notes: string | null;
+  status: string;
+  reviewed_by_id: string | null;
+  reviewed_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+  project?: { id: string; name: string };
+  schedule_option?: { id: string; option_label: string };
+  requested_by?: { id: string; name: string };
+}
+
+export const getPromotionRequestsAction = createAction<void, PromotionRequestWithRelations[]>(async ({ tx }) => {
+  const results = await LibraryService.getPromotionRequestsWithDetails(tx);
+  return results as unknown as PromotionRequestWithRelations[];
+});
+
+export const reviewPromotionRequestAction = createAction<{ requestId: string; action: "APPROVED" | "REJECTED" }, PromotionRequestWithRelations>(
+  async ({ input, ctx, tx }) => {
+    assertAdmin(ctx.role);
+
+    const result = await LibraryService.reviewPromotionRequest(tx, input.requestId, input.action, ctx.userId);
+    invalidateCache({ scope: REVALIDATE_LIBRARY });
+    return result as unknown as PromotionRequestWithRelations;
+  }
+);
 
 // --- VENDOR ACTIONS ---
 
@@ -61,22 +94,57 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
   }
 );
 
+export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, { success: boolean; materialsUpdated: number }>(
+  async ({ input, ctx, tx }) => {
+    assertAdmin(ctx.role);
+
+    if (input.sourceVendorId === input.targetVendorId) {
+      throw new Error("Cannot merge vendor with itself");
+    }
+
+    const [sourceVendor, targetVendor] = await Promise.all([
+      tx.vendor.findUnique({ where: { id: input.sourceVendorId } }),
+      tx.vendor.findUnique({ where: { id: input.targetVendorId } })
+    ]);
+
+    if (!sourceVendor || !targetVendor) {
+      throw new Error("One or both vendors not found");
+    }
+
+    const materialsUpdated = await tx.productCatalog.updateMany({
+      where: { vendor_id: input.sourceVendorId },
+      data: { vendor_id: input.targetVendorId }
+    });
+
+    await tx.vendor.update({
+      where: { id: input.targetVendorId },
+      data: {
+        company_name: targetVendor.company_name || sourceVendor.company_name,
+        company_pt: targetVendor.company_pt || sourceVendor.company_pt,
+        address: targetVendor.address || sourceVendor.address,
+        website_url: targetVendor.website_url || sourceVendor.website_url,
+        instagram_url: targetVendor.instagram_url || sourceVendor.instagram_url,
+      }
+    });
+
+    await tx.vendor.update({
+      where: { id: input.sourceVendorId },
+      data: { deleted_at: new Date() }
+    });
+
+    invalidateCache({ scope: REVALIDATE_LIBRARY });
+    return { success: true, materialsUpdated: materialsUpdated.count };
+  }
+);
+
 // --- MATERIAL CATALOG ACTIONS ---
 
-export const getMaterialsAction = createAction<
-  { 
-    category?: string; 
-    vendorId?: string; 
-    search?: string; 
-    hasPhysicalOnly?: boolean; 
-    status?: LibraryItemStatus;
-    page?: number;
-    pageSize?: number;
-  } | undefined,
-  { items: MaterialCatalogWithRelations[]; total: number }
+export const getProductsAction = createAction<
+  any,
+  { items: ProductCatalogWithRelations[]; total: number }
 >(
   async ({ input, tx }) => {
-    return LibraryService.getAllMaterials(tx, input);
+    return LibraryService.getAllProducts(tx, input);
   }
 );
 
@@ -84,16 +152,16 @@ export const getMaterialsAction = createAction<
  * Returns unique values for sub_category and finishing fields in the catalog.
  * Used to power the smart-suggest dropdowns in LibraryFormModal.
  */
-export const getMaterialMetadataAction = createAction<void, { subCategories: string[]; finishings: string[] }>(
+export const getProductMetadataAction = createAction<void, { subCategories: string[]; finishings: string[] }>(
   async ({ tx }) => {
     const [subCats, finishings] = await Promise.all([
-      tx.materialCatalog.findMany({
+      tx.productCatalog.findMany({
         select: { catalog_sub_category: true },
         distinct: ["catalog_sub_category"],
         where: { catalog_sub_category: { not: null } },
         orderBy: { catalog_sub_category: "asc" },
       }),
-      tx.materialCatalog.findMany({
+      tx.productCatalog.findMany({
         select: { catalog_finishing: true },
         distinct: ["catalog_finishing"],
         where: { catalog_finishing: { not: null } },
@@ -110,42 +178,42 @@ export const getMaterialMetadataAction = createAction<void, { subCategories: str
 
 
 
-export const createMaterialAction = createAction<MaterialCatalogInput, MaterialCatalogWithRelations>(
+export const createProductAction = createAction<ProductCatalogInput, ProductCatalog>(
   async ({ input, ctx, tx }) => {
     assertAdminOrStaff(ctx.role);
-    const validatedInput: MaterialCatalogInput = {
+    const validatedInput: ProductCatalogInput = {
       ...input,
       status: input.status ? LibraryItemStatusSchema.parse(input.status) : undefined,
-      metadata: input.metadata ? MaterialMetadataSchema.parse(input.metadata) : undefined,
+      metadata: input.metadata ? ProductMetadataSchema.parse(input.metadata) : undefined,
     };
 
-    const result = await LibraryService.createMaterial(validatedInput, ctx.userId, tx);
+    const result = await LibraryService.createProduct(validatedInput, ctx.userId, tx);
     
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;
   }
 );
 
-export const updateMaterialAction = createAction<{ id: string; data: Partial<MaterialCatalogInput> }, MaterialCatalogWithRelations>(
+export const updateProductAction = createAction<{ id: string; data: Partial<ProductCatalogInput> }, ProductCatalogWithRelations>(
   async ({ input, ctx, tx }) => {
     assertAdminOrStaff(ctx.role);
-    const validatedData: Partial<MaterialCatalogInput> = {
+    const validatedData: Partial<ProductCatalogInput> = {
       ...input.data,
       status: input.data.status ? LibraryItemStatusSchema.parse(input.data.status) : undefined,
-      metadata: input.data.metadata ? MaterialMetadataSchema.parse(input.data.metadata) : undefined,
+      metadata: input.data.metadata ? ProductMetadataSchema.parse(input.data.metadata) : undefined,
     };
 
-    const result = await LibraryService.updateMaterial(input.id, validatedData, ctx.userId, tx);
+    const result = await LibraryService.updateProduct(input.id, validatedData, ctx.userId, tx);
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;
   }
 );
 
-export const deleteMaterialAction = createAction<{ id: string }, MaterialCatalog>(
+export const deleteProductAction = createAction<{ id: string }, ProductCatalog>(
   async ({ input, ctx, tx }) => {
     assertAdminOrStaff(ctx.role);
 
-    const result = await LibraryService.deleteMaterial(input.id, ctx.userId, tx);
+    const result = await LibraryService.deleteProduct(input.id, ctx.userId, tx);
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;
   }
@@ -188,45 +256,65 @@ export const getMyRoleAction = createAction<void, string>(async ({ ctx }) => {
 
 // --- PROJECT MATERIAL REQUEST ACTIONS ---
 
-export const getAllMaterialRequestsAction = createAction<void, ProjectMaterialRequestWithDetails[]>(
+export const getAllProductRequestsAction = createAction<void, ProjectProductRequestWithDetails[]>(
   async ({ tx }) => {
-    return LibraryService.getAllMaterialRequests(tx);
+    return LibraryService.getAllProductRequests(tx);
   }
 );
 
-export const getProjectMaterialRequestsAction = createAction<{ projectId: string }, ProjectMaterialRequestWithDetails[]>(
+export const getProjectProductRequestsAction = createAction<{ projectId: string }, ProjectProductRequestWithDetails[]>(
   async ({ input, tx }) => {
-    return LibraryService.getProjectMaterialRequests(input.projectId, tx);
+    return LibraryService.getProjectProductRequests(input.projectId, tx);
   }
 );
 
-export const createProjectMaterialRequestAction = createAction<ProjectMaterialRequestInput, ProjectMaterialRequestWithDetails>(
+export const createProjectProductRequestAction = createAction<ProjectProductRequestInput, ProjectProductRequestWithDetails>(
   async ({ input, ctx, tx }) => {
-    const result = await LibraryService.createProjectMaterialRequest(input, ctx.userId, tx);
+    const result = await LibraryService.createProjectProductRequest(input, ctx.userId, tx);
     
     invalidateCache({ scope: REVALIDATE_CUSTOM, path: `/projects/${input.project_id}` });
     return result;
   }
 );
 
-export const updateMaterialRequestStatusAction = createAction<{ id: string; status: MaterialRequestStatus; staffName?: string | null }, ProjectMaterialRequestWithDetails>(
+export const updateProductRequestStatusAction = createAction<{ id: string; status: ProductRequestStatus; staffName?: string | null }, ProjectProductRequestWithDetails>(
   async ({ input, ctx, tx }) => {
     // If RECEIVED and no name provided, use the current user's name
     const staffToRecord = input.staffName || (input.status === "RECEIVED" ? (ctx.user.name ?? null) : null);
-    const result = (await LibraryService.updateProjectMaterialRequestStatus(input.id, input.status, staffToRecord, ctx.userId, tx)) as ProjectMaterialRequestWithDetails;
+    const result = (await LibraryService.updateProjectProductRequestStatus(input.id, input.status, staffToRecord, ctx.userId, tx)) as ProjectProductRequestWithDetails;
 
     invalidateCache({ scope: REVALIDATE_CUSTOM, path: `/projects/${result.project_id}` });
     return result;
   }
 );
 
-export const deleteProjectMaterialRequestAction = createAction<{ id: string }, ProjectMaterialRequestWithDetails>(
+export const deleteProjectProductRequestAction = createAction<{ id: string }, ProjectProductRequestWithDetails>(
   async ({ input, ctx, tx }) => {
     assertAdmin(ctx.role);
 
-    const result = await LibraryService.deleteProjectMaterialRequest(input.id, ctx.userId, tx);
+    const result = await LibraryService.deleteProjectProductRequest(input.id, ctx.userId, tx);
     
     invalidateCache({ scope: REVALIDATE_CUSTOM, path: `/projects/${result.project_id}` });
+    return result;
+  }
+);
+
+export const recordSampleMovementAction = createAction<{ 
+  sampleId: string; 
+  action: SampleAction; 
+  notes?: string | null 
+}, any>(
+  async ({ input, ctx, tx }) => {
+    assertAdminOrStaff(ctx.role);
+
+    const result = await LibraryService.logSampleAction(tx, {
+      sample_id: input.sampleId,
+      action: input.action,
+      notes: input.notes,
+      userId: ctx.userId
+    });
+
+    invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;
   }
 );

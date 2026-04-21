@@ -9,6 +9,7 @@ import { ScrollArea } from "./scroll-area";
 interface Option {
   id: string;
   name: string;
+  subText?: string;
 }
 
 interface OptionGroup {
@@ -146,7 +147,17 @@ export function CreatableSearch({
           : "text-slate-700 hover:bg-slate-50"
       )}
     >
-      <span className="truncate flex-1">{option.name}</span>
+      <div className="flex flex-col min-w-0 flex-1">
+        <span className="truncate block font-medium">{option.name}</span>
+        {option.subText && (
+          <span className={cn(
+            "text-[10px] truncate block",
+            value === option.id ? "text-slate-300" : "text-slate-400"
+          )}>
+            {option.subText}
+          </span>
+        )}
+      </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {badge && (
           <span className={value === option.id ? "opacity-80" : ""}>

@@ -5,6 +5,21 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.object.name='location'][callee.property.name='reload']",
+          message: "Use router.refresh() from next/navigation instead of location.reload().",
+        },
+        {
+          selector: "CallExpression[callee.object.property.name='location'][callee.property.name='reload']",
+          message: "Use router.refresh() from next/navigation instead of window.location.reload().",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

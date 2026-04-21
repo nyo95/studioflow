@@ -7,6 +7,10 @@ import { ScheduleRow } from "./ScheduleRow";
 import { cn } from "@/lib/utils";
 import type { ProjectScheduleSheetPayload } from "../../types";
 import type { ScheduleSection } from "@/generated/prisma";
+import { 
+  SortableContext, 
+  verticalListSortingStrategy 
+} from "@dnd-kit/sortable";
 
 interface ScheduleTableProps {
   sheet: ProjectScheduleSheetPayload;
@@ -14,10 +18,11 @@ interface ScheduleTableProps {
   onEditEntry?: (entry: any) => void;
   onDeleteEntry?: (id: string) => void;
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
+  onUpdateQty?: (entryId: string, qty: number) => Promise<void>;
   onAddAlternative?: (entryId: string, category: string) => void;
 }
 
-export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUpdateLocation, onAddAlternative }: ScheduleTableProps) {
+export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUpdateLocation, onUpdateQty, onAddAlternative }: ScheduleTableProps) {
   const isFixture = section === "FIXTURE";
   const [collapsedCategories, setCollapsedCategories] = React.useState<Set<string>>(new Set());
 
@@ -65,25 +70,31 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
                   </tr>
 
                   {!isCollapsed && (
-                    group.entries.length > 0 ? (
-                      group.entries.map((entry) => (
-                        <ScheduleRow
-                          key={entry.id}
-                          entry={entry}
-                          section={isFixture ? "FIXTURE" : "MATERIAL"}
-                          onEdit={onEditEntry}
-                          onDelete={onDeleteEntry}
-                          onUpdateLocation={onUpdateLocation}
-                          onAddAlternative={() => onAddAlternative?.(entry.id, group.schedule_category)}
-                        />
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={isFixture ? 5 : 4} className="px-5 py-8 text-center text-slate-400 font-sans text-xs italic">
-                          No items in this category
-                        </td>
-                      </tr>
-                    )
+                    <SortableContext 
+                      items={group.entries.map(e => e.id)} 
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {group.entries.length > 0 ? (
+                        group.entries.map((entry) => (
+                          <ScheduleRow
+                            key={entry.id}
+                            entry={entry}
+                            section={isFixture ? "FIXTURE" : "MATERIAL"}
+                            onEdit={onEditEntry}
+                            onDelete={onDeleteEntry}
+                            onUpdateLocation={onUpdateLocation}
+                            onUpdateQty={onUpdateQty}
+                            onAddAlternative={() => onAddAlternative?.(entry.id, group.schedule_category)}
+                          />
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={isFixture ? 5 : 4} className="px-5 py-8 text-center text-slate-400 font-sans text-xs italic">
+                            No items in this category
+                          </td>
+                        </tr>
+                      )}
+                    </SortableContext>
                   )}
                 </React.Fragment>
               );

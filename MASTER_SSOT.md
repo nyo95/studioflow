@@ -100,8 +100,9 @@ Candidate options associated with a schedule entry.
 ## 4. CORE WORKFLOWS
 
 ### 4.1 Phase Lifecycle
-Phases follow a strict sequence: **MOODBOARD → LAYOUT → DESIGN_3D → CD → SUPERVISION**.
-- **Activation:** Phase N can only activate if Phase N-1 is `READY_FOR_NEXT`.
+Phases follow a strict sequence (MOODBOARD → LAYOUT → DESIGN_3D → CD → SUPERVISION), but support concurrent activation where permitted.
+- **Activation:** By default, Phase N can only activate if Phase N-1 is `READY_FOR_NEXT` or `COMPLETED`.
+- **Parallel Activation:** Phases explicitly flagged with `allow_parallel: true` (e.g., LAYOUT, DESIGN_3D, CD) bypass the sequential dependency check and can be activated while the previous phase is still `IN_PROGRESS`.
 - **Review:** Internal review → Client review.
 - **Locking:** Phase is locked automatically upon client approval.
 

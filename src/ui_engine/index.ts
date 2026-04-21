@@ -8,6 +8,7 @@ export * from "./components/ProjectLiveProvider";
 export * from "./components/heading";
 export * from "./layout/shells/dashboard-page-shell";
 export * from "./layout/shells/settings-shell";
+export * from "./layout/shells/project-layout-shell";
 export * from "./components/section-card";
 export * from "./components/table-card";
 export * from "./components/status-badge";
