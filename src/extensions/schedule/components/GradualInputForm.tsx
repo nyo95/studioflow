@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, Plus, Check, ChevronRight, ChevronLeft, Package, Boxes, Layers, Sparkles, Palette, Ruler, Building2 } from "lucide-react";
+import { Search, Plus, Check, ChevronRight, ChevronLeft, Package, Boxes, Layers, Sparkles, Palette, Ruler, Building2, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import { OptimizedUploader } from "@/components/ui/optimized-uploader";
+import { uploadLibraryImage } from "@/extensions/library/lib/upload-client";
 import type { GradualFormData, GradualFormProducts } from "../types";
 
 interface GradualInputFormProps {
@@ -21,7 +23,7 @@ interface GradualInputFormProps {
   onSearch: (query: string) => void;
 }
 
-type Step = "TYPE" | "SELECT" | "IDENTITY" | "PHYSICAL" | "VENDOR" | "REVIEW";
+type Step = "TYPE" | "SELECT" | "INITIALS" | "VENDOR" | "REVIEW";
 
 const initialCustomData = {
   catalog_sku: "",
@@ -33,6 +35,7 @@ const initialCustomData = {
   catalog_sub_category: "",
   catalog_dimensions: "",
   catalog_reference_url: "",
+  catalog_image_url: "",
 };
 
 export function GradualInputForm({
@@ -56,20 +59,24 @@ export function GradualInputForm({
   const handleSelect = (id: string, name: string) => {
     setSelectedId(id);
     if (!id) {
-       setCustomData(prev => ({ ...prev, catalog_product_name: name }));
+       // If name was reserved or custom, we proceed to Initials for new material
+       const isReserved = name === "RESERVED";
+       setCustomData(prev => ({ 
+         ...prev, 
+         catalog_product_name: isReserved ? "" : name,
+         catalog_sku: isReserved ? "" : name
+       }));
+       setStep("INITIALS");
+    } else {
+       setStep("REVIEW");
     }
-    setStep("IDENTITY");
   };
 
   const selectedProduct = products.find(m => m.id === selectedId);
 
   const isMaterial = customData.catalog_type === "material";
-  const isFixture = customData.catalog_type === "fixture";
-
-  const canProceedFromIdentity = !!customData.catalog_product_name.trim();
-  const canProceedFromPhysical = selectedId || (
-    isMaterial ? !!customData.catalog_color.trim() : (!!customData.catalog_dimensions.trim())
-  );
+  
+  const canProceedFromInitials = !!customData.catalog_color.trim();
   const canProceedFromVendor = !!customData.catalog_brand.trim();
 
   const handleFinalize = async () => {
@@ -77,14 +84,19 @@ export function GradualInputForm({
     try {
       await onConfirm({
         selectedId: selectedId ?? "",
-        customData: !selectedId ? customData : initialCustomData
+        customData: !selectedId ? {
+          ...customData,
+          // Fallback SKU/Name to Color if they are empty (Manual/Bespoke flow)
+          catalog_sku: customData.catalog_sku || customData.catalog_color || "DRAFT",
+          catalog_product_name: customData.catalog_product_name || customData.catalog_color || "New Item",
+        } : initialCustomData
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const steps: Step[] = ["TYPE", "SELECT", "IDENTITY", "PHYSICAL", "VENDOR", "REVIEW"];
+  const steps: Step[] = ["TYPE", "SELECT", "INITIALS", "VENDOR", "REVIEW"];
   const currentStepIndex = steps.indexOf(step);
 
   return (
@@ -109,8 +121,7 @@ export function GradualInputForm({
             <span className="text-xs font-bold text-slate-900">
               {step === "TYPE" ? "Classification" : 
                step === "SELECT" ? "Source Search" : 
-               step === "IDENTITY" ? "Identity" :
-               step === "PHYSICAL" ? "Physical Details" :
+               step === "INITIALS" ? "Secondary/Initials" :
                step === "VENDOR" ? "Brand & Subcat" : "Review Commit"}
             </span>
          </div>
@@ -127,7 +138,7 @@ export function GradualInputForm({
                 <button 
                   onClick={() => { setCustomData(p => ({...p, catalog_type: "material"})); setStep("SELECT"); }}
                   className={cn(
-                    "p-6 rounded-[2rem] border-2 transition-all text-left group",
+                    "p-6 rounded-[var(--radius-premium)] border-2 transition-all text-left group",
                     customData.catalog_type === "material" ? "border-slate-900 bg-slate-50" : "border-slate-100 hover:border-slate-300"
                   )}
                 >
@@ -138,7 +149,7 @@ export function GradualInputForm({
                 <button 
                   onClick={() => { setCustomData(p => ({...p, catalog_type: "fixture"})); setStep("SELECT"); }}
                   className={cn(
-                    "p-6 rounded-[2rem] border-2 transition-all text-left group",
+                    "p-6 rounded-[var(--radius-premium)] border-2 transition-all text-left group",
                     customData.catalog_type === "fixture" ? "border-slate-900 bg-slate-50" : "border-slate-100 hover:border-slate-300"
                   )}
                 >
@@ -171,132 +182,80 @@ export function GradualInputForm({
                       allowFreeText
                 />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
-                   <button 
-                     onClick={() => handleSelect("", "RESERVED")}
-                     className="p-6 rounded-[2rem] border-2 border-dashed border-slate-100 hover:border-slate-900 hover:bg-slate-50 transition-all text-left group"
-                   >
-                     <div className="h-10 w-10 rounded-2xl bg-slate-50 group-hover:bg-slate-900 text-slate-300 group-hover:text-white flex items-center justify-center mb-4 transition-all">
-                        <Sparkles size={20} />
-                     </div>
-                     <h5 className="font-lora text-lg font-medium text-slate-900">Reserve Placeholder</h5>
-                     <p className="text-xs text-slate-400 mt-1 leading-relaxed">Add an empty slot to the schedule to be filled later.</p>
-                   </button>
-                   <Button variant="ghost" onClick={() => setStep("TYPE")} className="h-full rounded-[2rem] border-2 border-slate-50">
-                      <ChevronLeft className="mr-2" /> Back
-                   </Button>
-                </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                    <button 
+                      onClick={() => handleSelect("", "RESERVED")}
+                      className="p-6 rounded-[var(--radius-premium)] border-2 border-dashed border-slate-100 hover:border-slate-900 hover:bg-slate-50 transition-all text-left group"
+                    >
+                      <div className="h-10 w-10 rounded-lg bg-slate-50 group-hover:bg-slate-900 text-slate-300 group-hover:text-white flex items-center justify-center mb-4 transition-all">
+                         <Sparkles size={20} />
+                      </div>
+                      <h5 className="font-lora text-lg font-medium text-slate-900">Reserve Placeholder</h5>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">Add an empty slot to the schedule to be filled later.</p>
+                    </button>
+                    <Button variant="ghost" onClick={() => setStep("TYPE")} className="h-full rounded-[var(--radius-premium)] border-2 border-slate-50">
+                       <ChevronLeft className="mr-2" /> Back
+                    </Button>
+                 </div>
              </div>
           </div>
         )}
 
-        {step === "IDENTITY" && (
+        {step === "INITIALS" && (
           <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
              <div className="space-y-2">
-                <h3 className="font-lora text-2xl font-medium text-slate-900">Core Identity</h3>
-                <p className="text-sm text-slate-400 font-inter">Define the primary name and SKU for this snapshot.</p>
+                <h3 className="font-lora text-2xl font-medium text-slate-900">Secondary / Initials</h3>
+                <p className="text-sm text-slate-400 font-inter">Quick draft: focus on visual representation first.</p>
              </div>
+             
              <div className="space-y-6">
-                <div className="space-y-2">
-                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Product Name</Label>
-                   <Input 
-                     value={customData.catalog_product_name} 
-                     onChange={e => setCustomData(prev => ({...prev, catalog_product_name: e.target.value}))}
-                     placeholder="e.g. Oak Wood Plank"
-                     className="h-12 rounded-2xl border-none bg-slate-50 shadow-inner font-bold text-slate-900" 
-                   />
-                </div>
-                <div className="space-y-2">
-                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Merchant SKU (Optional)</Label>
-                   <Input 
-                     value={customData.catalog_sku} 
-                     onChange={e => setCustomData(prev => ({...prev, catalog_sku: e.target.value}))}
-                     placeholder="e.g. SKU-12345"
-                     className="h-12 rounded-2xl border-none bg-slate-50 shadow-inner font-medium" 
-                   />
-                </div>
-             </div>
-             <div className="flex items-center justify-between pt-4">
-                <Button variant="ghost" onClick={() => setStep("SELECT")} className="rounded-xl px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
-                   Back
-                </Button>
-                <Button 
-                   onClick={() => setStep("PHYSICAL")} 
-                   disabled={!canProceedFromIdentity}
-                   className="bg-slate-900 text-white rounded-xl px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200"
-                >
-                   Next: Physical <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-             </div>
-          </div>
-        )}
-
-        {step === "PHYSICAL" && (
-          <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-             <div className="space-y-2">
-                <h3 className="font-lora text-2xl font-medium text-slate-900">Physical Details</h3>
-                <p className="text-sm text-slate-400 font-inter">Specify visual and tactile properties.</p>
-             </div>
-
-             <div className="bg-slate-50 rounded-[2rem] p-8 border border-slate-100">
-                {selectedId ? (
-                   <div className="flex items-center gap-6">
-                      <div className="h-20 w-20 rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
-                         {selectedProduct?.catalog_image_url ? (
-                           <img src={selectedProduct.catalog_image_url} className="w-full h-full object-cover" />
-                         ) : <Package className="w-full h-full p-6 text-slate-100" />}
-                      </div>
-                      <div>
-                         <Badge className="bg-slate-900 text-white text-[9px] mb-2">MASTER SNAPSHOT</Badge>
-                         <h5 className="font-lora text-xl font-bold text-slate-900">{selectedProduct?.catalog_sku}</h5>
-                         <p className="text-xs text-slate-400 font-inter">{selectedProduct?.catalog_brand}</p>
-                      </div>
-                   </div>
-                ) : (
-                  <div className="space-y-6">
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                           <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                              Color {isMaterial && <span className="text-red-500">*</span>}
-                           </Label>
-                           <Input 
-                             value={customData.catalog_color} 
-                             onChange={e => setCustomData(prev => ({...prev, catalog_color: e.target.value}))}
-                             placeholder="e.g. Matte Black"
-                             className="h-12 rounded-xl border-none bg-white font-medium" 
-                           />
-                        </div>
-                        <div className="space-y-2">
-                           <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pattern</Label>
-                           <Input 
-                             value={customData.catalog_motif} 
-                             onChange={e => setCustomData(prev => ({...prev, catalog_motif: e.target.value}))}
-                             placeholder="e.g. Marble"
-                             className="h-12 rounded-xl border-none bg-white font-medium" 
-                           />
-                        </div>
-                     </div>
-                     <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dimensions</Label>
-                        <Input 
-                          value={customData.catalog_dimensions} 
-                          onChange={e => setCustomData(prev => ({...prev, catalog_dimensions: e.target.value}))}
-                          placeholder="e.g. 60 x 60 cm"
-                          className="h-12 rounded-xl border-none bg-white font-medium shadow-sm" 
-                        />
-                     </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="h-1 w-4 rounded-full bg-slate-200" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Image (Optional)</span>
                   </div>
-                )}
-             </div>
+                  <div className="flex items-start gap-5">
+                    <div className="w-[140px] flex-shrink-0">
+                      <OptimizedUploader
+                        value={customData.catalog_image_url}
+                        onUpload={async (file) => {
+                          const timestamp = Date.now();
+                          const fileName = `${timestamp}-${file.name.replace(/\s/g, "_")}`;
+                          const coverPath = `covers/${fileName}`;
+                          const url = await uploadLibraryImage(file, coverPath);
+                          setCustomData(prev => ({ ...prev, catalog_image_url: url }));
+                          return url;
+                        }}
+                        onClear={() => setCustomData(prev => ({ ...prev, catalog_image_url: "" }))}
+                        aspect={1}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2 pt-1">
+                      <p className="font-sans text-[10px] text-slate-400 leading-relaxed">
+                        Upload a reference photo to help identify this item in the schedule.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
+                <div className="space-y-2">
+                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color / Initials <span className="text-red-500">*</span></Label>
+                   <Input 
+                     value={customData.catalog_color} 
+                     onChange={e => setCustomData(prev => ({...prev, catalog_color: e.target.value}))}
+                     placeholder="e.g. Matte Black or MB-01"
+                     className="h-12 rounded-lg border-none bg-slate-50 shadow-inner font-bold text-slate-900" 
+                   />
+                </div>
+             </div>
              <div className="flex items-center justify-between pt-4">
-                <Button variant="ghost" onClick={() => setStep("IDENTITY")} className="rounded-xl px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
+                <Button variant="ghost" onClick={() => setStep("SELECT")} className="rounded-lg px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
                    Back
                 </Button>
                 <Button 
                    onClick={() => setStep("VENDOR")} 
-                   disabled={!canProceedFromPhysical}
-                   className="bg-slate-900 text-white rounded-xl px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200"
+                   disabled={!canProceedFromInitials}
+                   className="bg-slate-900 text-white rounded-lg px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200"
                 >
                    Next: Brand <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -318,7 +277,7 @@ export function GradualInputForm({
                      value={customData.catalog_brand} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_brand: e.target.value}))}
                      placeholder="e.g. Roman, Kohler"
-                     className="h-12 rounded-2xl border-none bg-slate-50 shadow-inner font-bold text-slate-900" 
+                     className="h-12 rounded-lg border-none bg-slate-50 shadow-inner font-bold text-slate-900" 
                    />
                 </div>
                 <div className="space-y-2">
@@ -327,18 +286,18 @@ export function GradualInputForm({
                      value={customData.catalog_sub_category} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_sub_category: e.target.value}))}
                      placeholder="e.g. Wall Tiles"
-                     className="h-12 rounded-2xl border-none bg-slate-50 shadow-inner font-medium" 
+                     className="h-12 rounded-lg border-none bg-slate-50 shadow-inner font-medium" 
                    />
                 </div>
              </div>
              <div className="flex items-center justify-between pt-4">
-                <Button variant="ghost" onClick={() => setStep("PHYSICAL")} className="rounded-xl px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
+                <Button variant="ghost" onClick={() => setStep("INITIALS")} className="rounded-lg px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
                    Back
                 </Button>
                 <Button 
                    onClick={() => setStep("REVIEW")} 
                    disabled={!canProceedFromVendor}
-                   className="bg-slate-900 text-white rounded-xl px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200"
+                   className="bg-slate-900 text-white rounded-lg px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200"
                 >
                    Review Entry <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -355,10 +314,22 @@ export function GradualInputForm({
 
              <div className="bg-slate-900 rounded-[2rem] p-8 text-white space-y-4">
                 <div className="flex justify-between items-start border-b border-white/10 pb-4">
-                   <div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Identity</span>
-                      <h4 className="font-lora text-xl font-bold">{selectedId ? selectedProduct?.catalog_sku : customData.catalog_product_name}</h4>
-                      <p className="text-xs text-slate-400">{customData.catalog_brand}</p>
+                   <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-lg bg-white/10 border border-white/20 overflow-hidden flex-shrink-0">
+                        {(selectedId ? selectedProduct?.catalog_image_url : customData.catalog_image_url) ? (
+                          <img 
+                            src={selectedId ? selectedProduct?.catalog_image_url! : customData.catalog_image_url!} 
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : <Package className="w-full h-full p-3 text-white/20" />}
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Identity</span>
+                        <h4 className="font-lora text-xl font-bold">
+                          {selectedId ? selectedProduct?.catalog_sku : (customData.catalog_color || "New Item")}
+                        </h4>
+                        <p className="text-xs text-slate-400">{selectedId ? selectedProduct?.catalog_brand : customData.catalog_brand}</p>
+                      </div>
                    </div>
                    <Badge className="bg-emerald-500 text-white border-none uppercase text-[8px] font-black">Ready</Badge>
                 </div>
@@ -371,21 +342,23 @@ export function GradualInputForm({
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 block">Category</span>
                       <span className="font-medium">{category}</span>
                    </div>
-                   <div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 block">Color/Specs</span>
-                      <span className="font-medium">{selectedId ? "-" : (customData.catalog_color || customData.catalog_dimensions || "Standard")}</span>
-                   </div>
+                   {!selectedId && (
+                     <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 block">Status</span>
+                        <span className="font-medium text-amber-400">Local Draft</span>
+                     </div>
+                   )}
                 </div>
              </div>
 
              <div className="flex items-center justify-between pt-4">
-                <Button variant="ghost" onClick={() => setStep("VENDOR")} className="rounded-xl px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
+                <Button variant="ghost" onClick={() => setStep(selectedId ? "SELECT" : "VENDOR")} className="rounded-lg px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
                    Adjust Details
                 </Button>
                 <Button 
                    onClick={handleFinalize} 
                    disabled={isSubmitting}
-                   className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-200"
+                   className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-200"
                 >
                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Commit to Schedule"}
                 </Button>

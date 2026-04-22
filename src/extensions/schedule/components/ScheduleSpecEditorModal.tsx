@@ -19,7 +19,8 @@ import {
   Package,
   Ruler,
   Building2,
-  Layers
+  Layers,
+  Sparkles
 } from "lucide-react";
 import { TagInput } from "@/components/ui/tag-input";
 import { cn } from "@/lib/utils";
@@ -139,6 +140,11 @@ export function ScheduleSpecEditorModal({
     }
   }, [isOpen, initialSnapshot, isSubmitting]);
 
+  const isPrimaryComplete = !!form.catalog_product_name?.trim() && !!form.catalog_sku?.trim();
+  const isVendorComplete = !!form.catalog_brand?.trim();
+  const isReadyForPromotion = isPrimaryComplete && isVendorComplete;
+  const isDraft = !initialSnapshot.product_catalog_id;
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
@@ -216,6 +222,41 @@ export function ScheduleSpecEditorModal({
         <ScrollArea className={cn("px-8 pb-8", isEditMode ? "h-[580px]" : "h-auto max-h-[70vh]")}>
           {!isEditMode ? (
             <div className="space-y-6 animate-in fade-in duration-300">
+              {isDraft && !isReadyForPromotion && (
+                <div className="bg-amber-50 border border-amber-200 rounded-[2rem] p-6 flex items-start gap-4 mb-6">
+                  <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
+                    <AlertCircle className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-black text-amber-900 uppercase tracking-widest">Action Required</h4>
+                    <p className="text-xs text-amber-700 leading-relaxed font-medium">
+                      This item is a local draft. To enable promotion to the Master Catalog, please complete the 
+                      <span className="font-bold"> Primary Data (SKU & Name)</span> and <span className="font-bold">Brand</span> details.
+                    </p>
+                    <Button 
+                      variant="link" 
+                      onClick={() => setIsEditMode(true)}
+                      className="p-0 h-auto text-[10px] font-black uppercase tracking-[0.2em] text-amber-600 hover:text-amber-900"
+                    >
+                      Complete Specifications →
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {isDraft && isReadyForPromotion && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-[2rem] p-6 flex items-start gap-4 mb-6">
+                  <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
+                    <Sparkles className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Elevation Ready</h4>
+                    <p className="text-xs text-emerald-700 leading-relaxed font-medium">
+                      All minimum requirements are met. You can now request this item to be added to the Product Catalog.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-start gap-6 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
                 <div className="w-32 h-32 rounded-3xl overflow-hidden bg-white border border-slate-200 shadow-sm flex-shrink-0">
                   {form.catalog_image_url ? (
@@ -478,23 +519,29 @@ export function ScheduleSpecEditorModal({
                 Cancel
               </Button>
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline"
-                  type="button"
-                  onClick={async () => {
-                    const toastId = toast.loading("Requesting promotion...");
-                    try {
-                      unwrapActionResult(await promoteToLibraryAction({ optionId }));
-                      toast.success("Promotion request sent!", { id: toastId });
-                      if (onSuccess) onSuccess();
-                    } catch (err: unknown) {
-                      toast.error(err instanceof Error ? err.message : "Promotion failed", { id: toastId });
-                    }
-                  }}
-                  className="h-10 rounded-xl border-slate-200 text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-white hover:border-slate-900"
-                >
-                  Save To Library
-                </Button>
+                {isDraft && (
+                  <Button 
+                    variant="outline"
+                    type="button"
+                    disabled={!isReadyForPromotion}
+                    onClick={async () => {
+                      const toastId = toast.loading("Requesting promotion...");
+                      try {
+                        unwrapActionResult(await promoteToLibraryAction({ optionId }));
+                        toast.success("Promotion request sent!", { id: toastId });
+                        if (onSuccess) onSuccess();
+                      } catch (err: unknown) {
+                        toast.error(err instanceof Error ? err.message : "Promotion failed", { id: toastId });
+                      }
+                    }}
+                    className={cn(
+                      "h-10 rounded-xl border-slate-200 text-[10px] font-bold uppercase tracking-widest transition-all",
+                      isReadyForPromotion ? "text-emerald-600 border-emerald-100 hover:border-emerald-500 hover:bg-emerald-50" : "text-slate-300 bg-slate-50 cursor-not-allowed"
+                    )}
+                  >
+                    {isReadyForPromotion ? "Request to Catalog" : "Incomplete for Catalog"}
+                  </Button>
+                )}
                 <Button 
                   onClick={handleSubmit} 
                   disabled={isSubmitting || !form.catalog_product_name?.trim() || !form.catalog_brand?.trim()}

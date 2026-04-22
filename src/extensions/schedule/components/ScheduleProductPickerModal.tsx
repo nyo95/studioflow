@@ -52,14 +52,14 @@ import { useProjectScheduleContext } from "../context/ProjectScheduleContext";
 type SchedulePickerPayload =
   | {
       projectId: string;
-      category: string;
+      schedule_category: string;
       section: ProductType;
       mode: "catalog";
       catalogItemId: string;
     }
   | {
       projectId: string;
-      category: string;
+      schedule_category: string;
       section: ProductType;
       mode: "create_catalog";
       catalogCreateData: {
@@ -76,7 +76,7 @@ type SchedulePickerPayload =
     }
   | {
       projectId: string;
-      category: string;
+      schedule_category: string;
       section: ProductType;
       mode: "reserve";
     };
@@ -168,7 +168,7 @@ export function ScheduleProductPickerModal({
       if (createCatalogName) {
         payload = {
           projectId,
-          category,
+          schedule_category: category,
           section,
           mode: "create_catalog",
           catalogCreateData: {
@@ -181,7 +181,7 @@ export function ScheduleProductPickerModal({
       } else {
         payload = {
           projectId,
-          category,
+          schedule_category: category,
           section,
           mode: "catalog",
           catalogItemId: selectedProductId as string,
@@ -225,7 +225,7 @@ export function ScheduleProductPickerModal({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent 
         onKeyDown={(e) => e.stopPropagation()}
-        className="sm:max-w-[700px] p-0 overflow-hidden border-none rounded-[2rem] shadow-2xl bg-white focus-visible:outline-none"
+        className="sm:max-w-[700px] p-0 overflow-hidden border-none rounded-[var(--radius-premium)] shadow-2xl bg-white focus-visible:outline-none"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Add Product to Schedule</DialogTitle>
@@ -245,16 +245,16 @@ export function ScheduleProductPickerModal({
               if (data.selectedId === "" && data.customData) {
                 // Bespoke or Reserve
                 if (data.customData.catalog_product_name === "RESERVED") {
-                  payload = { projectId, category, section, mode: "reserve" };
+                  payload = { projectId, schedule_category: category, section, mode: "reserve" };
                 } else {
                   payload = {
                     projectId,
-                    category,
+                    schedule_category: category,
                     section,
                     mode: "create_catalog",
-catalogCreateData: {
-                      catalog_sku: data.customData.catalog_sku || data.customData.catalog_product_name,
-                      catalog_product_name: data.customData.catalog_product_name,
+                    catalogCreateData: {
+                      catalog_sku: data.customData.catalog_sku || data.customData.catalog_color || "DRAFT",
+                      catalog_product_name: data.customData.catalog_product_name || data.customData.catalog_color || "New Item",
                       catalog_brand: data.customData.catalog_brand || "Custom",
                       catalog_color: data.customData.catalog_color || null,
                       catalog_motif: data.customData.catalog_motif || null,
@@ -268,7 +268,7 @@ catalogCreateData: {
               } else {
                 payload = {
                   projectId,
-                  category,
+                  schedule_category: category,
                   section,
                   mode: "catalog",
                   catalogItemId: data.selectedId as string,

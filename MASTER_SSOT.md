@@ -125,7 +125,10 @@ Approving a material option creates a frozen `data_snapshot`.
 
 ### 5.2 Explicit Promotion Pattern
 - **Local by Default:** New materials added to the scheduler are local to the project.
-- **Manual Promotion:** Users must explicitly click "Save to Library" to submit an item for global inclusion.
+- **Phased Input Flow (UX Refactor v1.5):** 
+    1. **Stage 1 (Draft):** Prioritize "Secondary / Initials" (Mandatory: Color) and Brand/Vendor. This creates a local project snapshot.
+    2. **Stage 2 (Elevation):** Primary data (SKU + Name) and Images can be added later to complete the specification.
+- **Manual Promotion:** Users must explicitly click "Save to Library" to submit an item for global inclusion. This is ONLY permitted once Stage 2 (Primary + Brand) is complete.
 - **Auto-Harvesting:** (Approved Decision) Items can be auto-harvested to the library as `PENDING` status for admin review.
 
 ### 5.3 Deterministic Coding

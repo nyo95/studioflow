@@ -1,5 +1,26 @@
 # StudioFlow Development Log (Changelog)
 
+## [1.5.1] - 2026-04-22
+### Added
+- **Design System Enforcement (Zero Hardcode Policy)**: Updated `AGENTS.md` with a mandatory rule banning hardcoded visual values (radii, spacing) in favor of UI engine tokens (`DESIGN_SYSTEM_CONFIG`, `var(--radius-premium)`).
+
+### Fixed
+- **Schedule Code Rendering**: Corrected the `schedule_code` display in the Table View by injecting the computed prefix-increment string directly from the service layer.
+- **Zod Validation Regression**: Resolved "Invalid input: expected string, received undefined" in the schedule picker by fixing field namespacing (`schedule_category`) and providing fallbacks for mandatory catalog fields.
+- **Visual Parity**: Replaced hardcoded `rounded-xl` with `var(--radius-premium)` across schedule card components.
+
+## [1.10.0] - 2026-04-22
+### Added
+- **Phased Material Input UX (Pillar 2)**: Implemented a progressive disclosure flow for schedule entries.
+    - **Stage 1**: "Initials-First" rapid drafting (Color + Brand + Image).
+    - **Stage 2**: "Data Elevation" for catalog readiness (SKU + Name).
+- **Promotion Guardrails**: The "Request to Catalog" action is now restricted until Primary data and Brand are finalized.
+- **Visual Clarity Refactor**: Simplified UI headings and labels across Library and Schedule extensions.
+
+### Changed
+- **SSOT v1.7.5**: Updated `MASTER_SSOT.md` to prioritize Secondary/Initials in the initial drafting phase.
+
+
 ## [1.9.1] - 2026-04-22
 ### Fixed
 - **Build Stabilization**: Resolved critical syntax errors in `LibraryService` and `library-actions.ts`.

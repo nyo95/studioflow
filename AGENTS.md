@@ -21,6 +21,13 @@ This project uses specific Next.js APIs and Prisma configurations that may diffe
 ## 🚫 UI/UX Preservation Protocol
 "DILARANG KERAS mengubah struktur tata letak (layout) yang sudah ada—seperti mengganti sidebar menjadi tab horizontal—tanpa permintaan eksplisit dari pengguna. Jangan menambahkan elemen estetika 'Premium' (shadow berlebih, animasi kompleks, font dekoratif baru) jika tidak diminta. Pertahankan fungsionalitas di atas hiasan visual."
 
+## 📐 Design System Enforcement (Zero Hardcode Policy)
+"DILARANG KERAS menggunakan nilai hardcoded untuk visual properties (misalnya `rounded-xl`, `p-5`, `shadow-md`, `text-2xl`). Kamu WAJIB melakukan hal berikut:
+1. **Cross-Check Tokens**: Selalu periksa `src/ui_engine/design-system.config.ts` dan `src/styles/designTokens.css` sebelum menulis kode UI.
+2. **Use Semantic Tokens**: Gunakan variabel CSS (misal `rounded-[var(--radius-premium)]`) atau config object (`DESIGN_SYSTEM_CONFIG.spacing.radius`).
+3. **Consistency over Speed**: Jangan menebak-nebak nilai. Jika token tidak ditemukan, tanyakan atau gunakan nilai yang paling mendekati dari konfigurasi yang ada."
+
+
 ## 🧱 Pillar 2 Resilience Protocol
 1. **Explicit Promotion**: Material catalog data bersifat 'Master'. Project data harus di-snapshot (PRD 2 rules). Data dari project TIDAK BOLEH auto-sync ke Library tanpa validasi eksplisit.
 2. **Audit Mandatory**: Setiap mutasi pada Library atau Scheduler Category WAJIB mencatat `insertAuditLog`.

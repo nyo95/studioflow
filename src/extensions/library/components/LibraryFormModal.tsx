@@ -301,11 +301,11 @@ export function LibraryFormModal({
         <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto p-0 border-none shadow-2xl">
           <DialogHeader className="p-6 bg-slate-900 text-white">
             <DialogTitle className="font-lora text-2xl font-medium tracking-tight">
-              {mode === "CREATE" ? "New" : "Edit"}{" "}
-              {type === "VENDOR" ? "Vendor Account" : "Product Listing"}
+              {mode === "CREATE" ? "Add" : "Edit"}{" "}
+              {type === "VENDOR" ? "Vendor" : "Product"}
             </DialogTitle>
             <p className="text-slate-400 text-xs font-inter uppercase tracking-[0.2em] font-bold mt-1">
-              StudioFlow Library Management
+              Library Management
             </p>
           </DialogHeader>
 
@@ -426,7 +426,7 @@ export function LibraryFormModal({
                     {/* INFO SECTION */}
                     <div className="space-y-4">
                         <Label className="text-slate-900 font-bold text-xs uppercase tracking-widest flex items-center gap-2">
-                             <LinkIcon className="h-3 w-3 text-slate-400" /> Social & Online Presence
+                             <LinkIcon className="h-3 w-3 text-slate-400" /> Web & Social
                         </Label>
                         <div className="grid grid-cols-2 gap-4">
                             <Input
@@ -455,7 +455,7 @@ export function LibraryFormModal({
                   {/* DIGITAL CATALOG SECTION */}
                   <div className="space-y-4">
                     <Label className="text-slate-900 font-bold text-xs uppercase tracking-widest flex items-center gap-2">
-                      <ImageIcon className="h-3 w-3 text-slate-400" /> Smart Visual Showcase
+                      <ImageIcon className="h-3 w-3 text-slate-400" /> Images & Links
                     </Label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="md:col-span-1">
@@ -500,7 +500,7 @@ export function LibraryFormModal({
                   {/* MATERIAL SPECS */}
                   <div className="space-y-4">
                     <Label className="text-slate-900 font-bold text-xs uppercase tracking-widest flex items-center gap-2">
-                      <Info className="h-3 w-3 text-slate-400" /> Core Specifications
+                      <Info className="h-3 w-3 text-slate-400" /> Specifications
                     </Label>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2 col-span-2">
@@ -591,7 +591,7 @@ export function LibraryFormModal({
                               <Layers className="h-4 w-4" />
                             </div>
                             <div className="text-left">
-                              <span className="text-xs font-bold uppercase tracking-widest block">Detailed Metadata</span>
+                              <span className="text-xs font-bold uppercase tracking-widest block">Details</span>
                               <span className="text-[10px] text-slate-400 font-medium">Color, Finishing, Dimensions, etc.</span>
                             </div>
                           </div>
@@ -719,7 +719,7 @@ export function LibraryFormModal({
                   {/* PHYSICAL INVENTORY */}
                   <div className="p-5 rounded-2xl bg-slate-900/5 ring-1 ring-slate-900/10 space-y-4">
                     <Label className="text-slate-900 font-bold text-xs uppercase tracking-[0.2em] flex items-center gap-2">
-                      <Warehouse className="h-4 w-4" /> Physical Sample Inventory
+                      <Warehouse className="h-4 w-4" /> Samples
                     </Label>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">
@@ -767,10 +767,10 @@ export function LibraryFormModal({
                     <div className="p-4 rounded-xl bg-orange-50 border border-orange-100 space-y-3">
                        <div className="flex items-center gap-2">
                          <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-                         <span className="text-[10px] font-black uppercase tracking-widest text-orange-950 font-inter">Approval Authority</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-orange-950 font-inter">Approval Status</span>
                        </div>
                        <div className="grid gap-2">
-                         <Label className="text-[10px] font-bold text-orange-900 uppercase">Current Asset Status</Label>
+                         <Label className="text-[10px] font-bold text-orange-900 uppercase">Current Status</Label>
                          <Select 
                             value={productData.status} 
                             onValueChange={(val) => setProductData({...productData, status: val as LibraryItemStatus})}

@@ -399,9 +399,9 @@ export function ProjectScheduleMain({
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <PageHeader
-        eyebrow="Specifications"
-        title="Unified Product Schedule"
-        description="Detailed procurement and technical schedule for all architectural and FF&E items."
+        eyebrow="Schedule"
+        title="Project Schedule"
+        description="Manage specifications and procurement for this project."
         titleClassName="font-lora text-4xl normal-case tracking-tight text-slate-900"
         descriptionClassName="mt-1 font-inter text-sm text-slate-500 max-w-2xl"
         className="pb-2"
@@ -487,7 +487,7 @@ export function ProjectScheduleMain({
             value={ProductType.fixture}
             className="flex-1 rounded-lg py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
           >
-            FF&E / Equipment
+            FF&E
           </TabsTrigger>
         </TabsList>
 

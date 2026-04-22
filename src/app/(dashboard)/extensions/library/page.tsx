@@ -125,9 +125,9 @@ export default function LibraryPage() {
     <DashboardPageShell className="max-w-[min(var(--ui-page-max-width,1280px),96rem)]">
       <div className="space-y-8 animate-in fade-in duration-700">
         <PageHeader
-          eyebrow="Extension // Pillar 2"
-          title="Digital Library"
-          description="A curated catalog of materials, queue approval, vendor management, and physical sample tracking."
+          eyebrow="Extensions"
+          title="Material Library"
+          description="Manage products, vendors, and inventory samples."
         />
 
         {isLoading ? (

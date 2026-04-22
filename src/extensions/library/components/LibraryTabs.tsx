@@ -116,7 +116,7 @@ export function LibraryTabs({
       <div className="flex flex-col lg:flex-row gap-10 items-start">
         {/* Left Column: Designers/Staff optimized sidebar */}
         <ActionSidebar>
-          <ActionSidebarSection title="Experience" subtitle="Search & Refine">
+          <ActionSidebarSection title="Filters" subtitle="Refine Catalog">
               <ActionSidebarItem label="Product Name">
                  <div className="relative group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
@@ -148,7 +148,7 @@ export function LibraryTabs({
                  </Select>
               </ActionSidebarItem>
 
-              <ActionSidebarItem label="Discovery Settings">
+              <ActionSidebarItem label="Options">
                  <div className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-50 transition-all hover:border-slate-100">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] font-black text-slate-900 font-inter uppercase tracking-widest">Physical Only</span>
@@ -178,7 +178,7 @@ export function LibraryTabs({
               className="w-full bg-slate-900 hover:bg-slate-800 text-white font-inter text-[10px] font-black uppercase tracking-widest h-12 px-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Plus className="h-4 w-4" />
-              <span>Add to Catalog</span>
+              <span>Add Product</span>
             </Button>
           )}
         </ActionSidebar>
@@ -190,26 +190,26 @@ export function LibraryTabs({
                 <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
                   <div className="flex items-center gap-3">
                     <LayoutGrid className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Storefront</span>
+                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Catalog</span>
                   </div>
                 </TabsTrigger>
                 <TabsTrigger value="inventory" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
                   <div className="flex items-center gap-3">
                     <Warehouse className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Physical Inventory</span>
+                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Samples</span>
                   </div>
                 </TabsTrigger>
                 <TabsTrigger value="vendors" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
                   <div className="flex items-center gap-3">
                     <Users className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Partner Brands</span>
+                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Vendors</span>
                   </div>
                 </TabsTrigger>
                 {isAdmin && (
                   <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
                     <div className="flex items-center gap-3">
                       <Clock className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                      <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Approval Queue</span>
+                      <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Queue</span>
                     </div>
                   </TabsTrigger>
                 )}

@@ -72,7 +72,8 @@ export async function buildScheduleSnapshot(
   tx: PrismaTransaction,
   catalogId?: string | null,
   manualData?: Partial<ScheduleSnapshot>, // Updated to use snapshot-like partial
-  sourceOrigin: SourceOrigin = "web_catalog"
+  sourceOrigin: SourceOrigin = "web_catalog",
+  catalogType?: ProductType
 ): Promise<ScheduleSnapshot> {
   if (catalogId) {
     const item = await tx.productCatalog.findUnique({
@@ -160,6 +161,7 @@ export async function buildScheduleSnapshot(
     },
     snapshot_source_payload: manualData?.snapshot_source_payload || undefined,
     snapshot_captured_at: new Date().toISOString(),
+    catalog_type: catalogType || manualData?.catalog_type || ProductType.material,
   };
 }
 
@@ -344,7 +346,7 @@ export class ScheduleService {
     projectId: string,
     section: ProductType = ProductType.material
   ) {
-    const [project, templates, prefixes, entries] = await Promise.all([
+    const [project, templates, prefixes, entriesRaw] = await Promise.all([
       tx.project.findUniqueOrThrow({
         where: { id: projectId },
         select: {
@@ -384,6 +386,11 @@ export class ScheduleService {
         orderBy: { schedule_sort_order: "asc" },
       }),
     ]);
+
+    const entries = entriesRaw.map(entry => ({
+      ...entry,
+      schedule_code: `${entry.schedule_prefix}-${String(entry.schedule_increment).padStart(2, "0")}`
+    }));
 
     const byCategory = new Map<string, (typeof entries)[number][]>();
     for (const entry of entries) {
@@ -443,7 +450,7 @@ export class ScheduleService {
    * @returns Raw schedule entries with options.
    */
   static async getProjectScheduleEntries(tx: PrismaTransaction, projectId: string, section?: ProductType) {
-    return tx.projectScheduleEntry.findMany({
+    const entries = await tx.projectScheduleEntry.findMany({
       where: { 
         project_id: projectId,
         ...(section ? { section } : {})
@@ -456,6 +463,11 @@ export class ScheduleService {
       },
       orderBy: { schedule_sort_order: "asc" },
     });
+
+    return entries.map(entry => ({
+      ...entry,
+      schedule_code: `${entry.schedule_prefix}-${String(entry.schedule_increment).padStart(2, "0")}`
+    }));
   }
 
   /**
@@ -551,13 +563,13 @@ export class ScheduleService {
         catalog_product_name: "[RESERVED]",
         catalog_brand: "PENDING",
         catalog_initials_type: "-",
-      });
+      }, "web_manual", section);
       isFinal = false; // Reserved slots are not final selections
       optionStatus = "DRAFT"; // Use DRAFT for reserved, not APPROVED
     } else if (mode === "manual") {
       // Manual mode creates a snapshot directly from provided data
       // It is considered APPROVED immediately in the project context
-      finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "web_manual");
+      finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "web_manual", section);
       isFinal = true;
       optionStatus = "APPROVED";
     } else {
@@ -569,7 +581,7 @@ export class ScheduleService {
         catalogItemId,
         catalogCreateData
       );
-      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined);
+      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "web_catalog", section);
     }
 
     // Validate Snapshot before save
@@ -624,6 +636,10 @@ export class ScheduleService {
       orderBy: { option_label: "asc" },
     });
 
+    const entry = await tx.projectScheduleEntry.findUniqueOrThrow({
+      where: { id: entryId }
+    });
+
     const lastLabel = existingOptions[existingOptions.length - 1]?.option_label || "@";
     const nextLabel = String.fromCharCode(lastLabel.charCodeAt(0) + 1);
 
@@ -636,9 +652,9 @@ export class ScheduleService {
         catalog_product_name: "[RESERVED]",
         catalog_brand: "PENDING",
         catalog_initials_type: "-",
-      });
+      }, "web_manual", entry.section);
     } else if (mode === "manual") {
-        finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "web_manual");
+        finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "web_manual", entry.section);
     } else {
       resolvedCatalogId = await resolveCatalogItemForMode(
         tx,
@@ -648,7 +664,7 @@ export class ScheduleService {
         catalogItemId,
         catalogCreateData
       );
-      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined);
+      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "web_catalog", entry.section);
     }
 
     // Validate Snapshot before save
@@ -935,6 +951,7 @@ export class ScheduleService {
     // Merge new data into snapshot using namespaced fields (Priority: Canonical > Alias > Current)
     const updatedSnapshot: ScheduleSnapshot = {
       ...currentSnapshot,
+      catalog_type: currentSnapshot.catalog_type || option.entry.section,
       catalog_product_name: data.catalog_product_name !== undefined ? data.catalog_product_name : currentSnapshot.catalog_product_name,
       catalog_brand: data.catalog_brand !== undefined ? data.catalog_brand : currentSnapshot.catalog_brand,
       catalog_initials_type: data.catalog_initials_type !== undefined ? (data.catalog_initials_type || null) : (currentSnapshot.catalog_initials_type ?? null),

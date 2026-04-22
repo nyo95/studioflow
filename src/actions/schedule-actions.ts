@@ -445,6 +445,20 @@ export const promoteToLibraryAction = createAction(
       }
     });
 
+    await insertAuditLog(
+      tx,
+      AUDIT_ACTIONS.LIBRARY_CREATE_PROMOTION_REQUEST,
+      "PromotionRequest",
+      result.id,
+      ctx.userId,
+      { 
+        project_id: option.entry.project_id, 
+        schedule_option_id: input.optionId,
+        catalog_sku: (snapshot as any).specs?.catalog_sku,
+        catalog_product_name: (snapshot as any).catalog_product_name
+      }
+    );
+
     invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
     return { success: true, requestId: result.id, message: "Promotion request submitted for approval" };
   },

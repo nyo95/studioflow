@@ -103,7 +103,7 @@ export const LibraryItemStatusSchema = z.nativeEnum(LibraryItemStatus);
 /**
  * Strict validation for Product Catalog according to Extension_rule.md
  */
-export const ProductCatalogValidationSchema = z.object({
+const ProductCatalogBaseSchema = z.object({
   catalog_category: z.string().min(1, "Category is required"),
   catalog_color: z.string().min(1, "Color is required"),
   catalog_sku: z.string().optional(),
@@ -112,18 +112,29 @@ export const ProductCatalogValidationSchema = z.object({
   catalog_type: z.nativeEnum(ProductType),
   vendor_id: z.string().optional(),
   vendor_name: z.string().optional(),
-}).refine(data => data.catalog_sku || data.catalog_product_name, {
-  message: "At least SKU or Product Name must exist",
-  path: ["catalog_sku"]
 });
+
+export const ProductCatalogValidationSchema = ProductCatalogBaseSchema.refine(
+  data => data.catalog_sku || data.catalog_product_name, 
+  {
+    message: "At least SKU or Product Name must exist",
+    path: ["catalog_sku"]
+  }
+);
 
 /**
  * Hyper-Strict validation for Catalog Approval (Source of Truth)
  */
-export const CatalogApprovalValidationSchema = ProductCatalogValidationSchema.extend({
+export const CatalogApprovalValidationSchema = ProductCatalogBaseSchema.extend({
   catalog_image_url: z.string().min(1, "Original Image is REQUIRED for catalog"),
   vendor_id: z.string().min(1, "Brand is REQUIRED for catalog"),
-});
+}).refine(
+  data => data.catalog_sku || data.catalog_product_name,
+  {
+    message: "At least SKU or Product Name must exist",
+    path: ["catalog_sku"]
+  }
+);
 
 /**
  * Type-specific assertions for material vs fixture

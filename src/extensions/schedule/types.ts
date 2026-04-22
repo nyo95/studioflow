@@ -13,6 +13,7 @@ export type GradualFormCustomData = {
   catalog_sub_category: string;
   catalog_dimensions: string;
   catalog_reference_url: string;
+  catalog_image_url?: string;
 };
 
 export type GradualFormData = {
@@ -66,6 +67,7 @@ export type ProjectScheduleOptionWithProduct = ProjectScheduleOption & {
 export type ProjectScheduleEntryWithRelations = ProjectScheduleEntry & {
   options: ProjectScheduleOptionWithProduct[];
   prefix_ref?: PrefixDictionary | null;
+  schedule_code?: string;
 };
 
 export type ScheduleGroupedByCategory = {

@@ -58,8 +58,8 @@ export function SettingsShell({
     <DashboardPageShell className="space-y-8">
       <PageBackLink />
       <PageHeader
-        eyebrow="System Control Plane"
-        title="SETTINGS"
+        eyebrow="Settings"
+        title="Studio Settings"
         description={description}
         divider={false}
       />
