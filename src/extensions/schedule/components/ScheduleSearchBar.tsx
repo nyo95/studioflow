@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
-import { ScheduleSection } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 import { getProductsAction } from "@/extensions/library/actions/library-actions";
 import { 
   addScheduleEntryWithProductAction, 
@@ -20,7 +20,7 @@ import type { ProductCatalogWithRelations } from "@/extensions/library/types";
 
 interface ScheduleSearchBarProps {
   projectId: string;
-  section: ScheduleSection;
+  section: ProductType;
   onSuccess: () => void;
 }
 
@@ -51,7 +51,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [step]);
 
-  const loadMaterials = React.useCallback(async (q: string) => {
+  const loadProducts = React.useCallback(async (q: string) => {
     if (!q.trim()) {
       setProducts([]);
       return;
@@ -80,10 +80,10 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
 
   React.useEffect(() => {
     const timeout = setTimeout(() => {
-      if (query && step === "SEARCH") loadMaterials(query);
+      if (query && step === "SEARCH") loadProducts(query);
     }, 300);
     return () => clearTimeout(timeout);
-  }, [query, loadMaterials, step]);
+  }, [query, loadProducts, step]);
 
   const reset = () => {
     setQuery("");
@@ -94,7 +94,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
     setCategoryQuery("");
   };
 
-  const handleSelectMaterial = async (product: ProductCatalogWithRelations) => {
+  const handleSelectProduct = async (product: ProductCatalogWithRelations) => {
     setIsCreating(true);
     try {
       await addScheduleEntryWithProductAction({
@@ -106,7 +106,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
       reset();
       onSuccess();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to add material");
+      toast.error(error instanceof Error ? error.message : "Failed to add product");
     } finally {
       setIsCreating(false);
     }
@@ -165,7 +165,7 @@ const entry = unwrapActionResult(await addScheduleEntryInstantAction({
               setShowResults(true);
             }}
             onFocus={() => setShowResults(true)}
-            placeholder="Search material libraries or type new name to add..."
+            placeholder="Search product libraries or type new name to add..."
             className="flex-1 bg-transparent border-none outline-none text-sm font-medium text-slate-900 placeholder:text-slate-400"
           />
         ) : (
@@ -211,7 +211,7 @@ const entry = unwrapActionResult(await addScheduleEntryInstantAction({
                       {products.map((m) => (
                         <button
                           key={m.id}
-                          onClick={() => handleSelectMaterial(m)}
+                          onClick={() => handleSelectProduct(m)}
                           className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-50 transition-colors group"
                         >
                           <div className="h-10 w-10 rounded-lg bg-slate-100 overflow-hidden shrink-0 border border-slate-100">
@@ -234,7 +234,7 @@ const entry = unwrapActionResult(await addScheduleEntryInstantAction({
                     </>
                   ) : query.length >= 2 && !isSearching ? (
                     <div className="px-3 py-8 text-center text-slate-400 text-xs italic">
-                      No matching materials found in library.
+                      No matching products found in library.
                     </div>
                   ) : null}
 

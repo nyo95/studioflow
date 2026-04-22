@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Blocks, Palette, Settings2, Users2, ShoppingBag } from "lucide-react";
-import type { Role, ScheduleSection } from "@/generated/prisma";
+import type { Role, ProductType } from "@/generated/prisma";
 import { TemplateManager } from "@/components/template-manager";
 import { UserManagement } from "@/components/user-management";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ interface ChecklistTemplate {
 interface ScheduleTemplateConfig {
   id: string;
   schedule_category: string;
-  section: ScheduleSection;
+  section: ProductType;
   is_active: boolean;
 }
 
@@ -31,7 +31,7 @@ interface SchedulePrefixConfig {
   id: string;
   schedule_category: string;
   prefix: string;
-  section: ScheduleSection;
+  section: ProductType;
 }
 
 type PanelKey = "general" | "team" | "project-engine" | "design-system" | "product-catalog";
@@ -63,7 +63,7 @@ const sections = [
   },
   {
     key: "product-catalog" as const,
-    label: "Product & Fixtures",
+    label: "Product Library",
     description: "Scheduler categories and prefixes",
     icon: ShoppingBag,
   },

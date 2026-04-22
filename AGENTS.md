@@ -24,7 +24,7 @@ This project uses specific Next.js APIs and Prisma configurations that may diffe
 ## 🧱 Pillar 2 Resilience Protocol
 1. **Explicit Promotion**: Material catalog data bersifat 'Master'. Project data harus di-snapshot (PRD 2 rules). Data dari project TIDAK BOLEH auto-sync ke Library tanpa validasi eksplisit.
 2. **Audit Mandatory**: Setiap mutasi pada Library atau Scheduler Category WAJIB mencatat `insertAuditLog`.
-3. **No Legacy Models**: DILARANG mengekspos atau menggunakan model `GlobalLibrary` dan `ProjectSchedule`. Gunakan `MaterialCatalog` dan `ProjectScheduleEntry`.
+3. **No Legacy Models**: DILARANG mengekspos atau menggunakan model `GlobalLibrary` dan `ProjectSchedule`. Gunakan `ProductCatalog` dan `ProjectScheduleEntry`.
 4. **Deterministic Coding**: Semua kode scheduler harus dikelola melalui `ScheduleService.normalizeCodes` untuk memastikan integritas prefix.
 5. **Terminology Architecture**: WAJIB menggunakan namespaced prefix (`catalog_`, `schedule_`). Format identitas produk: `[catalog_sku] - [catalog_product_name] ex. [catalog_brand]`.
 6. **Documentation First**: "Apabila mengedit `src/extensions/schedule/`, kamu WAJIB membaca [src/extensions/schedule/README.md](file:///d:/Misc/ProjectsHUB/radsaas-2/src/extensions/schedule/README.md) terlebih dahulu untuk memahami workflow snapshotting dan terminologi Pillar 2."

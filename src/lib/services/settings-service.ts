@@ -1,4 +1,4 @@
-import { Prisma, ScheduleSection } from "@/generated/prisma";
+import { Prisma, ProductType } from "@/generated/prisma";
 import { ScheduleService } from "./schedule-service";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
@@ -145,7 +145,7 @@ export const settingsService = {
 
   async executeUpsertScheduleCategoryConfig(
     tx: PrismaTransaction,
-    params: { section: ScheduleSection; category: string; prefix?: string; userId: string }
+    params: { section: ProductType; category: string; prefix?: string; userId: string }
   ) {
     const { section, userId } = params;
     const category = params.category.trim().toUpperCase();
@@ -189,7 +189,7 @@ export const settingsService = {
 
   async executeDeleteScheduleCategoryConfig(
     tx: PrismaTransaction,
-    params: { section: ScheduleSection; category: string; userId: string }
+    params: { section: ProductType; category: string; userId: string }
   ) {
     const { section, userId } = params;
     const category = params.category.trim().toUpperCase();

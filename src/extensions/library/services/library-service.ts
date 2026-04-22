@@ -1,11 +1,14 @@
-import { Prisma, ProductRequestStatus, LibraryItemStatus, ScheduleSection, SampleAction } from "@/generated/prisma";
+import { Prisma, ProductRequestStatus, LibraryItemStatus, ProductType, SampleAction } from "@/generated/prisma";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { settingsService } from "@/lib/services/settings-service";
 import { 
   ProductCatalogInput, 
   LibraryVendorInput, 
-  ProjectProductRequestInput 
+  ProjectProductRequestInput,
+  ProductCatalogValidationSchema,
+  CatalogApprovalValidationSchema,
+  ProductTypeAssertionSchema
 } from "../types";
 import { insertAuditLog } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/lib/services/audit/types";
@@ -27,6 +30,9 @@ export class LibraryService {
       action: SampleAction;
       notes?: string | null;
       userId: string;
+      taken_by?: string;
+      date_out?: Date;
+      date_return?: Date;
     }
   ) {
     return tx.sampleMovementLog.create({
@@ -34,8 +40,109 @@ export class LibraryService {
         sample_id: data.sample_id,
         user_id: data.userId,
         action: data.action,
-        notes: data.notes
+        notes: data.notes,
+        taken_by: data.taken_by,
+        date_out: data.date_out,
+        date_return: data.date_return
       }
+    });
+  }
+
+  /**
+   * CRITICAL RUNTIME ASSERTION: Blocks mutation if item is a Source of Truth (Catalog)
+   */
+  static async assertEditable(tx: PrismaTransaction, productId: string) {
+    const product = await tx.productCatalog.findUnique({
+      where: { id: productId }
+    });
+
+    if (product?.status === LibraryItemStatus.APPROVED) {
+      throw new ActionError("APPROVED global items are read-only. Please submit a Change Request.", "CATALOG_LOCKED");
+    }
+  }
+
+  /**
+   * CRITICAL RUNTIME ASSERTION: Validates model integrity based on ProductType
+   */
+  static async assertTypeRules(
+    type: ProductType, 
+    data: { qty?: number; location?: string },
+    context: "SNAPSHOT" | "CATALOG"
+  ) {
+    if (type === "material") {
+      if (data.qty !== undefined || data.location !== undefined) {
+        throw new ActionError("Materials are forbidden from having quantity or location data.", "TYPE_RULE_VIOLATION");
+      }
+    } else if (type === "fixture") {
+      if (context === "SNAPSHOT") {
+        if (!data.qty || data.qty <= 0) throw new ActionError("Fixtures in projects REQUIRE a quantity > 0.", "TYPE_RULE_VIOLATION");
+        if (!data.location?.trim()) throw new ActionError("Fixtures in projects REQUIRE a location.", "TYPE_RULE_VIOLATION");
+      }
+    }
+  }
+
+  /**
+   * CRITICAL RUNTIME ASSERTION: Validates product identity and catalog readiness
+   */
+  static async assertValidProduct(data: ProductCatalogInput, context: "SNAPSHOT" | "CATALOG") {
+    if (context === "CATALOG") {
+      const result = CatalogApprovalValidationSchema.safeParse(data);
+      if (!result.success) {
+        throw new ActionError(result.error.errors[0].message, "CATALOG_VALIDATION_ERROR");
+      }
+    } else {
+      const result = ProductCatalogValidationSchema.safeParse(data);
+      if (!result.success) {
+        throw new ActionError(result.error.errors[0].message, "SNAPSHOT_VALIDATION_ERROR");
+      }
+    }
+    
+    // Absolute ban on placeholders
+    const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—"];
+    const values = Object.values(data).filter(v => typeof v === "string");
+    if (values.some(v => placeholders.includes(v.trim().toUpperCase()))) {
+      throw new ActionError("Placeholders like 'N/A' or 'Unknown' are FORBIDDEN.", "PLACEHOLDER_VIOLATION");
+    }
+  }
+
+  /**
+   * CRITICAL RUNTIME ASSERTION: Propagates catalog updates to all linked project snapshots
+   */
+  static async syncCatalogToSchedules(tx: PrismaTransaction, productId: string, userId: string) {
+    const catalog = await tx.productCatalog.findUnique({ 
+      where: { id: productId },
+      include: { vendor: true }
+    });
+    if (!catalog) return;
+
+    // Find all un-locked schedule options using this global item
+    const linkedOptions = await tx.projectScheduleOption.findMany({
+      where: { 
+        product_catalog_id: productId,
+        entry: { version_locked: false }
+      }
+    });
+
+    await Promise.all(linkedOptions.map(option => 
+      tx.projectScheduleOption.update({
+        where: { id: option.id },
+        data: {
+          data_snapshot: {
+            sku: catalog.catalog_sku,
+            name: catalog.catalog_product_name,
+            brand: catalog.vendor.brand_name,
+            category: catalog.catalog_category,
+            color: catalog.catalog_color,
+            finishing: catalog.catalog_finishing,
+            motif: catalog.catalog_motif,
+            image_url: catalog.catalog_image_url
+          }
+        }
+      })
+    ));
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_SYNC_PROPAGATED, "ProductCatalog", productId, userId, {
+      synced_count: linkedOptions.length
     });
   }
 
@@ -53,7 +160,7 @@ export class LibraryService {
   }
 
   /**
-   * Returns one active vendor by id with related materials and contacts.
+   * Returns one active vendor by id with related products and contacts.
    * @param id Vendor id.
    * @param tx Prisma transaction client.
    * @returns Vendor or null when not found/deleted.
@@ -148,7 +255,7 @@ export class LibraryService {
    * @param id Vendor id.
    * @param userId Actor user id for audit.
    * @param tx Prisma transaction client.
-   * @throws {ActionError} VENDOR_HAS_ITEMS when vendor still owns active materials.
+   * @throws {ActionError} VENDOR_HAS_ITEMS when vendor still owns active products.
    * @returns Soft-deleted vendor row.
    */
   static async deleteVendor(id: string, userId: string, tx: PrismaTransaction) {
@@ -176,10 +283,10 @@ export class LibraryService {
   }
 
   /**
-   * Reads material catalog list with optional filters.
+   * Reads product catalog list with optional filters.
    * @param tx Prisma transaction client.
    * @param filters Optional list filters.
-   * @returns Material catalog rows with vendor and physical samples.
+   * @returns Product catalog rows with vendor and physical samples.
    */
   static async getAllProducts(
     tx: PrismaTransaction,
@@ -281,39 +388,26 @@ export class LibraryService {
   }
 
   /**
-   * Creates one material catalog row and writes audit log.
-   * @param data Material input payload.
-   * @param userId Actor user id for audit.
-   * @param tx Prisma transaction client.
-   * @throws {ActionError} when required vendor/category/product type is missing.
-   * @returns Created material with relations.
+   * @returns Created product with relations.
    */
   static async createProduct(data: ProductCatalogInput, userId: string, tx: PrismaTransaction) {
-    let resolvedVendorId = data.vendor_id;
+    const resolvedVendorId = data.vendor_id || await this.resolveVendor(data.vendor_name || data.catalog_brand || "", tx);
+    
+    await this.assertValidProduct(data, "SNAPSHOT");
+    await this.assertTypeRules(data.catalog_type || ProductType.material, {}, "SNAPSHOT");
 
-    // Handle On-the-Go Vendor Creation (Refactored for Anti-Ghosting)
-    if (!resolvedVendorId && data.vendor_name?.trim()) {
-      resolvedVendorId = await this.resolveVendor(data.vendor_name, tx);
-    }
+    if (!resolvedVendorId) throw new ActionError("Brand is REQUIRED for catalog entry.", "BRAND_REQUIRED");
 
-
-    if (!resolvedVendorId) throw new ActionError("Vendor is required.", "VENDOR_REQUIRED");
-    if (!data.catalog_category?.trim()) throw new ActionError("Category is required.", "CATEGORY_REQUIRED");
-    if (!data.catalog_sku?.trim()) throw new ActionError("Product type (SKU) is required.", "PRODUCT_TYPE_REQUIRED");
-
-    // Pillar 2: Resolve catalog_brand from vendor if not provided
-    let catalogBrand = data.catalog_brand;
-    if (!catalogBrand) {
-      const vendor = await tx.vendor.findUnique({ where: { id: resolvedVendorId } });
-      catalogBrand = vendor?.brand_name || "Unknown Brand";
-    }
-
-    // NOTE: Category registration moved to updateProduct (on APPROVE) to prevent ghost categories.
+    // Resolve catalog_brand from vendor - Hard Fail if vendor deleted
+    const vendor = await tx.vendor.findUnique({ where: { id: resolvedVendorId } });
+    if (!vendor || vendor.deleted_at) throw new ActionError("Valid Brand is REQUIRED.", "VENDOR_REQUIRED");
+    const catalogBrand = vendor.brand_name;
 
     const product = await tx.productCatalog.create({
       data: {
         vendor_id: resolvedVendorId,
         catalog_category: data.catalog_category.trim(),
+        catalog_type: data.catalog_type || ProductType.material,
         catalog_sub_category: this.normalizeOptional(data.catalog_sub_category),
         catalog_sku: data.catalog_sku.trim(),
         catalog_brand: catalogBrand,
@@ -324,9 +418,10 @@ export class LibraryService {
         catalog_dimension_l: this.normalizeOptional(data.catalog_dimension_l),
         catalog_dimension_t: this.normalizeOptional(data.catalog_dimension_t),
         catalog_dimension_unit: data.catalog_dimension_unit || "cm",
-        catalog_color: this.normalizeOptional(data.catalog_color),
+        catalog_color: data.catalog_color.trim(),
         catalog_finishing: this.normalizeOptional(data.catalog_finishing),
         catalog_image_url: this.normalizeOptional(data.catalog_image_url),
+        catalog_image_thumbnail_url: this.normalizeOptional(data.catalog_image_thumbnail_url),
         catalog_image_original_url: this.normalizeOptional(data.catalog_image_original_url),
         catalog_reference_url: this.normalizeOptional(data.catalog_reference_url),
         catalog_folder_url: this.normalizeOptional(data.catalog_folder_url),
@@ -336,7 +431,9 @@ export class LibraryService {
           create: data.physical_samples.map(s => ({
             rack_number: s.rack_number,
             box_number: s.box_number,
-            notes: this.normalizeOptional(s.notes)
+            notes: this.normalizeOptional(s.notes),
+            status: s.status || "AVAILABLE",
+            current_borrower_name: s.current_borrower_name
           }))
         } : undefined
       },
@@ -356,17 +453,25 @@ export class LibraryService {
   }
 
   /**
-   * Updates one material and writes audit log.
+   * Updates one product and writes audit log.
    * Registers schedule category only when status becomes APPROVED.
-   * @param id Material id.
-   * @param data Partial material payload.
+   * @param id Product id.
+   * @param data Partial product payload.
    * @param userId Actor user id for audit.
    * @param tx Prisma transaction client.
-   * @returns Updated material with relations.
+   * @returns Updated product with relations.
    */
   static async updateProduct(id: string, data: Partial<ProductCatalogInput>, userId: string, tx: PrismaTransaction) {
+    await this.assertEditable(tx, id);
     if (data.catalog_category !== undefined && !data.catalog_category.trim()) throw new ActionError("Category is required.", "CATEGORY_REQUIRED");
-    if (data.catalog_sku !== undefined && !data.catalog_sku.trim()) throw new ActionError("Product type is required.", "PRODUCT_TYPE_REQUIRED");
+    
+    const existing = await tx.productCatalog.findUnique({ where: { id } });
+    if (!existing) throw new ActionError("Product not found", "NOT_FOUND");
+
+    // STRICT: Type Immutability
+    if (data.catalog_type !== undefined && existing.catalog_type !== data.catalog_type) {
+      throw new ActionError("Product TYPE is immutable after creation.", "IMMUTABILITY_VIOLATION");
+    }
 
     // Unified sample update logic: Delete and replace for simplicity in this MVP
     const sampleOps = data.physical_samples ? {
@@ -374,7 +479,9 @@ export class LibraryService {
       create: data.physical_samples.map(s => ({
         rack_number: s.rack_number,
         box_number: s.box_number,
-        notes: this.normalizeOptional(s.notes)
+        notes: this.normalizeOptional(s.notes),
+        status: s.status || "AVAILABLE",
+        current_borrower_name: s.current_borrower_name
       }))
     } : undefined;
 
@@ -388,14 +495,16 @@ export class LibraryService {
         ...(data.catalog_brand !== undefined ? { catalog_brand: this.normalizeOptional(data.catalog_brand) } : {}),
         ...(data.catalog_product_name !== undefined ? { catalog_product_name: this.normalizeOptional(data.catalog_product_name) } : {}),
         ...(data.catalog_motif !== undefined ? { catalog_motif: this.normalizeOptional(data.catalog_motif) } : {}),
+        ...(data.catalog_type !== undefined ? { catalog_type: data.catalog_type } : {}),
         ...(data.tags !== undefined ? { tags: data.tags } : {}),
         ...(data.catalog_dimension_p !== undefined ? { catalog_dimension_p: this.normalizeOptional(data.catalog_dimension_p) } : {}),
         ...(data.catalog_dimension_l !== undefined ? { catalog_dimension_l: this.normalizeOptional(data.catalog_dimension_l) } : {}),
         ...(data.catalog_dimension_t !== undefined ? { catalog_dimension_t: this.normalizeOptional(data.catalog_dimension_t) } : {}),
         ...(data.catalog_dimension_unit !== undefined ? { catalog_dimension_unit: data.catalog_dimension_unit } : {}),
-        ...(data.catalog_color !== undefined ? { catalog_color: this.normalizeOptional(data.catalog_color) } : {}),
+        ...(data.catalog_color !== undefined ? { catalog_color: data.catalog_color.trim() } : {}),
         ...(data.catalog_finishing !== undefined ? { catalog_finishing: this.normalizeOptional(data.catalog_finishing) } : {}),
         ...(data.catalog_image_url !== undefined ? { catalog_image_url: this.normalizeOptional(data.catalog_image_url) } : {}),
+        ...(data.catalog_image_thumbnail_url !== undefined ? { catalog_image_thumbnail_url: this.normalizeOptional(data.catalog_image_thumbnail_url) } : {}),
         ...(data.catalog_image_original_url !== undefined ? { catalog_image_original_url: this.normalizeOptional(data.catalog_image_original_url) } : {}),
         ...(data.catalog_reference_url !== undefined ? { catalog_reference_url: this.normalizeOptional(data.catalog_reference_url) } : {}),
         ...(data.catalog_folder_url !== undefined ? { catalog_folder_url: this.normalizeOptional(data.catalog_folder_url) } : {}),
@@ -410,13 +519,13 @@ export class LibraryService {
       },
     });
 
-    // Record Inventory Logs for new samples
-    if (data.physical_samples) {
+    // Record Inventory Logs for new samples - ONLY for fixture
+    if (data.physical_samples && updated.catalog_type === "fixture") {
       await Promise.all(updated.physical_samples.map(sample => 
         this.logSampleAction(tx, {
           sample_id: sample.id,
           action: SampleAction.CHECK_IN,
-          notes: `Inventory updated/synced: Rack ${sample.rack_number}, Box ${sample.box_number}`,
+          notes: `Inventory updated: Rack ${sample.rack_number}, Box ${sample.box_number}`,
           userId
         })
       ));
@@ -427,21 +536,61 @@ export class LibraryService {
       status: updated.status
     });
 
-    // CRITICAL (fixed): Category registration ONLY on APPROVE
+    // CRITICAL: Category registration ONLY on APPROVE
     if (data.status === "APPROVED") {
+      await this.assertValidProduct(updated as any, "CATALOG");
+      
       await settingsService.executeUpsertScheduleCategoryConfig(tx, {
-        section: data.section || ScheduleSection.MATERIAL, 
+        section: updated.catalog_type, 
         category: updated.catalog_category,
         userId,
       });
+
+      // SYNC back to ALL un-locked project schedules
+      await this.syncCatalogToSchedules(tx, id, userId);
     }
 
-    // FORCED UPDATE: propagation of library changes to all linked project snapshots
-    // COMPLIANCE: Uses Promise.all inside transaction via ScheduleService.
-    const { ScheduleService } = await import("@/lib/services/schedule-service");
-    await ScheduleService.updateLinkedSnapshots(tx, id, userId);
-
     return updated;
+  }
+
+  /**
+   * Consolidates duplicate brands/vendors into one target vendor.
+   * Pillar 2 Resistance logic: Ensures no broken references in Catalog.
+   */
+  static async mergeVendors(tx: PrismaTransaction, sourceId: string, targetId: string, userId: string) {
+    if (sourceId === targetId) throw new ActionError("Cannot merge vendor into itself.", "MERGE_ERROR");
+
+    const [source, target] = await Promise.all([
+      tx.vendor.findUnique({ where: { id: sourceId }, include: { products: true } }),
+      tx.vendor.findUnique({ where: { id: targetId } })
+    ]);
+
+    if (!source || !target) throw new ActionError("One or both vendors not found.", "NOT_FOUND");
+
+    // Move all products to target vendor
+    await tx.productCatalog.updateMany({
+      where: { vendor_id: sourceId },
+      data: { 
+        vendor_id: targetId,
+        catalog_brand: target.brand_name
+      }
+    });
+
+    // Also update snapshots in all schedules using these products (Bulk sync)
+    const productIds = source.products.map(p => p.id);
+    await Promise.all(productIds.map(pid => this.syncCatalogToSchedules(tx, pid, userId)));
+
+    // Soft delete source vendor
+    await tx.vendor.update({
+      where: { id: sourceId },
+      data: { deleted_at: new Date() }
+    });
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_MERGE_VENDOR, "VENDOR", targetId, userId, {
+      merged_source_id: sourceId,
+      source_brand: source.brand_name,
+      target_brand: target.brand_name
+    });
   }
 
   /**
@@ -479,7 +628,7 @@ export class LibraryService {
     const vendorId = await this.resolveVendor(brand, tx);
 
 
-    // 2. Resolve Material (Deduplication) - Use try-catch to handle race conditions
+    // 2. Resolve Product (Deduplication) - Use try-catch to handle race conditions
     try {
       // First, check if product exists
       const existingProduct = await tx.productCatalog.findFirst({
@@ -565,12 +714,12 @@ export class LibraryService {
   }
 
   /**
-   * Performs a soft-delete on one material catalog item.
+   * Performs a soft-delete on one product catalog item.
    * COMPLIANCE: Adheres to SSOT §7.1 Soft Delete Policy. Force soft-delete is allowed per policy.
-   * @param id Material id.
+   * @param id Product id.
    * @param userId Actor user id for audit.
    * @param tx Prisma transaction client.
-   * @returns Soft-deleted material with vendor info.
+   * @returns Soft-deleted product with vendor info.
    */
   static async deleteProduct(id: string, userId: string, tx: PrismaTransaction) {
     // Soft Delete Implementation - Force Soft Delete allowed per SSOT policy
@@ -598,9 +747,9 @@ export class LibraryService {
   }
 
   /**
-   * Returns all project material requests across projects.
+   * Returns all project product requests across projects.
    * @param tx Prisma transaction client.
-   * @returns Request rows with material, requester, and project.
+   * @returns Request rows with product, requester, and project.
    */
   static async getAllProductRequests(tx: PrismaTransaction) {
     return tx.projectProductRequest.findMany({
@@ -618,10 +767,10 @@ export class LibraryService {
     });
   }
 
-  // --- PROJECT MATERIAL REQUESTS ---
+  // --- PROJECT PRODUCT REQUESTS ---
 
   /**
-   * Returns material requests for one project.
+   * Returns product requests for one project.
    * @param projectId Project id.
    * @param tx Prisma transaction client.
    * @returns Project-scoped request rows.
@@ -644,7 +793,7 @@ export class LibraryService {
   }
 
   /**
-   * Creates a project material request.
+   * Creates a project product request.
    * Supports auto-harvesting to pending library item for custom requests.
    * @param data Request payload.
    * @param userId Actor user id for audit.
@@ -673,7 +822,7 @@ export class LibraryService {
         const newVendor = await tx.vendor.create({
           data: { 
             brand_name: "PROJECT_HARVESTED", 
-            company_name: "Vendor generated from Project Material Requests" 
+            company_name: "Vendor generated from Project Product Requests" 
           }
         });
         vendorId = newVendor.id;

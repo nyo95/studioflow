@@ -1,5 +1,5 @@
 import { ActionError } from "@/lib/error-types";
-import { ProjectScheduleEntry, ProjectScheduleOption, ScheduleSection } from "@/generated/prisma";
+import { ProjectScheduleEntry, ProjectScheduleOption, ProductType } from "@/generated/prisma";
 
 interface ScheduleEntryWithOptions extends ProjectScheduleEntry {
   options: ProjectScheduleOption[];
@@ -14,7 +14,7 @@ interface ProjectMetadata {
 
 export function exportScheduleToCsv(
   entries: ScheduleEntryWithOptions[],
-  section: ScheduleSection,
+  section: ProductType,
   metadata?: ProjectMetadata
 ): string {
   void entries;

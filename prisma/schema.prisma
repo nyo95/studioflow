@@ -205,12 +205,14 @@ model ProductCatalog {
   catalog_dimension_l String?
   catalog_dimension_t String?
   catalog_dimension_unit String?               @default("cm")
-  catalog_color       String?
+  catalog_color       String
   catalog_finishing   String?
   catalog_image_url   String?
+  catalog_image_thumbnail_url String?
   catalog_image_original_url String?
   catalog_reference_url String?
   catalog_folder_url  String?
+  catalog_type        ProductType              @default(material)
   metadata            Json?
   catalog_price       Float?
   created_at          DateTime                 @default(now())
@@ -232,22 +234,28 @@ model PhysicalSample {
   rack_number   String
   box_number    String
   notes         String?
+  status        SampleStatus    @default(AVAILABLE)
+  current_borrower_name String?
   created_at    DateTime        @default(now())
   updated_at    DateTime        @updatedAt
   product       ProductCatalog  @relation(fields: [product_id], references: [id], onDelete: Cascade)
   movements     SampleMovementLog[]
+  requests      ProjectProductRequest[]
 
   @@index([product_id])
 }
 
 model SampleMovementLog {
-  id         String       @id @default(uuid())
-  sample_id  String
-  action     SampleAction
-  notes      String?
-  user_id    String
-  created_at DateTime     @default(now())
-  sample     PhysicalSample @relation(fields: [sample_id], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid())
+  sample_id     String
+  action        SampleAction
+  notes         String?
+  user_id       String
+  taken_by      String?
+  date_out      DateTime?
+  date_return   DateTime?
+  created_at    DateTime     @default(now())
+  sample        PhysicalSample @relation(fields: [sample_id], references: [id], onDelete: Cascade)
 
   @@index([sample_id])
 }
@@ -266,11 +274,13 @@ model ProjectProductRequest {
   is_scheduled         Boolean              @default(true)
   notes                String?
   staff_name_override  String?
+  linked_sample_id     String?
   created_at           DateTime             @default(now())
   updated_at           DateTime             @updatedAt
   product_catalog      ProductCatalog?      @relation(fields: [product_catalog_id], references: [id])
   schedule_entry       ProjectScheduleEntry? @relation(fields: [schedule_entry_id], references: [id], onDelete: SetNull)
   schedule_option      ProjectScheduleOption? @relation(fields: [schedule_option_id], references: [id], onDelete: SetNull)
+  physical_sample      PhysicalSample?      @relation(fields: [linked_sample_id], references: [id])
   project              Project              @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requested_by         User                 @relation(fields: [requested_by_id], references: [id])
 }
@@ -328,7 +338,7 @@ model PrefixDictionary {
   id                String                 @id @default(uuid())
   schedule_category String
   prefix            String
-  section           ScheduleSection        @default(MATERIAL)
+  section           ProductType            @default(material)
   entries           ProjectScheduleEntry[]
 
   @@unique([section, schedule_category])
@@ -338,13 +348,16 @@ model ProjectScheduleEntry {
   id                String                   @id @default(uuid())
   project_id        String
   schedule_category String
-  schedule_code     String
+  schedule_prefix   String
+  schedule_increment Int
   index_number      Int
   schedule_sort_order Int
   schedule_qty     Float?
   schedule_unit    String?
   schedule_location String?
-  section           ScheduleSection          @default(MATERIAL)
+  section           ProductType              @default(material)
+  active_index      Int                      @default(0)
+  version_locked    Boolean                  @default(false)
   prefix_id         String?
   created_at        DateTime                 @default(now())
   updated_at        DateTime                 @updatedAt
@@ -352,7 +365,9 @@ model ProjectScheduleEntry {
   project           Project                  @relation(fields: [project_id], references: [id], onDelete: Cascade)
   options           ProjectScheduleOption[]
   product_requests  ProjectProductRequest[]
-  @@unique([project_id, section, schedule_code])
+
+  @@unique([schedule_category, schedule_increment])
+  @@index([project_id])
 }
 
 model ProjectScheduleOption {
@@ -374,7 +389,7 @@ model ProjectScheduleOption {
 model ScheduleTemplate {
   id                String          @id @default(uuid())
   schedule_category String
-  section           ScheduleSection @default(MATERIAL)
+  section           ProductType     @default(material)
   is_active         Boolean         @default(true)
 
   @@unique([section, schedule_category])
@@ -413,6 +428,7 @@ enum PhaseName {
   DESIGN_3D
   CD
   SUPERVISION
+  COMPLETED
 }
 
 enum ProjectStatus {
@@ -479,9 +495,9 @@ enum ScheduleOptionStatus {
   NOT_USED
 }
 
-enum ScheduleSection {
-  MATERIAL
-  FIXTURE
+enum ProductType {
+  material
+  fixture
 }
 
 enum SampleAction {
@@ -492,4 +508,12 @@ enum SampleAction {
   CHECK_IN
   CHECK_OUT
   AUDITED
+  BORROW
+  RETURN
+}
+
+enum SampleStatus {
+  AVAILABLE
+  BORROWED
+  SENT_TO_CLIENT
 }

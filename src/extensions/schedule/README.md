@@ -1,4 +1,4 @@
-# Material & Fixtures Schedule Extension (Pillar 2)
+# Product Schedule Extension (Pillar 2)
 
 ## Overview
 The Schedule Extension (Pillar 2) is a "Smart Spreadsheet" for managing interior design specifications. It serves as the primary bridge between design intent (Project) and procurement sources (Library).
@@ -16,7 +16,7 @@ Candidate products associated with an Entry. Each Entry can have multiple Option
 - **status**: `DRAFT`, `APPROVED`, or `NOT_USED`.
 
 ### **ScheduleOptionSnapshot (Snapshot)**
-An immutable JSON blob capturing the material specifications. 
+An immutable JSON blob capturing the product specifications. 
 - **Namespaced Fields**: All fields strictly use namespaced prefixes (`catalog_` for library fields, `schedule_` for project context).
 - **Product Identity**: Standard display logic: `[catalog_sku] - [catalog_product_name] ex. [catalog_brand]`.
 - **Match-to Pattern**: `[catalog_sku] - color [match to] [relative_sku]`.
@@ -28,9 +28,9 @@ An immutable JSON blob capturing the material specifications.
 
 StudioFlow follows a strict **Snapshot-First** architecture to ensure data integrity:
 
-1.  **Library as Master**: The `MaterialCatalog` is the master source of truth (SSOT).
-2.  **Project as Snapshot**: Once a material is added to a project, it is frozen in a `data_snapshot`.
-3.  **Decoupling**: Editing a material in the global library does **NOT** retroactively change existing project schedules.
+1.  **Library as Master**: The `ProductCatalog` is the master source of truth (SSOT).
+2.  **Project as Snapshot**: Once a product is added to a project, it is frozen in a `data_snapshot`.
+3.  **Decoupling**: Editing a product in the global library does **NOT** retroactively change existing project schedules.
 4.  **Local by Default**: New items added manually to a project are local to that project.
 5.  **Explicit Promotion**: To move a manual project item into the global library, it must be explicitly "Promoted" (Promote to Library action).
 
@@ -38,8 +38,8 @@ StudioFlow follows a strict **Snapshot-First** architecture to ensure data integ
 
 ## 3. General Workflows
 
-### **Adding Materials**
-- **From Library**: Search and pick from the `MaterialCatalog`. A snapshot is created automatically.
+### **Adding Products**
+- **From Library**: Search and pick from the `ProductCatalog`. A snapshot is created automatically.
 - **Manual Creation**: Input data manually. This creates a local snapshot with `source_kind: "manual"`.
 
 ### **Alternative Options**
@@ -62,7 +62,7 @@ StudioFlow follows a strict **Snapshot-First** architecture to ensure data integ
 
 ### **UI Components**
 - `ProjectScheduleMain.tsx`: Root spreadsheet view with Dnd-Kit integration.
-- `ScheduleEntryRow.tsx`: Individual row component handling options and status.
+- `VisualTable.tsx` & `VisualRow.tsx`: Individual row component handling options and status.
 - `ScheduleSpecEditorModal.tsx`: Direct editor for the `data_snapshot`.
 
 ---

@@ -5,7 +5,7 @@ import { settingsService } from "@/lib/services/settings-service";
 import { assertAdmin } from "@/lib/permissions";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_HOME, REVALIDATE_SETTINGS } from "@/lib/revalidation-tags";
-import { ScheduleSection } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 import { 
   UpdateUISettingsSchema, 
   UpsertScheduleCategorySchema,

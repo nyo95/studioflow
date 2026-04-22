@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-export const GSheetsMaterialRowSchema = z.object({
+export const GSheetsArchitecturalRowSchema = z.object({
   code: z.string().min(1),
-  material_type: z.string().optional().nullable(),
+  product_category: z.string().optional().nullable(),
   ex: z.string().optional().nullable(),
   type: z.string().optional().nullable(),
   initials_type: z.string().optional().nullable(),
@@ -13,7 +13,7 @@ export const GSheetsMaterialRowSchema = z.object({
   schedule_unit: z.string().optional().nullable(),
 });
 
-export const GSheetsFixtureRowSchema = z.object({
+export const GSheetsFFERowSchema = z.object({
   code: z.string().min(1),
   ex: z.string().optional().nullable(),
   type: z.string().optional().nullable(),
@@ -25,12 +25,12 @@ export const GSheetsFixtureRowSchema = z.object({
   schedule_unit: z.string().optional().nullable(),
 });
 
-export type GSheetsMaterialRow = z.infer<typeof GSheetsMaterialRowSchema>;
-export type GSheetsFixtureRow = z.infer<typeof GSheetsFixtureRowSchema>;
+export type GSheetsArchitecturalRow = z.infer<typeof GSheetsArchitecturalRowSchema>;
+export type GSheetsFFERow = z.infer<typeof GSheetsFFERowSchema>;
 
 export interface ScheduleCsvExportRow {
   code: string;
-  material_type?: string | null;
+  product_category?: string | null;
   ex?: string | null;
   type?: string | null;
   initials_type?: string | null;
@@ -44,7 +44,7 @@ export interface ScheduleCsvExportRow {
 export interface ScheduleCsvImportRow {
   code: string;
   category?: string;
-  materialType?: string;
+  productCategory?: string;
   ex?: string;
   type?: string;
   initialsType?: string;

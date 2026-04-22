@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ProductType } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
 import { Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, ChevronLeft, ChevronRight, Package, Plus, MoreHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -24,10 +25,10 @@ interface ScheduleRowProps {
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
   onUpdateQty?: (entryId: string, qty: number) => Promise<void>;
   onAddAlternative?: () => void;
-  section?: "MATERIAL" | "FIXTURE";
+  section?: ProductType;
 }
 
-export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdateQty, onAddAlternative, section = "MATERIAL" }: ScheduleRowProps) {
+export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdateQty, onAddAlternative, section = ProductType.material }: ScheduleRowProps) {
   const {
     attributes,
     listeners,
@@ -152,7 +153,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
     if (e.key === "Escape") { setQtyValue(String(entry.schedule_qty ?? 0)); setEditingQty(false); }
   };
 
-  const isFixture = section === "FIXTURE";
+  const isFixture = section === ProductType.fixture;
 
   return (
     <tr 
@@ -214,7 +215,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
 
           <div className="min-w-0">
             <div className="font-serif text-sm font-semibold text-slate-900 leading-tight truncate max-w-[240px]">
-              {snapshot?.catalog_product_name || "Unspecified Material"}
+              {snapshot?.catalog_product_name || "Unspecified Product"}
             </div>
             <div className="font-sans text-[11px] text-slate-400 mt-0.5 truncate max-w-[240px]">
               {snapshot?.catalog_brand ? (
@@ -382,21 +383,21 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
             showCloseButton={false}
           >
             <DialogTitle className="sr-only">
-              {snapshot.catalog_product_name || "Material image"}
+              {snapshot.catalog_product_name || "Product image"}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Full size image preview of {snapshot.catalog_product_name || "the material"}
+              Full size image preview of {snapshot.catalog_product_name || "the product"}
             </DialogDescription>
             <div className="relative group/lbox">
               <img
                 src={snapshot.catalog_image_url}
-                alt={snapshot.catalog_product_name || "Material image"}
+                alt={snapshot.catalog_product_name || "Product image"}
                 className="max-h-[85vh] max-w-[85vw] w-auto h-auto rounded-2xl shadow-2xl object-contain"
               />
               {/* Caption */}
               <div className="absolute bottom-0 left-0 right-0 px-6 py-4 bg-gradient-to-t from-black/60 to-transparent rounded-b-2xl opacity-0 group-hover/lbox:opacity-100 transition-opacity">
                 <p className="font-serif text-white text-base font-semibold truncate">
-                  {snapshot.catalog_product_name || "Unnamed Material"}
+                  {snapshot.catalog_product_name || "Unnamed Product"}
                 </p>
                 {snapshot.catalog_brand && (
                   <p className="font-sans text-white/70 text-xs mt-0.5">{snapshot.catalog_brand}</p>
@@ -419,7 +420,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
         projectId={entry.project_id}
         scheduleEntryId={entry.id}
         scheduleOptionId={activeOption?.id}
-        productNameFallback={snapshot?.catalog_product_name || "Unspecified Material"}
+        productNameFallback={snapshot?.catalog_product_name || "Unspecified Product"}
         productCatalogId={activeOption?.product_catalog_id || undefined}
       />
     </tr>

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ProjectPriority, PhaseStatus, CDItemStatus, ActivityMode, ScheduleSection } from "@/generated/prisma";
+import { ProjectPriority, PhaseStatus, CDItemStatus, ActivityMode, ProductType } from "@/generated/prisma";
 
 // --- Common ---
 export const IdSchema = z.string().uuid("Invalid ID format");
@@ -170,13 +170,13 @@ export const DeleteByIdSchema = z.object({
 });
 
 export const UpsertScheduleCategorySchema = z.object({
-  section: z.nativeEnum(ScheduleSection),
+  section: z.nativeEnum(ProductType),
   schedule_category: z.string().min(1),
   prefix: z.string().optional(),
 });
 
 export const DeleteScheduleCategorySchema = z.object({
-  section: z.nativeEnum(ScheduleSection),
+  section: z.nativeEnum(ProductType),
   schedule_category: z.string().min(1),
 });
 
@@ -251,27 +251,30 @@ const OptionSourceSchema = z.discriminatedUnion("mode", [
 
 export const AddScheduleEntryInstantSchema = z.object({
   projectId: IdSchema,
-  schedule_category: z.string()
-    .min(1)
-    .refine(v => v.toLowerCase() !== "general", { message: "'General' category is not allowed" }),
-  section: z.nativeEnum(ScheduleSection).optional().default(ScheduleSection.MATERIAL),
+  schedule_category: z.string().min(1),
+  section: z.nativeEnum(ProductType).optional().default(ProductType.material),
+}).refine(v => v.schedule_category.toLowerCase() !== "general", {
+  message: "'General' category is not allowed",
+  path: ["schedule_category"],
 });
 
 export const AddScheduleEntryWithProductSchema = z.object({
   projectId: IdSchema,
   product_catalog_id: IdSchema,
-  section: z.nativeEnum(ScheduleSection).optional().default(ScheduleSection.MATERIAL),
+  section: z.nativeEnum(ProductType).optional().default(ProductType.material),
 });
 
 export const AddScheduleEntrySchema = z
   .object({
     projectId: IdSchema,
-    schedule_category: z.string()
-      .min(1)
-      .refine(v => v.toLowerCase() !== "general", { message: "'General' category is not allowed" }),
-    section: z.nativeEnum(ScheduleSection).optional().default(ScheduleSection.MATERIAL),
+    schedule_category: z.string().min(1),
+    section: z.nativeEnum(ProductType).optional().default(ProductType.material),
   })
-  .and(EntrySourceSchema);
+  .and(EntrySourceSchema)
+  .refine(v => v.schedule_category.toLowerCase() !== "general", {
+    message: "'General' category is not allowed",
+    path: ["schedule_category"],
+  });
 
 export const AddScheduleOptionSchema = z
   .object({
@@ -291,7 +294,7 @@ export const DeleteScheduleEntrySchema = z.object({
 
 export const BulkDeleteScheduleSchema = z.object({
   projectId: IdSchema,
-  section: z.nativeEnum(ScheduleSection),
+  section: z.nativeEnum(ProductType),
   schedule_category: z.string(),
   entryIds: z.array(IdSchema).min(1),
 });
@@ -326,7 +329,7 @@ export const UpdateScheduleEntrySchema = z.object({
 
 export const ReorderScheduleSchema = z.object({
   projectId: IdSchema,
-  section: z.nativeEnum(ScheduleSection),
+  section: z.nativeEnum(ProductType),
   schedule_category: z.string(),
   items: z.array(z.object({
     id: IdSchema,

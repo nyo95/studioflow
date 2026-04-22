@@ -5,6 +5,7 @@ export const ScheduleSnapshotSchema = z.object({
   snapshot_source_origin: z.enum(["web_catalog", "web_manual", "gsheets_import", "sketchup_plugin"]),
   snapshot_source_external_id: z.string().nullable(),
   product_catalog_id: z.string().nullable(),
+  catalog_type: z.enum(["material", "fixture"]),
   schedule_category: z.string(), 
   catalog_sub_category: z.string().nullable().optional(), 
   catalog_product_name: z.string(), 

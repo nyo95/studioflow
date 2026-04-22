@@ -99,7 +99,7 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
       toast.success("Product removed successfullly");
       router.refresh();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete material");
+      toast.error(error instanceof Error ? error.message : "Failed to delete product");
     } finally {
       setDeletingId(null);
     }
@@ -129,7 +129,7 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
           <TableHeader>
             <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 h-14">
               <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400 pl-8 w-[180px]">Rak / Box</TableHead>
-              <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Material Specification</TableHead>
+              <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Product Specification</TableHead>
               <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Brand Provider</TableHead>
               <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Sample History</TableHead>
               <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400 text-right pr-8">Audit Actions</TableHead>

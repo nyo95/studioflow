@@ -1,5 +1,12 @@
 # StudioFlow Development Log (Changelog)
 
+## [1.9.1] - 2026-04-22
+### Fixed
+- **Build Stabilization**: Resolved critical syntax errors in `LibraryService` and `library-actions.ts`.
+- **Type Hardening**: Completed the migration from legacy `ScheduleSection` enum to canonical `ProductType` across 15+ files.
+- **Database Synchronization**: Synchronized drifted database schema using `npx prisma db push` and restored the seeding workflow.
+- **Login Recovery**: Re-seeded the database with admin and staff credentials.
+
 ## [1.9.0] - 2026-04-19
 ### Phase 3: Global Terminology Refactor & API Foundation
 - **Data Migration**: Programmatically renamed legacy keys in JSON columns (`data_snapshot`, `manual_data`) using a direct PG script to ensure data integrity across the version transition.

@@ -101,30 +101,30 @@ function toObject(record: CsvRecord, headers: string[]): Record<string, string> 
   return row;
 }
 
-function isGSheetsHeader(record: CsvRecord, section: "MATERIAL" | "FIXTURE"): boolean {
+function isGSheetsHeader(record: CsvRecord, section: "ARCHITECTURAL" | "FFE"): boolean {
   const headers = record.map(normalizeHeader);
   if (headers[0] !== "code") return false;
 
-  const required = section === "MATERIAL"
-    ? ["material type", "ex", "type"]
+  const required = section === "ARCHITECTURAL"
+    ? ["product category", "ex", "type"]
     : ["ex", "type"];
 
   return required.every((header) => headers.includes(header));
 }
 
-function parseGSheetsRow(row: Record<string, string>, section: "MATERIAL" | "FIXTURE"): ScheduleCsvImportRow | null {
+function parseGSheetsRow(row: Record<string, string>, section: "ARCHITECTURAL" | "FFE"): ScheduleCsvImportRow | null {
   const code = row.code;
   if (!code) return null;
 
   const contactInfo = parseContactString(row.contact);
-  const materialType = section === "MATERIAL"
-    ? row["material type"] || row.material_type || undefined
+  const productCategory = section === "ARCHITECTURAL"
+    ? row["product category"] || row.product_category || undefined
     : undefined;
 
   return {
     code,
-    category: materialType,
-    materialType,
+    category: productCategory,
+    productCategory,
     ex: row.ex || undefined,
     type: row.type || undefined,
     initialsType: row["initials type"] || row.initials_type || undefined,
@@ -139,9 +139,9 @@ function parseGSheetsRow(row: Record<string, string>, section: "MATERIAL" | "FIX
   };
 }
 
-export function parseGSheetsMaterialCsv(
+export function parseGSheetsProductCsv(
   csvContent: string,
-  section: "MATERIAL" | "FIXTURE"
+  section: "ARCHITECTURAL" | "FFE"
 ): ScheduleCsvImportRow[] {
   const records = parseCsvRecords(csvContent);
   const headerIndex = records.findIndex((record) => isGSheetsHeader(record, section));

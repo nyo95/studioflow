@@ -191,7 +191,7 @@ export function ScheduleSpecEditorModal({
               </div>
               <div>
                 <DialogTitle className="font-lora text-xl font-medium text-slate-900 leading-none">
-                  {isEditMode ? "Edit Specification" : "Specification Details"}
+                  {isEditMode ? "Edit Snapshot Details" : "Product Specification"}
                 </DialogTitle>
                 <DialogDescription className="text-xs font-inter text-slate-400 font-medium tracking-tight">
                   {isEditMode ? "Changes are local to this project" : "Click to view full details"}
@@ -228,13 +228,12 @@ export function ScheduleSpecEditorModal({
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <Badge className="bg-slate-900 text-white text-[9px] mb-2">{form.catalog_sku || "N/A"}</Badge>
                   <h3 className="font-lora text-xl font-bold text-slate-900 leading-tight mb-1">
-                    {form.catalog_product_name || "Untitled Specification"}
+                    {form.catalog_product_name}
                   </h3>
                   <div className="flex items-center gap-2 text-sm text-slate-500 mb-3">
                     <Building2 className="h-3.5 w-3.5" />
-                    <span className="font-medium">{form.catalog_brand || "No Brand"}</span>
+                    <span className="font-medium">{form.catalog_brand}</span>
                   </div>
                   {form.catalog_reference_url && (
                     <a 
@@ -257,7 +256,7 @@ export function ScheduleSpecEditorModal({
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color</span>
                   </div>
                   <span className="font-lora text-lg font-medium text-slate-900">
-                    {form.catalog_color || "—"}
+                    {form.catalog_color}
                   </span>
                 </div>
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
@@ -266,7 +265,7 @@ export function ScheduleSpecEditorModal({
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pattern</span>
                   </div>
                   <span className="font-lora text-lg font-medium text-slate-900">
-                    {form.catalog_motif || "—"}
+                    {form.catalog_motif}
                   </span>
                 </div>
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
@@ -275,7 +274,7 @@ export function ScheduleSpecEditorModal({
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Finishing</span>
                   </div>
                   <span className="font-lora text-lg font-medium text-slate-900">
-                    {form.catalog_finishing || "—"}
+                    {form.catalog_finishing}
                   </span>
                 </div>
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
@@ -284,7 +283,7 @@ export function ScheduleSpecEditorModal({
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dimensions</span>
                   </div>
                   <span className="font-lora text-lg font-medium text-slate-900">
-                    {form.catalog_dimensions || "—"}
+                    {form.catalog_dimensions}
                   </span>
                 </div>
               </div>
@@ -329,7 +328,7 @@ export function ScheduleSpecEditorModal({
                   </div>
                   <div className="flex-1 space-y-2 pt-1">
                     <p className="font-sans text-[10px] text-slate-400 leading-relaxed">
-                      Upload a project-specific image for this material entry.
+                      Upload a project-specific image for this product entry.
                     </p>
                   </div>
                 </div>
@@ -506,7 +505,7 @@ export function ScheduleSpecEditorModal({
                   ) : (
                     <>
                       <Save className="h-3.5 w-3.5" />
-                      Save
+                      Save Product
                     </>
                   )}
                 </Button>

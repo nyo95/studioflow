@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { unwrapActionResult } from "@/lib/result";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScheduleSection } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 import { 
   getProjectScheduleAction, 
   importScheduleAction,
@@ -59,7 +59,7 @@ export function ProjectScheduleMain({
 }: ProjectScheduleMainProps) {
   const [sheet, setSheet] = React.useState<ProjectScheduleSheetPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [activeSection, setActiveSection] = React.useState<ScheduleSection>(ScheduleSection.MATERIAL);
+  const [activeSection, setActiveSection] = React.useState<ProductType>(ProductType.material);
   const [viewMode, setViewMode] = React.useState<"board" | "table">("table");
   const [importing, setImporting] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
@@ -73,7 +73,7 @@ export function ProjectScheduleMain({
     isOpen: boolean; 
     entryId?: string;
     category?: string;
-    section?: ScheduleSection;
+    section?: ProductType;
   }>({ 
     isOpen: false 
   });
@@ -84,7 +84,7 @@ export function ProjectScheduleMain({
     initialSnapshot: import("../types").ScheduleOptionSnapshot;
   } | null>(null);
 
-  const fetchSchedule = React.useCallback(async (section: ScheduleSection) => {
+  const fetchSchedule = React.useCallback(async (section: ProductType) => {
     setLoading(true);
     try {
       const result = unwrapActionResult(await getProjectScheduleAction({
@@ -400,8 +400,8 @@ export function ProjectScheduleMain({
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <PageHeader
         eyebrow="Specifications"
-        title="Product & Fixtures Schedule"
-        description="Detailed procurement and technical schedule."
+        title="Unified Product Schedule"
+        description="Detailed procurement and technical schedule for all architectural and FF&E items."
         titleClassName="font-lora text-4xl normal-case tracking-tight text-slate-900"
         descriptionClassName="mt-1 font-inter text-sm text-slate-500 max-w-2xl"
         className="pb-2"
@@ -471,23 +471,23 @@ export function ProjectScheduleMain({
       />
 
       <Tabs
-        defaultValue={ScheduleSection.MATERIAL}
+        defaultValue={ProductType.material}
         value={activeSection}
-        onValueChange={(value) => setActiveSection(value as ScheduleSection)}
+        onValueChange={(value) => setActiveSection(value as ProductType)}
         className="w-full"
       >
         <TabsList className="h-12 w-full max-w-md rounded-xl border border-slate-200/60 bg-slate-100/50 p-1">
           <TabsTrigger
-            value={ScheduleSection.MATERIAL}
+            value={ProductType.material}
             className="flex-1 rounded-lg py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
           >
-            Product Schedule
+            Architectural
           </TabsTrigger>
           <TabsTrigger
-            value={ScheduleSection.FIXTURE}
+            value={ProductType.fixture}
             className="flex-1 rounded-lg py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
           >
-            Fixtures Schedule
+            FF&E / Equipment
           </TabsTrigger>
         </TabsList>
 

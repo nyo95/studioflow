@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { ScheduleSection } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 
 interface ProjectScheduleContextType {
   projectId: string;
   category: string;
-  section: ScheduleSection;
+  section: ProductType;
   userRole?: string;
   onSuccess?: () => void;
 }

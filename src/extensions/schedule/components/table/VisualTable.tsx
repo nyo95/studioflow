@@ -4,7 +4,7 @@ import React from "react";
 import { ChevronDown, ChevronRight, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ProjectScheduleSheetPayload } from "../../types";
-import type { ScheduleSection } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 import { 
   SortableContext, 
   verticalListSortingStrategy 
@@ -13,7 +13,7 @@ import { VisualRow } from "./VisualRow";
 
 interface VisualTableProps {
   sheet: ProjectScheduleSheetPayload;
-  section?: ScheduleSection;
+  section?: ProductType;
   onEditEntry?: (entry: any) => void;
   onDeleteEntry?: (id: string) => void;
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
@@ -34,7 +34,7 @@ export function VisualTable({
   selectedIds = new Set(),
   onRowClick
 }: VisualTableProps) {
-  const isFixture = section === "FIXTURE";
+  const isFixture = section === ProductType.fixture;
   const [collapsedCategories, setCollapsedCategories] = React.useState<Set<string>>(new Set());
 
   const toggleCategory = (category: string) => {
@@ -113,7 +113,7 @@ export function VisualTable({
                           <VisualRow
                             key={entry.id}
                             entry={entry}
-                            section={isFixture ? "FIXTURE" : "MATERIAL"}
+                            section={isFixture ? ProductType.fixture : ProductType.material}
                             onEdit={onEditEntry}
                             onDelete={onDeleteEntry}
                             onUpdateLocation={onUpdateLocation}
@@ -149,7 +149,7 @@ export function VisualTable({
                     <div className="space-y-1">
                       <h4 className="font-lora text-xl font-medium text-slate-900">No specifications yet</h4>
                       <p className="font-inter text-xs text-slate-400 leading-relaxed">
-                        Start building your project schedule by adding materials or importing from CSV.
+                        Start building your project schedule by adding products or importing from CSV.
                       </p>
                     </div>
                   </div>

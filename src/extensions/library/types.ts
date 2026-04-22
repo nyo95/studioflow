@@ -1,4 +1,4 @@
-import { Prisma, Vendor, VendorContact, LibraryItemStatus, ScheduleSection, PromotionRequest } from "@/generated/prisma";
+import { Prisma, Vendor, VendorContact, LibraryItemStatus, ProductType, PromotionRequest } from "@/generated/prisma";
 import { z } from "zod";
 
 
@@ -49,13 +49,15 @@ export type PhysicalSampleInput = {
   rack_number: string;
   box_number: string;
   notes?: string;
+  status?: "AVAILABLE" | "BORROWED" | "SENT_TO_CLIENT";
+  current_borrower_name?: string;
 };
 
 export type ProductCatalogInput = {
   vendor_id?: string;
   vendor_name?: string;
   catalog_category: string;
-  section?: ScheduleSection; // Added to support MATERIAL vs FIXTURE sections
+  catalog_type?: ProductType; // material or fixture
   catalog_sub_category?: string;
   catalog_sku: string;
   catalog_brand?: string;
@@ -66,9 +68,10 @@ export type ProductCatalogInput = {
   catalog_dimension_l?: string;
   catalog_dimension_t?: string;
   catalog_dimension_unit?: string;
-  catalog_color?: string;
+  catalog_color: string; // REQUIRED as per Extension_rule.md
   catalog_finishing?: string;
   catalog_image_url?: string;
+  catalog_image_thumbnail_url?: string;
   catalog_image_original_url?: string;
   catalog_reference_url?: string;
   catalog_folder_url?: string;
@@ -91,9 +94,57 @@ export type ProjectProductRequestInput = {
   area_location?: string;
   is_scheduled?: boolean;
   notes?: string;
+  linked_sample_id?: string;
 };
 
 export const ProductMetadataSchema = z.record(z.string(), z.unknown());
 export const LibraryItemStatusSchema = z.nativeEnum(LibraryItemStatus);
+
+/**
+ * Strict validation for Product Catalog according to Extension_rule.md
+ */
+export const ProductCatalogValidationSchema = z.object({
+  catalog_category: z.string().min(1, "Category is required"),
+  catalog_color: z.string().min(1, "Color is required"),
+  catalog_sku: z.string().optional(),
+  catalog_product_name: z.string().optional(),
+  catalog_image_url: z.string().optional(), // Snapshot level optional
+  catalog_type: z.nativeEnum(ProductType),
+  vendor_id: z.string().optional(),
+  vendor_name: z.string().optional(),
+}).refine(data => data.catalog_sku || data.catalog_product_name, {
+  message: "At least SKU or Product Name must exist",
+  path: ["catalog_sku"]
+});
+
+/**
+ * Hyper-Strict validation for Catalog Approval (Source of Truth)
+ */
+export const CatalogApprovalValidationSchema = ProductCatalogValidationSchema.extend({
+  catalog_image_url: z.string().min(1, "Original Image is REQUIRED for catalog"),
+  vendor_id: z.string().min(1, "Brand is REQUIRED for catalog"),
+});
+
+/**
+ * Type-specific assertions for material vs fixture
+ */
+export const ProductTypeAssertionSchema = z.object({
+  catalog_type: z.nativeEnum(ProductType),
+  schedule_qty: z.number().optional(),
+  schedule_location: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.catalog_type === "material") {
+    if (data.schedule_qty !== undefined || data.schedule_location !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Materials FORBID qty and location",
+        path: ["schedule_qty"]
+      });
+    }
+  } else if (data.catalog_type === "fixture") {
+    // Note: These are required only in SNAPSHOT context
+    // This schema will be used contextually by the service layer
+  }
+});
 
 export type PromotionRequestWithDetails = PromotionRequest;

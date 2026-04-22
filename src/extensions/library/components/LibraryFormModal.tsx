@@ -21,7 +21,7 @@ import { createVendorAction, updateVendorAction, createProductAction, updateProd
 import { TagInput } from "@/components/ui/tag-input";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { LibraryVendor, ProductCatalogWithRelations, LibraryVendorInput, ProductCatalogInput } from "../types";
-import { LibraryItemStatus } from "@/generated/prisma";
+import { LibraryItemStatus, ProductType } from "@/generated/prisma";
 import { toast } from "sonner";
 import { Loader2, Image as ImageIcon, Link as LinkIcon, Info, Warehouse, Users, Crop, Palette, Layers, ChevronDown, ChevronUp } from "lucide-react";
 import { unwrapActionResult } from "@/lib/result";
@@ -62,7 +62,7 @@ export function LibraryFormModal({
   vendors = [],
   categories = [],
   productCategories = [],
-  fixtureCategories = [],
+  ffeCategories = [],
   subCategories = [],
   finishings = [],
   onSuccess,
@@ -81,9 +81,9 @@ export function LibraryFormModal({
     contacts: [{ contact_person: "", contact_role: "Sales" }],
   });
 
-  // Section for grouped category picker (MATERIAL or FIXTURE)
-  // Must align with Prisma `ScheduleSection` enum.
-  const [productSection, setProductSection] = React.useState<"MATERIAL" | "FIXTURE">("MATERIAL");
+  // Section for grouped category picker (ARCHITECTURAL or FFE)
+  // Must align with Prisma `ProductType` enum.
+  const [productSection, setProductSection] = React.useState<ProductType>(ProductType.material);
 
   // Product Form State (Catalog + Single Physical Sample for ease of use)
   const [productData, setProductData] = React.useState<ProductCatalogInput>({
@@ -204,7 +204,7 @@ export function LibraryFormModal({
         status: "APPROVED",
         physical_samples: [{ rack_number: "", box_number: "", notes: "" }]
       });
-      setProductSection("MATERIAL");
+      setProductSection(ProductType.material);
       setShowAdvanced(false);
     }
   }, [isOpen, initialData, type, vendors]);
@@ -524,22 +524,22 @@ export function LibraryFormModal({
                           groups={[
                             ...(productCategories.length > 0 ? [{
                               label: "Product",
-                              options: productCategories.map(cat => ({ id: `MATERIAL:${cat}`, name: cat }))
+                              options: productCategories.map(cat => ({ id: `${ProductType.material}:${cat}`, name: cat }))
                             }] : []),
-                            ...(fixtureCategories.length > 0 ? [{
-                              label: "Fixture",
-                              options: fixtureCategories.map(cat => ({ id: `FIXTURE:${cat}`, name: cat }))
+                            ...(ffeCategories.length > 0 ? [{
+                              label: "FF&E",
+                              options: ffeCategories.map(cat => ({ id: `${ProductType.fixture}:${cat}`, name: cat }))
                             }] : []),
                             // Fallback: if no grouped data yet, show categories flat
-                            ...(productCategories.length === 0 && fixtureCategories.length === 0 ? [{
+                            ...(productCategories.length === 0 && ffeCategories.length === 0 ? [{
                               label: "Product",
-                              options: categories.map(cat => ({ id: `MATERIAL:${cat}`, name: cat }))
+                              options: categories.map(cat => ({ id: `${ProductType.material}:${cat}`, name: cat }))
                             }] : []),
                           ]}
                           value={productData.catalog_category ? `${productSection}:${productData.catalog_category}` : undefined}
                           onSelect={(id, name) => {
                             const parts = id.split(":");
-                            const section = (parts[0] || "MATERIAL") as "MATERIAL" | "FIXTURE";
+                            const section = (parts[0] || ProductType.material) as ProductType;
                             const cat = parts.slice(1).join(":") || name;
                             setProductSection(section);
                             setProductData({ ...productData, catalog_category: cat });

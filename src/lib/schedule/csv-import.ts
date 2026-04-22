@@ -1,4 +1,4 @@
-import { Prisma, ScheduleSection } from "@/generated/prisma";
+import { Prisma, ProductType } from "@/generated/prisma";
 import { ActionError } from "@/lib/error-types";
 import { TxClient } from "@/lib/permissions";
 import { buildScheduleSnapshot, ScheduleService, SourceOrigin } from "@/lib/services/schedule-service";
@@ -6,7 +6,7 @@ import { ScheduleCsvImportRow } from "./csv-types";
 
 export interface ImportScheduleOptions {
   projectId: string;
-  section: ScheduleSection;
+  section: ProductType;
   rows: ScheduleCsvImportRow[];
   sourceOrigin?: SourceOrigin;
 }
@@ -14,7 +14,7 @@ export interface ImportScheduleOptions {
 async function resolveImportCategory(
   tx: TxClient,
   row: ScheduleCsvImportRow,
-  section: ScheduleSection
+  section: ProductType
 ): Promise<string> {
   const explicitCategory = row.category?.trim() || row.materialType?.trim();
   if (explicitCategory) {
@@ -242,7 +242,7 @@ export async function importScheduleFromCsv(
 export async function importFromSketchUp(
   tx: TxClient,
   projectId: string,
-  section: ScheduleSection,
+  section: ProductType,
   rows: ScheduleCsvImportRow[]
 ): Promise<{ created: number; updated: number }> {
   void tx;

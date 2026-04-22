@@ -17,7 +17,7 @@ import {
   LibraryItemStatusSchema,
   PromotionRequestWithDetails
 } from "../types";
-import { ProductRequestStatus, LibraryItemStatus, SampleAction } from "@/generated/prisma";
+import { ProductRequestStatus, LibraryItemStatus, SampleAction, ProductType } from "@/generated/prisma";
 import { REVALIDATE_LIBRARY } from "@/lib/revalidation-tags";
 
 interface PromotionRequestWithRelations {
@@ -94,7 +94,7 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
   }
 );
 
-export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, { success: boolean; materialsUpdated: number }>(
+export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, { success: boolean; productsUpdated: number }>(
   async ({ input, ctx, tx }) => {
     assertAdmin(ctx.role);
 
@@ -111,7 +111,7 @@ export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetV
       throw new Error("One or both vendors not found");
     }
 
-    const materialsUpdated = await tx.productCatalog.updateMany({
+    const productsUpdated = await tx.productCatalog.updateMany({
       where: { vendor_id: input.sourceVendorId },
       data: { vendor_id: input.targetVendorId }
     });
@@ -133,11 +133,11 @@ export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetV
     });
 
     invalidateCache({ scope: REVALIDATE_LIBRARY });
-    return { success: true, materialsUpdated: materialsUpdated.count };
+    return { success: true, productsUpdated: productsUpdated.count };
   }
 );
 
-// --- MATERIAL CATALOG ACTIONS ---
+// --- PRODUCT CATALOG ACTIONS ---
 
 export const getProductsAction = createAction<
   any,
@@ -229,7 +229,7 @@ export const getLibraryCategoriesAction = createAction<void, string[]>(async ({ 
  */
 export const getGroupedCategoriesAction = createAction<
   void,
-  { material: string[]; fixture: string[] }
+  { architectural: string[]; ffe: string[] }
 >(async ({ tx }) => {
   const rows = await tx.prefixDictionary.findMany({
     select: { schedule_category: true, section: true },
@@ -237,15 +237,15 @@ export const getGroupedCategoriesAction = createAction<
     orderBy: { schedule_category: "asc" },
   });
 
-  const material: string[] = [];
-  const fixture: string[] = [];
+  const architectural: string[] = [];
+  const ffe: string[] = [];
 
   for (const r of rows) {
-    if (r.section === "FIXTURE") fixture.push(r.schedule_category.toUpperCase());
-    else material.push(r.schedule_category.toUpperCase());
+    if (r.section === ProductType.fixture) ffe.push(r.schedule_category.toUpperCase());
+    else architectural.push(r.schedule_category.toUpperCase());
   }
 
-  return { material, fixture };
+  return { architectural, ffe };
 });
 
 
@@ -254,7 +254,7 @@ export const getMyRoleAction = createAction<void, string>(async ({ ctx }) => {
   return ctx.role;
 });
 
-// --- PROJECT MATERIAL REQUEST ACTIONS ---
+// --- PROJECT PRODUCT REQUEST ACTIONS ---
 
 export const getAllProductRequestsAction = createAction<void, ProjectProductRequestWithDetails[]>(
   async ({ tx }) => {

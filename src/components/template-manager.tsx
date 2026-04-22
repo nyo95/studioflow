@@ -29,7 +29,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Role, ScheduleSection } from "@/generated/prisma";
+import { Role, ProductType } from "@/generated/prisma";
 import { unwrapActionResult } from "@/lib/result";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 
@@ -47,7 +47,7 @@ interface ChecklistTemplate {
 interface ScheduleTemplateConfig {
   id: string;
   schedule_category: string;
-  section: ScheduleSection;
+  section: ProductType;
   is_active: boolean;
 }
 
@@ -55,7 +55,7 @@ interface SchedulePrefixConfig {
   id: string;
   schedule_category: string;
   prefix: string;
-  section: ScheduleSection;
+  section: ProductType;
 }
 
 function isGlobalChecklistTemplate(phaseEnum: string | null) {
@@ -84,25 +84,25 @@ export function TemplateManager({
   void userRole;
   const [loading, setLoading] = useState<string | null>(null);
   const [newChecklistLabels, setNewChecklistLabels] = useState<Record<string, string>>({});
-  const [newSchedulerCategory, setNewSchedulerCategory] = useState<Record<ScheduleSection, string>>({
-    [ScheduleSection.MATERIAL]: "",
-    [ScheduleSection.FIXTURE]: "",
+  const [newSchedulerCategory, setNewSchedulerCategory] = useState<Record<ProductType, string>>({
+    [ProductType.material]: "",
+    [ProductType.fixture]: "",
   });
-  const [newSchedulerPrefix, setNewSchedulerPrefix] = useState<Record<ScheduleSection, string>>({
-    [ScheduleSection.MATERIAL]: "",
-    [ScheduleSection.FIXTURE]: "",
+  const [newSchedulerPrefix, setNewSchedulerPrefix] = useState<Record<ProductType, string>>({
+    [ProductType.material]: "",
+    [ProductType.fixture]: "",
   });
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
-  const [activeSection, setActiveSection] = useState<ScheduleSection>(ScheduleSection.MATERIAL);
+  const [activeSection, setActiveSection] = useState<ProductType>(ProductType.material);
   const [editingCategory, setEditingCategory] = useState<string>("");
   const [editingPrefix, setEditingPrefix] = useState<string>("");
   const [durations, setDurations] = useState<Record<string, number>>(
     Object.fromEntries(timelineTemplates.map((t) => [t.phase_enum, t.duration_days]))
   );
   const router = useRouter();
-  const schedulerSections = [ScheduleSection.MATERIAL, ScheduleSection.FIXTURE] as const;
+  const schedulerSections = [ProductType.material, ProductType.fixture] as const;
 
   useEffect(() => {
     const fetchCats = async () => {
@@ -159,7 +159,7 @@ export function TemplateManager({
     }
   };
 
-  const handleSaveSchedulerConfig = async (section: ScheduleSection, cat?: string, pref?: string) => {
+  const handleSaveSchedulerConfig = async (section: ProductType, cat?: string, pref?: string) => {
     const category = (cat || newSchedulerCategory[section])?.trim();
     if (!category) return;
 
@@ -183,7 +183,7 @@ export function TemplateManager({
     }
   };
 
-  const handleOpenModal = (section: ScheduleSection, mode: "add" | "edit", config?: { category: string; prefix?: string }) => {
+  const handleOpenModal = (section: ProductType, mode: "add" | "edit", config?: { category: string; prefix?: string }) => {
     setActiveSection(section);
     setModalMode(mode);
     setEditingCategory(config?.category || "");
@@ -191,7 +191,7 @@ export function TemplateManager({
     setIsModalOpen(true);
   };
 
-  const handleDeleteSchedulerConfig = async (section: ScheduleSection, category: string) => {
+  const handleDeleteSchedulerConfig = async (section: ProductType, category: string) => {
     setLoading(`scheduler-delete-${section}-${category}`);
     try {
       unwrapActionResult(await deleteScheduleCategoryConfig({ section, schedule_category: category }));
@@ -203,7 +203,7 @@ export function TemplateManager({
     }
   };
 
-  const getSchedulerConfigs = (section: ScheduleSection) => {
+  const getSchedulerConfigs = (section: ProductType) => {
     const templates = scheduleTemplates.filter((item) => item.section === section);
     const prefixes = schedulePrefixes.filter((item) => item.section === section);
     const categoryMap = new Map<string, { category: string; prefix?: string; active: boolean }>();
@@ -468,7 +468,7 @@ export function TemplateManager({
             <div className="mt-8 grid gap-6 xl:grid-cols-2">
               {schedulerSections.map((section) => {
                 const configs = getSchedulerConfigs(section);
-                const sectionLabel = section === ScheduleSection.MATERIAL ? "Product" : "Fixture";
+                const sectionLabel = section === ProductType.material ? "Product" : "FF&E";
 
                 return (
                   <div key={section} className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/30">
@@ -553,7 +553,7 @@ export function TemplateManager({
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle className="font-serif text-xl">
-                  {modalMode === "add" ? `Add ${activeSection === ScheduleSection.MATERIAL ? "Product" : "Fixture"} Category` : "Edit Prefix"}
+                  {modalMode === "add" ? `Add ${activeSection === ProductType.material ? "Product" : "FF&E"} Category` : "Edit Prefix"}
                 </DialogTitle>
               </DialogHeader>
               <div className="grid gap-6 py-4">

@@ -2,14 +2,14 @@
 
 import * as React from "react";
 import { CheckCircle2, Package, Clock, XCircle, Plus, Sparkles } from "lucide-react";
-import { ProjectScheduleOptionWithMaterial, ScheduleOptionSnapshot } from "../types";
+import { ProjectScheduleOptionWithProduct, ScheduleOptionSnapshot } from "../types";
 import { approveScheduleOptionAction } from "@/actions/schedule-actions";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 
 interface ScheduleOptionCardProps {
-  option: ProjectScheduleOptionWithMaterial;
+  option: ProjectScheduleOptionWithProduct;
   entryId: string;
   onRefresh: () => void;
 }
@@ -120,9 +120,9 @@ export function ScheduleOptionCard({ option, entryId, onRefresh }: ScheduleOptio
       ) : null}
       
       <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-white/95 to-transparent flex justify-center opacity-0 group-hover/opt:opacity-100 transition-opacity">
-<span className="text-[7px] font-black uppercase text-slate-500 line-clamp-1 truncate w-full text-center px-1">
-            {snapshot?.catalog_product_name || snapshot?.specs?.catalog_motif || "Empty Varian"}
-          </span>
+        <span className="text-[7px] font-black uppercase text-slate-500 line-clamp-1 truncate w-full text-center px-1">
+          {snapshot?.catalog_product_name || snapshot?.specs?.catalog_motif}
+        </span>
       </div>
 
       <ImageLightbox 

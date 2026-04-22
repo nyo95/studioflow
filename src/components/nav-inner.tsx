@@ -267,7 +267,7 @@ export function NavInner({
                   title="Product & Fixtures"
                 >
                   <ShoppingBag className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
-                  {collapsed ? null : "Product & Fixtures"}
+                  {collapsed ? null : "Product Schedule"}
                 </Link>
               </li>
             </ul>

@@ -29,7 +29,7 @@ interface LibraryTabsProps {
   onPageChange: (page: number) => void;
   categories: string[];
   productCategories?: string[];
-  fixtureCategories?: string[];
+  ffeCategories?: string[];
   subCategories?: string[];
   finishings?: string[];
   searchQuery: string;
@@ -55,7 +55,7 @@ export function LibraryTabs({
   onPageChange,
   categories,
   productCategories = [],
-  fixtureCategories = [],
+  ffeCategories = [],
   subCategories = [],
   finishings = [],
   searchQuery,
@@ -292,6 +292,8 @@ export function LibraryTabs({
         initialData={selectedData}
         vendors={vendors}
         categories={categories}
+        productCategories={productCategories}
+        ffeCategories={ffeCategories}
         onSuccess={handleSuccess}
       />
     </Tabs>

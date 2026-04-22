@@ -46,21 +46,21 @@ import type {
 } from "../../library/types";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
-import { ScheduleSection } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 import { useProjectScheduleContext } from "../context/ProjectScheduleContext";
 
 type SchedulePickerPayload =
   | {
       projectId: string;
       category: string;
-      section: ScheduleSection;
+      section: ProductType;
       mode: "catalog";
       catalogItemId: string;
     }
   | {
       projectId: string;
       category: string;
-      section: ScheduleSection;
+      section: ProductType;
       mode: "create_catalog";
       catalogCreateData: {
         catalog_sku: string;
@@ -77,7 +77,7 @@ type SchedulePickerPayload =
   | {
       projectId: string;
       category: string;
-      section: ScheduleSection;
+      section: ProductType;
       mode: "reserve";
     };
 
@@ -98,7 +98,7 @@ export function ScheduleProductPickerModal({
   const [vendors, setVendors] = React.useState<LibraryVendor[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [selectedMaterialId, setSelectedMaterialId] = React.useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = React.useState<string | null>(null);
   
   // Custom Creation State
   const [createCatalogName, setCreateCatalogName] = React.useState<string | null>(null);
@@ -114,7 +114,7 @@ export function ScheduleProductPickerModal({
     }
   }, []);
 
-  const fetchMaterials = React.useCallback(async () => {
+  const fetchProducts = React.useCallback(async () => {
     setIsSearching(true);
     try {
       const res = unwrapActionResult<{ items: ProductCatalogWithRelations[]; total: number }>(await getProductsAction({ search: searchQuery }));
@@ -129,9 +129,9 @@ export function ScheduleProductPickerModal({
   React.useEffect(() => {
     if (isOpen) {
       fetchVendors();
-      fetchMaterials();
+      fetchProducts();
     }
-  }, [isOpen, fetchMaterials, fetchVendors]);
+  }, [isOpen, fetchProducts, fetchVendors]);
 
   // Load catalog options
   React.useEffect(() => {
@@ -184,7 +184,7 @@ export function ScheduleProductPickerModal({
           category,
           section,
           mode: "catalog",
-          catalogItemId: selectedMaterialId as string,
+          catalogItemId: selectedProductId as string,
         };
       }
 
@@ -210,7 +210,7 @@ export function ScheduleProductPickerModal({
       // Reset form
       setCreateBrand("");
       setCreateReferenceUrl("");
-      setSelectedMaterialId(null);
+      setSelectedProductId(null);
       setCreateCatalogName(null);
     } catch (error: unknown) {
       toast.error(
@@ -228,13 +228,13 @@ export function ScheduleProductPickerModal({
         className="sm:max-w-[700px] p-0 overflow-hidden border-none rounded-[2rem] shadow-2xl bg-white focus-visible:outline-none"
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>Add Material to Schedule</DialogTitle>
+          <DialogTitle>Add Product to Schedule</DialogTitle>
         </DialogHeader>
         <GradualInputForm
           section={section}
           category={category}
           isSearching={isSearching}
-          materials={products}
+          products={products}
           onSearch={setSearchQuery}
           onCancel={() => onOpenChange(false)}
           onConfirm={async (data) => {

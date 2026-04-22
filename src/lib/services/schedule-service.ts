@@ -1,4 +1,4 @@
-import { Prisma, ProjectScheduleEntry, ProjectScheduleOption, ScheduleSection } from "@/generated/prisma";
+import { Prisma, ProjectScheduleEntry, ProjectScheduleOption, ProductType } from "@/generated/prisma";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { insertAuditLog } from "@/actions/_shared";
@@ -110,6 +110,7 @@ export async function buildScheduleSnapshot(
       catalog_contact_phone: defaultContact?.phone_number ?? null,
       catalog_contact_email: defaultContact?.email ?? null,
       catalog_has_sample: item.physical_samples?.length ? true : false,
+      catalog_type: item.catalog_type,
       specs: {
         catalog_sku: item.catalog_sku,
         catalog_motif: item.catalog_motif,
@@ -201,6 +202,7 @@ async function resolveCatalogItemForMode(
     {
       vendor_id: vendor.id,
       catalog_category: category,
+      catalog_type: catalogCreateData?.catalog_type || ProductType.material,
       catalog_sub_category: catalogCreateData?.catalog_sub_category ?? undefined,
       catalog_sku: catalogCreateData?.catalog_sku || normalizedName,
       catalog_product_name: normalizedName,
@@ -283,12 +285,12 @@ export class ScheduleService {
   }
 
   /**
-   * Explicitly promotes a project material snapshot to the global library.
+   * Explicitly promotes a project product snapshot to the global library.
    * This is part of the Pillar 2 Resilience strategy to prevent data pollution.
    * @param tx Prisma transaction client.
    * @param optionId Option id to promote.
    * @param userId Actor user id for audit.
-   * @returns Updated option linked to a library material.
+   * @returns Updated option linked to a library product.
    */
   static async executePromoteToLibrary(tx: PrismaTransaction, optionId: string, userId: string) {
     const option = await tx.projectScheduleOption.findUniqueOrThrow({
@@ -320,10 +322,10 @@ export class ScheduleService {
   /**
    * Returns active schedule templates for one section.
    * @param tx Prisma transaction client.
-   * @param section MATERIAL or FIXTURE.
+   * @param section material or fixture.
    * @returns Active template rows.
    */
-  static async getActiveScheduleTemplates(tx: PrismaTransaction, section: ScheduleSection) {
+  static async getActiveScheduleTemplates(tx: PrismaTransaction, section: ProductType) {
     return tx.scheduleTemplate.findMany({
       where: { section, is_active: true },
       orderBy: { schedule_category: "asc" },
@@ -334,13 +336,13 @@ export class ScheduleService {
    * Fetches the complete schedule sheet payload for a project
    * @param tx Prisma transaction client.
    * @param projectId Project id.
-   * @param section Schedule section (defaults MATERIAL).
+   * @param section Schedule section (defaults ARCHITECTURAL).
    * @returns Grouped schedule sheet payload used by UI.
    */
   static async getProjectScheduleSheet(
     tx: PrismaTransaction,
     projectId: string,
-    section: ScheduleSection = ScheduleSection.MATERIAL
+    section: ProductType = ProductType.material
   ) {
     const [project, templates, prefixes, entries] = await Promise.all([
       tx.project.findUniqueOrThrow({
@@ -423,14 +425,14 @@ export class ScheduleService {
   }
 
   /**
-   * Alias for getProjectScheduleSheet with default MATERIAL section.
+   * Alias for getProjectScheduleSheet with default ARCHITECTURAL section.
    * @param tx Prisma transaction client.
    * @param projectId Project id.
    * @param section Optional schedule section.
    * @returns Schedule sheet payload.
    */
-  static async getProjectSchedule(tx: PrismaTransaction, projectId: string, section?: ScheduleSection) {
-    return this.getProjectScheduleSheet(tx, projectId, section ?? ScheduleSection.MATERIAL);
+  static async getProjectSchedule(tx: PrismaTransaction, projectId: string, section?: ProductType) {
+    return this.getProjectScheduleSheet(tx, projectId, section ?? ProductType.material);
   }
 
   /**
@@ -440,7 +442,7 @@ export class ScheduleService {
    * @param section Optional schedule section filter.
    * @returns Raw schedule entries with options.
    */
-  static async getProjectScheduleEntries(tx: PrismaTransaction, projectId: string, section?: ScheduleSection) {
+  static async getProjectScheduleEntries(tx: PrismaTransaction, projectId: string, section?: ProductType) {
     return tx.projectScheduleEntry.findMany({
       where: { 
         project_id: projectId,
@@ -474,14 +476,14 @@ export class ScheduleService {
     category: string,
     mode: "catalog" | "create_catalog" | "manual" | "reserve",
     catalogItemId?: string | null,
-    catalogCreateData?: ScheduleCatalogCreateInput,
-    section: ScheduleSection = ScheduleSection.MATERIAL,
+    catalogCreateData?: ScheduleCatalogCreateInput & { catalog_type?: ProductType },
+    section: ProductType = ProductType.material,
     userId?: string
   ): Promise<{ entry: ProjectScheduleEntry; createdCatalogId: string | null }> {
 
     const normalizedCategory = category.trim().toUpperCase();
     if (!normalizedCategory || normalizedCategory.toLowerCase() === "general") {
-      throw new ActionError("Valid material category is required. 'General' is no longer supported.", "VALIDATION_FAILED");
+      throw new ActionError("Valid product category is required. 'General' is no longer supported.", "VALIDATION_FAILED");
     }
 
     // 1. Get Prefix
@@ -516,7 +518,7 @@ export class ScheduleService {
     });
     const nextSortOrder = (lastEntry?.schedule_sort_order ?? 0) + 1;
 
-    // 3. Create Entry
+    // 3. Create Entry with temporary sequence
     const entry = await tx.projectScheduleEntry.create({
       data: {
         project_id: projectId,
@@ -524,7 +526,8 @@ export class ScheduleService {
         section,
         schedule_sort_order: nextSortOrder,
         index_number: 9999, // Temp, will be normalized
-        schedule_code: `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        schedule_prefix: prefixDict.prefix,
+        schedule_increment: 9999, // Temp, will be normalized
         prefix_id: prefixDict.id,
       },
     });
@@ -589,15 +592,10 @@ export class ScheduleService {
       await syncOptionToLibrary(tx, option.id, validatedSnapshot, userId);
     }
 
-    // 6. Normalize codes
+    // 6. Normalize codes (Global category-wide uniqueness)
     await this.normalizeCodes(tx, projectId, section, normalizedCategory);
 
-    // Re-fetch entry with normalized code for response
-    const normalizedEntry = await tx.projectScheduleEntry.findUniqueOrThrow({
-      where: { id: entry.id }
-    });
-
-    return { entry: normalizedEntry, createdCatalogId: mode === "create_catalog" ? resolvedCatalogId : null };
+    return { entry, createdCatalogId: mode === "create_catalog" ? resolvedCatalogId : null };
   }
 
   /**
@@ -791,7 +789,7 @@ export class ScheduleService {
     tx: PrismaTransaction,
     entryIds: string[],
     projectId: string,
-    section: ScheduleSection,
+    section: ProductType,
     category: string,
     userId?: string
   ) {
@@ -826,10 +824,13 @@ export class ScheduleService {
    * @param section Schedule section.
    * @param category Category name.
    */
-  static async normalizeCodes(tx: PrismaTransaction, projectId: string, section: ScheduleSection, category: string) {
+  /**
+   * Safe normalization of codes using split prefix and increment.
+   * Enforces global uniqueness within the category.
+   */
+  static async normalizeCodes(tx: PrismaTransaction, projectId: string, section: ProductType, category: string) {
     const normalizedCategory = category.trim().toUpperCase();
     if (!normalizedCategory || normalizedCategory.toLowerCase() === "general") {
-      console.warn(`[normalizeCodes] Skipped invalid category: "${normalizedCategory || category}"`);
       return;
     }
 
@@ -839,25 +840,52 @@ export class ScheduleService {
       include: { prefix_ref: true },
     });
 
-    if (entries.length === 0) {
-      console.warn(`[normalizeCodes] No entries found for project=${projectId} category=${normalizedCategory}`);
-      return;
-    }
+    if (entries.length === 0) return;
 
-    // Update each entry with correct code and index sequentially to prevent deadlock
+    // Update each entry with correct prefix and increment
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const prefix = entry.prefix_ref?.prefix || "ITEM";
-      const newCode = `${prefix}-${i + 1}`;
       
       await tx.projectScheduleEntry.update({
         where: { id: entry.id },
         data: { 
-          schedule_code: newCode,
+          schedule_prefix: prefix,
+          schedule_increment: i + 1,
           index_number: i + 1
         }
       });
     }
+  }
+
+  /**
+   * Swaps the active option index for a schedule entry.
+   * Pillars 2 Resilience: Ensures index is valid and within bounds.
+   */
+  static async switchActiveOption(tx: PrismaTransaction, entryId: string, targetIndex: number, userId: string) {
+    const entry = await tx.projectScheduleEntry.findUniqueOrThrow({
+      where: { id: entryId },
+      include: { options: true }
+    });
+
+    if (targetIndex < 0 || targetIndex >= entry.options.length) {
+      throw new ActionError(`Invalid option index: ${targetIndex}. Range is 0 to ${entry.options.length - 1}`, "INDEX_OUT_OF_BOUNDS");
+    }
+
+    const updated = await tx.projectScheduleEntry.update({
+      where: { id: entryId },
+      data: { active_index: targetIndex },
+      include: { options: true }
+    });
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_SWITCH_OPTION, "ProjectScheduleEntry", entryId, userId, {
+      project_id: entry.project_id,
+      previous_index: entry.active_index,
+      new_index: targetIndex,
+      option_id: entry.options[targetIndex].id
+    });
+
+    return updated;
   }
 
 
@@ -907,21 +935,21 @@ export class ScheduleService {
     // Merge new data into snapshot using namespaced fields (Priority: Canonical > Alias > Current)
     const updatedSnapshot: ScheduleSnapshot = {
       ...currentSnapshot,
-      catalog_product_name: data.catalog_product_name !== undefined ? data.catalog_product_name : data.name !== undefined ? data.name : currentSnapshot.catalog_product_name,
-      catalog_brand: data.catalog_brand !== undefined ? data.catalog_brand : data.brand !== undefined ? data.brand : currentSnapshot.catalog_brand,
+      catalog_product_name: data.catalog_product_name !== undefined ? data.catalog_product_name : currentSnapshot.catalog_product_name,
+      catalog_brand: data.catalog_brand !== undefined ? data.catalog_brand : currentSnapshot.catalog_brand,
       catalog_initials_type: data.catalog_initials_type !== undefined ? (data.catalog_initials_type || null) : (currentSnapshot.catalog_initials_type ?? null),
-      catalog_reference_url: data.catalog_reference_url !== undefined ? (data.catalog_reference_url || null) : data.reference_url !== undefined ? (data.reference_url || null) : (currentSnapshot.catalog_reference_url ?? null),
-      catalog_image_url: data.catalog_image_url !== undefined ? (data.catalog_image_url || null) : data.image_url !== undefined ? (data.image_url || null) : (currentSnapshot.catalog_image_url ?? null),
-      catalog_price: data.catalog_price !== undefined ? data.catalog_price : data.price !== undefined ? data.price : (currentSnapshot.catalog_price ?? null),
-      catalog_contact_name: data.catalog_contact_name !== undefined ? (data.catalog_contact_name || null) : data.contact_name !== undefined ? (data.contact_name || null) : (currentSnapshot.catalog_contact_name ?? null),
-      catalog_contact_phone: data.catalog_contact_phone !== undefined ? (data.catalog_contact_phone || null) : data.contact_phone !== undefined ? (data.contact_phone || null) : (currentSnapshot.catalog_contact_phone ?? null),
-      catalog_contact_email: data.catalog_contact_email !== undefined ? (data.catalog_contact_email || null) : data.contact_email !== undefined ? (data.contact_email || null) : (currentSnapshot.catalog_contact_email ?? null),
-      catalog_has_sample: data.catalog_has_sample !== undefined ? data.catalog_has_sample : (data.has_sample !== undefined ? data.has_sample : currentSnapshot.catalog_has_sample ?? false),
+      catalog_reference_url: data.catalog_reference_url !== undefined ? (data.catalog_reference_url || null) : (currentSnapshot.catalog_reference_url ?? null),
+      catalog_image_url: data.catalog_image_url !== undefined ? (data.catalog_image_url || null) : (currentSnapshot.catalog_image_url ?? null),
+      catalog_price: data.catalog_price !== undefined ? data.catalog_price : (currentSnapshot.catalog_price ?? null),
+      catalog_contact_name: data.catalog_contact_name !== undefined ? (data.catalog_contact_name || null) : (currentSnapshot.catalog_contact_name ?? null),
+      catalog_contact_phone: data.catalog_contact_phone !== undefined ? (data.catalog_contact_phone || null) : (currentSnapshot.catalog_contact_phone ?? null),
+      catalog_contact_email: data.catalog_contact_email !== undefined ? (data.catalog_contact_email || null) : (currentSnapshot.catalog_contact_email ?? null),
+      catalog_has_sample: data.catalog_has_sample !== undefined ? data.catalog_has_sample : (currentSnapshot.catalog_has_sample ?? false),
       specs: {
-        catalog_sku: data.specs?.hasOwnProperty('catalog_sku') ? (data.specs.catalog_sku as string || "Unknown") : (currentSnapshot.specs?.catalog_sku as string || "Unknown"),
+        catalog_sku: data.specs?.hasOwnProperty('catalog_sku') ? (data.specs.catalog_sku as string || "") : (currentSnapshot.specs?.catalog_sku as string || ""),
         catalog_motif: data.specs?.hasOwnProperty('catalog_motif') ? (data.specs.catalog_motif as string || null) : (currentSnapshot.specs?.catalog_motif as string || null),
         catalog_structured_tags: data.specs?.hasOwnProperty('catalog_structured_tags') ? (data.specs.catalog_structured_tags as string[] || []) : (currentSnapshot.specs?.catalog_structured_tags as string[] || []),
-        catalog_dimensions: data.specs?.hasOwnProperty('catalog_dimensions') ? (data.specs.catalog_dimensions as string || "N/A") : (currentSnapshot.specs?.catalog_dimensions as string || "N/A"),
+        catalog_dimensions: data.specs?.hasOwnProperty('catalog_dimensions') ? (data.specs.catalog_dimensions as string || "") : (currentSnapshot.specs?.catalog_dimensions as string || ""),
         catalog_color: data.specs?.hasOwnProperty('catalog_color') ? (data.specs.catalog_color as string || null) : (currentSnapshot.specs?.catalog_color as string || null),
         catalog_finishing: data.specs?.hasOwnProperty('catalog_finishing') ? (data.specs.catalog_finishing as string || null) : (currentSnapshot.specs?.catalog_finishing as string || null),
         catalog_reference_url: data.specs?.hasOwnProperty('catalog_reference_url') ? (data.specs.catalog_reference_url as string || null) : (currentSnapshot.specs?.catalog_reference_url as string || null),
@@ -966,7 +994,7 @@ export class ScheduleService {
     tx: PrismaTransaction,
 
     projectId: string,
-    section: ScheduleSection,
+    section: ProductType,
     category: string,
     items: { id: string; schedule_sort_order: number }[],
     userId?: string
@@ -1065,7 +1093,7 @@ export class ScheduleService {
     }
   }
 
-  static async normalizeAllProjectsCodesForCategory(tx: PrismaTransaction, category: string, section: ScheduleSection, userId?: string) {
+  static async normalizeAllProjectsCodesForCategory(tx: PrismaTransaction, category: string, section: ProductType, userId?: string) {
     const normalizedCategory = category.trim().toUpperCase();
     const projectIds = await tx.projectScheduleEntry.findMany({
       where: { schedule_category: normalizedCategory, section },

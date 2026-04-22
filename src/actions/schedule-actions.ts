@@ -25,8 +25,8 @@ import { AUDIT_ACTIONS } from "@/lib/services/audit/types";
 import { evaluateAccess, PERMISSION, RBAC } from "@/lib/rbac";
 import { ActionError } from "@/lib/error-types";
 import { getProjectMembershipOrThrow } from "@/lib/permissions";
-import { Role, ScheduleSection } from "@/generated/prisma";
-import { parseGSheetsMaterialCsv } from "@/lib/schedule/csv-parse";
+import { Role, ProductType } from "@/generated/prisma";
+import { parseGSheetsProductCsv } from "@/lib/schedule/csv-parse";
 import { importScheduleFromCsv } from "@/lib/schedule/csv-import";
 
 /**
@@ -48,7 +48,7 @@ export const getProjectScheduleAction = createAction(
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_VIEW);
     return ScheduleService.getProjectScheduleSheet(tx, input.projectId, input.section);
   },
-  { schema: z.object({ projectId: IdSchema, section: z.nativeEnum(ScheduleSection).optional() }) }
+  { schema: z.object({ projectId: IdSchema, section: z.nativeEnum(ProductType).optional() }) }
 );
 
 export const getScheduleCategoriesAction = createAction(
@@ -75,7 +75,7 @@ export const getScheduleCategoriesAction = createAction(
       .sort()
       .map(category => ({ category }));
   },
-  { schema: z.object({ section: z.nativeEnum(ScheduleSection) }) }
+  { schema: z.object({ section: z.nativeEnum(ProductType) }) }
 );
 
 export const addScheduleEntryAction = createAction(
@@ -375,7 +375,7 @@ export const moveEntryToCategoryAction = createAction(
 
 const ImportScheduleSchema = z.object({
   projectId: IdSchema,
-  section: z.nativeEnum(ScheduleSection),
+  section: z.nativeEnum(ProductType),
   csvContent: z.string(),
   source: z.literal("gsheets").default("gsheets"),
 });
@@ -386,7 +386,7 @@ export const importScheduleAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_ADD);
 
-    const rows = parseGSheetsMaterialCsv(input.csvContent, input.section);
+    const rows = parseGSheetsProductCsv(input.csvContent, input.section);
 
     if (rows.length === 0) {
       throw new ActionError("No valid rows found in CSV", "VALIDATION_FAILED");

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ProductType } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
 import { 
   Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, 
@@ -15,15 +16,16 @@ import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
+import type { ProjectScheduleEntryWithRelations } from "../../types";
 
 interface VisualRowProps {
-  entry: any;
-  onEdit?: (entry: any) => void;
+  entry: ProjectScheduleEntryWithRelations;
+  onEdit?: (entry: ProjectScheduleEntryWithRelations) => void;
   onDelete?: (id: string) => void;
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
   onUpdateQty?: (entryId: string, qty: number) => Promise<void>;
   onAddAlternative?: () => void;
-  section?: "MATERIAL" | "FIXTURE";
+  section?: ProductType;
   isSelected?: boolean;
   onClick?: (event: React.MouseEvent) => void;
 }
@@ -35,7 +37,7 @@ export function VisualRow({
   onUpdateLocation, 
   onUpdateQty, 
   onAddAlternative, 
-  section = "MATERIAL",
+  section = ProductType.material,
   isSelected,
   onClick
 }: VisualRowProps) {
@@ -137,7 +139,7 @@ export function VisualRow({
     }
   };
 
-  const isFixture = section === "FIXTURE";
+  const isFixture = section === ProductType.fixture;
 
   return (
     <tr 
@@ -195,10 +197,10 @@ export function VisualRow({
 
           <div className="flex-1 min-w-0 py-1">
             <h4 className="font-lora text-lg font-medium text-slate-900 truncate leading-tight">
-              {snapshot?.catalog_product_name || "Untitled Specification"}
+              {snapshot?.catalog_product_name}
             </h4>
             <div className="flex items-center gap-2 mt-1.5 font-inter text-xs text-slate-400">
-               <span className="font-bold text-slate-900">{snapshot?.catalog_brand || "No Brand"}</span>
+               <span className="font-bold text-slate-900">{snapshot?.catalog_brand}</span>
                <div className="h-1 w-1 rounded-full bg-slate-200" />
                <span className="uppercase tracking-widest text-[10px] font-medium">{entry.schedule_category}</span>
             </div>
@@ -361,7 +363,7 @@ export function VisualRow({
         projectId={entry.project_id}
         scheduleEntryId={entry.id}
         scheduleOptionId={activeOption?.id}
-        productNameFallback={snapshot?.catalog_product_name || "Unspecified Material"}
+        productNameFallback={snapshot?.catalog_product_name || "Reserved Slot"}
         productCatalogId={activeOption?.product_catalog_id || undefined}
       />
     </tr>

@@ -18,12 +18,12 @@ import {
 } from "@dnd-kit/sortable";
 import { ScheduleColumn } from "./ScheduleColumn";
 import { cn } from "@/lib/utils";
-import type { ScheduleSection } from "@/generated/prisma";
+import type { ProductType } from "@/generated/prisma";
 import type { ProjectScheduleSheetPayload } from "../../types";
 
 interface ScheduleBoardProps {
   sheet: ProjectScheduleSheetPayload;
-  section: ScheduleSection;
+  section: ProductType;
   onReorder: (category: string, items: { id: string; schedule_sort_order: number }[]) => Promise<void>;
   onMoveBetweenCategories?: (entryId: string, fromCategory: string, toCategory: string, newIndex: number) => Promise<void>;
   onAddEntry?: (category: string) => void;

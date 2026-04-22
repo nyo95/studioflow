@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScheduleSection } from "@/generated/prisma";
+import type { ProductType } from "@/generated/prisma";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { getAvailableSchedulerCategories } from "@/actions/settings-actions";
 import { unwrapActionResult } from "@/lib/result";
@@ -18,7 +18,7 @@ import { unwrapActionResult } from "@/lib/result";
 interface ScheduleCategoryPickerModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  section: ScheduleSection;
+  section: ProductType;
   onSelect: (category: string) => void;
 }
 
@@ -51,7 +51,7 @@ export function ScheduleCategoryPickerModal({
     }
   }, [isOpen]);
 
-  const sectionLabel = section === ScheduleSection.MATERIAL ? "material" : "fixture";
+  const sectionLabel = section === ProductType.material ? "architectural" : "FF&E";
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

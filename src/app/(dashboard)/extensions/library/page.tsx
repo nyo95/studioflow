@@ -29,7 +29,7 @@ export default function LibraryPage() {
   
   const [categories, setCategories] = React.useState<string[]>([]);
   const [productCategories, setProductCategories] = React.useState<string[]>([]);
-  const [fixtureCategories, setFixtureCategories] = React.useState<string[]>([]);
+  const [ffeCategories, setFFECategories] = React.useState<string[]>([]);
   const [subCategories, setSubCategories] = React.useState<string[]>([]);
   const [finishings, setFinishings] = React.useState<string[]>([]);
   
@@ -74,8 +74,8 @@ export default function LibraryPage() {
           setFinishings(metaRes.data.finishings);
         }
         if (groupedCatsRes.success) {
-          setProductCategories(groupedCatsRes.data.material);
-          setFixtureCategories(groupedCatsRes.data.fixture);
+          setProductCategories(groupedCatsRes.data.architectural);
+          setFFECategories(groupedCatsRes.data.ffe);
         }
       } catch {
         toast.error("Failed to load library metadata");
@@ -148,7 +148,7 @@ export default function LibraryPage() {
               onPageChange={setCurrentPage}
               categories={categories}
               productCategories={productCategories}
-              fixtureCategories={fixtureCategories}
+              ffeCategories={ffeCategories}
               subCategories={subCategories}
               finishings={finishings}
               requests={requests}

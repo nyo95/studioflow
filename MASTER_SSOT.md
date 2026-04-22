@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 1.5
-> **Last Updated:** April 2026 (Phase 3 Completed)
+> **Document Version:** 1.7.2
+> **Last Updated:** April 2026 (Build Stabilization & Type Hardening)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -85,7 +85,7 @@ The global reusable material and fixture database.
 
 #### ProjectScheduleEntry
 Represents a single row in the project's specification sheet.
-- **Namespaced Classification:** Uses `schedule_category` (e.g., PAINT, SANITARY) and `schedule_section` (e.g., MATERIAL, FF&E).
+- **Namespaced Classification:** Uses schedule_category (e.g., PAINT, SANITARY) and section (type: ProductType: material, fixture).
 - **Code:** Deterministic code generated as `[Prefix]-[Index]`.
 - **Qty / Unit / schedule_location:** Project-specific metadata fields.
 
@@ -140,7 +140,7 @@ Approving a material option creates a frozen `data_snapshot`.
 
 ### 6.1 Google Sheets (CSV Roundtrip)
 - **Export:** Web scheduler exports section-specific CSV for external editing.
-- **Import:** Manual CSV upload matches existing rows by `project_id + section + code`.
+- **Import:** Manual CSV upload matches existing rows by `project_id + section + schedule_code`.
 - **Validation:** Importers must map to valid categories; unknown categories are rejected.
 
 ### 6.2 SketchUp Plugin
@@ -179,7 +179,7 @@ This matrix defines the canonical mapping between concepts, labels, and persiste
 
 | Concept | Canonical Name | UI Label | Persistence Symbol (Prisma) | Banned Legacy Terms |
 |---------|----------------|----------|------------------------------|---------------------|
-| Library | MaterialCatalog | Library (Queue) | `MaterialCatalog` | `GlobalLibrary`, `CommonLibrary` |
+| Library | ProductCatalog | Library (Queue) | `ProductCatalog` | `GlobalLibrary`, `CommonLibrary`, `MaterialCatalog` |
 | Schedule| ProjectScheduleEntry | Schedule | `ProjectScheduleEntry` | `ProjectSchedule`, `ScheduleSheet` |
 | Brand   | Brand          | Brand    | `Vendor.brand_name` | - |
 | SKU     | SKU            | SKU      | `catalog_sku` | - |

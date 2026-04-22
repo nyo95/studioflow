@@ -6,7 +6,7 @@ import { ScheduleTableHeader } from "./ScheduleTableHeader";
 import { ScheduleRow } from "./ScheduleRow";
 import { cn } from "@/lib/utils";
 import type { ProjectScheduleSheetPayload } from "../../types";
-import type { ScheduleSection } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 import { 
   SortableContext, 
   verticalListSortingStrategy 
@@ -14,7 +14,7 @@ import {
 
 interface ScheduleTableProps {
   sheet: ProjectScheduleSheetPayload;
-  section?: ScheduleSection;
+  section?: ProductType;
   onEditEntry?: (entry: any) => void;
   onDeleteEntry?: (id: string) => void;
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
@@ -23,7 +23,7 @@ interface ScheduleTableProps {
 }
 
 export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUpdateLocation, onUpdateQty, onAddAlternative }: ScheduleTableProps) {
-  const isFixture = section === "FIXTURE";
+  const isFixture = section === ProductType.fixture;
   const [collapsedCategories, setCollapsedCategories] = React.useState<Set<string>>(new Set());
 
   const toggleCategory = (category: string) => {
@@ -79,7 +79,7 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
                           <ScheduleRow
                             key={entry.id}
                             entry={entry}
-                            section={isFixture ? "FIXTURE" : "MATERIAL"}
+                            section={isFixture ? ProductType.fixture : ProductType.material}
                             onEdit={onEditEntry}
                             onDelete={onDeleteEntry}
                             onUpdateLocation={onUpdateLocation}
@@ -105,7 +105,7 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
                 <td colSpan={isFixture ? 5 : 4} className="px-6 py-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <p className="font-lora text-lg text-slate-400">No entries found</p>
-                    <p className="font-sans text-sm text-slate-400">Start by adding a material or importing CSV data.</p>
+                    <p className="font-sans text-sm text-slate-400">Start by adding a product or importing CSV data.</p>
                   </div>
                 </td>
               </tr>

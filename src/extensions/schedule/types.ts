@@ -1,4 +1,4 @@
-import { ProjectScheduleEntry, ProjectScheduleOption, PrefixDictionary, ScheduleSection, ProductCatalog } from "@/generated/prisma";
+import { ProjectScheduleEntry, ProjectScheduleOption, PrefixDictionary, ProductType, ProductCatalog } from "@/generated/prisma";
 
 export type GradualFormCustomData = {
   // Step 1: Primary
@@ -20,7 +20,7 @@ export type GradualFormData = {
   customData: GradualFormCustomData;
 };
 
-export type GradualFormMaterials = Pick<ProductCatalog, "id" | "catalog_sku" | "catalog_product_name" | "catalog_brand" | "catalog_image_url">[];
+export type GradualFormProducts = Pick<ProductCatalog, "id" | "catalog_sku" | "catalog_product_name" | "catalog_brand" | "catalog_image_url">[];
 
 export type ScheduleOptionSnapshot = {
   snapshot_source_kind: "catalog" | "manual";
@@ -53,7 +53,7 @@ export type ScheduleOptionSnapshot = {
   snapshot_captured_at: string;
 };
 
-export type ProjectScheduleOptionWithMaterial = ProjectScheduleOption & {
+export type ProjectScheduleOptionWithProduct = ProjectScheduleOption & {
   product_catalog?: (ProductCatalog & {
     product_requests?: {
       status: string;
@@ -64,13 +64,13 @@ export type ProjectScheduleOptionWithMaterial = ProjectScheduleOption & {
 
 
 export type ProjectScheduleEntryWithRelations = ProjectScheduleEntry & {
-  options: ProjectScheduleOptionWithMaterial[];
+  options: ProjectScheduleOptionWithProduct[];
   prefix_ref?: PrefixDictionary | null;
 };
 
 export type ScheduleGroupedByCategory = {
   schedule_category: string;
-  schedule_section: ScheduleSection;
+  schedule_section: ProductType;
   entries: ProjectScheduleEntryWithRelations[];
 };
 
@@ -82,7 +82,7 @@ export type ScheduleProjectMetadata = {
 };
 
 export type ProjectScheduleSheetPayload = {
-  section: ScheduleSection;
+  section: ProductType;
   project: ScheduleProjectMetadata;
   availableCategories: string[];
   groups: ScheduleGroupedByCategory[];
