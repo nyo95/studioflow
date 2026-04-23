@@ -1037,6 +1037,72 @@ export class LibraryService {
     userId: string,
     notes?: string
   ) {
+    const request = await tx.promotionRequest.findUnique({
+      where: { id: requestId },
+      include: { project: true }
+    });
+
+    if (!request) throw new ActionError("Promotion request not found", "NOT_FOUND");
+    if (request.status !== "PENDING") throw new ActionError("Request already processed", "INVALID_STATE");
+
+    let productCatalogId: string | undefined;
+
+    if (status === "APPROVED") {
+      const snapshot = request.snapshot_data as any;
+      if (!snapshot) throw new ActionError("Missing snapshot data", "SNAPSHOT_MISSING");
+
+      // 1. Resolve Vendor
+      const vendorId = await this.resolveVendor(snapshot.catalog_brand || "Unknown Brand", tx);
+
+      // 2. Create Product Catalog Entry
+      const product = await tx.productCatalog.create({
+        data: {
+          vendor_id: vendorId,
+          catalog_category: snapshot.schedule_category || "UNCATEGORIZED",
+          catalog_type: snapshot.catalog_type || ProductType.material,
+          catalog_sub_category: snapshot.catalog_sub_category || null,
+          catalog_sku: snapshot.catalog_sku || snapshot.catalog_product_name || "N/A",
+          catalog_product_name: snapshot.catalog_product_name || null,
+          catalog_brand: snapshot.catalog_brand || null,
+          catalog_motif: snapshot.catalog_motif || null,
+          catalog_color: snapshot.catalog_color || null,
+          catalog_finishing: snapshot.catalog_finishing || null,
+          catalog_dimension_p: snapshot.catalog_dimension_p || snapshot.specs?.catalog_dimension?.p || null,
+          catalog_dimension_l: snapshot.catalog_dimension_l || snapshot.specs?.catalog_dimension?.l || null,
+          catalog_dimension_t: snapshot.catalog_dimension_t || snapshot.specs?.catalog_dimension?.t || null,
+          catalog_dimension_unit: snapshot.catalog_dimension_unit || snapshot.specs?.catalog_dimension?.unit || "cm",
+          catalog_image_url: snapshot.catalog_image_url || null,
+          catalog_image_original_url: snapshot.catalog_image_original_url || null,
+          catalog_reference_url: snapshot.catalog_reference_url || null,
+          catalog_price: snapshot.catalog_price || null,
+          status: "APPROVED", // Auto-approve promoted items
+        }
+      });
+
+      productCatalogId = product.id;
+
+      // 3. Link back to Project Schedule Option
+      await tx.projectScheduleOption.update({
+        where: { id: request.schedule_option_id },
+        data: {
+          product_catalog_id: product.id,
+          status: "APPROVED"
+        }
+      });
+
+      // 4. Record Audit Log for Approval
+      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_APPROVE_PROMOTION, "PromotionRequest", requestId, userId, {
+        product_id: product.id,
+        project_id: request.project_id
+      });
+    } else {
+      // Record Audit Log for Rejection
+      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_REJECT_PROMOTION, "PromotionRequest", requestId, userId, {
+        project_id: request.project_id
+      });
+    }
+
+    // Update Request Status
     return tx.promotionRequest.update({
       where: { id: requestId },
       data: {

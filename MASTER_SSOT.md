@@ -18,6 +18,12 @@ The application follows a strict high-end minimalist design philosophy:
 - **Subtle Interactions:** Hover states use color shifts or subtle background changes, not complex animations.
 - **Purposeful Color:** Minimal color usage—primarily slate neutrals with red accents for urgent/priority items.
 
+### View-First Protocol (UX Refactor v1.5)
+The application enforces a "View-First" interaction model for data integrity:
+- **Default State:** All forms/modals for existing data MUST open in a Read-Only state.
+- **Modify Toggle:** Privileged users are presented with a "Modify" (Edit Symbol) button to explicitly unlock field mutations.
+- **Safety:** This prevents accidental data changes during inspection and provides a consistent interface for all user roles.
+
 ### UI Engine Rules
 
 #### Typography System (`src/ui_engine/design-system.config.ts`)
@@ -71,7 +77,7 @@ Tracks every mutation in the system for accountability.
 - **project_id / phase_id:** Optional context fields for filtering.
 - **details:** JSON snapshot of the change.
 
-#### MaterialCatalog (Library SSOT)
+#### ProductCatalog (Library SSOT)
 The global reusable material and fixture database.
 - **Namespaced Fields:** All fields strictly use the `catalog_` prefix (e.g., `catalog_sku`, `catalog_product_name`, `catalog_category`, `catalog_brand`).
 - **Product Identity:** Canonical display format: `[catalog_sku] - [catalog_product_name] ex. [catalog_brand]`.
@@ -125,11 +131,16 @@ Approving a material option creates a frozen `data_snapshot`.
 
 ### 5.2 Explicit Promotion Pattern
 - **Local by Default:** New materials added to the scheduler are local to the project.
+- **Hybrid Quick Draft (UX Refactor v1.6):** 
+    - **Trigger:** Initiated via the Global Search Bar when no matching library product is found.
+    - **Quick Draft Dialog:** A centralized modal for rapid drafting that satisfies Stage 1 (Draft) requirements in a single step.
 - **Phased Input Flow (UX Refactor v1.5):** 
-    1. **Stage 1 (Draft):** Prioritize "Secondary / Initials" (Mandatory: Color) and Brand/Vendor. This creates a local project snapshot.
-    2. **Stage 2 (Elevation):** Primary data (SKU + Name) and Images can be added later to complete the specification.
-- **Manual Promotion:** Users must explicitly click "Save to Library" to submit an item for global inclusion. This is ONLY permitted once Stage 2 (Primary + Brand) is complete.
-- **Auto-Harvesting:** (Approved Decision) Items can be auto-harvested to the library as `PENDING` status for admin review.
+    1. **Stage 1 (Draft):** Prioritize "Classification" (Color, Pattern, or Finishing) and Mandatory Brand/Vendor. This creates a local project snapshot.
+    2. **Stage 2 (Elevation):** Primary data (SKU + Name) and Images. Completing this stage elevates the snapshot to "Library Ready".
+- **Strict Gatekeeping:** 
+    - **Update Snapshot:** Requires Stage 1 completeness (Color).
+    - **Promote to Library:** Requires full Stage 2 completeness (SKU, Name, Brand, Image).
+- **Manual Promotion:** Users must explicitly click "Save to Library" (Manual Elevation). Auto-harvesting is disabled for project snapshots to ensure library quality.
 
 ### 5.3 Deterministic Coding
 - Codes are managed via `ScheduleService.normalizeCodes`.
@@ -167,12 +178,12 @@ Every mutation (Create/Update/Delete/Approve) MUST call `insertAuditLog`.
 
 ## 8. SECURITY & PERMISSIONS
 
-| Role | Description |
-|------|-------------|
-| **ADMIN** | Full system and settings control. |
-| **DIC** | Designer In Charge: Manages all project phases except CD. |
-| **DRIC** | Drafter In Charge: Primarily manages the CD phase. |
-| **STAFF** | Read-only access to projects. |
+| Role | Description | Access Rights |
+|------|-------------|---------------|
+| **ADMIN** | Full system and settings control. | Edit Schedule, Edit Library, Manage Queue. |
+| **DIC** | Designer In Charge: Project Lead. | Edit Schedule (Project Level), Read-only Library. |
+| **DRIC** | Drafter In Charge: Production Lead. | Edit Schedule (Project Level), Read-only Library. |
+| **STAFF** | General Designer / Studio Staff. | Read-only Schedule, Edit Library (Catalog Level). |
 
 ---
 
@@ -186,7 +197,7 @@ This matrix defines the canonical mapping between concepts, labels, and persiste
 | Schedule| ProjectScheduleEntry | Schedule | `ProjectScheduleEntry` | `ProjectSchedule`, `ScheduleSheet` |
 | Brand   | Brand          | Brand    | `Vendor.brand_name` | - |
 | SKU     | SKU            | SKU      | `catalog_sku` | - |
-| Product | Catalog Item   | Product  | `MaterialCatalog.catalog_product_name` | - |
+| Product | Catalog Item   | Product  | `ProductCatalog.catalog_product_name` | - |
 | Code    | Sequence Code  | Code     | `ProjectScheduleEntry.schedule_code` | `ProjectScheduleEntry.code` |
 | Category| Schedule Group | Category | `ProjectScheduleEntry.schedule_category` | `category` (scheduler domain) |
 | Order   | Display Order  | Sort     | `ProjectScheduleEntry.schedule_sort_order` | `sort_order` |
@@ -195,7 +206,7 @@ This matrix defines the canonical mapping between concepts, labels, and persiste
 ## 10. BANNED LEGACY VARIANTS
 
 The following terms and fields are BANNED in new code and must be phased out from active contracts:
-- **`GlobalLibrary` / `CommonLibrary`**: Use `MaterialCatalog`.
+- **`GlobalLibrary` / `CommonLibrary` / `MaterialCatalog`**: Use `ProductCatalog`.
 - **`ProjectSchedule`**: Use namespaced `ProjectScheduleEntry`.
 - **`code` / `category` / `sort_order`**: (In models) Use `schedule_code`, `schedule_category`, `schedule_sort_order`.
 - **`project_type`**: Use `core_project_type`.

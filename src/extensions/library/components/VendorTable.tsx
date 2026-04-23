@@ -26,6 +26,8 @@ import { deleteVendorAction } from "../actions/library-actions";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
+import { UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META } from "@/ui_engine";
+import { cn } from "@/lib/utils";
 
 interface VendorTableProps {
   vendors: LibraryVendor[];
@@ -59,7 +61,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+    <div className={cn("border border-slate-100 bg-white overflow-hidden shadow-sm", UI_ENGINE_RADIUS_CARD)}>
       <Table>
         <TableHeader>
           <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
@@ -82,7 +84,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
                     <div className="flex flex-col">
                       <span>{vendor.company_name || "-"}</span>
                       {vendor.company_pt && (
-                        <span className="text-[10px] text-slate-400 leading-tight">
+                        <span className={cn("text-slate-400 leading-tight", UI_ENGINE_TYPE_META)}>
                           PT: {vendor.company_pt}
                         </span>
                       )}
@@ -94,7 +96,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
                       ? `${vendor.contacts[0].contact_person} (${vendor.contacts[0].contact_role})`
                       : "-"}
                     {vendor.contacts && vendor.contacts.length > 1 && (
-                      <span className="ml-1 text-[10px] bg-slate-100 px-1 rounded text-slate-500">
+                      <span className={cn("ml-1 bg-slate-100 px-1 text-slate-500", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL)}>
                         +{vendor.contacts.length - 1} more
                       </span>
                     )}
@@ -136,7 +138,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
                         href={vendor.instagram_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1.5 rounded-md border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all font-inter"
+                        className={cn("p-1.5 border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all font-inter", UI_ENGINE_RADIUS_CONTROL)}
                         title="Instagram"
                       >
                         <AtSign className="h-4 w-4" />

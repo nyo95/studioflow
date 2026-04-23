@@ -21,6 +21,9 @@ This project uses specific Next.js APIs and Prisma configurations that may diffe
 ## 🚫 UI/UX Preservation Protocol
 "DILARANG KERAS mengubah struktur tata letak (layout) yang sudah ada—seperti mengganti sidebar menjadi tab horizontal—tanpa permintaan eksplisit dari pengguna. Jangan menambahkan elemen estetika 'Premium' (shadow berlebih, animasi kompleks, font dekoratif baru) jika tidak diminta. Pertahankan fungsionalitas di atas hiasan visual."
 
+## 👁️ View-First Protocol
+"Setiap modal/form untuk data yang sudah ada WAJIB dibuka dalam mode read-only secara default. Gunakan tombol 'Modify' (icon Edit3) sebagai gatekeeper untuk masuk ke mode edit. Pastikan transisi antara mode read-only dan edit bersifat smooth dan tidak merusak layout."
+
 ## 📐 Design System Enforcement (Zero Hardcode Policy)
 "DILARANG KERAS menggunakan nilai hardcoded untuk visual properties (misalnya `rounded-xl`, `p-5`, `shadow-md`, `text-2xl`). Kamu WAJIB melakukan hal berikut:
 1. **Cross-Check Tokens**: Selalu periksa `src/ui_engine/design-system.config.ts` dan `src/styles/designTokens.css` sebelum menulis kode UI.
@@ -30,7 +33,10 @@ This project uses specific Next.js APIs and Prisma configurations that may diffe
 
 ## 🧱 Pillar 2 Resilience Protocol
 1. **Explicit Promotion**: Material catalog data bersifat 'Master'. Project data harus di-snapshot (PRD 2 rules). Data dari project TIDAK BOLEH auto-sync ke Library tanpa validasi eksplisit.
-2. **Audit Mandatory**: Setiap mutasi pada Library atau Scheduler Category WAJIB mencatat `insertAuditLog`.
+2. **Gatekeeping**: 
+   - **Stage 1 (Mandatory Color)**: Diperlukan untuk update snapshot lokal.
+   - **Stage 2 (Identity + Media)**: SKU, Product Name, Brand, dan Image WAJIB lengkap sebelum tombol 'Promote to Library' diaktifkan.
+3. **Audit Mandatory**: Setiap mutasi pada Library atau Scheduler Category WAJIB mencatat `insertAuditLog`.
 3. **No Legacy Models**: DILARANG mengekspos atau menggunakan model `GlobalLibrary` dan `ProjectSchedule`. Gunakan `ProductCatalog` dan `ProjectScheduleEntry`.
 4. **Deterministic Coding**: Semua kode scheduler harus dikelola melalui `ScheduleService.normalizeCodes` untuk memastikan integritas prefix.
 5. **Terminology Architecture**: WAJIB menggunakan namespaced prefix (`catalog_`, `schedule_`). Format identitas produk: `[catalog_sku] - [catalog_product_name] ex. [catalog_brand]`.

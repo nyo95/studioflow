@@ -16,6 +16,8 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   pageMaxWidth: "1280px",
   tableDensity: "compact", // default to compact for rows
   modalDensity: "standard", // default modal padding
+  radiusControl: "0.5rem",
+  radiusAction: "0.25rem",
 };
 
 export function sanitizeUISettings(input?: UISettings | null): UISettings {
@@ -48,6 +50,8 @@ export function uiSettingsToStyle(settings: UISettings): UISettingsStyle {
     ["pageMaxWidth", "--ui-page-max-width"],
     ["tableDensity", "--ui-table-density"],
     ["modalDensity", "--ui-modal-density"],
+    ["radiusControl", "--ui-radius-control"],
+    ["radiusAction", "--ui-radius-action"],
   ];
 
   for (const [key, variableName] of variableMap) {

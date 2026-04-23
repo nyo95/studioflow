@@ -40,6 +40,11 @@ export default async function PhaseDetailPage({
       pic_designer_id: true,
       pic_drafter_id: true,
       status_progress: true,
+      client: {
+        select: {
+          name: true
+        }
+      },
       phases: {
         select: {
           order_index: true,
@@ -170,7 +175,9 @@ export default async function PhaseDetailPage({
         <PageBackLink />
 
         <PageHeader
+          eyebrow={project.name}
           title={`${phase.name_enum.replace(/_/g, " ")} ${activeRevision ? `${activeRevision.major}.${activeRevision.minor}` : ""}`}
+          description={`${project.client?.name || "No Client Assigned"}`}
           action={
             <PhaseActions
               phaseId={phase.id}
@@ -237,34 +244,44 @@ export default async function PhaseDetailPage({
 
         <div className="grid grid-cols-1 gap-10 xl:grid-cols-12">
           <div className="space-y-12 xl:col-span-8">
-            {phase.name_enum === "CD" ? (
-              <Tabs defaultValue="review" className="w-full">
-                <TabsList className="grid h-auto w-full grid-cols-2 border border-slate-200 bg-slate-50 p-1">
-                  <TabsTrigger value="review" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
-                    Active Review
-                  </TabsTrigger>
-                  <TabsTrigger value="cd-list" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
-                    CD List
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="review" className="mt-6">
-                  {reviewPanel}
-                </TabsContent>
-                <TabsContent value="cd-list" className="mt-6">
-                  <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <CDListTable
-                      phaseId={phase.id}
-                      items={phase.cd_lists}
-                      userId={userId}
-                      userRole={role as Role}
-                      canMutate={canManagePhase}
-                    />
-                  </section>
-                </TabsContent>
-              </Tabs>
-            ) : (
-              reviewPanel
-            )}
+            <SectionCard
+              header={
+                <div>
+                  <Heading variant="uiMeta" level={6}>Phase Metadata</Heading>
+                  <Heading level={2} className="mt-2 text-slate-900">Overview</Heading>
+                </div>
+              }
+              className="animate-in fade-in slide-in-from-bottom-4 duration-700"
+            >
+              {phase.name_enum === "CD" ? (
+                <Tabs defaultValue="review" className="w-full">
+                  <TabsList className="grid h-auto w-full grid-cols-2 border border-slate-200 bg-slate-50 p-1">
+                    <TabsTrigger value="review" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
+                      Active Review
+                    </TabsTrigger>
+                    <TabsTrigger value="cd-list" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
+                      CD List
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="review" className="mt-6">
+                    {reviewPanel}
+                  </TabsContent>
+                  <TabsContent value="cd-list" className="mt-6">
+                    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+                      <CDListTable
+                        phaseId={phase.id}
+                        items={phase.cd_lists}
+                        userId={userId}
+                        userRole={role as Role}
+                        canMutate={canManagePhase}
+                      />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                reviewPanel
+              )}
+            </SectionCard>
           </div>
 
           <ActionSidebar className="xl:col-span-4">

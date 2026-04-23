@@ -25,8 +25,6 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
 
   const items = [
     ...coreItems.slice(0, 2),
-    // Admin Hub - RBAC Protection
-    ...(userRole === "ADMIN" ? [{ icon: ShieldAlert, label: "Admin", href: "/admin" }] : []),
     // for extension: library //
     ...EXTENSIONS,
     ...coreItems.slice(2),

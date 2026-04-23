@@ -26,7 +26,6 @@ interface ScheduleBoardProps {
   section: ProductType;
   onReorder: (category: string, items: { id: string; schedule_sort_order: number }[]) => Promise<void>;
   onMoveBetweenCategories?: (entryId: string, fromCategory: string, toCategory: string, newIndex: number) => Promise<void>;
-  onAddEntry?: (category: string) => void;
   onEditEntry?: (entry: ProjectScheduleSheetPayload["groups"][0]["entries"][0]) => void;
   onDeleteEntry?: (id: string, category: string) => void;
 }
@@ -35,7 +34,6 @@ export function ScheduleBoard({
   sheet, 
   onReorder, 
   onMoveBetweenCategories,
-  onAddEntry, 
   onEditEntry, 
   onDeleteEntry 
 }: ScheduleBoardProps) {
@@ -120,7 +118,6 @@ export function ScheduleBoard({
               id={group.schedule_category}
               title={group.schedule_category}
               items={group.entries}
-              onAddEntry={onAddEntry}
               onEditEntry={onEditEntry}
               onDeleteEntry={(id) => onDeleteEntry?.(id, group.schedule_category)}
             />

@@ -42,13 +42,39 @@ export const getPromotionRequestsAction = createAction<void, PromotionRequestWit
   return results as unknown as PromotionRequestWithRelations[];
 });
 
-export const reviewPromotionRequestAction = createAction<{ requestId: string; action: "APPROVED" | "REJECTED" }, PromotionRequestWithRelations>(
+export const reviewPromotionRequestAction = createAction<{ requestId: string; action: "APPROVED" | "REJECTED"; notes?: string }, PromotionRequestWithRelations>(
   async ({ input, ctx, tx }) => {
     assertAdmin(ctx.role);
 
-    const result = await LibraryService.reviewPromotionRequest(tx, input.requestId, input.action, ctx.userId);
+    const result = await LibraryService.reviewPromotionRequest(tx, input.requestId, input.action, ctx.userId, input.notes);
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result as unknown as PromotionRequestWithRelations;
+  }
+);
+
+export const createPromotionRequestAction = createAction<{ 
+  schedule_option_id: string; 
+  project_id: string; 
+  notes?: string 
+}, any>(
+  async ({ input, ctx, tx }) => {
+    const option = await tx.projectScheduleOption.findUnique({
+      where: { id: input.schedule_option_id },
+      include: { entry: true }
+    });
+
+    if (!option) throw new Error("Schedule option not found");
+    if (!option.data_snapshot) throw new Error("Cannot promote option without snapshot data");
+
+    const result = await LibraryService.createPromotionRequest(tx, {
+      project_id: input.project_id,
+      schedule_option_id: input.schedule_option_id,
+      requested_by_id: ctx.userId,
+      snapshot_data: option.data_snapshot,
+      notes: input.notes
+    });
+
+    return result;
   }
 );
 
@@ -60,7 +86,7 @@ export const getVendorsAction = createAction<void, LibraryVendor[]>(async ({ tx 
 
 export const createVendorAction = createAction<LibraryVendorInput, LibraryVendor>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    assertAdminOrStaff(ctx.role);
 
     const result = await LibraryService.createVendor(input, ctx.userId, tx);
 
@@ -73,7 +99,7 @@ export const createVendorAction = createAction<LibraryVendorInput, LibraryVendor
 
 export const updateVendorAction = createAction<{ id: string; data: Partial<LibraryVendorInput> }, LibraryVendor>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    assertAdminOrStaff(ctx.role);
 
     const result = await LibraryService.updateVendor(input.id, input.data, ctx.userId, tx);
     // LibraryService.updateVendor() handles audit logging
@@ -85,7 +111,7 @@ export const updateVendorAction = createAction<{ id: string; data: Partial<Libra
 
 export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    assertAdminOrStaff(ctx.role);
 
     const result = await LibraryService.deleteVendor(input.id, ctx.userId, tx);
     // LibraryService.deleteVendor() handles audit logging
@@ -96,7 +122,7 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
 
 export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, { success: boolean; productsUpdated: number }>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    assertAdminOrStaff(ctx.role);
 
     if (input.sourceVendorId === input.targetVendorId) {
       throw new Error("Cannot merge vendor with itself");

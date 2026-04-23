@@ -35,6 +35,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { 
+  UI_ENGINE_RADIUS_CARD, 
+  UI_ENGINE_RADIUS_CONTROL, 
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_TYPE_META
+} from "@/ui_engine";
+import { cn } from "@/lib/utils";
 
 interface ProductTableProps {
   products: ProductCatalogWithRelations[];
@@ -52,7 +59,7 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
   if (products.length === 0) {
     return (
       <div className="py-24 text-center animate-in fade-in duration-500">
-        <div className="h-16 w-16 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-4">
+        <div className={cn("h-16 w-16 bg-slate-50 flex items-center justify-center mx-auto mb-4", UI_ENGINE_RADIUS_ACTION)}>
           <ImageIcon className="h-6 w-6 text-slate-200" />
         </div>
         <h3 className="font-lora text-lg text-slate-900 mb-1">No items found</h3>
@@ -62,17 +69,17 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
   }
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+    <div className={cn("border border-slate-100 bg-white overflow-hidden shadow-sm", UI_ENGINE_RADIUS_CARD)}>
       <Table>
         <TableHeader>
           <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 h-12">
-            <TableHead className="w-[80px] font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400 pl-6">Image</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Product Info</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Vendor</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Category</TableHead>
-            {!isQueueMode && <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Price</TableHead>}
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Status</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400 text-right pr-6">Actions</TableHead>
+            <TableHead className={cn("w-[80px] font-inter font-bold uppercase tracking-wider text-slate-400 pl-6", UI_ENGINE_TYPE_META)}>Image</TableHead>
+            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Product Info</TableHead>
+            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Vendor</TableHead>
+            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Category</TableHead>
+            {!isQueueMode && <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Price</TableHead>}
+            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Status</TableHead>
+            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400 text-right pr-6", UI_ENGINE_TYPE_META)}>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -85,7 +92,7 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
                         src: m.catalog_image_original_url || m.catalog_image_url!, 
                         alt: m.catalog_sku 
                     })}
-                    className="relative h-14 w-14 rounded-md overflow-hidden bg-slate-100 group/img focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-sm border border-slate-200"
+                    className={cn("relative h-14 w-14 overflow-hidden bg-slate-100 group/img focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-sm border border-slate-200", UI_ENGINE_RADIUS_CONTROL)}
                   >
                     <img 
                       src={m.catalog_image_url} 
@@ -97,7 +104,7 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
                     </div>
                   </button>
                 ) : (
-                  <div className="h-14 w-14 rounded-md bg-slate-50 flex items-center justify-center border border-dashed border-slate-200">
+                  <div className={cn("h-14 w-14 bg-slate-50 flex items-center justify-center border border-dashed border-slate-200", UI_ENGINE_RADIUS_CONTROL)}>
                     <ImageIcon className="h-6 w-6 text-slate-200" />
                   </div>
                 )}
@@ -107,7 +114,7 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
                   <span className="font-lora font-semibold text-slate-900 text-[13px]">
                     {m.catalog_sku} - {m.catalog_product_name || m.catalog_motif || 'Item'} ex. {m.catalog_brand || m.vendor.brand_name}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-inter font-medium truncate max-w-[250px]">
+                  <span className={cn("text-slate-400 font-inter font-medium truncate max-w-[250px]", UI_ENGINE_TYPE_META)}>
                     {m.catalog_motif || "No Variant"} {m.catalog_finishing ? `· ${m.catalog_finishing}` : ""}
                   </span>
                 </div>
@@ -119,8 +126,8 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] font-black uppercase tracking-tight text-slate-900 font-inter">{m.catalog_category}</span>
-                  {m.catalog_sub_category && <span className="text-[9px] text-slate-400 font-inter">{m.catalog_sub_category}</span>}
+                  <span className={cn("font-black uppercase tracking-tight text-slate-900 font-inter", UI_ENGINE_TYPE_META)}>{m.catalog_category}</span>
+                  {m.catalog_sub_category && <span className={cn("text-slate-400 font-inter", UI_ENGINE_TYPE_META)}>{m.catalog_sub_category}</span>}
                 </div>
               </TableCell>
               {(!isQueueMode) && (
@@ -133,11 +140,11 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
               <TableCell>
                 <Badge 
                   variant="outline"
-                  className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0 border-none ${
+                  className={cn("font-bold uppercase tracking-widest px-1.5 py-0 border-none", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL, 
                     m.status === 'APPROVED' 
                       ? 'bg-emerald-50 text-emerald-700' 
                       : 'bg-orange-50 text-orange-700'
-                  }`}
+                  )}
                 >
                   {m.status}
                 </Badge>

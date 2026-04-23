@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Lora } from "next/font/google";
 import { LayoutClient } from "@/components/layout-client";
+import { AuthProvider } from "@/components/providers/auth-provider";
 import { UI_ENGINE_CANVAS_CLASS } from "@/ui_engine/tokens";
 import { HydrationProvider, DehydrationDebug } from "@/ui_engine/components/EnhancedHydrationGuard";
 import "./globals.css";
@@ -37,7 +38,9 @@ export default function RootLayout({
         className={`h-screen overflow-hidden ${UI_ENGINE_CANVAS_CLASS} font-sans text-slate-900 antialiased`}
       >
         <HydrationProvider>
-          <LayoutClient>{children}</LayoutClient>
+          <AuthProvider>
+            <LayoutClient>{children}</LayoutClient>
+          </AuthProvider>
           {/* <DehydrationDebug /> */}
         </HydrationProvider>
       </body>

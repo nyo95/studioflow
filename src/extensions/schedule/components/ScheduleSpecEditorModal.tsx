@@ -41,12 +41,13 @@ import { Badge } from "@/components/ui/badge";
 import { 
   updateScheduleOptionSnapshotAction, 
   getScheduleSuggestionsAction,
-  promoteToLibraryAction
 } from "@/actions/schedule-actions";
+import { createPromotionRequestAction } from "@/extensions/library/actions/library-actions";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { ScheduleOptionSnapshot } from "../types";
 import { CreatableSearch } from "@/components/ui/creatable-search";
+import { UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION, UI_ENGINE_TYPE_META } from "@/ui_engine";
 
 interface ProductSuggestion {
   id: string;
@@ -140,12 +141,16 @@ export function ScheduleSpecEditorModal({
     }
   }, [isOpen, initialSnapshot, isSubmitting]);
 
-  const isPrimaryComplete = !!form.catalog_product_name?.trim() && !!form.catalog_sku?.trim();
-  const isVendorComplete = !!form.catalog_brand?.trim();
-  const isReadyForPromotion = isPrimaryComplete && isVendorComplete;
+  const isPrimaryComplete = !!form.catalog_product_name?.trim() && !!form.catalog_sku?.trim() && !!form.catalog_brand?.trim();
+  const isSecondaryComplete = !!form.catalog_color?.trim();
+  const isReadyForPromotion = isPrimaryComplete && !!form.catalog_image_url;
   const isDraft = !initialSnapshot.product_catalog_id;
 
   const handleSubmit = async () => {
+    if (!isSecondaryComplete) {
+      toast.error("Color is mandatory for project snapshots");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const dataPayload = {
@@ -185,394 +190,468 @@ export function ScheduleSpecEditorModal({
       <DialogContent 
         onKeyDown={(e) => e.stopPropagation()}
         className={cn(
-          "p-0 overflow-hidden border-slate-100 rounded-3xl shadow-2xl backdrop-blur-sm bg-white/95",
-          isEditMode ? "max-w-[700px]" : "max-w-[600px]"
+          "p-0 overflow-hidden border-none shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] bg-white",
+          UI_ENGINE_RADIUS_CARD,
+          "max-w-[1100px] w-[95vw]"
         )}
       >
-        <DialogHeader className="p-8 pb-4">
-          <div className="flex items-center gap-4 justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shadow-slate-200">
-                <Tag className="h-5 w-5" />
-              </div>
-              <div>
-                <DialogTitle className="font-lora text-xl font-medium text-slate-900 leading-none">
-                  {isEditMode ? "Edit Snapshot Details" : "Product Specification"}
+        <div className="flex flex-col md:flex-row h-[750px] max-h-[90vh]">
+          {/* Left Panel: Visual Focus & Checklist */}
+          <div className="w-full md:w-[380px] bg-slate-50 border-r border-slate-100 flex flex-col relative overflow-hidden">
+             <div className="flex-1 flex flex-col p-8 pt-10">
+               {/* Hero Image Card */}
+               <div className={cn("relative group w-full aspect-square bg-white shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden flex items-center justify-center mb-10", UI_ENGINE_RADIUS_CARD)}>
+                 {form.catalog_image_url ? (
+                   <img 
+                    src={form.catalog_image_url} 
+                    alt={form.catalog_product_name} 
+                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+                   />
+                 ) : (
+                   <div className="flex flex-col items-center gap-4 text-slate-200">
+                     <Package className="h-16 w-16 stroke-[1]" />
+                     <span className="text-[9px] font-black uppercase tracking-[0.3em]">No Visual Data</span>
+                   </div>
+                 )}
+                 
+                 {!isEditMode && form.catalog_reference_url && (
+                   <a 
+                    href={form.catalog_reference_url} 
+                    target="_blank" 
+                    className={cn("absolute bottom-4 right-4 h-10 w-10 bg-white/90 backdrop-blur-md shadow-lg flex items-center justify-center text-slate-900 hover:bg-slate-900 hover:text-white transition-all", UI_ENGINE_RADIUS_ACTION)}
+                   >
+                     <ExternalLink className="h-4 w-4" />
+                   </a>
+                 )}
+               </div>
+
+               {/* Promotion Readiness Checklist */}
+               <div className="space-y-6">
+                 <div className="flex items-center gap-3">
+                   <Sparkles className="h-4 w-4 text-slate-400" />
+                   <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-950">Readiness Score</h4>
+                 </div>
+                 
+                 <div className="space-y-4">
+                    {/* Stage 1: Project Minimum */}
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 border transition-colors",
+                        isSecondaryComplete ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-200 text-slate-300"
+                      )}>
+                        <Badge variant="ghost" className="p-0 hover:bg-transparent">
+                          {isSecondaryComplete ? <Save className="h-2.5 w-2.5" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />}
+                        </Badge>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className={cn("text-[11px] font-bold block transition-colors", isSecondaryComplete ? "text-slate-900" : "text-slate-400")}>Stage 1: Project Snapshot</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Requires Color specification.</span>
+                      </div>
+                    </div>
+
+                    {/* Stage 2: Catalog Ready */}
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 border transition-colors",
+                        isReadyForPromotion ? "bg-indigo-500 border-indigo-500 text-white" : "bg-white border-slate-200 text-slate-300"
+                      )}>
+                        <Badge variant="ghost" className="p-0 hover:bg-transparent">
+                          {isReadyForPromotion ? <Sparkles className="h-2.5 w-2.5" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />}
+                        </Badge>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className={cn("text-[11px] font-bold block transition-colors", isReadyForPromotion ? "text-slate-900" : "text-slate-400")}>Stage 2: Catalog Ready</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Requires SKU, Name, Brand & Image.</span>
+                      </div>
+                    </div>
+                 </div>
+
+                 {!isReadyForPromotion && isEditMode && (
+                   <div className={cn("p-4 bg-amber-50/50 border border-amber-100 mt-2", UI_ENGINE_RADIUS_CONTROL)}>
+                     <div className="flex gap-2 text-amber-700">
+                       <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                       <span className="text-[10px] font-medium leading-relaxed">
+                         Complete Primary Info and Brand to promote this item to the Global Library.
+                       </span>
+                     </div>
+                   </div>
+                 )}
+               </div>
+             </div>
+
+             <div className="p-8 border-t border-slate-100 flex items-center justify-between">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">System Code</span>
+                  <span className="text-sm font-mono font-bold text-slate-900 tracking-tighter">{initialSnapshot.schedule_code || "NEW"}</span>
+                </div>
+                <div className="text-right space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Status</span>
+                  <Badge variant="outline" className={cn(
+                    "text-[9px] font-black uppercase border-none px-2 py-0.5",
+                    isReadyForPromotion ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
+                  )}>
+                    {isReadyForPromotion ? "Ready" : "Draft"}
+                  </Badge>
+                </div>
+             </div>
+          </div>
+
+          {/* Right Panel: Content / Form */}
+          <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+            <DialogHeader className="p-10 pb-6 border-b border-slate-50 flex flex-row items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge className={cn("bg-slate-900 text-white font-black uppercase tracking-widest px-2 py-0.5", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL)}>
+                    {initialSnapshot.catalog_category || "General"}
+                  </Badge>
+                  {isReadyForPromotion && (
+                    <Badge className={cn("bg-indigo-50 text-indigo-600 border-none font-black uppercase tracking-widest px-2 py-0.5", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL)}>
+                      Premium Catalog
+                    </Badge>
+                  )}
+                </div>
+                <DialogTitle className="font-lora text-3xl font-bold text-slate-900">
+                  {isEditMode ? "Modify Specification" : (form.catalog_product_name || "Product Details")}
                 </DialogTitle>
-                <DialogDescription className="text-xs font-inter text-slate-400 font-medium tracking-tight">
-                  {isEditMode ? "Changes are local to this project" : "Click to view full details"}
+                <DialogDescription className="text-xs text-slate-400 font-inter">
+                  Managing snapshot for {initialSnapshot.schedule_code} in this project.
                 </DialogDescription>
               </div>
-            </div>
-            
-            {isAdmin && !isEditMode && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditMode(true)}
-                className="rounded-xl h-9 px-4 text-[10px] font-bold uppercase tracking-widest border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-900"
-              >
-                <Edit3 className="h-3.5 w-3.5 mr-2" />
-                Edit
-              </Button>
-            )}
-          </div>
-        </DialogHeader>
-
-        <ScrollArea className={cn("px-8 pb-8", isEditMode ? "h-[580px]" : "h-auto max-h-[70vh]")}>
-          {!isEditMode ? (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              {isDraft && !isReadyForPromotion && (
-                <div className="bg-amber-50 border border-amber-200 rounded-[2rem] p-6 flex items-start gap-4 mb-6">
-                  <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
-                    <AlertCircle className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-black text-amber-900 uppercase tracking-widest">Action Required</h4>
-                    <p className="text-xs text-amber-700 leading-relaxed font-medium">
-                      This item is a local draft. To enable promotion to the Master Catalog, please complete the 
-                      <span className="font-bold"> Primary Data (SKU & Name)</span> and <span className="font-bold">Brand</span> details.
-                    </p>
-                    <Button 
-                      variant="link" 
+              <div className="flex items-center gap-3">
+                 {isAdmin && !isEditMode && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setIsEditMode(true)}
-                      className="p-0 h-auto text-[10px] font-black uppercase tracking-[0.2em] text-amber-600 hover:text-amber-900"
+                      className={cn("h-10 px-5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-950 hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all gap-2", UI_ENGINE_RADIUS_ACTION)}
                     >
-                      Complete Specifications →
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Modify Snapshot
+                    </Button>
+                 )}
+                 <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => onOpenChange(false)}
+                  className={cn("h-10 w-10 text-slate-400 hover:text-slate-900 hover:bg-slate-50", UI_ENGINE_RADIUS_ACTION)}
+                 >
+                   <X className="h-5 w-5" />
+                 </Button>
+              </div>
+            </DialogHeader>
+
+            <ScrollArea className="flex-1">
+              <div className="p-10">
+                {isEditMode ? (
+                  <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Section 1: Identity & Brand (Required for Catalog) */}
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-4">
+                        <div className={cn("h-8 w-8 bg-slate-950 text-white flex items-center justify-center text-[10px] font-bold", UI_ENGINE_RADIUS_ACTION)}>01</div>
+                        <div>
+                          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-950">Identity & Vendor</h4>
+                          <p className="text-[10px] text-slate-400">Essential information for Global Library promotion.</p>
+                        </div>
+                      </div>
+                      
+                      <div className={cn("p-8 bg-slate-50/50 border border-slate-100 space-y-6", UI_ENGINE_RADIUS_CONTROL)}>
+                        <div className="grid grid-cols-2 gap-6">
+                           <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SKU / Catalog Code</Label>
+                            <Input 
+                              value={form.catalog_sku} 
+                              onChange={(e) => setForm({...form, catalog_sku: e.target.value})}
+                              placeholder="e.g. PT-01" 
+                              className={cn("h-12 bg-white border-slate-200 focus:border-slate-900 transition-all text-sm font-medium", UI_ENGINE_RADIUS_CONTROL)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Product Name</Label>
+                            <Input 
+                              value={form.catalog_product_name} 
+                              onChange={(e) => setForm({...form, catalog_product_name: e.target.value})}
+                              placeholder="e.g. Oak Wood Texture" 
+                              className={cn("h-12 bg-white border-slate-200 focus:border-slate-900 transition-all text-sm font-medium", UI_ENGINE_RADIUS_CONTROL)}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Brand / Vendor Name</Label>
+                          <CreatableSearch 
+                            value={suggestions.brands.find(b => b.name === form.catalog_brand)?.id || ""}
+                            placeholder="Search or type brand name..."
+                            options={suggestions.brands}
+                            allowFreeText={true}
+                            onSelect={(id, name) => setForm({ ...form, catalog_brand: name })}
+                            onCreate={(name) => setForm({ ...form, catalog_brand: name })}
+                            className="h-12"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Secondary / Initials */}
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-4">
+                        <div className={cn("h-8 w-8 bg-slate-200 text-slate-600 flex items-center justify-center text-[10px] font-bold", UI_ENGINE_RADIUS_ACTION)}>02</div>
+                        <div>
+                          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-950">Secondary Specs</h4>
+                          <p className="text-[10px] text-slate-400">Mandatory "Initials" for project schedule visualization.</p>
+                        </div>
+                      </div>
+                      
+                      <div className={cn("p-8 bg-white border border-slate-200 shadow-sm space-y-6", UI_ENGINE_RADIUS_CONTROL)}>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-950 ml-1">Color (Mandatory) *</Label>
+                          <Input 
+                            value={form.catalog_color} 
+                            onChange={(e) => setForm({...form, catalog_color: e.target.value})}
+                            placeholder="e.g. Walnut Brown" 
+                            className={cn("h-12 bg-white border-slate-900/20 ring-1 ring-slate-900/5 text-sm font-bold", UI_ENGINE_RADIUS_CONTROL)}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pattern / Motif</Label>
+                            <Input 
+                              value={form.catalog_motif} 
+                              onChange={(e) => setForm({...form, catalog_motif: e.target.value})}
+                              placeholder="e.g. Grainy" 
+                              className={cn("h-12 bg-slate-50 border-transparent text-sm", UI_ENGINE_RADIUS_CONTROL)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Finishing</Label>
+                            <Input 
+                              value={form.catalog_finishing} 
+                              onChange={(e) => setForm({...form, catalog_finishing: e.target.value})}
+                              placeholder="e.g. Matte" 
+                              className={cn("h-12 bg-slate-50 border-transparent text-sm", UI_ENGINE_RADIUS_CONTROL)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 3: Tertiary & Media */}
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-4">
+                        <div className={cn("h-8 w-8 bg-slate-200 text-slate-600 flex items-center justify-center text-[10px] font-bold", UI_ENGINE_RADIUS_ACTION)}>03</div>
+                        <div>
+                          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-950">Tertiary & Assets</h4>
+                          <p className="text-[10px] text-slate-400">Dimensions, metadata, and hero image upload.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-8">
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Dimensions</Label>
+                            <Input 
+                              value={form.catalog_dimensions} 
+                              onChange={(e) => setForm({...form, catalog_dimensions: e.target.value})}
+                              placeholder="e.g. 60x60 cm" 
+                              className={cn("h-12 bg-slate-50 border-transparent text-sm", UI_ENGINE_RADIUS_CONTROL)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Reference Link</Label>
+                            <Input 
+                              value={form.catalog_reference_url} 
+                              onChange={(e) => setForm({...form, catalog_reference_url: e.target.value})}
+                              placeholder="https://..." 
+                              className={cn("h-12 bg-slate-50 border-transparent text-sm", UI_ENGINE_RADIUS_CONTROL)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Product Tags</Label>
+                          <TagInput 
+                            tags={form.catalog_structured_tags} 
+                            onChange={(tags) => setForm({ ...form, catalog_structured_tags: tags })} 
+                            placeholder="Add tags..." 
+                            className="w-full"
+                          />
+                        </div>
+
+                        <div className={cn("p-10 bg-slate-50 border border-dashed border-slate-200 flex flex-col items-center gap-6", UI_ENGINE_RADIUS_CARD)}>
+                            <div className="w-44 aspect-square">
+                              <OptimizedUploader
+                                value={form.catalog_image_url}
+                                onUpload={async (file) => {
+                                  const timestamp = Date.now();
+                                  const fileName = `${timestamp}-${file.name.replace(/\s/g, "_")}`;
+                                  const url = await uploadLibraryImage(file, `covers/${fileName}`);
+                                  setForm(prev => ({ ...prev, catalog_image_url: url }));
+                                  return url;
+                                }}
+                                onClear={() => setForm(prev => ({ ...prev, catalog_image_url: "" }))}
+                                aspect={1}
+                              />
+                            </div>
+                            <div className="text-center space-y-1">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-950">Master Catalog Hero Image</p>
+                              <p className="text-[10px] text-slate-400 italic">White background recommended for catalog consistency.</p>
+                            </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-12 animate-in fade-in duration-500">
+                    <div className="grid grid-cols-2 gap-10">
+                      {/* Section: Identity Matrix */}
+                      <div className="col-span-2 space-y-6">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-900">Identity & Branding</span>
+                          <div className="h-px flex-1 bg-slate-100" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-6">
+                           <div className="space-y-1">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Brand Name</span>
+                              <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                                <Building2 className="h-4 w-4 text-slate-400" />
+                                <span className="text-sm font-bold text-slate-900">{form.catalog_brand || "Not Set"}</span>
+                              </div>
+                           </div>
+                           <div className="space-y-1">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Catalog SKU</span>
+                              <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                                <Tag className="h-4 w-4 text-slate-400" />
+                                <span className="font-mono text-sm font-bold text-slate-900">{form.catalog_sku || "N/A"}</span>
+                              </div>
+                           </div>
+                        </div>
+                      </div>
+
+                      {/* Section: Specification Matrix */}
+                      <div className="col-span-2 space-y-6">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-900">Specification Matrix</span>
+                          <div className="h-px flex-1 bg-slate-100" />
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                           <div className="space-y-1">
+                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Color</span>
+                             <div className={cn("p-5 bg-white border border-slate-200 shadow-sm flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                               <Palette className="h-4 w-4 text-slate-400" />
+                               <span className="text-sm font-bold text-slate-900">{form.catalog_color || "—"}</span>
+                             </div>
+                           </div>
+                           <div className="space-y-1">
+                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Pattern</span>
+                             <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                               <Layers className="h-4 w-4 text-slate-400" />
+                               <span className="text-sm font-medium text-slate-600">{form.catalog_motif || "—"}</span>
+                             </div>
+                           </div>
+                           <div className="space-y-1">
+                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Finishing</span>
+                             <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                               <Sparkles className="h-4 w-4 text-slate-400" />
+                               <span className="text-sm font-medium text-slate-600">{form.catalog_finishing || "—"}</span>
+                             </div>
+                           </div>
+                        </div>
+                        <div className="space-y-1">
+                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Dimensions</span>
+                             <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                               <Ruler className="h-4 w-4 text-slate-400" />
+                               <span className="text-sm font-medium text-slate-600">{form.catalog_dimensions || "Standard Dimensions"}</span>
+                             </div>
+                        </div>
+                      </div>
+
+                      {/* Tags & Context */}
+                      {form.catalog_structured_tags.length > 0 && (
+                        <div className="col-span-2 space-y-4">
+                           <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-900">Search Tags</span>
+                            <div className="h-px flex-1 bg-slate-100" />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {form.catalog_structured_tags.map((tag, i) => (
+                              <Badge key={i} className={cn("bg-slate-100 text-slate-600 border-none font-bold px-3 py-1", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_ACTION)}>
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+
+            <div className="p-10 pt-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              {isEditMode ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setIsEditMode(false)}
+                    className={cn("h-12 px-8 font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-slate-950", UI_ENGINE_RADIUS_CONTROL)}
+                  >
+                    Discard Changes
+                  </Button>
+                  <Button 
+                    onClick={handleSubmit} 
+                    disabled={isSubmitting || !isSecondaryComplete}
+                    className={cn("bg-slate-950 hover:bg-black text-white h-12 px-12 shadow-xl shadow-slate-200 font-black text-[10px] uppercase tracking-widest gap-3 transition-all", UI_ENGINE_RADIUS_CONTROL)}
+                  >
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> Finalize Snapshot</>}
+                  </Button>
+                </>
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "h-10 px-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border",
+                      isReadyForPromotion ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100",
+                      UI_ENGINE_RADIUS_ACTION
+                    )}>
+                      {isReadyForPromotion ? <Sparkles className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                      {isReadyForPromotion ? "Promotion Ready" : "Promotion Locked"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {isDraft && (
+                      <Button 
+                        variant={isReadyForPromotion ? "default" : "secondary"}
+                        disabled={!isReadyForPromotion}
+                        onClick={async () => {
+                          const toastId = toast.loading("Requesting promotion to Master Catalog...");
+                          try {
+                            unwrapActionResult(await createPromotionRequestAction({ optionId }));
+                            toast.success("Product promoted to Global Library!", { id: toastId });
+                            if (onRefresh) onRefresh();
+                          } catch (err: unknown) {
+                            toast.error(err instanceof Error ? err.message : "Promotion failed", { id: toastId });
+                          }
+                        }}
+                        className={cn(
+                          "h-12 px-8 font-black text-[10px] uppercase tracking-widest gap-2 shadow-lg transition-all",
+                          isReadyForPromotion ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100" : "bg-slate-100 text-slate-400 shadow-none cursor-not-allowed",
+                          UI_ENGINE_RADIUS_CONTROL
+                        )}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Promote to Master Catalog
+                      </Button>
+                    )}
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => onOpenChange(false)}
+                      className={cn("h-12 px-10 font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-slate-950 hover:bg-slate-100/50", UI_ENGINE_RADIUS_CONTROL)}
+                    >
+                      Dismiss
                     </Button>
                   </div>
                 </div>
               )}
-
-              {isDraft && isReadyForPromotion && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-[2rem] p-6 flex items-start gap-4 mb-6">
-                  <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
-                    <Sparkles className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Elevation Ready</h4>
-                    <p className="text-xs text-emerald-700 leading-relaxed font-medium">
-                      All minimum requirements are met. You can now request this item to be added to the Product Catalog.
-                    </p>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-start gap-6 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
-                <div className="w-32 h-32 rounded-3xl overflow-hidden bg-white border border-slate-200 shadow-sm flex-shrink-0">
-                  {form.catalog_image_url ? (
-                    <img src={form.catalog_image_url} alt={form.catalog_product_name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                      <Package className="h-8 w-8 text-slate-200" />
-                      <span className="text-[8px] font-black text-slate-300 uppercase">No Image</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-lora text-xl font-bold text-slate-900 leading-tight mb-1">
-                    {form.catalog_product_name}
-                  </h3>
-                  <div className="flex items-center gap-2 text-sm text-slate-500 mb-3">
-                    <Building2 className="h-3.5 w-3.5" />
-                    <span className="font-medium">{form.catalog_brand}</span>
-                  </div>
-                  {form.catalog_reference_url && (
-                    <a 
-                      href={form.catalog_reference_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      View Reference
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Palette className="h-4 w-4 text-slate-400" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color</span>
-                  </div>
-                  <span className="font-lora text-lg font-medium text-slate-900">
-                    {form.catalog_color}
-                  </span>
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Layers className="h-4 w-4 text-slate-400" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pattern</span>
-                  </div>
-                  <span className="font-lora text-lg font-medium text-slate-900">
-                    {form.catalog_motif}
-                  </span>
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Type className="h-4 w-4 text-slate-400" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Finishing</span>
-                  </div>
-                  <span className="font-lora text-lg font-medium text-slate-900">
-                    {form.catalog_finishing}
-                  </span>
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Ruler className="h-4 w-4 text-slate-400" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dimensions</span>
-                  </div>
-                  <span className="font-lora text-lg font-medium text-slate-900">
-                    {form.catalog_dimensions}
-                  </span>
-                </div>
-              </div>
-
-              {form.catalog_sub_category && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sub-category:</span>
-                  <Badge variant="outline" className="text-[10px] font-medium">{form.catalog_sub_category}</Badge>
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                {form.catalog_structured_tags.map((tag, i) => (
-                  <Badge key={i} className="bg-slate-100 text-slate-600 text-[10px] font-medium">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
             </div>
-          ) : (
-            <div className="space-y-6 pt-2">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-1 w-4 rounded-full bg-slate-200" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Cover Image</span>
-                </div>
-                <div className="flex items-start gap-5">
-                  <div className="w-[140px] flex-shrink-0">
-                    <OptimizedUploader
-                      value={form.catalog_image_url}
-                      onUpload={async (file) => {
-                        const timestamp = Date.now();
-                        const fileName = `${timestamp}-${file.name.replace(/\s/g, "_")}`;
-                        const coverPath = `covers/${fileName}`;
-                        const url = await uploadLibraryImage(file, coverPath);
-                        setForm(prev => ({ ...prev, catalog_image_url: url }));
-                        return url;
-                      }}
-                      onClear={() => setForm(prev => ({ ...prev, catalog_image_url: "" }))}
-                      aspect={1}
-                    />
-                  </div>
-                  <div className="flex-1 space-y-2 pt-1">
-                    <p className="font-sans text-[10px] text-slate-400 leading-relaxed">
-                      Upload a project-specific image for this product entry.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-1 w-4 rounded-full bg-slate-900" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Product Identity</span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SKU</Label>
-                    <Input 
-                      value={form.catalog_sku} 
-                      onChange={(e) => setForm({...form, catalog_sku: e.target.value})}
-                      placeholder="e.g. PL-1" 
-                      className="h-11 bg-slate-50 border-slate-100 rounded-xl font-inter font-medium"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Product Name</Label>
-                    <Input 
-                      value={form.catalog_product_name} 
-                      onChange={(e) => setForm({...form, catalog_product_name: e.target.value})}
-                      placeholder="e.g. HPL Wood Texture" 
-                      className="h-11 bg-slate-50 border-slate-100 rounded-xl font-inter font-medium"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Brand</Label>
-                  <CreatableSearch 
-                    value={suggestions.brands.find(b => b.name === form.catalog_brand)?.id || ""}
-                    placeholder="Select or enter Brand..."
-                    options={suggestions.brands}
-                    allowFreeText={true}
-                    onSelect={(id, name) => setForm({ ...form, catalog_brand: name })}
-                    onCreate={(name) => setForm({ ...form, catalog_brand: name })}
-                    className="h-11"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-1 w-4 rounded-full bg-slate-400" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Physical Identity</span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Color</Label>
-                    <Input 
-                      value={form.catalog_color} 
-                      onChange={(e) => setForm({...form, catalog_color: e.target.value})}
-                      placeholder="e.g. Walnut" 
-                      className="h-11 bg-slate-50 border-slate-100 rounded-xl font-inter font-medium"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pattern / Motif</Label>
-                    <Input 
-                      value={form.catalog_motif} 
-                      onChange={(e) => setForm({...form, catalog_motif: e.target.value})}
-                      placeholder="e.g. Wood Grain" 
-                      className="h-11 bg-slate-50 border-slate-100 rounded-xl font-inter font-medium"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Finishing</Label>
-                    <Input 
-                      value={form.catalog_finishing} 
-                      onChange={(e) => setForm({...form, catalog_finishing: e.target.value})}
-                      placeholder="e.g. Matte" 
-                      className="h-11 bg-slate-50 border-slate-100 rounded-xl font-inter font-medium"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Dimensions</Label>
-                    <Input 
-                      value={form.catalog_dimensions} 
-                      onChange={(e) => setForm({...form, catalog_dimensions: e.target.value})}
-                      placeholder="e.g. 122 x 244 cm" 
-                      className="h-11 bg-slate-50 border-slate-100 rounded-xl font-inter font-medium"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-1 w-4 rounded-full bg-slate-400" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Additional</span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Sub-Category</Label>
-                    <Input 
-                      value={form.catalog_sub_category} 
-                      onChange={(e) => setForm({...form, catalog_sub_category: e.target.value})}
-                      placeholder="e.g. Exterior Panel" 
-                      className="h-11 bg-slate-50 border-slate-100 rounded-xl font-inter font-medium"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1">
-                      <LinkIcon className="h-2.5 w-2.5" /> Reference
-                    </Label>
-                    <Input 
-                      value={form.catalog_reference_url} 
-                      onChange={(e) => setForm({...form, catalog_reference_url: e.target.value})}
-                      placeholder="https://..." 
-                      className="h-11 bg-slate-50 border-slate-100 rounded-xl font-inter font-medium"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Tags</Label>
-                <TagInput 
-                  tags={form.catalog_structured_tags} 
-                  onChange={(tags) => setForm({ ...form, catalog_structured_tags: tags })} 
-                  placeholder="Type tag..." 
-                  className="w-full"
-                />
-              </div>
-            </div>
-          )}
-        </ScrollArea>
-
-        <div className="p-6 pt-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
-          {isEditMode ? (
-            <>
-              <Button
-                variant="ghost"
-                onClick={() => setIsEditMode(false)}
-                className="h-10 px-4 rounded-xl font-inter font-bold text-xs uppercase tracking-widest text-slate-400"
-              >
-                Cancel
-              </Button>
-              <div className="flex items-center gap-2">
-                {isDraft && (
-                  <Button 
-                    variant="outline"
-                    type="button"
-                    disabled={!isReadyForPromotion}
-                    onClick={async () => {
-                      const toastId = toast.loading("Requesting promotion...");
-                      try {
-                        unwrapActionResult(await promoteToLibraryAction({ optionId }));
-                        toast.success("Promotion request sent!", { id: toastId });
-                        if (onSuccess) onSuccess();
-                      } catch (err: unknown) {
-                        toast.error(err instanceof Error ? err.message : "Promotion failed", { id: toastId });
-                      }
-                    }}
-                    className={cn(
-                      "h-10 rounded-xl border-slate-200 text-[10px] font-bold uppercase tracking-widest transition-all",
-                      isReadyForPromotion ? "text-emerald-600 border-emerald-100 hover:border-emerald-500 hover:bg-emerald-50" : "text-slate-300 bg-slate-50 cursor-not-allowed"
-                    )}
-                  >
-                    {isReadyForPromotion ? "Request to Catalog" : "Incomplete for Catalog"}
-                  </Button>
-                )}
-                <Button 
-                  onClick={handleSubmit} 
-                  disabled={isSubmitting || !form.catalog_product_name?.trim() || !form.catalog_brand?.trim()}
-                  className="bg-slate-950 hover:bg-slate-800 text-white rounded-xl h-10 px-6 shadow-xl shadow-slate-200 font-inter font-bold text-xs uppercase tracking-widest gap-2"
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Save className="h-3.5 w-3.5" />
-                      Save Product
-                    </>
-                  )}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-2 text-slate-400 text-xs">
-                <Info className="h-4 w-4" />
-                <span className="font-medium">Local to this project</span>
-              </div>
-              <Button 
-                variant="ghost" 
-                onClick={() => onOpenChange(false)}
-                className="h-10 px-6 rounded-xl font-inter font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-slate-900"
-              >
-                Close
-              </Button>
-            </div>
-          )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

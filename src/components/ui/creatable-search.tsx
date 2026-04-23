@@ -23,8 +23,8 @@ interface CreatableSearchProps {
   /** Grouped list of options */
   groups?: OptionGroup[];
   value?: string;
-  onSelect: (id: string, name: string) => void;
-  onCreate: (name: string) => void;
+  onSelect?: (id: string, name: string) => void;
+  onCreate?: (name: string) => void;
   onSearchChange?: (search: string) => void;
   placeholder?: string;
   label?: string;
@@ -111,7 +111,7 @@ export function CreatableSearch({
         setOpen(false);
         // In allowFreeText mode, commit whatever is in the input as the value
         if (allowFreeText && search.trim() && search !== allOptions.find(o => o.id === value)?.name) {
-          onCreate(search.trim());
+          onCreate?.(search.trim());
         }
       }
     }
@@ -120,16 +120,16 @@ export function CreatableSearch({
   }, [allowFreeText, search, allOptions, value, onCreate]);
 
   const handleSelect = (option: Option) => {
-    onSelect(option.id, option.name);
+    onSelect?.(option.id, option.name);
     setSearch(option.name);
     setOpen(false);
   };
 
   const handleCreate = (name: string) => {
-    onCreate(name);
+    onCreate?.(name);
     if (allowFreeText) {
       // In free-text mode, also call onSelect with empty id so parent can store the raw string
-      onSelect("", name);
+      onSelect?.("", name);
     }
     setSearch(name);
     setOpen(false);

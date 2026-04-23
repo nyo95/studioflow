@@ -24,7 +24,16 @@ export interface UISettings {
   pageMaxWidth?: string;
   tableDensity?: string;
   modalDensity?: string;
+  radiusControl?: string;
+  radiusAction?: string;
 }
+
+export const defaultUISettings: UISettings = {
+  tableDensity: "compact",
+  modalDensity: "standard",
+  radiusControl: "0.5rem",
+  radiusAction: "0.25rem",
+};
 
 export interface PhaseHeartbeatChecklistItem {
   id: string;

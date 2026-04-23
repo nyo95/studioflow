@@ -9,6 +9,7 @@ import {
   SortableContext, 
   verticalListSortingStrategy 
 } from "@dnd-kit/sortable";
+import { UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL } from "@/ui_engine";
 import { VisualRow } from "./VisualRow";
 
 interface VisualTableProps {
@@ -80,20 +81,10 @@ export function VisualTable({
                   </span>
                 </h3>
               </div>
-              
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => onAddAlternative?.("", group.schedule_category)}
-                  className="h-7 px-3 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-slate-900 hover:border-slate-300 transition-all flex items-center gap-1.5 group/add-btn shadow-sm"
-                >
-                  <Plus className="h-3 w-3 transition-transform group-hover/add-btn:rotate-90" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Add Product</span>
-                </button>
-              </div>
             </div>
 
             {!isCollapsed && (
-              <div className="bg-slate-100/50 rounded-[var(--radius-premium)] p-3 transition-colors">
+              <div className={cn("bg-slate-100/50 p-3 transition-colors", UI_ENGINE_RADIUS_CARD)}>
                 <div className="space-y-3">
                   <SortableContext 
                     items={group.entries.map(e => e.id)} 
@@ -115,7 +106,7 @@ export function VisualTable({
                         />
                       ))
                     ) : (
-                      <div className="py-12 flex flex-col items-center gap-2 bg-white/50 rounded-xl border border-dashed border-slate-200">
+                      <div className={cn("py-12 flex flex-col items-center gap-2 bg-white/50 border border-dashed border-slate-200", UI_ENGINE_RADIUS_CONTROL)}>
                         <span className="font-sans text-[10px] uppercase font-bold tracking-widest text-slate-400">Empty Category</span>
                       </div>
                     )}
@@ -128,7 +119,7 @@ export function VisualTable({
       })}
 
       {sheet.groups.length === 0 && (
-        <div className="py-24 text-center bg-slate-50/50 rounded-[var(--radius-premium)] border border-dashed border-slate-200">
+        <div className={cn("py-24 text-center bg-slate-50/50 border border-dashed border-slate-200", UI_ENGINE_RADIUS_CARD)}>
           <div className="max-w-xs mx-auto flex flex-col items-center gap-4">
             <div className="w-16 h-16 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-200 border border-slate-100">
               <List className="h-8 w-8" />

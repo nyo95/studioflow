@@ -40,7 +40,8 @@ StudioFlow follows a strict **Snapshot-First** architecture to ensure data integ
 
 ### **Adding Products**
 - **From Library**: Search and pick from the `ProductCatalog`. A snapshot is created automatically.
-- **Manual Creation**: Input data manually. This creates a local snapshot with `source_kind: "manual"`.
+- **Hybrid Quick Draft**: Triggered from the search bar when a product is not found in the library. Mandates Category, Brand, and Classification (Stage 1 Draft).
+- **Manual Creation (Legacy)**: Input data manually via the picker modal.
 
 ### **Alternative Options**
 - Use "Add Alternative" to create a new `ProjectScheduleOption` for an existing `ProjectScheduleEntry`.

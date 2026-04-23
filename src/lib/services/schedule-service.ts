@@ -858,7 +858,16 @@ export class ScheduleService {
 
     if (entries.length === 0) return;
 
-    // Update each entry with correct prefix and increment
+    // Phase 1: Move all to temporary negative increments to prevent P2002 unique collisions
+    // during the re-indexing process
+    for (let i = 0; i < entries.length; i++) {
+      await tx.projectScheduleEntry.update({
+        where: { id: entries[i].id },
+        data: { schedule_increment: -(i + 1) }
+      });
+    }
+
+    // Phase 2: Update each entry with correct final prefix and positive increment
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const prefix = entry.prefix_ref?.prefix || "ITEM";

@@ -25,7 +25,7 @@ import type { ProjectScheduleSheetPayload } from "../types";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ErrorFallback } from "@/components/shared/error-fallback";
 import { ProjectScheduleProvider } from "../context/ProjectScheduleContext";
-import { PageHeader, TableCard } from "@/ui_engine";
+import { PageHeader, TableCard, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
 import { LayoutGrid, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -421,20 +421,21 @@ export function ProjectScheduleMain({
                 variant="ghost"
                 data-selection-ignore="true"
                 onMouseDown={(e) => e.stopPropagation()}
-                className="h-11 rounded-xl text-xs font-bold text-red-600 bg-transparent hover:bg-red-50 px-4 transition-all"
+                className={cn("h-11 text-xs font-bold text-red-600 bg-transparent hover:bg-red-50 px-4 transition-all", UI_ENGINE_RADIUS_CONTROL)}
                 onClick={handleBulkDelete}
               >
                 Delete Selected ({selectedIds.size})
               </Button>
             )}
 
-            <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200 mr-2">
+            <div className={cn("flex items-center bg-slate-100 p-1 border border-slate-200 mr-2", UI_ENGINE_RADIUS_CONTROL)}>
               <Button
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "h-9 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
-                  viewMode === "table" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                  "h-9 px-3 text-[10px] font-bold uppercase tracking-wider transition-all",
+                  viewMode === "table" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600",
+                  UI_ENGINE_RADIUS_ACTION
                 )}
                 onClick={() => setViewMode("table")}
               >
@@ -445,8 +446,9 @@ export function ProjectScheduleMain({
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "h-9 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
-                  viewMode === "board" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                  "h-9 px-3 text-[10px] font-bold uppercase tracking-wider transition-all",
+                  viewMode === "board" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600",
+                  UI_ENGINE_RADIUS_ACTION
                 )}
                 onClick={() => setViewMode("board")}
               >
@@ -459,7 +461,7 @@ export function ProjectScheduleMain({
               variant="outline"
               data-selection-ignore="true"
               onMouseDown={(e) => e.stopPropagation()}
-              className="h-11 rounded-xl border-slate-200 text-xs font-semibold text-slate-600"
+              className={cn("h-11 border-slate-200 text-xs font-semibold text-slate-600", UI_ENGINE_RADIUS_CONTROL)}
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
             >
@@ -476,16 +478,22 @@ export function ProjectScheduleMain({
         onValueChange={(value) => setActiveSection(value as ProductType)}
         className="w-full"
       >
-        <TabsList className="h-12 w-full max-w-md rounded-xl border border-slate-200/60 bg-slate-100/50 p-1">
+        <TabsList className={cn("h-12 w-full max-w-md border border-slate-200/60 bg-slate-100/50 p-1", UI_ENGINE_RADIUS_CONTROL)}>
           <TabsTrigger
             value={ProductType.material}
-            className="flex-1 rounded-lg py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+            className={cn(
+              "flex-1 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm",
+              UI_ENGINE_RADIUS_ACTION
+            )}
           >
             Architectural
           </TabsTrigger>
           <TabsTrigger
             value={ProductType.fixture}
-            className="flex-1 rounded-lg py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+            className={cn(
+              "flex-1 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm",
+              UI_ENGINE_RADIUS_ACTION
+            )}
           >
             FF&E
           </TabsTrigger>
@@ -507,11 +515,6 @@ export function ProjectScheduleMain({
                 section={activeSection}
                 onReorder={handleReorder}
                 onMoveBetweenCategories={handleMoveBetweenCategories}
-                onAddEntry={(category) => setPickerModal({ 
-                  isOpen: true, 
-                  category,
-                  section: activeSection
-                })}
                 onEditEntry={(entry: any) => {
                   const finalOption = entry.options.find((o: any) => o.is_final) || entry.options[0];
                   if (finalOption) {

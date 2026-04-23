@@ -24,7 +24,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Edit2, User, MapPin, Calendar, Building2, Lock, CheckCircle2 } from "lucide-react";
-import { Heading } from "@/ui_engine";
+import { Heading, SectionCard } from "@/ui_engine";
 import { formatPhaseName, type ProgressState } from "@/lib/project-progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -167,165 +167,168 @@ export function ProjectOverviewForm({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-      <div className="flex items-start justify-between gap-6 border-b border-slate-200 pb-6 mb-8">
-        <div>
-          <Heading variant="uiMeta" level={6}>Project Metadata</Heading>
-          <Heading level={2} className="mt-2 text-slate-900">Overview</Heading>
-        </div>
+    <SectionCard
+      header={
+        <div className="flex w-full items-start justify-between gap-6">
+          <div>
+            <Heading variant="uiMeta" level={6}>Project Metadata</Heading>
+            <Heading level={2} className="mt-2 text-slate-900">Overview</Heading>
+          </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 rounded-lg border-slate-200 text-xs font-semibold shadow-none hover:bg-slate-50">
-              <Edit2 className="mr-2 h-3.5 w-3.5" />
-              Edit Information
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <form onSubmit={handleSubmit}>
-              <DialogHeader>
-                <DialogTitle asChild>
-                  <Heading level={3}>Edit Project Metadata</Heading>
-                </DialogTitle>
-                <DialogDescription>
-                  Update project details and assigned PICs.
-                </DialogDescription>
-              </DialogHeader>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 rounded-lg border-slate-200 text-xs font-semibold shadow-none hover:bg-slate-50">
+                <Edit2 className="mr-2 h-3.5 w-3.5" />
+                Edit Information
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <form onSubmit={handleSubmit}>
+                <DialogHeader>
+                  <DialogTitle asChild>
+                    <Heading level={3}>Edit Project Metadata</Heading>
+                  </DialogTitle>
+                  <DialogDescription>
+                    Update project details and assigned PICs.
+                  </DialogDescription>
+                </DialogHeader>
 
-              <TooltipProvider delayDuration={0}>
-                <div className="grid gap-6 py-6">
-                  {error ? (
-                    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-                      {error}
-                    </div>
-                  ) : null}
+                <TooltipProvider delayDuration={0}>
+                  <div className="grid gap-6 py-6">
+                    {error ? (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                        {error}
+                      </div>
+                    ) : null}
 
-                  <MetadataField
-                    id="name"
-                    label="Project Name"
-                    disabled={!canEditProjectName}
-                  >
-                    <Input
+                    <MetadataField
                       id="name"
-                      name="name"
-                      defaultValue={project.name}
+                      label="Project Name"
                       disabled={!canEditProjectName}
-                      className="border-slate-200"
-                    />
-                  </MetadataField>
+                    >
+                      <Input
+                        id="name"
+                        name="name"
+                        defaultValue={project.name}
+                        disabled={!canEditProjectName}
+                        className="border-slate-200"
+                      />
+                    </MetadataField>
 
-                  <MetadataField
-                    id="client_id"
-                    label="Client Name"
-                    disabled={!canEditClient}
-                  >
-                    <CreatableSearch
-                      options={[
-                        { id: "none", name: "No Client" },
-                        ...clients.map(c => ({ id: c.id, name: c.name }))
-                      ]}
-                      value={selectedClientId}
-                      onSelect={(id: string, name: string) => {
-                        setSelectedClientId(id);
-                        setClientSearch(name);
-                      }}
-                      onCreate={(name: string) => {
-                        setSelectedClientId(""); // Marker for "New Client"
-                        setClientSearch(name);
-                      }}
-                      placeholder="Search or type a new client..."
+                    <MetadataField
+                      id="client_id"
+                      label="Client Name"
                       disabled={!canEditClient}
-                    />
-                  </MetadataField>
-
-                  <div className="grid grid-cols-2 gap-6">
-                    <MetadataField id="area" label="Area (sqm)" disabled={!canEditArea}>
-                      <div className="relative">
-                        <Input
-                          id="area"
-                          name="area"
-                          type="number"
-                          defaultValue={project.area || ""}
-                          disabled={!canEditArea}
-                          className="border-slate-200 pr-12"
-                        />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
-                          sqm
-                        </span>
-                      </div>
+                    >
+                      <CreatableSearch
+                        options={[
+                          { id: "none", name: "No Client" },
+                          ...clients.map(c => ({ id: c.id, name: c.name }))
+                        ]}
+                        value={selectedClientId}
+                        onSelect={(id: string, name: string) => {
+                          setSelectedClientId(id);
+                          setClientSearch(name);
+                        }}
+                        onCreate={(name: string) => {
+                          setSelectedClientId(""); // Marker for "New Client"
+                          setClientSearch(name);
+                        }}
+                        placeholder="Search or type a new client..."
+                        disabled={!canEditClient}
+                      />
                     </MetadataField>
 
-                    <MetadataField id="opening_date" label="Target Opening" disabled={!canEditOpening}>
-                      <div className="relative">
-                        <Input
-                          id="opening_date"
-                          name="opening_date"
-                          type="date"
-                          defaultValue={project.opening_date_input_value}
-                          disabled={!canEditOpening}
-                          className="border-slate-200"
-                        />
-                      </div>
-                    </MetadataField>
+                    <div className="grid grid-cols-2 gap-6">
+                      <MetadataField id="area" label="Area (sqm)" disabled={!canEditArea}>
+                        <div className="relative">
+                          <Input
+                            id="area"
+                            name="area"
+                            type="number"
+                            defaultValue={project.area || ""}
+                            disabled={!canEditArea}
+                            className="border-slate-200 pr-12"
+                          />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
+                            sqm
+                          </span>
+                        </div>
+                      </MetadataField>
+
+                      <MetadataField id="opening_date" label="Target Opening" disabled={!canEditOpening}>
+                        <div className="relative">
+                          <Input
+                            id="opening_date"
+                            name="opening_date"
+                            type="date"
+                            defaultValue={project.opening_date_input_value}
+                            disabled={!canEditOpening}
+                            className="border-slate-200"
+                          />
+                        </div>
+                      </MetadataField>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <MetadataField id="pic_designer_id" label="DIC (Designer)" disabled={!canEditDic}>
+                        <select
+                          id="pic_designer_id"
+                          name="pic_designer_id"
+                          defaultValue={project.pic_designer_id}
+                          disabled={!canEditDic}
+                          className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
+                        >
+                          {designers.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {user.name}
+                            </option>
+                          ))}
+                        </select>
+                      </MetadataField>
+
+                      <MetadataField id="pic_drafter_id" label="DRIC (Drafter)" disabled={!canEditDric}>
+                        <select
+                          id="pic_drafter_id"
+                          name="pic_drafter_id"
+                          defaultValue={project.pic_drafter_id}
+                          disabled={!canEditDric}
+                          className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
+                        >
+                          {drafters.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {user.name}
+                            </option>
+                          ))}
+                        </select>
+                      </MetadataField>
+                    </div>
                   </div>
+                </TooltipProvider>
 
-                  <div className="grid grid-cols-2 gap-6">
-                    <MetadataField id="pic_designer_id" label="DIC (Designer)" disabled={!canEditDic}>
-                      <select
-                        id="pic_designer_id"
-                        name="pic_designer_id"
-                        defaultValue={project.pic_designer_id}
-                        disabled={!canEditDic}
-                        className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
-                      >
-                        {designers.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.name}
-                          </option>
-                        ))}
-                      </select>
-                    </MetadataField>
-
-                    <MetadataField id="pic_drafter_id" label="DRIC (Drafter)" disabled={!canEditDric}>
-                      <select
-                        id="pic_drafter_id"
-                        name="pic_drafter_id"
-                        defaultValue={project.pic_drafter_id}
-                        disabled={!canEditDric}
-                        className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
-                      >
-                        {drafters.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.name}
-                          </option>
-                        ))}
-                      </select>
-                    </MetadataField>
-                  </div>
-                </div>
-              </TooltipProvider>
-
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setOpen(false)}
-                  className="rounded-lg px-6"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="rounded-lg bg-slate-900 px-8 font-semibold text-white hover:bg-slate-800"
-                >
-                  {loading ? "Saving..." : "Save Changes"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setOpen(false)}
+                    className="rounded-lg px-6"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="rounded-lg bg-slate-900 px-8 font-semibold text-white hover:bg-slate-800"
+                  >
+                    {loading ? "Saving..." : "Save Changes"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      }
+    >
 
       {/* Progress Section - Placed prominently at the top */}
       {currentProgress && (
@@ -507,7 +510,7 @@ export function ProjectOverviewForm({
           </div>
         </div>
       )}
-    </div>
+    </SectionCard>
   );
 }
 

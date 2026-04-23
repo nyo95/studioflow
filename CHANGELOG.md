@@ -1,5 +1,48 @@
 # StudioFlow Development Log (Changelog)
 
+## [1.13.0] - 2026-04-23
+### Added
+- **Consolidated Library Management**: Integrated `Approval Queue` and `Sample Logistics` (Product Requests) directly into the `Material Library` extension.
+- **RBAC Enforcement**: Enhanced `LibraryTabs` to show `Queue` exclusively to `ADMIN` and `Requests` to both `ADMIN` and `STAFF`.
+
+### Removed
+- **Legacy Admin Dashboard**: Purged the redundant `/admin` route and UI.
+- **Navigation Cleanup**: Removed the "Admin" sidebar entry to streamline the workspace.
+
+## [1.12.0] - 2026-04-23
+### Added
+- **Hybrid Quick Draft (UX Unification)**:
+    - Replaced legacy multi-step inline creation with a high-performance **QuickDraftDialog** triggered from the search bar.
+    - Unified the "Local Project Entry" flow with strict **Stage 1 (Draft)** compliance.
+    - Mandated Brand/Vendor selection and Classification (Color/Pattern/Finishing) for all new entries.
+- **Documentation Cleanup**: Deleted redundant legacy docs (`Extension_rule.md`, `Extension_byBK.md`) and synchronized terminology with the global `ProductCatalog` schema.
+
+### Fixed
+- **Runtime Stabilization**: Resolved a critical `ReferenceError: categories is not defined` in `ScheduleSearchBar.tsx` by removing incomplete/dead code and cleaning up unused imports.
+
+### Changed
+- **Terminology Standardization**: Synchronized all references to `GlobalLibrary` and `MaterialCatalog` to the canonical `ProductCatalog` persistence symbol in `MASTER_SSOT.md`.
+- **README Alignment**: Updated extension-level documentation to reflect the new creation patterns.
+
+## [1.11.0] - 2026-04-23
+### Added
+- **View-First UI Protocol**: Implemented a global "Read-Only by Default" pattern for all detail modals.
+- **Role-Based Access Control (RBAC)**:
+    - **Project Schedule**: Strictly restricted editing and library promotion to `ADMIN`, `DIC`, and `DRIC` roles.
+    - **Product Catalog**: Unified all catalog interactions into a single `LibraryFormModal` with editing restricted to `ADMIN` and `STAFF`.
+- **Strict Promotion Gatekeeping**: 
+    - Implemented a mandatory **Stage 1 (Color)** check for project snapshot updates.
+    - Implemented a mandatory **Stage 2 (Identity + Image)** check for global library promotion.
+- **UX Modernization**: Removed redundant "+ ADD PRODUCT" buttons from category headers in favor of the new inline search bar and command menu pattern.
+
+### Changed
+- **Modal Unification**: Deprecated and removed the standalone `ProductDetailModal`, unifying its functionality into the `LibraryFormModal`.
+- **SSOT v1.8.0**: Updated `MASTER_SSOT.md` with explicit role permissions and View-First UI protocols.
+- **Agent Rules**: Updated `AGENTS.md` to enforce the new architectural and UX standards.
+
+### Fixed
+- **Radius Hierarchy**: Corrected mismatched radii across schedule and library components using UI engine tokens.
+
 ## [1.5.1] - 2026-04-22
 ### Added
 - **Design System Enforcement (Zero Hardcode Policy)**: Updated `AGENTS.md` with a mandatory rule banning hardcoded visual values (radii, spacing) in favor of UI engine tokens (`DESIGN_SYSTEM_CONFIG`, `var(--radius-premium)`).

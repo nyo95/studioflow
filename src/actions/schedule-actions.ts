@@ -408,62 +408,7 @@ export const importScheduleAction = createAction(
   { schema: ImportScheduleSchema }
 );
 
-export const promoteToLibraryAction = createAction(
-  async ({ input, ctx, tx }) => {
-    const option = await tx.projectScheduleOption.findUniqueOrThrow({
-      where: { id: input.optionId },
-      include: { entry: true }
-    });
-    
-    await getProjectMembershipOrThrow(tx, option.entry.project_id, ctx.userId, ctx.role);
-    RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
 
-    const snapshot = option.data_snapshot;
-    if (!snapshot) {
-      throw new ActionError("Cannot promote option without snapshot data", "SNAPSHOT_MISSING");
-    }
-
-    const existingRequest = await tx.promotionRequest.findFirst({
-      where: {
-        schedule_option_id: input.optionId,
-        status: "PENDING"
-      }
-    });
-
-    if (existingRequest) {
-      throw new ActionError("There's already a pending request for this option", "DUPLICATE_REQUEST");
-    }
-
-    const result = await tx.promotionRequest.create({
-      data: {
-        project_id: option.entry.project_id,
-        schedule_option_id: input.optionId,
-        requested_by_id: ctx.userId,
-        snapshot_data: snapshot as any,
-        notes: input.notes,
-        status: "PENDING",
-      }
-    });
-
-    await insertAuditLog(
-      tx,
-      AUDIT_ACTIONS.LIBRARY_CREATE_PROMOTION_REQUEST,
-      "PromotionRequest",
-      result.id,
-      ctx.userId,
-      { 
-        project_id: option.entry.project_id, 
-        schedule_option_id: input.optionId,
-        catalog_sku: (snapshot as any).specs?.catalog_sku,
-        catalog_product_name: (snapshot as any).catalog_product_name
-      }
-    );
-
-    invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
-    return { success: true, requestId: result.id, message: "Promotion request submitted for approval" };
-  },
-  { schema: z.object({ optionId: IdSchema, notes: z.string().optional() }) }
-);
 
 export const getScheduleSuggestionsAction = createAction(
   async ({ input, tx }) => {

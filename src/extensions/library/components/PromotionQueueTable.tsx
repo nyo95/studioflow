@@ -6,8 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
-import { approvePromotionRequestAction, rejectPromotionRequestAction } from "@/actions/library-actions";
+import { reviewPromotionRequestAction } from "@/extensions/library/actions/library-actions";
 import { cn } from "@/lib/utils";
+import { 
+  UI_ENGINE_RADIUS_CARD, 
+  UI_ENGINE_RADIUS_CONTROL, 
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_TYPE_META
+} from "@/ui_engine";
 
 interface PromotionRequest {
   id: string;
@@ -37,7 +43,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
 
   const handleApprove = async (request: PromotionRequest) => {
     try {
-      unwrapActionResult(await approvePromotionRequestAction({ requestId: request.id }));
+      unwrapActionResult(await reviewPromotionRequestAction({ requestId: request.id, action: "APPROVED" }));
       toast.success("Promotion request approved");
       onRefresh?.();
     } catch (error: unknown) {
@@ -47,7 +53,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
 
   const handleReject = async (request: PromotionRequest) => {
     try {
-      unwrapActionResult(await rejectPromotionRequestAction({ requestId: request.id }));
+      unwrapActionResult(await reviewPromotionRequestAction({ requestId: request.id, action: "REJECTED" }));
       toast.success("Promotion request rejected");
       onRefresh?.();
     } catch (error: unknown) {
@@ -61,7 +67,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
   if (requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-6">
+        <div className={cn("h-16 w-16 bg-slate-100 flex items-center justify-center mb-6", UI_ENGINE_RADIUS_CARD)}>
           <Clock className="h-8 w-8 text-slate-300" />
         </div>
         <h3 className="font-lora text-lg font-medium text-slate-900 mb-2">No Pending Requests</h3>
@@ -78,7 +84,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
         <section>
           <div className="flex items-center gap-3 mb-6">
             <h2 className="font-lora text-xl font-medium text-slate-900">Pending Review</h2>
-            <Badge variant="outline" className="font-inter text-[10px]">
+            <Badge variant="outline" className={cn("font-inter", UI_ENGINE_TYPE_META)}>
               {pendingRequests.length}
             </Badge>
           </div>
@@ -87,11 +93,11 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
             {pendingRequests.map((req) => (
               <div
                 key={req.id}
-                className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                className={cn("bg-white border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow", UI_ENGINE_RADIUS_CARD)}
               >
                 <div className="p-6 flex items-start gap-6">
                   {req.snapshot_data?.catalog_image_url && (
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-50 flex-shrink-0">
+                    <div className={cn("w-20 h-20 overflow-hidden bg-slate-50 flex-shrink-0", UI_ENGINE_RADIUS_CARD)}>
                       <img
                         src={req.snapshot_data.catalog_image_url}
                         alt=""
@@ -121,14 +127,14 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                             variant="outline"
                             size="sm"
                             onClick={() => handleReject(req)}
-                            className="h-10 w-10 p-0 rounded-xl border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-100 hover:bg-red-50"
+                            className={cn("h-10 w-10 p-0 border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-100 hover:bg-red-50", UI_ENGINE_RADIUS_CONTROL)}
                           >
                             <X className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
                             onClick={() => handleApprove(req)}
-                            className="h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
+                            className={cn("h-10 px-4 bg-slate-900 hover:bg-slate-800 text-white shadow-sm", UI_ENGINE_RADIUS_CONTROL)}
                           >
                             <Check className="h-4 w-4 mr-2" />
                             Approve
@@ -177,14 +183,16 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
               <div
                 key={req.id}
                 className={cn(
-                  "flex items-center gap-4 p-4 rounded-xl border border-slate-100 transition-all",
+                  "flex items-center gap-4 p-4 border border-slate-100 transition-all",
+                  UI_ENGINE_RADIUS_CONTROL,
                   req.status === "APPROVED" ? "bg-emerald-50/50" : "bg-slate-50/50"
                 )}
               >
                 <Badge
                   variant="outline"
                   className={cn(
-                    "font-inter text-[10px]",
+                    "font-inter",
+                    UI_ENGINE_TYPE_META,
                     req.status === "APPROVED"
                       ? "border-emerald-200 bg-emerald-100 text-emerald-700"
                       : "border-slate-200 bg-slate-100 text-slate-500"

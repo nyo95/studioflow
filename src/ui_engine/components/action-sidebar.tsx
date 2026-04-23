@@ -2,6 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Heading } from "./heading";
+import { UI_ENGINE_RADIUS_CARD } from "../tokens";
 
 export interface ActionSidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
@@ -35,7 +36,7 @@ export function ActionSidebarSection({
   ...props
 }: ActionSidebarSectionProps) {
   return (
-    <Card className={cn("border-slate-200 bg-white shadow-sm overflow-hidden rounded-[var(--ui-radius-card,1rem)]", className)} {...props}>
+    <Card className={cn("border-slate-200 bg-white shadow-sm overflow-hidden", UI_ENGINE_RADIUS_CARD, className)} {...props}>
       <div className="border-b border-slate-100 bg-slate-50/30 p-5 pb-3">
         <div className="space-y-1">
           <Heading level={4}>{title}</Heading>

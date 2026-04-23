@@ -178,7 +178,7 @@ export function GradualInputForm({
                       onSelect={handleSelect}
                       onCreate={(name) => handleSelect("", name)}
                       onSearchChange={onSearch}
-                      placeholder="Search brands, codes, or motifs..."
+                      placeholder="Search Library or type Color, Pattern, or SKU..."
                       allowFreeText
                 />
 
@@ -243,7 +243,7 @@ export function GradualInputForm({
                    <Input 
                      value={customData.catalog_color} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_color: e.target.value}))}
-                     placeholder="e.g. Matte Black or MB-01"
+                     placeholder="e.g. Matte Black (Color) or MB-01"
                      className="h-12 rounded-lg border-none bg-slate-50 shadow-inner font-bold text-slate-900" 
                    />
                 </div>
@@ -276,7 +276,7 @@ export function GradualInputForm({
                    <Input 
                      value={customData.catalog_brand} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_brand: e.target.value}))}
-                     placeholder="e.g. Roman, Kohler"
+                     placeholder="e.g. Roman, Kohler (Brand)"
                      className="h-12 rounded-lg border-none bg-slate-50 shadow-inner font-bold text-slate-900" 
                    />
                 </div>

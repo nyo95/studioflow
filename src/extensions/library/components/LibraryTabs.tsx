@@ -1,22 +1,23 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@/lib/utils";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Search, Filter, Warehouse, Plus, LayoutGrid, Clock } from "lucide-react";
+import { Users, Search, Filter, Warehouse, Plus, LayoutGrid, Clock, ClipboardList } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VendorTable } from "./VendorTable";
 import { PhysicalInventoryTable } from "./PhysicalInventoryTable";
 import { LibraryFormModal } from "./LibraryFormModal";
-import { ProductDetailModal } from "./modals/ProductDetailModal";
 import { ProductCatalogWithRelations, LibraryVendor, ProjectProductRequestWithDetails } from "../types";
 import { ProductGrid } from "./catalog/ProductGrid";
+import { ProductRequestTable } from "./ProductRequestTable";
 import { PromotionQueueTable } from "./PromotionQueueTable";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { ActionSidebar, ActionSidebarSection, ActionSidebarItem } from "@/ui_engine";
+import { ActionSidebar, ActionSidebarSection, ActionSidebarItem, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ErrorFallback } from "@/components/shared/error-fallback";
 
@@ -83,8 +84,8 @@ export function LibraryTabs({
   };
 
   const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
-  const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
   const [modalMode, setModalMode] = React.useState<"CREATE" | "EDIT">("CREATE");
+  const [modalType, setModalType] = React.useState<"PRODUCT" | "VENDOR">("PRODUCT");
   const [selectedData, setSelectedData] = React.useState<LibraryVendor | ProductCatalogWithRelations | null>(null);
 
   const retryTab = () => router.refresh();
@@ -95,16 +96,20 @@ export function LibraryTabs({
 
   const openDetail = (product: ProductCatalogWithRelations) => {
     setSelectedData(product);
-    setIsDetailModalOpen(true);
+    setModalType("PRODUCT");
+    setModalMode("EDIT");
+    setIsFormModalOpen(true);
   };
 
   const openVendorEdit = (vendor: LibraryVendor) => {
     setSelectedData(vendor);
+    setModalType("VENDOR");
     setModalMode("EDIT");
     setIsFormModalOpen(true);
   };
 
   const isAdmin = userRole === "ADMIN";
+  const canManageCatalog = userRole === "ADMIN" || userRole === "STAFF";
 
   return (
     <Tabs 
@@ -121,8 +126,8 @@ export function LibraryTabs({
                  <div className="relative group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
                     <Input
-                      placeholder="Search catalog..."
-                      className="pl-9 w-full bg-slate-50/50 border-slate-100 focus:bg-white focus:border-slate-200 focus:ring-0 h-10 font-inter text-xs shadow-none rounded-xl transition-all"
+                      placeholder="Search Library..."
+                      className={cn("pl-9 w-full bg-slate-50/50 border-slate-100 focus:bg-white focus:border-slate-200 focus:ring-0 h-10 font-inter text-xs shadow-none transition-all", UI_ENGINE_RADIUS_CONTROL)}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -131,13 +136,13 @@ export function LibraryTabs({
 
               <ActionSidebarItem label="Collection Category">
                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger className="w-full h-10 border-slate-100 bg-slate-50/50 font-inter text-xs focus:ring-0 shadow-none rounded-xl transition-all">
+                    <SelectTrigger className={cn("w-full h-10 border-slate-100 bg-slate-50/50 font-inter text-xs focus:ring-0 shadow-none transition-all", UI_ENGINE_RADIUS_CONTROL)}>
                       <div className="flex items-center gap-2">
                         <Filter className="h-3 w-3 text-slate-400" />
                         <SelectValue placeholder="All Categories" />
                       </div>
                     </SelectTrigger>
-                    <SelectContent className="font-inter text-xs rounded-xl border-slate-100 shadow-2xl">
+                    <SelectContent className={cn("font-inter text-xs border-slate-100 shadow-2xl", UI_ENGINE_RADIUS_CONTROL)}>
                       <SelectItem value="all">Every Category</SelectItem>
                       {categories.map((cat) => (
                         <SelectItem key={cat} value={cat}>
@@ -149,7 +154,7 @@ export function LibraryTabs({
               </ActionSidebarItem>
 
               <ActionSidebarItem label="Options">
-                 <div className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-50 transition-all hover:border-slate-100">
+                 <div className={cn("flex items-center justify-between p-4 bg-slate-50/50 border border-slate-50 transition-all hover:border-slate-100", UI_ENGINE_RADIUS_CONTROL)}>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] font-black text-slate-900 font-inter uppercase tracking-widest">Physical Only</span>
                       <span className="text-[9px] text-slate-400 font-inter">Filter items with samples</span>
@@ -168,14 +173,15 @@ export function LibraryTabs({
               </ActionSidebarItem>
           </ActionSidebarSection>
 
-          {isAdmin && (
+          {canManageCatalog && (
             <Button 
               onClick={() => {
                 setModalMode("CREATE");
+                setModalType("PRODUCT");
                 setSelectedData(null);
                 setIsFormModalOpen(true);
               }}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-inter text-[10px] font-black uppercase tracking-widest h-12 px-4 rounded-2xl shadow-lg flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className={cn("w-full bg-slate-900 hover:bg-slate-800 text-white font-inter text-[10px] font-black uppercase tracking-widest h-12 px-4 shadow-lg flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]", UI_ENGINE_RADIUS_CONTROL)}
             >
               <Plus className="h-4 w-4" />
               <span>Add Product</span>
@@ -205,6 +211,14 @@ export function LibraryTabs({
                     <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Vendors</span>
                   </div>
                 </TabsTrigger>
+                {canManageCatalog && (
+                  <TabsTrigger value="requests" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <ClipboardList className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
+                      <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Requests</span>
+                    </div>
+                  </TabsTrigger>
+                )}
                 {isAdmin && (
                   <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
                     <div className="flex items-center gap-3">
@@ -261,6 +275,18 @@ export function LibraryTabs({
             </ErrorBoundary>
           </TabsContent>
 
+          {canManageCatalog && (
+            <TabsContent value="requests" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+              <ErrorBoundary name="Product Requests">
+                <ProductRequestTable
+                  requests={requests}
+                  userRole={userRole}
+                  onRefresh={retryTab}
+                />
+              </ErrorBoundary>
+            </TabsContent>
+          )}
+
           {isAdmin && (
             <TabsContent value="queue" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
               <ErrorBoundary name="Promotion Queue">
@@ -275,19 +301,11 @@ export function LibraryTabs({
         </main>
       </div>
 
-      {/* Detail Modal (RBAC Enabled) */}
-      <ProductDetailModal
-        isOpen={isDetailModalOpen}
-        onOpenChange={setIsDetailModalOpen}
-        product={selectedData as ProductCatalogWithRelations}
-        userRole={userRole}
-      />
-
-      {/* Global Form Modal (Creation) */}
+      {/* Unified Form/Viewer Modal (RBAC & View-First Enabled) */}
       <LibraryFormModal
         isOpen={isFormModalOpen}
         onOpenChange={setIsFormModalOpen}
-        type={activeTab === "vendors" ? "VENDOR" : "PRODUCT"}
+        type={modalType}
         mode={modalMode}
         initialData={selectedData}
         vendors={vendors}

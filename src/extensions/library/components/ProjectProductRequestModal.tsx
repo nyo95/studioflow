@@ -151,7 +151,7 @@ export function ProjectProductRequestModal({
                     setCustomName(name);
                   }}
                   onSearchChange={setSearch}
-                  placeholder="Search by brand, type, or motif..."
+                  placeholder="Search by Brand, Product Name, or Pattern..."
                   allowFreeText
                 />
                 {isManualEntry && (
@@ -208,7 +208,7 @@ export function ProjectProductRequestModal({
                           <Label htmlFor="custom_name" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Custom Product Name & Brand</Label>
                           <Input
                             id="custom_name"
-                            placeholder="e.g. Roman Tile Granit G6022..."
+                            placeholder="e.g. Roman Tile Granit G6022 (Product Name)"
                             className="bg-white border-2 border-slate-100 focus:border-slate-900 h-12 text-sm font-medium transition-all"
                             value={customName}
                             onChange={(e) => setCustomName(e.target.value)}

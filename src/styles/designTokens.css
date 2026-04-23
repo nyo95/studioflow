@@ -21,7 +21,10 @@
   --glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
 
   /* Spacing & Radii */
-  --radius-premium: 1.25rem; /* 20px */
+  --radius-premium: var(--ui-radius-card, 0.75rem);
+  --ui-radius-card: 0.75rem;
+  --ui-radius-control: calc(var(--ui-radius-card) * 0.66);
+  --ui-radius-action: calc(var(--ui-radius-card) * 0.33);
   --radius-glass: 1rem;
 }
 

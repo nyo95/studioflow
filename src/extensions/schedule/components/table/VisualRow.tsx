@@ -16,6 +16,7 @@ import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
+import { UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
 import type { ProjectScheduleEntryWithRelations } from "../../types";
 
 interface VisualRowProps {
@@ -147,9 +148,10 @@ export function VisualRow({
       style={style} 
       onClick={onClick}
       className={cn(
-        "group relative flex items-center gap-6 p-2 rounded-[var(--radius-premium)] border transition-all duration-300",
+        "group relative flex items-center gap-6 p-2 border transition-all duration-300",
+        UI_ENGINE_RADIUS_CONTROL,
         isSelected 
-          ? "bg-slate-900 border-slate-900 text-white shadow-lg z-10 scale-[1.01]" 
+          ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900 shadow-xl z-10 scale-[1.01]" 
           : "bg-white/80 backdrop-blur-md border-slate-200/60 hover:border-slate-300 shadow-sm hover:shadow-md",
         isDragging && "opacity-50 scale-105 z-50 shadow-2xl ring-2 ring-slate-900"
       )}
@@ -179,8 +181,8 @@ export function VisualRow({
 
       {/* 2. Product Visual & Main Specs */}
       <div className="flex-1 flex items-center gap-4 min-w-0">
-        <div
-          className="relative flex-shrink-0 w-20 h-20 rounded-[var(--radius-premium)] overflow-hidden bg-slate-100 border border-slate-200 cursor-zoom-in group/img"
+        <div 
+          className={cn("w-20 h-20 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_ACTION)}
           onClick={(e) => { e.stopPropagation(); snapshot?.catalog_image_url && setLightboxOpen(true); }}
         >
           {snapshot?.catalog_image_url ? (
@@ -206,16 +208,16 @@ export function VisualRow({
         <div className="flex-1 min-w-0">
           <h4 className={cn(
             "font-serif text-sm font-semibold truncate transition-colors leading-tight",
-            isSelected ? "text-white" : "text-slate-900"
+            isSelected ? "text-slate-900" : "text-slate-900"
           )}>
             {snapshot?.catalog_product_name || "Unspecified Product"}
           </h4>
           <div className="flex items-center gap-2 mt-0.5">
-             <span className={cn("font-sans text-[11px]", isSelected ? "text-white/80" : "text-slate-500")}>
+             <span className={cn("font-sans text-[11px]", isSelected ? "text-slate-600" : "text-slate-500")}>
                {snapshot?.catalog_brand || "No Brand"}
              </span>
-             <div className={cn("h-1 w-1 rounded-full", isSelected ? "bg-white/20" : "bg-slate-200")} />
-             <span className={cn("font-sans text-[10px] font-medium uppercase tracking-widest opacity-60", isSelected ? "text-white" : "text-slate-400")}>
+             <div className={cn("h-1 w-1 rounded-full", isSelected ? "bg-slate-300" : "bg-slate-200")} />
+             <span className={cn("font-sans text-[10px] font-medium uppercase tracking-widest opacity-60", isSelected ? "text-slate-900" : "text-slate-400")}>
                {entry.schedule_category}
              </span>
           </div>
@@ -237,8 +239,8 @@ export function VisualRow({
                     <ChevronLeft className="h-3 w-3" />
                   </button>
                   <div className="px-2 flex flex-col items-center min-w-[32px]">
-                     <span className={cn("text-[6px] font-black uppercase tracking-[0.15em] leading-none", isSelected ? "text-white/40" : "text-slate-300")}>Opt</span>
-                     <span className={cn("font-inter text-xs font-black leading-none -mt-0.5", isSelected ? "text-white" : "text-slate-900")}>
+                     <span className={cn("text-[6px] font-black uppercase tracking-[0.15em] leading-none", isSelected ? "text-slate-400" : "text-slate-300")}>Opt</span>
+                     <span className={cn("font-inter text-xs font-black leading-none -mt-0.5", isSelected ? "text-slate-900" : "text-slate-900")}>
                        {activeOptionIndex + 1}
                      </span>
                   </div>
@@ -279,7 +281,7 @@ export function VisualRow({
                 value={locationValue}
                 onChange={(e) => setLocationValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSaveLocation()}
-                className="h-9 text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-xl px-3 outline-none focus:ring-2 focus:ring-slate-900 transition-all w-full"
+                className={cn("h-9 text-xs font-bold text-slate-900 bg-white border border-slate-200 px-3 outline-none focus:ring-2 focus:ring-slate-900 transition-all w-full", UI_ENGINE_RADIUS_CONTROL)}
                 placeholder="Loc..."
                 autoFocus
               />

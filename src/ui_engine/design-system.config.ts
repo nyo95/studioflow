@@ -76,7 +76,9 @@ export const DESIGN_SYSTEM_CONFIG = {
     sectionGap: "space-y-[var(--ui-section-gap,2rem)]",
     cardPaddingX: "px-[var(--ui-section-px,1.5rem)]",
     cardPaddingY: "py-[var(--ui-section-py,1.5rem)]",
-    radius: "rounded-[var(--ui-radius-card,1.5rem)]",
+    radius: "rounded-[var(--ui-radius-card,0.75rem)]",
+    radiusControl: "rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]",
+    radiusAction: "rounded-[var(--ui-radius-action,calc(var(--ui-radius-card,0.75rem)*0.33))]",
   },
   rails: {
     outerWidth: "var(--ui-sidebar-rail-width, 78px)",

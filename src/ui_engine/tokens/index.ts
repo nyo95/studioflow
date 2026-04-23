@@ -28,6 +28,8 @@ export const UI_ENGINE_PAGE_SHELL_CLASS = cn(
 
 // 2. Aesthetic Tokens (Radius & Colors)
 export const UI_ENGINE_RADIUS_CARD = radius.RADIUS_CARD;
+export const UI_ENGINE_RADIUS_CONTROL = radius.RADIUS_CONTROL;
+export const UI_ENGINE_RADIUS_ACTION = radius.RADIUS_ACTION;
 export const UI_ENGINE_RADIUS_BUTTON = radius.RADIUS_BUTTON;
 export const UI_ENGINE_RADIUS_INPUT = radius.RADIUS_INPUT;
 
@@ -47,6 +49,12 @@ export const TYPE_H2 = cn(
   DESIGN_SYSTEM_CONFIG.typography.h2.tracking,
   DESIGN_SYSTEM_CONFIG.typography.h2.color
 );
+export const TYPE_H3 = cn(
+  DESIGN_SYSTEM_CONFIG.typography.h3.size,
+  DESIGN_SYSTEM_CONFIG.typography.h3.weight,
+  DESIGN_SYSTEM_CONFIG.typography.h3.tracking,
+  DESIGN_SYSTEM_CONFIG.typography.h3.color
+);
 export const TYPE_BODY = typography.TEXT_SIZE_BODY;
 export const TYPE_META = typography.TEXT_SIZE_BADGE;
 
@@ -54,6 +62,14 @@ export const UI_ENGINE_FONT_SANS = typography.FONT_BODY;
 export const UI_ENGINE_FONT_SERIF = typography.FONT_HEADING;
 export const UI_ENGINE_TYPE_H1 = typography.TEXT_H1;
 export const UI_ENGINE_TYPE_H2 = cn(TYPE_H2, "text-wrap");
+export const UI_ENGINE_TYPE_H3 = cn(TYPE_H3, "text-wrap");
+export const UI_ENGINE_TYPE_H4 = cn(
+  DESIGN_SYSTEM_CONFIG.typography.h4.size,
+  DESIGN_SYSTEM_CONFIG.typography.h4.weight,
+  DESIGN_SYSTEM_CONFIG.typography.h4.tracking,
+  DESIGN_SYSTEM_CONFIG.typography.h4.color,
+  "text-wrap"
+);
 
 export const UI_ENGINE_TYPE_BODY = typography.TEXT_SIZE_BODY;
 export const UI_ENGINE_TYPE_META = typography.TEXT_SIZE_BADGE;

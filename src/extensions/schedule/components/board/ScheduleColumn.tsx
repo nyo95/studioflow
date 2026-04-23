@@ -12,12 +12,11 @@ interface ScheduleColumnProps {
   id: string; // The category name
   title: string;
   items: any[];
-  onAddEntry?: (category: string) => void;
   onEditEntry?: (entry: any) => void;
   onDeleteEntry?: (id: string) => void;
 }
 
-export function ScheduleColumn({ id, title, items, onAddEntry, onEditEntry, onDeleteEntry }: ScheduleColumnProps) {
+export function ScheduleColumn({ id, title, items, onEditEntry, onDeleteEntry }: ScheduleColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
@@ -30,14 +29,6 @@ export function ScheduleColumn({ id, title, items, onAddEntry, onEditEntry, onDe
           </span>
         </h3>
         <div className="flex items-center gap-1">
-          <Button 
-            variant="ghost" 
-            size="icon-sm" 
-            className="h-7 w-7 text-slate-400 hover:text-slate-600 hover:bg-slate-200"
-            onClick={() => onAddEntry?.(id)}
-          >
-            <Plus size={16} />
-          </Button>
           <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-slate-400">
             <MoreVertical size={14} />
           </Button>
