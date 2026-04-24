@@ -16,7 +16,7 @@ async function resolveImportCategory(
   row: ScheduleCsvImportRow,
   section: ProductType
 ): Promise<string> {
-  const explicitCategory = row.category?.trim() || row.materialType?.trim();
+  const explicitCategory = row.category?.trim() || row.productCategory?.trim();
   if (explicitCategory) {
     const normalized = explicitCategory.toLowerCase();
     if (normalized === "general" || normalized === "") {
@@ -134,7 +134,7 @@ export async function importScheduleFromCsv(
     projectId,
     section,
     rows,
-    sourceOrigin = "gsheets_import",
+    sourceOrigin,
   } = options;
 
   let created = 0;
@@ -147,7 +147,8 @@ export async function importScheduleFromCsv(
       where: {
         project_id: projectId,
         section,
-        schedule_code: row.code,
+        schedule_prefix: row.code.split("-")[0]?.trim() || "",
+        schedule_increment: parseInt(row.code.split("-")[1]?.trim() || "0", 10),
       },
       include: {
         options: true,
@@ -156,7 +157,7 @@ export async function importScheduleFromCsv(
 
     const category = normalizeImportCategory(existing?.schedule_category ?? await resolveImportCategory(tx, row, section));
     const manualData = buildManualImportData(row, category);
-    const snapshot = await buildScheduleSnapshot(tx, null, manualData, sourceOrigin);
+    const snapshot = await buildScheduleSnapshot(tx, null, manualData, sourceOrigin || "gsheets_import");
     const snapshotJson = snapshot as unknown as Prisma.InputJsonValue;
 
     if (existing) {
@@ -206,7 +207,8 @@ export async function importScheduleFromCsv(
         project_id: projectId,
         schedule_category: normalizedCategory,
         section,
-        schedule_code: `TEMP-IMPORT-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        schedule_prefix: prefixDict.prefix || "ITEM",
+        schedule_increment: (lastEntry?.schedule_increment ?? 0) + 1,
         prefix_id: prefixDict.id,
         schedule_sort_order: (lastEntry?.schedule_sort_order ?? 0) + 1,
         index_number: (lastEntry?.index_number ?? 0) + 1,
@@ -227,10 +229,6 @@ export async function importScheduleFromCsv(
     });
 
     // Canonical scheduler codes are normalized from prefix/category order, not imported raw text.
-    await tx.projectScheduleEntry.update({
-      where: { id: entry.id },
-      data: { schedule_code: `TEMP-${entry.id}` },
-    });
     await ScheduleService.normalizeCodes(tx, projectId, section, normalizedCategory);
 
     created++;

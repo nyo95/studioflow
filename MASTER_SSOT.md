@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 1.7.2
-> **Last Updated:** April 2026 (Build Stabilization & Type Hardening)
+> **Document Version:** 1.9.0 (versi 1.6 Alignment)
+> **Last Updated:** April 2026 (UI Hierarchy & Search Optimization)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -22,6 +22,7 @@ The application follows a strict high-end minimalist design philosophy:
 The application enforces a "View-First" interaction model for data integrity:
 - **Default State:** All forms/modals for existing data MUST open in a Read-Only state.
 - **Modify Toggle:** Privileged users are presented with a "Modify" (Edit Symbol) button to explicitly unlock field mutations.
+- **Visual Hierarchy Priority (Generic Items):** For items where primary identifiers (SKU, Name) are missing or marked as "Generic", the UI must automatically promote technical specifications (Color, Pattern, Finish) to the primary display line to ensure physical recognizability.
 - **Safety:** This prevents accidental data changes during inspection and provides a consistent interface for all user roles.
 
 ### UI Engine Rules
@@ -87,11 +88,21 @@ The global reusable material and fixture database.
 - **Deleted_at:** Soft-delete timestamp (no hard deletes allowed).
 - **Physical Samples:** Tracks physical sample location (`catalog_rak_location`, `catalog_box_number`).
 
+#### Project (Identity & Naming)
+- **Canonical Naming Format:** `[YYYY]-[NNN] [Project Name]` (e.g., `2025-429 Heloskin Cimanggu`).
+- **Structure:**
+    - `[YYYY]`: 4-digit year of creation.
+    - `[NNN]`: 3-digit sequential index for the year.
+    - `[Space]`: A single space separator.
+    - `[Project Name]`: The readable title.
+- **Enforcement:** Service layer automatically generates this prefix if auto-naming is enabled. Manual entries must adhere to this format.
+
 ### 3.2 Scheduler Entities (Pillar 2)
 
 #### ProjectScheduleEntry
 Represents a single row in the project's specification sheet.
-- **Namespaced Classification:** Uses schedule_category (e.g., PAINT, SANITARY) and section (type: ProductType: material, fixture).
+- **Scope & Uniqueness:** Uniqueness is scoped to `[project_id, section, schedule_prefix, schedule_increment]`. This allows identical codes (e.g., PT-01) across different projects while maintaining absolute uniqueness within a project's domain.
+- **Namespaced Classification:** Uses `schedule_category` (e.g., PAINT, SANITARY) and `section` (type: `ProductType`: material, fixture).
 - **Code:** Deterministic code generated as `[Prefix]-[Index]`.
 - **Qty / Unit / schedule_location:** Project-specific metadata fields.
 
@@ -134,13 +145,15 @@ Approving a material option creates a frozen `data_snapshot`.
 - **Hybrid Quick Draft (UX Refactor v1.6):** 
     - **Trigger:** Initiated via the Global Search Bar when no matching library product is found.
     - **Quick Draft Dialog:** A centralized modal for rapid drafting that satisfies Stage 1 (Draft) requirements in a single step.
+    - **Global Search Override:** Searching the Master Library via the selection modal overrides current category filters to ensure all library assets are discoverable regardless of their primary classification.
 - **Phased Input Flow (UX Refactor v1.5):** 
     1. **Stage 1 (Draft):** Prioritize "Classification" (Color, Pattern, or Finishing) and Mandatory Brand/Vendor. This creates a local project snapshot.
     2. **Stage 2 (Elevation):** Primary data (SKU + Name) and Images. Completing this stage elevates the snapshot to "Library Ready".
 - **Strict Gatekeeping:** 
-    - **Update Snapshot:** Requires Stage 1 completeness (Color).
-    - **Promote to Library:** Requires full Stage 2 completeness (SKU, Name, Brand, Image).
-- **Manual Promotion:** Users must explicitly click "Save to Library" (Manual Elevation). Auto-harvesting is disabled for project snapshots to ensure library quality.
+    - **Update Snapshot:** Requires Stage 1 completeness (Mandatory: `catalog_color`).
+    - **Promote to Library:** Requires full Stage 2 completeness (Mandatory: `catalog_sku`, `catalog_product_name`, `catalog_brand`, `catalog_image_url`).
+- **Ownership Validation:** All mutations (Edit/Delete/Promote) strictly validate that the target belongs to the active project.
+- **Manual Promotion:** Users must explicitly click "Save to Library" (Manual Elevation). Auto-harvesting is disabled for project snapshots to ensure library quality. Project-level custom requests do NOT create library entries.
 
 ### 5.3 Deterministic Coding
 - Codes are managed via `ScheduleService.normalizeCodes`.
@@ -150,15 +163,18 @@ Approving a material option creates a frozen `data_snapshot`.
 
 ---
 
-## 6. INTEGRATION PATTERNS
+## 6. INTEGRATION PATTERNS (DEFERRED)
+
+> [!IMPORTANT]
+> **Status: Temporarily Unsupported**. All external integrations (CSV, SketchUp) are currently deferred while the core snapshot-first architecture is stabilized. Integration endpoints exist in the codebase but are explicitly disabled (`FEATURE_DISABLED`).
 
 ### 6.1 Google Sheets (CSV Roundtrip)
-- **Export:** Web scheduler exports section-specific CSV for external editing.
-- **Import:** Manual CSV upload matches existing rows by `project_id + section + schedule_code`.
+- **Export:** (Deferred) Web scheduler exports section-specific CSV for external editing.
+- **Import:** (Deferred) Manual CSV upload matches existing rows by `project_id + section + schedule_code`.
 - **Validation:** Importers must map to valid categories; unknown categories are rejected.
 
 ### 6.2 SketchUp Plugin
-- **One-Way Import:** Web scheduler accepts CSV exports from the SketchUp `material_scheduler` plugin.
+- **One-Way Import:** (Deferred) Web scheduler accepts CSV exports from the SketchUp `material_scheduler` plugin.
 - **Source Origin:** Imported rows are tagged as `sketchup_plugin` in the snapshot metadata.
 
 ---
@@ -180,10 +196,10 @@ Every mutation (Create/Update/Delete/Approve) MUST call `insertAuditLog`.
 
 | Role | Description | Access Rights |
 |------|-------------|---------------|
-| **ADMIN** | Full system and settings control. | Edit Schedule, Edit Library, Manage Queue. |
+| **ADMIN** | Full system and settings control. | Edit Schedule, **Full Library Access (including APPROVED items)**, Manage Queue. |
 | **DIC** | Designer In Charge: Project Lead. | Edit Schedule (Project Level), Read-only Library. |
 | **DRIC** | Drafter In Charge: Production Lead. | Edit Schedule (Project Level), Read-only Library. |
-| **STAFF** | General Designer / Studio Staff. | Read-only Schedule, Edit Library (Catalog Level). |
+| **STAFF** | General Designer / Studio Staff. | Read-only Schedule, Edit Library (Catalog Level - **PENDING only**). |
 
 ---
 
@@ -198,7 +214,7 @@ This matrix defines the canonical mapping between concepts, labels, and persiste
 | Brand   | Brand          | Brand    | `Vendor.brand_name` | - |
 | SKU     | SKU            | SKU      | `catalog_sku` | - |
 | Product | Catalog Item   | Product  | `ProductCatalog.catalog_product_name` | - |
-| Code    | Sequence Code  | Code     | `ProjectScheduleEntry.schedule_code` | `ProjectScheduleEntry.code` |
+| Code    | Sequence Code  | Code     | `${schedule_prefix}-${schedule_increment}` | `ProjectScheduleEntry.code` |
 | Category| Schedule Group | Category | `ProjectScheduleEntry.schedule_category` | `category` (scheduler domain) |
 | Order   | Display Order  | Sort     | `ProjectScheduleEntry.schedule_sort_order` | `sort_order` |
 | Pending | Queue          | Queue    | `LibraryItemStatus.PENDING` | `Under Review` |
@@ -210,7 +226,7 @@ The following terms and fields are BANNED in new code and must be phased out fro
 - **`ProjectSchedule`**: Use namespaced `ProjectScheduleEntry`.
 - **`code` / `category` / `sort_order`**: (In models) Use `schedule_code`, `schedule_category`, `schedule_sort_order`.
 - **`project_type`**: Use `core_project_type`.
-- **`source_kind` / `source_origin` / `source_external_id`**: (In snapshots) Use `snapshot_source_kind`, `snapshot_source_origin`, `snapshot_source_external_id`.
+- **`source_kind` / `source_origin` / `source_external_id`**: (In snapshots) Use `snapshot_source_kind`, `snapshot_source_origin` (values: `library`, `manual`, `gsheets_import`, `sketchup_plugin`), `snapshot_source_external_id`.
 - **`captured_at`**: (In snapshots) Use `snapshot_captured_at`.
 - **`initials_type` / `has_sample`**: (In snapshots) Use `catalog_initials_type`, `catalog_has_sample`.
 - **`specs.catalog_product_name`**: (In snapshots) Use `specs.catalog_motif` to avoid confusion with root name.

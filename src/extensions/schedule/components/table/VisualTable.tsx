@@ -18,7 +18,6 @@ interface VisualTableProps {
   onEditEntry?: (entry: any) => void;
   onDeleteEntry?: (id: string) => void;
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
-  onUpdateQty?: (entryId: string, qty: number) => Promise<void>;
   onAddAlternative?: (entryId: string, category: string) => void;
   selectedIds?: Set<string>;
   onRowClick?: (id: string, event: React.MouseEvent) => void;
@@ -30,7 +29,6 @@ export function VisualTable({
   onEditEntry, 
   onDeleteEntry, 
   onUpdateLocation, 
-  onUpdateQty, 
   onAddAlternative,
   selectedIds = new Set(),
   onRowClick
@@ -99,7 +97,6 @@ export function VisualTable({
                           onEdit={onEditEntry}
                           onDelete={onDeleteEntry}
                           onUpdateLocation={onUpdateLocation}
-                          onUpdateQty={onUpdateQty}
                           onAddAlternative={() => onAddAlternative?.(entry.id, group.schedule_category)}
                           isSelected={selectedIds.has(entry.id)}
                           onClick={(e) => onRowClick?.(entry.id, e)}

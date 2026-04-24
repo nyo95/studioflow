@@ -73,6 +73,7 @@ interface ScheduleSpecEditorModalProps {
   onSuccess?: () => void;
   onRefresh?: () => void;
   userRole?: string;
+  projectId: string;
 }
 
 export function ScheduleSpecEditorModal({
@@ -82,7 +83,8 @@ export function ScheduleSpecEditorModal({
   onOpenChange,
   onSuccess,
   onRefresh,
-  userRole = "STAFF"
+  userRole = "STAFF",
+  projectId
 }: ScheduleSpecEditorModalProps) {
   const isAdmin = ["ADMIN", "DIC", "DRIC"].includes(userRole);
   
@@ -141,8 +143,14 @@ export function ScheduleSpecEditorModal({
     }
   }, [isOpen, initialSnapshot, isSubmitting]);
 
-  const isPrimaryComplete = !!form.catalog_product_name?.trim() && !!form.catalog_sku?.trim() && !!form.catalog_brand?.trim();
-  const isSecondaryComplete = !!form.catalog_color?.trim();
+  const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
+  const isPlaceholder = (val?: string | null) => !val || placeholders.includes(val.trim().toUpperCase());
+
+  const hasPrimaryIdentity = !isPlaceholder(form.catalog_sku) || !isPlaceholder(form.catalog_product_name);
+  const isBrandComplete = !isPlaceholder(form.catalog_brand);
+  
+  const isPrimaryComplete = hasPrimaryIdentity && isBrandComplete;
+  const isSecondaryComplete = !!form.catalog_color?.trim() && !isPlaceholder(form.catalog_color);
   const isReadyForPromotion = isPrimaryComplete && !!form.catalog_image_url;
   const isDraft = !initialSnapshot.product_catalog_id;
 
@@ -228,20 +236,20 @@ export function ScheduleSpecEditorModal({
                {/* Promotion Readiness Checklist */}
                <div className="space-y-6">
                  <div className="flex items-center gap-3">
-                   <Sparkles className="h-4 w-4 text-slate-400" />
-                   <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-950">Readiness Score</h4>
+                   <div className="h-5 w-5 bg-slate-950 rounded-md flex items-center justify-center">
+                      <Sparkles className="h-3 w-3 text-white" />
+                    </div>
+                   <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-950">Library Readiness</h4>
                  </div>
                  
-                 <div className="space-y-4">
+                 <div className="space-y-5 p-5 bg-white border border-slate-100 rounded-2xl shadow-sm">
                     {/* Stage 1: Project Minimum */}
                     <div className="flex items-start gap-3">
                       <div className={cn(
-                        "mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 border transition-colors",
-                        isSecondaryComplete ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-200 text-slate-300"
+                        "mt-0.5 h-6 w-6 rounded-full flex items-center justify-center shrink-0 border-2 transition-all",
+                        isSecondaryComplete ? "bg-emerald-500 border-emerald-500 shadow-[0_2px_8px_-2px_rgba(16,185,129,0.3)]" : "bg-white border-slate-200"
                       )}>
-                        <Badge variant="ghost" className="p-0 hover:bg-transparent">
-                          {isSecondaryComplete ? <Save className="h-2.5 w-2.5" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />}
-                        </Badge>
+                        {isSecondaryComplete ? <Layers className="h-3 w-3 text-white" /> : <div className="h-2 w-2 rounded-full bg-slate-200" />}
                       </div>
                       <div className="space-y-0.5">
                         <span className={cn("text-[11px] font-bold block transition-colors", isSecondaryComplete ? "text-slate-900" : "text-slate-400")}>Stage 1: Project Snapshot</span>
@@ -252,16 +260,18 @@ export function ScheduleSpecEditorModal({
                     {/* Stage 2: Catalog Ready */}
                     <div className="flex items-start gap-3">
                       <div className={cn(
-                        "mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 border transition-colors",
-                        isReadyForPromotion ? "bg-indigo-500 border-indigo-500 text-white" : "bg-white border-slate-200 text-slate-300"
+                        "mt-0.5 h-6 w-6 rounded-full flex items-center justify-center shrink-0 border-2 transition-all",
+                        isReadyForPromotion ? "bg-indigo-600 border-indigo-600 shadow-sm" : "bg-white border-slate-200"
                       )}>
-                        <Badge variant="ghost" className="p-0 hover:bg-transparent">
-                          {isReadyForPromotion ? <Sparkles className="h-2.5 w-2.5" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />}
-                        </Badge>
+                        {isReadyForPromotion ? (
+                          <Sparkles className="h-3 w-3 text-white" />
+                        ) : (
+                          <div className="h-2 w-2 rounded-full bg-slate-200" />
+                        )}
                       </div>
                       <div className="space-y-0.5">
-                        <span className={cn("text-[11px] font-bold block transition-colors", isReadyForPromotion ? "text-slate-900" : "text-slate-400")}>Stage 2: Catalog Ready</span>
-                        <span className="text-[10px] text-slate-400 font-medium">Requires SKU, Name, Brand & Image.</span>
+                        <span className={cn("text-[11px] font-bold block tracking-tight transition-colors", isReadyForPromotion ? "text-slate-900" : "text-slate-400")}>Stage 2: Catalog Ready</span>
+                        <span className="text-[10px] text-slate-400 font-medium leading-tight">Requires SKU or Name, Brand & Image.</span>
                       </div>
                     </div>
                  </div>
@@ -302,7 +312,7 @@ export function ScheduleSpecEditorModal({
               <div className="space-y-1">
                 <div className="flex items-center gap-2 mb-1">
                   <Badge className={cn("bg-slate-900 text-white font-black uppercase tracking-widest px-2 py-0.5", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL)}>
-                    {initialSnapshot.catalog_category || "General"}
+                    {initialSnapshot.schedule_category || "General"}
                   </Badge>
                   {isReadyForPromotion && (
                     <Badge className={cn("bg-indigo-50 text-indigo-600 border-none font-black uppercase tracking-widest px-2 py-0.5", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL)}>
@@ -314,7 +324,7 @@ export function ScheduleSpecEditorModal({
                   {isEditMode ? "Modify Specification" : (form.catalog_product_name || "Product Details")}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400 font-inter">
-                  Managing snapshot for {initialSnapshot.schedule_code} in this project.
+                  Managing snapshot {initialSnapshot.schedule_code ? `for ${initialSnapshot.schedule_code}` : "details"} in this project.
                 </DialogDescription>
               </div>
               <div className="flex items-center gap-3">
@@ -623,7 +633,10 @@ export function ScheduleSpecEditorModal({
                         onClick={async () => {
                           const toastId = toast.loading("Requesting promotion to Master Catalog...");
                           try {
-                            unwrapActionResult(await createPromotionRequestAction({ optionId }));
+                            unwrapActionResult(await createPromotionRequestAction({ 
+                              schedule_option_id: optionId,
+                              project_id: projectId 
+                            }));
                             toast.success("Product promoted to Global Library!", { id: toastId });
                             if (onRefresh) onRefresh();
                           } catch (err: unknown) {

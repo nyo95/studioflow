@@ -8,11 +8,13 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Plus, MoreVertical } from "lucide-react";
 
+import type { ProjectScheduleEntryWithRelations } from "../../types";
+
 interface ScheduleColumnProps {
   id: string; // The category name
   title: string;
-  items: any[];
-  onEditEntry?: (entry: any) => void;
+  items: ProjectScheduleEntryWithRelations[];
+  onEditEntry?: (entry: ProjectScheduleEntryWithRelations) => void;
   onDeleteEntry?: (id: string) => void;
 }
 

@@ -1,3 +1,4 @@
+import { ProductType } from "@/generated/prisma";
 import { ScheduleCsvImportRow } from "./csv-types";
 import { ActionError } from "@/lib/error-types";
 
@@ -101,23 +102,23 @@ function toObject(record: CsvRecord, headers: string[]): Record<string, string> 
   return row;
 }
 
-function isGSheetsHeader(record: CsvRecord, section: "ARCHITECTURAL" | "FFE"): boolean {
+function isGSheetsHeader(record: CsvRecord, section: ProductType): boolean {
   const headers = record.map(normalizeHeader);
   if (headers[0] !== "code") return false;
 
-  const required = section === "ARCHITECTURAL"
+  const required = section === ProductType.material
     ? ["product category", "ex", "type"]
     : ["ex", "type"];
 
   return required.every((header) => headers.includes(header));
 }
 
-function parseGSheetsRow(row: Record<string, string>, section: "ARCHITECTURAL" | "FFE"): ScheduleCsvImportRow | null {
+function parseGSheetsRow(row: Record<string, string>, section: ProductType): ScheduleCsvImportRow | null {
   const code = row.code;
   if (!code) return null;
 
   const contactInfo = parseContactString(row.contact);
-  const productCategory = section === "ARCHITECTURAL"
+  const productCategory = section === ProductType.material
     ? row["product category"] || row.product_category || undefined
     : undefined;
 
@@ -141,7 +142,7 @@ function parseGSheetsRow(row: Record<string, string>, section: "ARCHITECTURAL" |
 
 export function parseGSheetsProductCsv(
   csvContent: string,
-  section: "ARCHITECTURAL" | "FFE"
+  section: ProductType
 ): ScheduleCsvImportRow[] {
   const records = parseCsvRecords(csvContent);
   const headerIndex = records.findIndex((record) => isGSheetsHeader(record, section));

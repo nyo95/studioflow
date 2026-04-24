@@ -25,9 +25,10 @@ export type GradualFormProducts = Pick<ProductCatalog, "id" | "catalog_sku" | "c
 
 export type ScheduleOptionSnapshot = {
   snapshot_source_kind: "catalog" | "manual";
-  snapshot_source_origin?: "web_catalog" | "web_manual" | "gsheets_import" | "sketchup_plugin";
+  snapshot_source_origin?: string | null;
   snapshot_source_external_id?: string | null;
   product_catalog_id: string | null;
+  catalog_type: ProductType;
   schedule_category: string;
   catalog_sub_category?: string | null;
   catalog_product_name: string;
@@ -45,6 +46,10 @@ export type ScheduleOptionSnapshot = {
     catalog_motif?: string | null;
     catalog_structured_tags: string[];
     catalog_dimensions: string;
+    catalog_dimension_p?: string | null;
+    catalog_dimension_l?: string | null;
+    catalog_dimension_t?: string | null;
+    catalog_dimension_unit?: string | null;
     catalog_color?: string | null;
     catalog_finishing?: string | null;
     catalog_reference_url?: string | null;
@@ -52,6 +57,8 @@ export type ScheduleOptionSnapshot = {
   };
   snapshot_source_payload?: unknown;
   snapshot_captured_at: string;
+  schedule_code?: string; // Computed
+  project_id?: string;    // Context
 };
 
 export type ProjectScheduleOptionWithProduct = ProjectScheduleOption & {

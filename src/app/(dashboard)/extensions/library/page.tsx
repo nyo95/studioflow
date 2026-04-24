@@ -90,7 +90,14 @@ export default function LibraryPage() {
   const fetchProducts = React.useCallback(async () => {
     setIsRefreshingProducts(true);
     try {
-      const statusFilter = activeTab === "queue" ? "PENDING" : activeTab === "catalog" ? "APPROVED" : undefined;
+      // For staff/admin, we show all items (including PENDING) in the catalog storefront
+      // to allow them to manage/approve newly added items without confusion.
+      const isAdminOrStaff = role === "ADMIN" || role === "STAFF";
+      const statusFilter = activeTab === "queue" 
+        ? "PENDING" 
+        : activeTab === "catalog" 
+          ? (isAdminOrStaff ? undefined : "APPROVED") 
+          : undefined;
       
       const res = await getProductsAction({
         search: debouncedSearch,

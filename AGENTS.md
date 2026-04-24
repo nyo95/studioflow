@@ -21,6 +21,9 @@ This project uses specific Next.js APIs and Prisma configurations that may diffe
 ## 🚫 UI/UX Preservation Protocol
 "DILARANG KERAS mengubah struktur tata letak (layout) yang sudah ada—seperti mengganti sidebar menjadi tab horizontal—tanpa permintaan eksplisit dari pengguna. Jangan menambahkan elemen estetika 'Premium' (shadow berlebih, animasi kompleks, font dekoratif baru) jika tidak diminta. Pertahankan fungsionalitas di atas hiasan visual."
 
+## 🏷️ Project Naming Protocol
+"Format nama proyek WAJIB menggunakan: `[Tahun]-[Nomor] [Nama Proyek]`. Contoh: `2025-429 Heloskin Cimanggu`. Pastikan ada spasi (bukan dash) antara nomor urut dan nama proyek."
+
 ## 👁️ View-First Protocol
 "Setiap modal/form untuk data yang sudah ada WAJIB dibuka dalam mode read-only secara default. Gunakan tombol 'Modify' (icon Edit3) sebagai gatekeeper untuk masuk ke mode edit. Pastikan transisi antara mode read-only dan edit bersifat smooth dan tidak merusak layout."
 

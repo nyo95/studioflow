@@ -366,7 +366,7 @@ model ProjectScheduleEntry {
   options           ProjectScheduleOption[]
   product_requests  ProjectProductRequest[]
 
-  @@unique([schedule_category, schedule_increment])
+  @@unique([project_id, section, schedule_prefix, schedule_increment])
   @@index([project_id])
 }
 

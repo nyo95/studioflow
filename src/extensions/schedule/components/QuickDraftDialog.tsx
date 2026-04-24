@@ -45,6 +45,7 @@ interface QuickDraftDialogProps {
   projectId: string;
   section: ProductType;
   initialValue: string;
+  onSuccess?: () => void;
 }
 
 type Classification = "color" | "motif" | "finishing";
@@ -54,7 +55,8 @@ export function QuickDraftDialog({
   onOpenChange, 
   projectId, 
   section, 
-  initialValue 
+  initialValue,
+  onSuccess
 }: QuickDraftDialogProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -150,6 +152,7 @@ export function QuickDraftDialog({
 
       toast.success("Draft entry created successfully");
       onOpenChange(false);
+      onSuccess?.();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create draft");
@@ -261,8 +264,8 @@ export function QuickDraftDialog({
             <div className="space-y-2">
               <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Visual Image (Optional)</Label>
               <UniversalImageUploader
-                value={imageUrl}
-                onChange={setImageUrl}
+                initialImageUrl={imageUrl}
+                onUploadComplete={(urls) => setImageUrl(urls.cover)}
                 className="h-32"
               />
             </div>

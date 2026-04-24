@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const ScheduleSnapshotSchema = z.object({
   snapshot_source_kind: z.enum(["catalog", "manual"]),
-  snapshot_source_origin: z.enum(["web_catalog", "web_manual", "gsheets_import", "sketchup_plugin"]),
+  snapshot_source_origin: z.enum(["library", "manual", "gsheets_import", "sketchup_plugin"]).nullable().optional(),
   snapshot_source_external_id: z.string().nullable(),
   product_catalog_id: z.string().nullable(),
   catalog_type: z.enum(["material", "fixture"]),
@@ -23,6 +23,10 @@ export const ScheduleSnapshotSchema = z.object({
     catalog_motif: z.string().nullable().optional(), 
     catalog_structured_tags: z.array(z.string()), 
     catalog_dimensions: z.string(), 
+    catalog_dimension_p: z.string().nullable().optional(),
+    catalog_dimension_l: z.string().nullable().optional(),
+    catalog_dimension_t: z.string().nullable().optional(),
+    catalog_dimension_unit: z.string().nullable().optional(),
     catalog_color: z.string().nullable().optional(),
     catalog_finishing: z.string().nullable().optional(),
     catalog_reference_url: z.string().nullable().optional(),

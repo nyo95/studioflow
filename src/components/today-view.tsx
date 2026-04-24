@@ -6,39 +6,16 @@ import { TodayTaskItem } from "@/components/today-task-item";
 import { TodayInlineAdd } from "@/components/today-inline-add";
 import { cn } from "@/lib/utils";
 
-interface Task {
-  id: string;
-  content: string;
-  status: string;
-  mode: string;
-  projectName: string;
-  phaseName: string;
-  isUrgent: boolean;
-}
-
-interface Phase {
-  id: string;
-  name: string;
-  status: string;
-  revisionId?: string;
-  tasks: Task[];
-}
-
-interface Project {
-  id: string;
-  name: string;
-  isUrgent: boolean;
-  phases: Phase[];
-}
+import { DashboardProject, DashboardTask } from "@/types/dashboard";
 
 interface TodayViewProps {
-  projects: Project[];
+  projects: DashboardProject[];
 }
 
 type RenderItem = 
   | { type: "projectHeader"; id: string; projectId: string; name: string; isUrgent: boolean }
   | { type: "phaseHeader"; id: string; projectId: string; phaseName: string }
-  | { type: "task"; id: string; projectId: string; activity: Task }
+  | { type: "task"; id: string; projectId: string; activity: DashboardTask }
   | { 
       type: "inlineAdd"; 
       id: string; 
@@ -69,7 +46,7 @@ export function TodayView({ projects }: TodayViewProps) {
     projects.forEach((project) => {
       const projectPhases = project.phases.map(phase => ({
         ...phase,
-        tasks: phase.tasks.filter(t => (t.status === "DONE" || t.status === "COMPLETED") === isDone)
+        tasks: phase.tasks.filter(t => (t.status === "COMPLETED") === isDone)
       })).filter(phase => phase.tasks.length > 0);
 
       if (projectPhases.length === 0) return;
@@ -94,8 +71,7 @@ export function TodayView({ projects }: TodayViewProps) {
             phaseName: phase.name
           });
 
-          // Tasks
-          phase.tasks.forEach((task) => {
+            phase.tasks.forEach((task: DashboardTask) => {
             list.push({
               type: "task",
               id: `task-${task.id}`,
@@ -184,7 +160,7 @@ export function TodayView({ projects }: TodayViewProps) {
                   <TodayTaskItem
                     id={item.activity.id}
                     label={item.activity.content}
-                    isChecked={item.activity.status === "DONE" || item.activity.status === "COMPLETED"}
+                    isChecked={item.activity.status === "COMPLETED"}
                     mode={item.activity.mode}
                     isUrgent={item.activity.isUrgent}
                   />
@@ -217,7 +193,7 @@ export function TodayView({ projects }: TodayViewProps) {
           value="open" 
           className="rounded-none border-b-2 border-transparent px-1 pb-3 pt-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 shadow-none transition-all data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:text-slate-900"
         >
-          Open Tasks ({projects.reduce((acc, p) => acc + p.phases.reduce((acc2, ph) => acc2 + ph.tasks.filter(t => t.status !== "DONE" && t.status !== "COMPLETED").length, 0), 0)})
+          Open Tasks ({projects.reduce((acc, p) => acc + p.phases.reduce((acc2, ph) => acc2 + ph.tasks.filter(t => t.status !== "COMPLETED").length, 0), 0)})
         </TabsTrigger>
         <TabsTrigger 
           value="done" 

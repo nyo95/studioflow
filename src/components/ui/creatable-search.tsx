@@ -78,7 +78,10 @@ export function CreatableSearch({
   const filterOptions = React.useCallback((opts: Option[]) => {
     const normalized = search.trim().toLowerCase();
     if (!normalized) return opts;
-    return opts.filter((o) => o.name.toLowerCase().includes(normalized));
+    return opts.filter((o) => 
+      o.name.toLowerCase().includes(normalized) || 
+      (o.subText && o.subText.toLowerCase().includes(normalized))
+    );
   }, [search]);
 
   const filteredFlat = React.useMemo(() => filterOptions(allOptions), [filterOptions, allOptions]);

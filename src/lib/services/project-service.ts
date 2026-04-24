@@ -39,7 +39,7 @@ export const projectService = {
     let formattedName = normalizedName;
 
     if (systemConfig.is_auto_naming_enabled) {
-      if (/^\d{4}-\d{3}-.+/.test(normalizedName)) {
+      if (/^\d{4}-\d{3} .+/.test(normalizedName)) {
         throw new ActionError("Enter only the readable project name. Year and sequence are generated automatically.", "AUTO_NAMING_CONFLICT");
       }
 
@@ -49,9 +49,9 @@ export const projectService = {
         where: { name: { startsWith: yearPrefix } },
       });
       const nnn = String(projectCount + 1).padStart(3, "0");
-      formattedName = `${currentYear}-${nnn}-${normalizedName}`;
-    } else if (!/^\d{4}-\d{3}-.+/.test(normalizedName)) {
-      throw new ActionError("Project name must use the format: [YYYY]-[NNN]-[Name].", "INVALID_FORMAT");
+      formattedName = `${currentYear}-${nnn} ${normalizedName}`;
+    } else if (!/^\d{4}-\d{3} .+/.test(normalizedName)) {
+      throw new ActionError("Project name must use the format: [YYYY]-[NNN] [Name].", "INVALID_FORMAT");
     }
 
     const project = await tx.project.create({

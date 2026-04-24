@@ -77,7 +77,6 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
             <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Product Info</TableHead>
             <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Vendor</TableHead>
             <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Category</TableHead>
-            {!isQueueMode && <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Price</TableHead>}
             <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Status</TableHead>
             <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400 text-right pr-6", UI_ENGINE_TYPE_META)}>Actions</TableHead>
           </TableRow>
@@ -130,13 +129,6 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
                   {m.catalog_sub_category && <span className={cn("text-slate-400 font-inter", UI_ENGINE_TYPE_META)}>{m.catalog_sub_category}</span>}
                 </div>
               </TableCell>
-              {(!isQueueMode) && (
-                  <TableCell>
-                    <span className="text-xs font-inter font-bold text-slate-900">
-                      {m.catalog_price ? `Rp ${m.catalog_price.toLocaleString()}` : "-"}
-                    </span>
-                  </TableCell>
-              )}
               <TableCell>
                 <Badge 
                   variant="outline"

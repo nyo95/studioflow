@@ -90,7 +90,7 @@ export const addScheduleEntryAction = createAction(
       input.schedule_category,
       input.mode,
       input.mode === "catalog" ? input.catalogItemId : undefined,
-      input.mode === "create_catalog" ? input.catalogCreateData : undefined,
+      (input.mode === "create_catalog" || input.mode === "manual") ? input.catalogCreateData : undefined,
       input.section,
       ctx.userId
     );
@@ -147,40 +147,10 @@ export const addScheduleEntryWithProductAction = createAction(
       tx,
       input.projectId,
       product.catalog_category,
-      "reserve",
-      undefined,
+      "catalog",
+      product.id,
       undefined,
       input.section,
-      ctx.userId
-    );
-
-    // Get the first option (created automatically)
-    const option = await tx.projectScheduleOption.findFirst({
-      where: { entry_id: entry.id },
-      orderBy: { created_at: "asc" },
-    });
-
-    if (!option) {
-      throw new ActionError("Failed to create option for entry", "CREATION_FAILED");
-    }
-
-    // Update option with product data in same transaction
-    await ScheduleService.updateOptionSnapshot(
-      tx,
-      option.id,
-      {
-        catalog_product_name: product.catalog_product_name || "Unnamed Product",
-        catalog_brand: product.vendor?.brand_name || "Generic",
-        specs: {
-          catalog_sku: product.catalog_sku,
-          catalog_color: product.catalog_color || undefined,
-          catalog_finishing: product.catalog_finishing || undefined,
-          catalog_product_name: product.catalog_motif || undefined,
-        },
-        catalog_image_url: product.catalog_image_url || undefined,
-        catalog_reference_url: product.catalog_reference_url || undefined,
-        catalog_price: product.catalog_price || undefined,
-      },
       ctx.userId
     );
 
@@ -211,7 +181,7 @@ export const addScheduleOptionAction = createAction(
       input.mode,
       entry.schedule_category,
       input.mode === "catalog" ? input.catalogItemId : undefined,
-      input.mode === "create_catalog" ? input.catalogCreateData : undefined,
+      (input.mode === "create_catalog" || input.mode === "manual") ? input.catalogCreateData : undefined,
       ctx.userId
     );
 
@@ -234,6 +204,9 @@ export const approveScheduleOptionAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_APPROVE);
 
+    // Validate ownership
+    await ScheduleService.validateOwnership(tx, option.entry.project_id, input.entryId, input.optionId);
+
     const result = await ScheduleService.approveOption(tx, input.optionId, input.entryId, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
@@ -247,6 +220,9 @@ export const updateScheduleEntryAction = createAction(
     await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
+
+    // Validate ownership
+    await ScheduleService.validateOwnership(tx, input.projectId, input.entryId);
 
     const result = await ScheduleService.updateEntry(tx, input.entryId, input.data, ctx.userId);
 
@@ -266,6 +242,9 @@ export const updateScheduleOptionSnapshotAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
 
+    // Validate ownership
+    await ScheduleService.validateOwnership(tx, option.entry.project_id, undefined, input.optionId);
+
     const result = await ScheduleService.updateOptionSnapshot(tx, input.optionId, input.data, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
@@ -281,25 +260,13 @@ export const deleteScheduleOptionAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_DELETE);
 
-    const option = await tx.projectScheduleOption.findUniqueOrThrow({
-      where: { id: input.optionId },
-      include: { entry: true },
-    });
+    // Validate ownership before smart delete
+    await ScheduleService.validateOwnership(tx, input.projectId, undefined, input.optionId);
 
-    // Delete the option
-    await tx.projectScheduleOption.delete({ where: { id: input.optionId } });
+    const result = await ScheduleService.smartDeleteOption(tx, input.optionId, ctx.userId);
 
-    // Audit log
-    await insertAuditLog(
-      tx,
-      AUDIT_ACTIONS.SCHEDULE_DELETE_OPTION,
-      "ProjectScheduleOption",
-      input.optionId,
-      ctx.userId,
-      { project_id: option.entry.project_id, entry_id: option.entry_id }
-    );
-
-    return { success: true };
+    invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
+    return result;
   },
   { schema: z.object({ projectId: IdSchema, optionId: IdSchema }) }
 );
@@ -309,6 +276,9 @@ export const deleteScheduleEntryAction = createAction(
     await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_DELETE);
+
+    // Validate ownership
+    await ScheduleService.validateOwnership(tx, input.projectId, input.entryId);
 
     const deletedEntry = await ScheduleService.deleteEntry(tx, input.entryId, ctx.userId);
 
@@ -345,6 +315,19 @@ export const reorderScheduleEntriesAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
 
+    // Validate all items belong to this project and category
+    const count = await tx.projectScheduleEntry.count({
+      where: {
+        id: { in: input.items.map(i => i.id) },
+        project_id: input.projectId,
+        section: input.section,
+        schedule_category: input.schedule_category.trim().toUpperCase()
+      }
+    });
+    if (count !== input.items.length) {
+      throw new ActionError("One or more items do not belong to this project or category.", "OWNERSHIP_VIOLATION");
+    }
+
     await ScheduleService.reorderEntries(tx, input.projectId, input.section, input.schedule_category, input.items, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
@@ -358,6 +341,9 @@ export const moveEntryToCategoryAction = createAction(
     await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
+
+    // Validate ownership
+    await ScheduleService.validateOwnership(tx, input.projectId, input.entryId);
 
     await ScheduleService.moveEntryToCategory(
       tx,
@@ -377,7 +363,7 @@ const ImportScheduleSchema = z.object({
   projectId: IdSchema,
   section: z.nativeEnum(ProductType),
   csvContent: z.string(),
-  source: z.literal("gsheets").default("gsheets"),
+  source: z.enum(["gsheets", "sketchup"]).default("gsheets"),
 });
 
 export const importScheduleAction = createAction(
@@ -392,7 +378,14 @@ export const importScheduleAction = createAction(
       throw new ActionError("No valid rows found in CSV", "VALIDATION_FAILED");
     }
 
-    const result = await importScheduleFromCsv(tx, { projectId: input.projectId, section: input.section, rows });
+    const sourceOrigin = input.source === "sketchup" ? "sketchup_plugin" : "gsheets_import";
+
+    const result = await importScheduleFromCsv(tx, { 
+      projectId: input.projectId, 
+      section: input.section, 
+      rows,
+      sourceOrigin 
+    });
 
     await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_IMPORT, "Project", input.projectId, ctx.userId, {
       section: input.section,
@@ -411,7 +404,7 @@ export const importScheduleAction = createAction(
 
 
 export const getScheduleSuggestionsAction = createAction(
-  async ({ input, tx }) => {
+  async ({ tx }) => {
     const [vendors, products] = await Promise.all([
       tx.vendor.findMany({
         where: { deleted_at: null },
@@ -469,7 +462,7 @@ export const swapScheduleEntriesAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
 
-    await ScheduleService.swapEntries(tx, input.projectId, input.idA, input.idB, ctx.userId);
+    await ScheduleService.swapEntries(tx, input.projectId, input.idA, input.idB);
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return { success: true };

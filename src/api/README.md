@@ -1,6 +1,9 @@
 # StudioFlow API Specification (v1.0)
 
 ## Overview
+> [!WARNING]
+> **DEFERRED STATUS**: This API specification is currently **deferred**. The endpoints are implemented but explicitly disabled (`FEATURE_DISABLED`) while the core StudioFlow architecture is finalized.
+
 This document defines the API endpoints and data structures for external integrations, specifically the StudioFlow SketchUp plugin.
 
 ## 1. Authentication
@@ -44,7 +47,7 @@ Initializes or updates schedule entries from SketchUp material data.
 | Entity Count | `qty` | calculated quantity |
 
 #### **Snapshot Generation**
-Items imported via this endpoint are automatically tagged with `source_origin: "sketchup_plugin"`.
+Items imported via this endpoint are automatically tagged with `snapshot_source_origin: "sketchup_plugin"`.
 
 ## 3. Library Lookup API
 
@@ -82,4 +85,4 @@ Retrieves the full specified schedule for a project, optimized for SketchUp rend
 ---
 
 > [!IMPORTANT]
-> **Terminology Compliance**: All integration endpoints MUST use the namespaced `catalog_` prefix for material fields. Failure to do so will result in validation errors (`SCHEMA_MISMATCH`).
+> **Terminology Compliance**: All integration endpoints MUST use the namespaced `catalog_` prefix for material fields and `snapshot_` for source metadata. Failure to do so will result in validation errors (`SCHEMA_MISMATCH`).

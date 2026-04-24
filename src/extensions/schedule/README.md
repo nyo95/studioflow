@@ -7,6 +7,7 @@ The Schedule Extension (Pillar 2) is a "Smart Spreadsheet" for managing interior
 
 ### **ProjectScheduleEntry (Entry)**
 A single row in the schedule representing a specific requirement (e.g., Paint, Floor Tile, or Faucet).
+- **Scope & Uniqueness**: Uniqueness is strictly scoped to `[project_id, section, schedule_prefix, schedule_increment]`. This enables multi-project scalability, allowing identical codes (e.g., PT-01) across different projects.
 - **Code**: Sequential identifier (e.g., `PT-01`) managed by `ScheduleService`.
 - **Metadata**: Project-specific data like `schedule_location`, `qty`, and `unit`.
 
@@ -14,6 +15,7 @@ A single row in the schedule representing a specific requirement (e.g., Paint, F
 Candidate products associated with an Entry. Each Entry can have multiple Options (Option A, B, C...) for comparison or client review.
 - **is_final**: Marks the approved option for procurement.
 - **status**: `DRAFT`, `APPROVED`, or `NOT_USED`.
+- **Smart Deletion**: Deleting a "Final" option automatically promotes the next available sibling to "Final" to ensure the Entry always has a representative product.
 
 ### **ScheduleOptionSnapshot (Snapshot)**
 An immutable JSON blob capturing the product specifications. 
@@ -42,6 +44,8 @@ StudioFlow follows a strict **Snapshot-First** architecture to ensure data integ
 - **From Library**: Search and pick from the `ProductCatalog`. A snapshot is created automatically.
 - **Hybrid Quick Draft**: Triggered from the search bar when a product is not found in the library. Mandates Category, Brand, and Classification (Stage 1 Draft).
 - **Manual Creation (Legacy)**: Input data manually via the picker modal.
+- **CSV Import (Deferred)**: Batch import from Google Sheets.
+- **SketchUp Import (Deferred)**: Batch import from SketchUp plugin.
 
 ### **Alternative Options**
 - Use "Add Alternative" to create a new `ProjectScheduleOption` for an existing `ProjectScheduleEntry`.
@@ -68,12 +72,15 @@ StudioFlow follows a strict **Snapshot-First** architecture to ensure data integ
 
 ---
 
-## 5. API & Integration Standards
+## 5. API & Integration Standards (DEFERRED)
 
 ### **SketchUp Plugin Integration**
-The system exposes a specialized API surface for SketchUp plugin connectivity:
-- **Snapshot Origin**: Imports are tagged as `source_origin: "sketchup_plugin"`.
-- **Field Correlation**: The plugin must map SketchUp material attributes to `catalog_sku` and `catalog_metadata`.
+> [!IMPORTANT]
+> **Status: Temporarily Unsupported**. While the API specification exists, the implementation is currently **disabled** (`FEATURE_DISABLED`) to prioritize core stabilization.
+
+Documentation for the intended integration model:
+- **Snapshot Origin**: Imports are tagged as `snapshot_source_origin: "sketchup_plugin"`.
+- **Field Correlation**: The plugin must map SketchUp material attributes to `catalog_sku` and `snapshot_source_payload`.
 - **Endpoint Specification**: Refer to `src/api/README.md` for the technical specification.
 
 ### **Terminology & Namespacing Rules**

@@ -11,13 +11,12 @@ import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/actions/schedule-actions";
 import type { ProjectScheduleEntry, ProjectScheduleOption } from "@/generated/prisma";
+import type { ProjectScheduleEntryWithRelations } from "../../types";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 
 interface ScheduleCardProps {
-  entry: ProjectScheduleEntry & {
-    options: ProjectScheduleOption[];
-  };
-  onEdit?: (entry: any) => void;
+  entry: ProjectScheduleEntryWithRelations;
+  onEdit?: (entry: ProjectScheduleEntryWithRelations) => void;
   onDelete?: (id: string) => void;
 }
 
@@ -36,7 +35,7 @@ export function ScheduleCard({ entry, onEdit, onDelete }: ScheduleCardProps) {
     transition,
   };
 
-  const finalOption = entry.options.find((o) => o.is_final) || entry.options[0];
+  const finalOption = entry.options.find((o: ProjectScheduleOption) => o.is_final) || entry.options[0];
   const snapshot = finalOption?.data_snapshot as unknown as ScheduleSnapshot | null;
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -115,7 +114,9 @@ export function ScheduleCard({ entry, onEdit, onDelete }: ScheduleCardProps) {
                 </div>
               </div>
               <h4 className="font-serif text-sm font-semibold text-slate-900 leading-tight truncate">
-                {snapshot?.catalog_product_name || "Unspecified Material"}
+                {(snapshot?.catalog_product_name && snapshot.catalog_product_name !== "[RESERVED]") 
+                  ? snapshot.catalog_product_name 
+                  : (snapshot?.catalog_initials_type || "Reserved Slot")}
               </h4>
               <p className="font-sans text-[11px] text-slate-500 truncate mt-0.5">
                 {snapshot?.catalog_brand || "No Brand"}

@@ -1,5 +1,41 @@
 # StudioFlow Development Log (Changelog)
 
+## [1.16.0] - 2026-04-24 (versi 1.6)
+### Added
+- **Visual Hierarchy Refactor (Schedule Table)**:
+    - Prioritized **Technical Specifications** (Color, Pattern, Finish) for "Generic" items where primary identity (SKU/Name) is missing.
+    - Implemented capitalized labels (`Color:`, `Pattern:`, `Finish:`) for professional consistency.
+    - Added hyphen separator (`[SKU] - [Name]`) for clearer product identity.
+- **Alternative Options UI Redesign**:
+    - Consolidated option switcher and "Add Alternative" button into a single, cohesive premium control bar.
+    - Improved counter format (`Option X / Y`) using tabular numbers for layout stability.
+- **Global Catalog Search Optimization**:
+    - Implemented **Category Override** in Source Search: Searching the master library now ignores category filters to maximize recall.
+    - Enhanced `CreatableSearch` with multi-field filtering (SKU, Name, and Brand).
+
+### Changed
+- **Search visibility**: Improved `GradualInputForm` product mapping to include Name in the searchable dropdown label.
+
+## [1.14.0] - 2026-04-24
+### Added
+- **Pillar 2 Resilience Refactor**:
+    - **Multi-Project Scalability**: Migrated `ProjectScheduleEntry` uniqueness to be scoped by `project_id`, enabling identical schedule codes across different projects.
+    - **Immutable Snapshot Contract**: Formalized strict namespaced snapshots (`snapshot_*`, `catalog_*`) and removed all legacy reader/writer aliases.
+    - **Smart Deletion**: Implemented deterministic sibling promotion when deleting "Final" options to prevent broken schedule entries.
+    - **Stage-Based Gatekeeping**: Enforced server-side validation for Stage 1 (Color mandatory) and Stage 2 (Identity + Media mandatory for promotion).
+- **Security Hardening**: 
+    - Enforced **ADMIN-only edit policy** for `APPROVED` catalog items. `STAFF` is restricted to editing `PENDING` items only. Removed all implied "Change Request" workflow placeholders.
+    - Modified `ProjectProductRequest` to be strictly project-local; removed legacy auto-harvesting logic that created global catalog entries from custom requests.
+- **Integration Deferral**: Formally marked all external integrations (CSV Export/Import, SketchUp Plugin) as **Deferred** in documentation. Code implementations remain in the codebase but are explicitly disabled (`FEATURE_DISABLED`) to prioritize core stability.
+
+### Fixed
+- **Catalog Linkage**: Refactored `add-from-existing` flow to establish immediate `product_catalog_id` linkage, eliminating the "reserve-then-patch" anti-pattern.
+- **Field Mapping**: Corrected field mapping errors where `catalog_motif` was being overwritten by `catalog_product_name` during promotion.
+- **Bulk Delete Payload**: Fixed a frontend bug in `ProjectScheduleMain.tsx` where the wrong key was passed during group deletion.
+
+### Changed
+- **Auto-Sync Removal**: Disabled auto-propagation of catalog updates to project snapshots to ensure historical integrity (Pillar 2 SSOT).
+
 ## [1.13.0] - 2026-04-23
 ### Added
 - **Consolidated Library Management**: Integrated `Approval Queue` and `Sample Logistics` (Product Requests) directly into the `Material Library` extension.
@@ -29,6 +65,8 @@
 - **View-First UI Protocol**: Implemented a global "Read-Only by Default" pattern for all detail modals.
 - **Role-Based Access Control (RBAC)**:
     - **Project Schedule**: Strictly restricted editing and library promotion to `ADMIN`, `DIC`, and `DRIC` roles.
+    - **Quick Draft Dialog:** A centralized modal for rapid drafting that satisfies Stage 1 (Draft) requirements in a single step.
+    - **Global Search Override:** Searching the Master Library via the selection modal overrides current category filters to ensure all library assets are discoverable regardless of their primary classification.
     - **Product Catalog**: Unified all catalog interactions into a single `LibraryFormModal` with editing restricted to `ADMIN` and `STAFF`.
 - **Strict Promotion Gatekeeping**: 
     - Implemented a mandatory **Stage 1 (Color)** check for project snapshot updates.

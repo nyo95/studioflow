@@ -193,26 +193,26 @@ export function LibraryTabs({
         <main className="flex-1 w-full animate-in fade-in slide-in-from-right-4 duration-1500">
           <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-0.5">
              <TabsList className="bg-transparent border-none h-auto p-0 flex gap-8">
-                <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                   <div className="flex items-center gap-3">
                     <LayoutGrid className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
                     <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Catalog</span>
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="inventory" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                <TabsTrigger value="inventory" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                   <div className="flex items-center gap-3">
                     <Warehouse className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
                     <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Samples</span>
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="vendors" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                <TabsTrigger value="vendors" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                   <div className="flex items-center gap-3">
                     <Users className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
                     <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Vendors</span>
                   </div>
                 </TabsTrigger>
                 {canManageCatalog && (
-                  <TabsTrigger value="requests" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                  <TabsTrigger value="requests" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                     <div className="flex items-center gap-3">
                       <ClipboardList className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
                       <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Requests</span>
@@ -220,7 +220,7 @@ export function LibraryTabs({
                   </TabsTrigger>
                 )}
                 {isAdmin && (
-                  <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-0 transition-all group">
+                  <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                     <div className="flex items-center gap-3">
                       <Clock className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
                       <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Queue</span>

@@ -61,7 +61,7 @@ type SchedulePickerPayload =
       projectId: string;
       schedule_category: string;
       section: ProductType;
-      mode: "create_catalog";
+      mode: "manual";
       catalogCreateData: {
         catalog_sku: string;
         catalog_product_name: string;
@@ -117,7 +117,10 @@ export function ScheduleProductPickerModal({
   const fetchProducts = React.useCallback(async () => {
     setIsSearching(true);
     try {
-      const res = unwrapActionResult<{ items: ProductCatalogWithRelations[]; total: number }>(await getProductsAction({ search: searchQuery }));
+      const res = unwrapActionResult<{ items: ProductCatalogWithRelations[]; total: number }>(await getProductsAction({ 
+        search: searchQuery,
+        type: section
+      }));
       setProducts(res.items);
     } catch (error) {
       toast.error("Failed to fetch library catalog");
@@ -141,8 +144,9 @@ export function ScheduleProductPickerModal({
       try {
         const results = unwrapActionResult(
           await getProductsAction({
-            category: category !== "all" ? category : undefined,
+            category: searchQuery.trim() ? undefined : (category !== "all" ? category : undefined),
             search: searchQuery.trim() || undefined,
+            type: section,
           }),
         ) as { items: ProductCatalogWithRelations[] };
         if (isMounted) setProducts(results.items);
@@ -170,7 +174,7 @@ export function ScheduleProductPickerModal({
           projectId,
           schedule_category: category,
           section,
-          mode: "create_catalog",
+          mode: "manual",
           catalogCreateData: {
             catalog_sku: createCatalogName,
             catalog_product_name: createCatalogName,
@@ -194,7 +198,7 @@ export function ScheduleProductPickerModal({
             entryId: entryId,
             mode: payload.mode,
             ...(payload.mode === "catalog" ? { catalogItemId: payload.catalogItemId } : {}),
-            ...(payload.mode === "create_catalog" ? { catalogCreateData: payload.catalogCreateData } : {}),
+            ...(payload.mode === "manual" ? { catalogCreateData: payload.catalogCreateData } : {}),
           }),
         );
         toast.success("New alternative option added successfully");
@@ -251,7 +255,7 @@ export function ScheduleProductPickerModal({
                     projectId,
                     schedule_category: category,
                     section,
-                    mode: "create_catalog",
+                    mode: "manual",
                     catalogCreateData: {
                       catalog_sku: data.customData.catalog_sku || data.customData.catalog_color || "DRAFT",
                       catalog_product_name: data.customData.catalog_product_name || data.customData.catalog_color || "New Item",
@@ -281,7 +285,7 @@ export function ScheduleProductPickerModal({
                     entryId: entryId,
                     mode: payload.mode,
                     ...(payload.mode === "catalog" ? { catalogItemId: payload.catalogItemId } : {}),
-                    ...(payload.mode === "create_catalog" ? { catalogCreateData: payload.catalogCreateData } : {}),
+                    ...(payload.mode === "manual" ? { catalogCreateData: payload.catalogCreateData } : {}),
                   }),
                 );
                 toast.success("New alternative option added successfully");

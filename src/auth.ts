@@ -13,6 +13,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   useSecureCookies: process.env.NODE_ENV === "production",
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   cookies: {
     sessionToken: {
@@ -22,6 +23,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         sameSite: "lax",
         path: "/",
         secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60, // 30 days
       },
     },
   },

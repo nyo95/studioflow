@@ -88,12 +88,12 @@ async function main() {
 
   // 6. Seed Projects
   const projectsData = [
-    { id: "e1e1e1e1-e1e1-4e11-8e11-e1e1e1e1e1e1", name: "2025-412-Shoes Area Yogya Tasikmalaya", start: "2025-07-07", opening: null, status: "ACTIVE" },
-    { id: "e2e2e2e2-e2e2-4e22-8e22-e2e2e2e2e2e2", name: "2025-429-Heloskin Cimanggu", start: "2026-01-28", opening: null, status: "ACTIVE" },
-    { id: "e3e3e3e3-e3e3-4e33-8e33-e3e3e3e3e3e3", name: "2026-472-Sociolla SBZ The Breeze BSD", start: "2025-12-09", opening: "2026-05-11", status: "ACTIVE" },
-    { id: "e4e4e4e4-e4e4-4e44-8e44-e4e4e4e4e4e4", name: "2026-473-SPF Booth ARCH.ID", start: "2025-12-24", opening: "2026-04-22", status: "ACTIVE" },
-    { id: "e5e5e5e5-e5e5-4e55-8e55-e5e5e5e5e5e5", name: "2026-474-Sociolla SBW R1", start: "2026-01-27", opening: "2026-04-08", status: "ACTIVE" },
-    { id: "e6e6e6e6-e6e6-4e66-8e66-e6e6e6e6e6e6", name: "2026-483-Sociolla SPZ PI", start: "2025-06-16", opening: "2026-06-17", status: "ACTIVE" },
+    { id: "e1e1e1e1-e1e1-4e11-8e11-e1e1e1e1e1e1", name: "2025-412 Shoes Area Yogya Tasikmalaya", start: "2025-07-07", opening: null, status: "ACTIVE" },
+    { id: "e2e2e2e2-e2e2-4e22-8e22-e2e2e2e2e2e2", name: "2025-429 Heloskin Cimanggu", start: "2026-01-28", opening: null, status: "ACTIVE" },
+    { id: "e3e3e3e3-e3e3-4e33-8e33-e3e3e3e3e3e3", name: "2026-472 Sociolla SBZ The Breeze BSD", start: "2025-12-09", opening: "2026-05-11", status: "ACTIVE" },
+    { id: "e4e4e4e4-e4e4-4e44-8e44-e4e4e4e4e4e4", name: "2026-473 SPF Booth ARCH.ID", start: "2025-12-24", opening: "2026-04-22", status: "ACTIVE" },
+    { id: "e5e5e5e5-e5e5-4e55-8e55-e5e5e5e5e5e5", name: "2026-474 Sociolla SBW R1", start: "2026-01-27", opening: "2026-04-08", status: "ACTIVE" },
+    { id: "e6e6e6e6-e6e6-4e66-8e66-e6e6e6e6e6e6", name: "2026-483 Sociolla SPZ PI", start: "2025-06-16", opening: "2026-06-17", status: "ACTIVE" },
   ];
 
   console.log("Seeding projects and bootstrapping phases...");

@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { ProductType } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { getAvailableSchedulerCategories } from "@/actions/settings-actions";
 import { unwrapActionResult } from "@/lib/result";

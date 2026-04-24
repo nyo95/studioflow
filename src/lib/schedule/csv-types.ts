@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma";
 
 export const GSheetsArchitecturalRowSchema = z.object({
   code: z.string().min(1),
@@ -76,3 +77,5 @@ export const SketchUpImportRowSchema = z.object({
 });
 
 export type SketchUpImportRow = z.infer<typeof SketchUpImportRowSchema>;
+
+export interface ScheduleEntryWithOptions extends Prisma.ProjectScheduleEntryGetPayload<{ include: { options: true } }> {}

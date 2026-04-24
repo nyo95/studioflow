@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface LoginFormProps {
   appTitle: string;
@@ -16,6 +17,7 @@ export function LoginForm({ appTitle }: LoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [rememberMe, setRememberMe] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -33,6 +35,7 @@ export function LoginForm({ appTitle }: LoginFormProps) {
     const result = await signIn("credentials", {
       email: email.trim(),
       password,
+      rememberMe: rememberMe ? "true" : "false",
       redirect: false,
     });
 
@@ -86,6 +89,22 @@ export function LoginForm({ appTitle }: LoginFormProps) {
               onChange={(event) => setPassword(event.target.value)}
               required
             />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="rememberMe" 
+                checked={rememberMe} 
+                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+              />
+              <Label 
+                htmlFor="rememberMe" 
+                className="text-xs font-medium leading-none text-slate-600 peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                Keep me signed in
+              </Label>
+            </div>
           </div>
 
           <Button type="submit" disabled={loading} className="h-11 w-full bg-slate-900 text-white hover:bg-slate-800">

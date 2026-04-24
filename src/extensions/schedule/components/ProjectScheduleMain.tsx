@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Upload, Plus } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { unwrapActionResult } from "@/lib/result";
 import { toast } from "sonner";
@@ -12,7 +12,6 @@ import {
   importScheduleAction,
   reorderScheduleEntriesAction,
   moveEntryToCategoryAction,
-  deleteScheduleEntryAction,
   bulkDeleteScheduleEntriesAction,
   updateScheduleEntryAction,
 } from "@/actions/schedule-actions";
@@ -21,19 +20,13 @@ import { VisualTable } from "./table/VisualTable";
 import { ScheduleSearchBar } from "./ScheduleSearchBar";
 import { ScheduleProductPickerModal } from "./ScheduleProductPickerModal";
 import { ScheduleSpecEditorModal } from "./ScheduleSpecEditorModal";
-import type { ProjectScheduleSheetPayload } from "../types";
-import { ErrorBoundary } from "@/components/shared/error-boundary";
-import { ErrorFallback } from "@/components/shared/error-fallback";
+import type { ProjectScheduleSheetPayload, ScheduleGroupedByCategory, ProjectScheduleEntryWithRelations, ScheduleOptionSnapshot } from "../types";
 import { ProjectScheduleProvider } from "../context/ProjectScheduleContext";
-import { PageHeader, TableCard, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
+import { useRouter } from "next/navigation";
+import { PageHeader, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
 import { LayoutGrid, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import { 
-  TableHeader, 
-  TableHead,
-  TableRow 
-} from "@/components/ui/table";
 import {
   DndContext, 
   closestCenter,
@@ -57,6 +50,7 @@ export function ProjectScheduleMain({
   projectId,
   userRole = "STAFF",
 }: ProjectScheduleMainProps) {
+  const router = useRouter();
   const [sheet, setSheet] = React.useState<ProjectScheduleSheetPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [activeSection, setActiveSection] = React.useState<ProductType>(ProductType.material);
@@ -178,7 +172,8 @@ export function ProjectScheduleMain({
 
   const handleRefresh = React.useCallback(() => {
     fetchSchedule(activeSection);
-  }, [fetchSchedule, activeSection]);
+    router.refresh();
+  }, [fetchSchedule, activeSection, router]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -211,9 +206,9 @@ export function ProjectScheduleMain({
     if (!over || active.id === over.id || !sheet) return;
 
     // Find source and target groups
-    let sourceGroup: any = null;
-    let targetGroup: any = null;
-    let activeEntry: any = null;
+    let sourceGroup: ScheduleGroupedByCategory | null = null;
+    let targetGroup: ScheduleGroupedByCategory | null = null;
+    let activeEntry: ProjectScheduleEntryWithRelations | null = null;
 
     for (const group of sheet.groups) {
       const entry = group.entries.find(e => e.id === active.id);
@@ -230,11 +225,11 @@ export function ProjectScheduleMain({
 
     if (sourceGroup.schedule_category === targetGroup.schedule_category) {
       // Same category: Reorder
-      const oldIndex = sourceGroup.entries.findIndex((e: any) => e.id === active.id);
-      const newIndex = targetGroup.entries.findIndex((e: any) => e.id === over.id);
+      const oldIndex = sourceGroup.entries.findIndex((e) => e.id === active.id);
+      const newIndex = targetGroup.entries.findIndex((e) => e.id === over.id);
 
       const newEntries = arrayMove(sourceGroup.entries, oldIndex, newIndex) as typeof sourceGroup.entries;
-      const reorderItems = newEntries.map((e: any, idx: number) => ({
+      const reorderItems = newEntries.map((e, idx: number) => ({
         id: e.id,
         schedule_sort_order: idx + 1
       }));
@@ -250,16 +245,18 @@ export function ProjectScheduleMain({
       await handleReorder(sourceGroup.schedule_category, reorderItems);
     } else {
       // Different category: Move
-      const newIndex = targetGroup.entries.findIndex((e: any) => e.id === over.id);
+      const newIndex = targetGroup.entries.findIndex((e) => e.id === over.id);
       
       // Optimistic update
       const updatedGroups = sheet.groups.map(g => {
         if (g.schedule_category === sourceGroup.schedule_category) {
-          return { ...g, entries: g.entries.filter((e: any) => e.id !== active.id) };
+          return { ...g, entries: g.entries.filter((e) => e.id !== active.id) };
         }
         if (g.schedule_category === targetGroup.schedule_category) {
           const next = [...g.entries];
-          next.splice(newIndex, 0, activeEntry);
+          if (activeEntry) {
+            next.splice(newIndex, 0, activeEntry);
+          }
           return { ...g, entries: next };
         }
         return g;
@@ -288,18 +285,6 @@ export function ProjectScheduleMain({
     }
   };
 
-  const handleUpdateQty = async (entryId: string, qty: number) => {
-    try {
-      unwrapActionResult(await updateScheduleEntryAction({
-        projectId,
-        entryId,
-        data: { schedule_qty: qty }
-      }));
-      fetchSchedule(activeSection);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to update quantity");
-    }
-  };
 
   const handleMoveBetweenCategories = async (entryId: string, fromCategory: string, toCategory: string, newIndex: number) => {
     try {
@@ -341,7 +326,7 @@ export function ProjectScheduleMain({
         unwrapActionResult(await bulkDeleteScheduleEntriesAction({
           projectId,
           section: activeSection,
-          category,
+          schedule_category: category,
           entryIds: ids
         }));
       }
@@ -360,7 +345,6 @@ export function ProjectScheduleMain({
     fetchSchedule(activeSection);
   }, [fetchSchedule, activeSection]);
 
-  const groups = sheet?.groups ?? [];
 
   const handleImport = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -515,13 +499,13 @@ export function ProjectScheduleMain({
                 section={activeSection}
                 onReorder={handleReorder}
                 onMoveBetweenCategories={handleMoveBetweenCategories}
-                onEditEntry={(entry: any) => {
-                  const finalOption = entry.options.find((o: any) => o.is_final) || entry.options[0];
+                onEditEntry={(entry: ProjectScheduleEntryWithRelations) => {
+                  const finalOption = entry.options.find((o) => o.is_final) || entry.options[0];
                   if (finalOption) {
                     setEditorModal({ 
                       isOpen: true, 
                       optionId: finalOption.id, 
-                      initialSnapshot: finalOption.data_snapshot 
+                      initialSnapshot: finalOption.data_snapshot as unknown as import("../types").ScheduleOptionSnapshot
                     });
                   }
                 }}
@@ -537,14 +521,13 @@ export function ProjectScheduleMain({
                   sheet={sheet}
                   section={activeSection}
                   onUpdateLocation={handleUpdateLocation}
-                  onUpdateQty={handleUpdateQty}
-                  onEditEntry={(entry: any) => {
-                    const finalOption = entry.options.find((o: any) => o.is_final) || entry.options[0];
+                  onEditEntry={(entry: ProjectScheduleEntryWithRelations) => {
+                    const finalOption = entry.options.find((o) => o.is_final) || entry.options[0];
                     if (finalOption) {
                       setEditorModal({ 
                         isOpen: true, 
                         optionId: finalOption.id, 
-                        initialSnapshot: finalOption.data_snapshot 
+                        initialSnapshot: finalOption.data_snapshot as unknown as ScheduleOptionSnapshot
                       });
                     }
                   }}
@@ -593,6 +576,7 @@ export function ProjectScheduleMain({
           onOpenChange={(open) => setEditorModal(open ? editorModal : null)}
           onRefresh={handleRefresh}
           userRole={userRole}
+          projectId={projectId}
         />
       )}
     </div>

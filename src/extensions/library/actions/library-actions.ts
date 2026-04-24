@@ -14,11 +14,12 @@ import {
   ProjectProductRequestWithDetails,
   ProjectProductRequestInput,
   ProductMetadataSchema,
-  LibraryItemStatusSchema,
-  PromotionRequestWithDetails
+  LibraryItemStatusSchema
 } from "../types";
-import { ProductRequestStatus, LibraryItemStatus, SampleAction, ProductType } from "@/generated/prisma";
+import { ProductRequestStatus, LibraryItemStatus, SampleAction, ProductType, SampleMovementLog, PromotionRequest } from "@/generated/prisma";
 import { REVALIDATE_LIBRARY } from "@/lib/revalidation-tags";
+import { RBAC } from "@/lib/rbac";
+import { getProjectMembershipOrThrow } from "@/lib/permissions";
 
 interface PromotionRequestWithRelations {
   id: string;
@@ -37,7 +38,8 @@ interface PromotionRequestWithRelations {
   requested_by?: { id: string; name: string };
 }
 
-export const getPromotionRequestsAction = createAction<void, PromotionRequestWithRelations[]>(async ({ tx }) => {
+export const getPromotionRequestsAction = createAction<void, PromotionRequestWithRelations[]>(async ({ ctx, tx }) => {
+  assertAdmin(ctx.role);
   const results = await LibraryService.getPromotionRequestsWithDetails(tx);
   return results as unknown as PromotionRequestWithRelations[];
 });
@@ -56,14 +58,20 @@ export const createPromotionRequestAction = createAction<{
   schedule_option_id: string; 
   project_id: string; 
   notes?: string 
-}, any>(
+}, PromotionRequest>(
   async ({ input, ctx, tx }) => {
+    await getProjectMembershipOrThrow(tx, input.project_id, ctx.userId, ctx.role);
+    RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
+
     const option = await tx.projectScheduleOption.findUnique({
       where: { id: input.schedule_option_id },
       include: { entry: true }
     });
 
     if (!option) throw new Error("Schedule option not found");
+    if (option.entry.project_id !== input.project_id) {
+      throw new Error("Ownership mismatch: Schedule option does not belong to this project.");
+    }
     if (!option.data_snapshot) throw new Error("Cannot promote option without snapshot data");
 
     const result = await LibraryService.createPromotionRequest(tx, {
@@ -166,11 +174,20 @@ export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetV
 // --- PRODUCT CATALOG ACTIONS ---
 
 export const getProductsAction = createAction<
-  any,
+  { 
+    category?: string; 
+    vendorId?: string; 
+    search?: string; 
+    hasPhysicalOnly?: boolean; 
+    status?: LibraryItemStatus;
+    type?: ProductType;
+    page?: number;
+    pageSize?: number;
+  },
   { items: ProductCatalogWithRelations[]; total: number }
 >(
   async ({ input, tx }) => {
-    return LibraryService.getAllProducts(tx, input);
+    return LibraryService.getAllProducts(tx, input) as Promise<{ items: ProductCatalogWithRelations[]; total: number }>;
   }
 );
 
@@ -229,7 +246,7 @@ export const updateProductAction = createAction<{ id: string; data: Partial<Prod
       metadata: input.data.metadata ? ProductMetadataSchema.parse(input.data.metadata) : undefined,
     };
 
-    const result = await LibraryService.updateProduct(input.id, validatedData, ctx.userId, tx);
+    const result = await LibraryService.updateProduct(input.id, validatedData, ctx.userId, tx, ctx.role);
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;
   }
@@ -283,19 +300,22 @@ export const getMyRoleAction = createAction<void, string>(async ({ ctx }) => {
 // --- PROJECT PRODUCT REQUEST ACTIONS ---
 
 export const getAllProductRequestsAction = createAction<void, ProjectProductRequestWithDetails[]>(
-  async ({ tx }) => {
+  async ({ ctx, tx }) => {
+    assertAdmin(ctx.role);
     return LibraryService.getAllProductRequests(tx);
   }
 );
 
 export const getProjectProductRequestsAction = createAction<{ projectId: string }, ProjectProductRequestWithDetails[]>(
-  async ({ input, tx }) => {
+  async ({ input, ctx, tx }) => {
+    await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
     return LibraryService.getProjectProductRequests(input.projectId, tx);
   }
 );
 
 export const createProjectProductRequestAction = createAction<ProjectProductRequestInput, ProjectProductRequestWithDetails>(
   async ({ input, ctx, tx }) => {
+    await getProjectMembershipOrThrow(tx, input.project_id, ctx.userId, ctx.role);
     const result = await LibraryService.createProjectProductRequest(input, ctx.userId, tx);
     
     invalidateCache({ scope: REVALIDATE_CUSTOM, path: `/projects/${input.project_id}` });
@@ -329,7 +349,7 @@ export const recordSampleMovementAction = createAction<{
   sampleId: string; 
   action: SampleAction; 
   notes?: string | null 
-}, any>(
+}, SampleMovementLog>(
   async ({ input, ctx, tx }) => {
     assertAdminOrStaff(ctx.role);
 

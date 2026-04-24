@@ -268,7 +268,7 @@ export function LibraryFormModal({
       } else {
         const finalProduct: ProductCatalogInput = {
           ...productData,
-          section: productSection,
+          catalog_type: productSection,
           catalog_category: productData.catalog_category.trim(),
           catalog_sku: productData.catalog_sku.trim(),
           vendor_name: productData.vendor_name?.trim() || undefined,

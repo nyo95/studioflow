@@ -8,7 +8,7 @@ import { AUDIT_ACTIONS } from "@/lib/services/audit/types";
 import { LibraryService } from "@/extensions/library/services/library-service";
 import { ScheduleSnapshotSchema, type ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 
-export type SourceOrigin = "web_catalog" | "web_manual" | "gsheets_import" | "sketchup_plugin";
+export type SourceOrigin = "library" | "manual" | "gsheets_import" | "sketchup_plugin";
 
 export interface ScheduleManualDataInput {
   catalog_product_name: string;
@@ -53,6 +53,7 @@ export interface ScheduleCatalogCreateInput {
   catalog_reference_url?: string | null;
   catalog_price?: number | null;
   catalog_dimension?: string | null;
+  catalog_type?: ProductType;
 }
 
 
@@ -71,9 +72,8 @@ function calculateInitialsType(data: { catalog_motif?: string | null; catalog_co
 export async function buildScheduleSnapshot(
   tx: PrismaTransaction,
   catalogId?: string | null,
-  manualData?: Partial<ScheduleSnapshot>, // Updated to use snapshot-like partial
-  sourceOrigin: SourceOrigin = "web_catalog",
-  catalogType?: ProductType
+  manualData?: Partial<ScheduleSnapshot>,
+  sourceOrigin?: SourceOrigin,
 ): Promise<ScheduleSnapshot> {
   if (catalogId) {
     const item = await tx.productCatalog.findUnique({
@@ -92,13 +92,14 @@ export async function buildScheduleSnapshot(
 
     return {
       snapshot_source_kind: "catalog",
-      snapshot_source_origin: sourceOrigin,
+      snapshot_source_origin: sourceOrigin || "library",
       snapshot_source_external_id: null,
       product_catalog_id: item.id,
+      catalog_type: item.catalog_type,
       schedule_category: item.catalog_category,
       catalog_sub_category: item.catalog_sub_category,
       catalog_product_name: item.catalog_product_name || item.catalog_sku,
-      catalog_brand: item.catalog_brand || item.vendor.brand_name,
+      catalog_brand: item.catalog_brand || item.vendor?.brand_name || "Custom",
       catalog_initials_type: calculateInitialsType({
         catalog_motif: item.catalog_motif,
         catalog_color: item.catalog_color,
@@ -111,12 +112,15 @@ export async function buildScheduleSnapshot(
       catalog_contact_phone: defaultContact?.phone_number ?? null,
       catalog_contact_email: defaultContact?.email ?? null,
       catalog_has_sample: item.physical_samples?.length ? true : false,
-      catalog_type: item.catalog_type,
       specs: {
         catalog_sku: item.catalog_sku,
         catalog_motif: item.catalog_motif,
         catalog_structured_tags: item.tags,
         catalog_dimensions: `${item.catalog_dimension_p ?? ""} x ${item.catalog_dimension_l ?? ""} x ${item.catalog_dimension_t ?? ""} ${item.catalog_dimension_unit ?? "cm"}`,
+        catalog_dimension_p: item.catalog_dimension_p,
+        catalog_dimension_l: item.catalog_dimension_l,
+        catalog_dimension_t: item.catalog_dimension_t,
+        catalog_dimension_unit: item.catalog_dimension_unit,
         catalog_color: item.catalog_color,
         catalog_finishing: item.catalog_finishing,
         catalog_reference_url: item.catalog_reference_url,
@@ -130,9 +134,10 @@ export async function buildScheduleSnapshot(
   // Manual fallback
   return {
     snapshot_source_kind: "manual",
-    snapshot_source_origin: sourceOrigin === "web_catalog" ? "web_manual" : sourceOrigin,
+    snapshot_source_origin: sourceOrigin || manualData?.snapshot_source_origin || "manual",
     snapshot_source_external_id: manualData?.snapshot_source_external_id ?? null,
     product_catalog_id: null,
+    catalog_type: manualData?.catalog_type || ProductType.material,
     schedule_category: manualData?.schedule_category ?? "",
     catalog_sub_category: manualData?.catalog_sub_category ?? null,
     catalog_product_name: manualData?.catalog_product_name || "Manual Item",
@@ -154,6 +159,10 @@ export async function buildScheduleSnapshot(
       catalog_motif: manualData?.specs?.catalog_motif ?? null,
       catalog_structured_tags: manualData?.specs?.catalog_structured_tags ?? [],
       catalog_dimensions: manualData?.specs?.catalog_dimensions || "N/A",
+      catalog_dimension_p: manualData?.specs?.catalog_dimension_p ?? null,
+      catalog_dimension_l: manualData?.specs?.catalog_dimension_l ?? null,
+      catalog_dimension_t: manualData?.specs?.catalog_dimension_t ?? null,
+      catalog_dimension_unit: manualData?.specs?.catalog_dimension_unit ?? null,
       catalog_color: manualData?.specs?.catalog_color ?? null,
       catalog_finishing: manualData?.specs?.catalog_finishing ?? null,
       catalog_reference_url: manualData?.specs?.catalog_reference_url ?? null,
@@ -161,7 +170,6 @@ export async function buildScheduleSnapshot(
     },
     snapshot_source_payload: manualData?.snapshot_source_payload || undefined,
     snapshot_captured_at: new Date().toISOString(),
-    catalog_type: catalogType || manualData?.catalog_type || ProductType.material,
   };
 }
 
@@ -208,8 +216,8 @@ async function resolveCatalogItemForMode(
       catalog_sub_category: catalogCreateData?.catalog_sub_category ?? undefined,
       catalog_sku: catalogCreateData?.catalog_sku || normalizedName,
       catalog_product_name: normalizedName,
-      catalog_motif: catalogCreateData?.catalog_product_name ?? undefined,
-      catalog_color: catalogCreateData?.catalog_color ?? undefined,
+      catalog_motif: catalogCreateData?.catalog_motif ?? undefined,
+      catalog_color: catalogCreateData?.catalog_color || "Standard",
       catalog_finishing: catalogCreateData?.catalog_finishing ?? undefined,
       catalog_dimension_p: catalogCreateData?.catalog_dimension_p ?? undefined,
       catalog_dimension_l: catalogCreateData?.catalog_dimension_l ?? undefined,
@@ -228,54 +236,34 @@ async function resolveCatalogItemForMode(
 }
 
 
-/**
- * Helper to sync a project option's snapshot to the global library.
- * Part of the Pillar 2 "Auto-Harvesting" workflow.
- */
-async function syncOptionToLibrary(tx: PrismaTransaction, optionId: string, snapshot: ScheduleSnapshot, userId?: string) {
-  const syncedProduct = await LibraryService.ensureProductInLibrary(tx, {
-    catalog_product_name: snapshot.catalog_product_name,
-    catalog_brand: snapshot.catalog_brand,
-    catalog_category: snapshot.schedule_category,
-    catalog_image_url: snapshot.catalog_image_url,
-    catalog_price: snapshot.catalog_price,
-    catalog_color: snapshot.specs?.catalog_color,
-    catalog_finishing: snapshot.specs?.catalog_finishing,
-    catalog_motif: snapshot.catalog_product_name,
-  });
 
-  // Skip if product could not be synced (e.g., reserved brands)
-  if (!syncedProduct) {
-    console.warn(`[syncOptionToLibrary] Skipped syncing reserved/pending product for option=${optionId}`);
-    return null;
-  }
-
-  // Update original option if the link was established or updated
-  const updatedSnapshot = {
-    ...snapshot,
-    product_catalog_id: syncedProduct.id
-  };
-
-  const updatedOption = await tx.projectScheduleOption.update({
-    where: { id: optionId },
-    data: {
-      product_catalog_id: syncedProduct.id,
-      data_snapshot: updatedSnapshot as unknown as Prisma.InputJsonValue
-    },
-    include: { entry: true }
-  });
-
-  if (userId && syncedProduct.status === "PENDING") {
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_PROMOTE_TO_LIBRARY, "ProductCatalog", syncedProduct.id, userId, {
-      harvested_from_option: optionId,
-      project_id: updatedOption.entry.project_id
-    });
-  }
-
-  return updatedOption;
-}
 
 export class ScheduleService {
+  /**
+   * Ownership Validation: Verifies that an entry or option belongs to the specified project.
+   */
+  static async validateOwnership(tx: PrismaTransaction, projectId: string, entryId?: string, optionId?: string) {
+    if (entryId) {
+      const entry = await tx.projectScheduleEntry.findUnique({
+        where: { id: entryId },
+        select: { project_id: true }
+      });
+      if (!entry || entry.project_id !== projectId) {
+        throw new ActionError("Ownership Validation Failed: Entry does not belong to this project", "UNAUTHORIZED");
+      }
+    }
+
+    if (optionId) {
+      const option = await tx.projectScheduleOption.findUnique({
+        where: { id: optionId },
+        include: { entry: { select: { project_id: true } } }
+      });
+      if (!option || option.entry.project_id !== projectId) {
+        throw new ActionError("Ownership Validation Failed: Option does not belong to this project", "UNAUTHORIZED");
+      }
+    }
+  }
+
   /**
    * Returns a preferred prefix for a category, falling back to first 2 letters.
    */
@@ -286,40 +274,6 @@ export class ScheduleService {
     return map[category.toUpperCase()] || category.substring(0, 2).toUpperCase();
   }
 
-  /**
-   * Explicitly promotes a project product snapshot to the global library.
-   * This is part of the Pillar 2 Resilience strategy to prevent data pollution.
-   * @param tx Prisma transaction client.
-   * @param optionId Option id to promote.
-   * @param userId Actor user id for audit.
-   * @returns Updated option linked to a library product.
-   */
-  static async executePromoteToLibrary(tx: PrismaTransaction, optionId: string, userId: string) {
-    const option = await tx.projectScheduleOption.findUniqueOrThrow({
-      where: { id: optionId },
-      include: { entry: true }
-    });
-
-    const snapshot = option.data_snapshot as unknown as ScheduleSnapshot;
-    if (!snapshot) throw new ActionError("Cannot promote option without valid snapshot", "SNAPSHOT_MISSING");
-
-    // Perform promotion using existing helper
-    const updatedOption = await syncOptionToLibrary(tx, optionId, snapshot);
-
-    if (!updatedOption) {
-      throw new ActionError("Cannot promote reserved/pending product to library", "PROMOTION_FAILED");
-    }
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_PROMOTE_TO_LIBRARY, "ProjectScheduleOption", optionId, userId, {
-      project_id: option.entry.project_id,
-      entry_id: option.entry_id,
-      catalog_id: updatedOption.product_catalog_id,
-      brand: snapshot.catalog_brand,
-      name: snapshot.catalog_product_name
-    });
-
-    return updatedOption;
-  }
 
   /**
    * Returns active schedule templates for one section.
@@ -563,13 +517,13 @@ export class ScheduleService {
         catalog_product_name: "[RESERVED]",
         catalog_brand: "PENDING",
         catalog_initials_type: "-",
-      }, "web_manual", section);
+      }, "manual");
       isFinal = false; // Reserved slots are not final selections
       optionStatus = "DRAFT"; // Use DRAFT for reserved, not APPROVED
     } else if (mode === "manual") {
       // Manual mode creates a snapshot directly from provided data
       // It is considered APPROVED immediately in the project context
-      finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "web_manual", section);
+      finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "manual");
       isFinal = true;
       optionStatus = "APPROVED";
     } else {
@@ -581,13 +535,13 @@ export class ScheduleService {
         catalogItemId,
         catalogCreateData
       );
-      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "web_catalog", section);
+      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "library");
     }
 
     // Validate Snapshot before save
     const validatedSnapshot = ScheduleSnapshotSchema.parse(finalSnapshot);
 
-    const option = await tx.projectScheduleOption.create({
+    await tx.projectScheduleOption.create({
       data: {
         entry_id: entry.id,
         product_catalog_id: resolvedCatalogId,
@@ -598,11 +552,6 @@ export class ScheduleService {
       },
     });
 
-    // 5. Automatic Sync to Library (Auto-Harvesting)
-    // สำหรับ manual/create_catalog, kita promo ke library tapi status PENDING (di Queue)
-    if (mode === "manual" || mode === "create_catalog") {
-      await syncOptionToLibrary(tx, option.id, validatedSnapshot, userId);
-    }
 
     // 6. Normalize codes (Global category-wide uniqueness)
     await this.normalizeCodes(tx, projectId, section, normalizedCategory);
@@ -636,9 +585,6 @@ export class ScheduleService {
       orderBy: { option_label: "asc" },
     });
 
-    const entry = await tx.projectScheduleEntry.findUniqueOrThrow({
-      where: { id: entryId }
-    });
 
     const lastLabel = existingOptions[existingOptions.length - 1]?.option_label || "@";
     const nextLabel = String.fromCharCode(lastLabel.charCodeAt(0) + 1);
@@ -652,9 +598,9 @@ export class ScheduleService {
         catalog_product_name: "[RESERVED]",
         catalog_brand: "PENDING",
         catalog_initials_type: "-",
-      }, "web_manual", entry.section);
+      }, "manual");
     } else if (mode === "manual") {
-        finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "web_manual", entry.section);
+        finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "manual");
     } else {
       resolvedCatalogId = await resolveCatalogItemForMode(
         tx,
@@ -664,7 +610,7 @@ export class ScheduleService {
         catalogItemId,
         catalogCreateData
       );
-      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "web_catalog", entry.section);
+      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "library");
     }
 
     // Validate Snapshot before save
@@ -689,12 +635,54 @@ export class ScheduleService {
       });
     }
 
-    // 5. Automatic Sync (Auto-Harvesting)
-    if (mode !== "catalog" && mode !== "reserve") {
-      await syncOptionToLibrary(tx, option.id, validatedSnapshot, userId);
-    }
 
     return { option, createdCatalogId: mode === "create_catalog" ? resolvedCatalogId : null };
+  }
+
+  /**
+   * Deletes an option with smart logic:
+   * - If the option is FINAL (active), promote a sibling (if any) to FINAL.
+   * - Prevent deleting the last option in an entry.
+   */
+  static async smartDeleteOption(tx: PrismaTransaction, optionId: string, userId?: string) {
+    const option = await tx.projectScheduleOption.findUniqueOrThrow({
+      where: { id: optionId },
+      include: { entry: { include: { options: true } } }
+    });
+
+    const siblings = option.entry.options;
+    if (siblings.length <= 1) {
+      throw new ActionError("Cannot delete the last option of a schedule entry.", "DELETE_RESTRICTED");
+    }
+
+    const wasFinal = option.is_final;
+
+    // Delete the target option
+    const result = await tx.projectScheduleOption.delete({
+      where: { id: optionId }
+    });
+
+    // If it was final, promote the next available sibling
+    if (wasFinal) {
+      const remainingSiblings = siblings.filter(o => o.id !== optionId).sort((a, b) => a.option_label.localeCompare(b.option_label));
+      if (remainingSiblings.length > 0) {
+        const nextPromoted = remainingSiblings[0];
+        await tx.projectScheduleOption.update({
+          where: { id: nextPromoted.id },
+          data: { is_final: true, status: "APPROVED" }
+        });
+      }
+    }
+
+    if (userId) {
+      await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_DELETE_OPTION, "ProjectScheduleOption", optionId, userId, {
+        project_id: option.entry.project_id,
+        entry_id: option.entry_id,
+        was_final: wasFinal
+      });
+    }
+
+    return result;
   }
 
   /**
@@ -782,7 +770,7 @@ export class ScheduleService {
       await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_DELETE_ENTRY, "ProjectScheduleEntry", entryId, userId, {
         project_id: entry.project_id,
         schedule_category: entry.schedule_category,
-        schedule_code: entry.schedule_code,
+        schedule_code: `${entry.schedule_prefix}-${String(entry.schedule_increment).padStart(2, "0")}`,
       });
     }
 
@@ -926,27 +914,17 @@ export class ScheduleService {
     tx: PrismaTransaction,
     optionId: string,
     data: {
-      name?: string; // alias for catalog_product_name
       catalog_product_name?: string;
-      brand?: string; // alias for catalog_brand
       catalog_brand?: string;
       catalog_initials_type?: string | null;
-      initials_type?: string | null; // legacy
-      reference_url?: string | null; // alias for catalog_reference_url
       catalog_reference_url?: string | null;
-      image_url?: string | null; // alias for catalog_image_url
       catalog_image_url?: string | null;
-      price?: number | null; // alias for catalog_price
       catalog_price?: number | null;
-      contact_name?: string | null;
       catalog_contact_name?: string | null;
-      contact_phone?: string | null;
       catalog_contact_phone?: string | null;
-      contact_email?: string | null;
       catalog_contact_email?: string | null;
-      specs?: Record<string, unknown>;
       catalog_has_sample?: boolean;
-      has_sample?: boolean; // legacy
+      specs?: Record<string, unknown>;
     },
     userId: string
   ) {
@@ -956,8 +934,14 @@ export class ScheduleService {
     });
 
     const currentSnapshot = (option.data_snapshot as unknown as ScheduleSnapshot) || {} as ScheduleSnapshot;
+
+    // Stage 1 Gatekeeping: catalog_color is mandatory for local snapshot updates
+    const colorToSave = data.specs?.hasOwnProperty('catalog_color') ? (data.specs.catalog_color as string) : currentSnapshot.specs?.catalog_color;
+    if (!colorToSave || colorToSave.trim() === "") {
+      throw new ActionError("Stage 1 Validation Failed: catalog_color is mandatory for local snapshots", "VALIDATION_FAILED");
+    }
     
-    // Merge new data into snapshot using namespaced fields (Priority: Canonical > Alias > Current)
+    // Merge new data into snapshot using namespaced fields
     const updatedSnapshot: ScheduleSnapshot = {
       ...currentSnapshot,
       catalog_type: currentSnapshot.catalog_type || option.entry.section,
@@ -1141,46 +1125,6 @@ export class ScheduleService {
   }
 
   /**
-   * FORCED UPDATE: propagation of library changes to all linked project snapshots
-   * @param tx Prisma transaction client.
-   * @param productId Master product catalog id.
-   * @param userId Actor user id for audit.
-   */
-  static async updateLinkedSnapshots(tx: PrismaTransaction, productId: string, userId: string) {
-    const product = await tx.productCatalog.findUnique({
-      where: { id: productId },
-      include: { vendor: true }
-    });
-    if (!product) return;
-
-    const options = await tx.projectScheduleOption.findMany({
-      where: { 
-        product_catalog_id: productId
-      }
-    });
-
-    if (options.length === 0) return;
-
-    console.log(`[ForcedUpdate] Refreshing ${options.length} snapshots for product=${productId}`);
-
-    await Promise.all(options.map(option => 
-      this.updateOptionSnapshot(tx, option.id, {
-        catalog_product_name: product.catalog_product_name || undefined,
-        catalog_brand: product.catalog_brand || product.vendor?.brand_name || undefined,
-        catalog_image_url: product.catalog_image_url,
-        catalog_price: product.catalog_price,
-        specs: {
-          catalog_sku: product.catalog_sku,
-          catalog_motif: product.catalog_motif,
-          catalog_color: product.catalog_color,
-          catalog_finishing: product.catalog_finishing,
-          ...((product.metadata as any) || {})
-        }
-      }, userId)
-    ));
-  }
-
-  /**
    * Swaps two entries in the same category.
    * @param tx Prisma transaction client.
    * @param projectId Project id.
@@ -1188,7 +1132,7 @@ export class ScheduleService {
    * @param idB Second entry id.
    * @param userId Actor user id for audit.
    */
-  static async swapEntries(tx: PrismaTransaction, projectId: string, idA: string, idB: string, userId?: string) {
+  static async swapEntries(tx: PrismaTransaction, projectId: string, idA: string, idB: string) {
     const [entryA, entryB] = await Promise.all([
       tx.projectScheduleEntry.findUnique({ where: { id: idA } }),
       tx.projectScheduleEntry.findUnique({ where: { id: idB } })

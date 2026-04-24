@@ -59,6 +59,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
     try {
       const result = unwrapActionResult(await getProductsAction({ 
         search: q,
+        type: section,
       })) as { items: ProductCatalogWithRelations[] };
       setProducts(result.items);
     } catch (err) {
@@ -126,7 +127,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
             setShowResults(true);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && query.trim() && !products.some(p => p.catalog_product_name.toLowerCase() === query.toLowerCase())) {
+            if (e.key === "Enter" && query.trim() && !products.some(p => p.catalog_product_name?.toLowerCase() === query.toLowerCase())) {
               handleStartCreateNew();
             }
           }}
@@ -219,6 +220,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
         projectId={projectId}
         section={section}
         initialValue={draftValue}
+        onSuccess={onSuccess}
       />
     </div>
   );

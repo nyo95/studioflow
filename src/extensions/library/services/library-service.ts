@@ -1,4 +1,4 @@
-import { Prisma, ProductRequestStatus, LibraryItemStatus, ProductType, SampleAction } from "@/generated/prisma";
+import { Prisma, ProductRequestStatus, LibraryItemStatus, ProductType, SampleAction, Role } from "@/generated/prisma";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { settingsService } from "@/lib/services/settings-service";
@@ -8,8 +8,9 @@ import {
   ProjectProductRequestInput,
   ProductCatalogValidationSchema,
   CatalogApprovalValidationSchema,
-  ProductTypeAssertionSchema
+  ProductCatalogWithRelations
 } from "../types";
+import { ScheduleOptionSnapshot } from "../../schedule/types";
 import { insertAuditLog } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/lib/services/audit/types";
 
@@ -51,13 +52,13 @@ export class LibraryService {
   /**
    * CRITICAL RUNTIME ASSERTION: Blocks mutation if item is a Source of Truth (Catalog)
    */
-  static async assertEditable(tx: PrismaTransaction, productId: string) {
+  static async assertEditable(tx: PrismaTransaction, productId: string, role?: Role) {
     const product = await tx.productCatalog.findUnique({
       where: { id: productId }
     });
 
-    if (product?.status === LibraryItemStatus.APPROVED) {
-      throw new ActionError("APPROVED global items are read-only. Please submit a Change Request.", "CATALOG_LOCKED");
+    if (product?.status === LibraryItemStatus.APPROVED && role !== Role.ADMIN) {
+      throw new ActionError("APPROVED global items are read-only. Only ADMIN can override.", "CATALOG_LOCKED");
     }
   }
 
@@ -88,62 +89,25 @@ export class LibraryService {
     if (context === "CATALOG") {
       const result = CatalogApprovalValidationSchema.safeParse(data);
       if (!result.success) {
-        throw new ActionError(result.error.errors[0].message, "CATALOG_VALIDATION_ERROR");
+        throw new ActionError(result.error.issues[0].message, "CATALOG_VALIDATION_ERROR");
       }
     } else {
       const result = ProductCatalogValidationSchema.safeParse(data);
       if (!result.success) {
-        throw new ActionError(result.error.errors[0].message, "SNAPSHOT_VALIDATION_ERROR");
+        throw new ActionError(result.error.issues[0].message, "SNAPSHOT_VALIDATION_ERROR");
       }
     }
     
-    // Absolute ban on placeholders
-    const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—"];
-    const values = Object.values(data).filter(v => typeof v === "string");
-    if (values.some(v => placeholders.includes(v.trim().toUpperCase()))) {
-      throw new ActionError("Placeholders like 'N/A' or 'Unknown' are FORBIDDEN.", "PLACEHOLDER_VIOLATION");
+    // IDENTITY RULE: At least one primary identifier must be non-placeholder
+    const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
+    const isPlaceholder = (val?: string | null) => !val || placeholders.includes(val.trim().toUpperCase());
+
+    const skuInvalid = isPlaceholder(data.catalog_sku);
+    const nameInvalid = isPlaceholder(data.catalog_product_name);
+
+    if (skuInvalid && nameInvalid) {
+      throw new ActionError("Product requires at least one valid identity (SKU or Name). Placeholders in both are FORBIDDEN.", "PLACEHOLDER_VIOLATION");
     }
-  }
-
-  /**
-   * CRITICAL RUNTIME ASSERTION: Propagates catalog updates to all linked project snapshots
-   */
-  static async syncCatalogToSchedules(tx: PrismaTransaction, productId: string, userId: string) {
-    const catalog = await tx.productCatalog.findUnique({ 
-      where: { id: productId },
-      include: { vendor: true }
-    });
-    if (!catalog) return;
-
-    // Find all un-locked schedule options using this global item
-    const linkedOptions = await tx.projectScheduleOption.findMany({
-      where: { 
-        product_catalog_id: productId,
-        entry: { version_locked: false }
-      }
-    });
-
-    await Promise.all(linkedOptions.map(option => 
-      tx.projectScheduleOption.update({
-        where: { id: option.id },
-        data: {
-          data_snapshot: {
-            sku: catalog.catalog_sku,
-            name: catalog.catalog_product_name,
-            brand: catalog.vendor.brand_name,
-            category: catalog.catalog_category,
-            color: catalog.catalog_color,
-            finishing: catalog.catalog_finishing,
-            motif: catalog.catalog_motif,
-            image_url: catalog.catalog_image_url
-          }
-        }
-      })
-    ));
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_SYNC_PROPAGATED, "ProductCatalog", productId, userId, {
-      synced_count: linkedOptions.length
-    });
   }
 
   /**
@@ -296,10 +260,11 @@ export class LibraryService {
       search?: string; 
       hasPhysicalOnly?: boolean; 
       status?: LibraryItemStatus;
+      type?: ProductType;
       page?: number;
       pageSize?: number;
     }
-  ): Promise<{ items: any[]; total: number }> {
+  ): Promise<{ items: ProductCatalogWithRelations[]; total: number }> {
     const where: Prisma.ProductCatalogWhereInput = {
       deleted_at: null
     };
@@ -307,6 +272,7 @@ export class LibraryService {
     if (filters?.status) where.status = filters.status;
     if (filters?.category && filters.category !== "all") where.catalog_category = filters.category;
     if (filters?.vendorId) where.vendor_id = filters.vendorId;
+    if (filters?.type) where.catalog_type = filters.type;
     
     if (filters?.search) {
       where.OR = [
@@ -314,6 +280,10 @@ export class LibraryService {
         { catalog_brand: { contains: filters.search, mode: "insensitive" } },
         { catalog_sku: { contains: filters.search, mode: "insensitive" } },
         { catalog_sub_category: { contains: filters.search, mode: "insensitive" } },
+        { catalog_category: { contains: filters.search, mode: "insensitive" } },
+        { catalog_motif: { contains: filters.search, mode: "insensitive" } },
+        { catalog_color: { contains: filters.search, mode: "insensitive" } },
+        { catalog_finishing: { contains: filters.search, mode: "insensitive" } },
       ];
     }
     if (filters?.hasPhysicalOnly) {
@@ -348,7 +318,7 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Resolved vendor id.
    */
-  private static async resolveVendor(brand: string, tx: PrismaTransaction) {
+  private static async resolveVendor(brand: string, userId: string, tx: PrismaTransaction) {
     const normalized = brand.trim();
     if (!normalized) throw new ActionError("Brand name is required", "VENDOR_REQUIRED");
 
@@ -365,6 +335,11 @@ export class LibraryService {
           where: { id: existing.id },
           data: { deleted_at: null }
         });
+
+        await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_VENDOR, "VENDOR", existing.id, userId, {
+          brand_name: existing.brand_name,
+          action: "REVIVE_VIA_RESOLUTION"
+        });
       }
       return existing.id;
     }
@@ -374,6 +349,12 @@ export class LibraryService {
       const created = await tx.vendor.create({
         data: { brand_name: normalized }
       });
+
+      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_VENDOR, "VENDOR", created.id, userId, {
+        brand_name: normalized,
+        source: "RESOLUTION_AUTO_CREATE"
+      });
+
       return created.id;
     } catch (error: unknown) {
       // Race condition fallback: if another request created it in between
@@ -391,7 +372,7 @@ export class LibraryService {
    * @returns Created product with relations.
    */
   static async createProduct(data: ProductCatalogInput, userId: string, tx: PrismaTransaction) {
-    const resolvedVendorId = data.vendor_id || await this.resolveVendor(data.vendor_name || data.catalog_brand || "", tx);
+    const resolvedVendorId = data.vendor_id || await this.resolveVendor(data.vendor_name || data.catalog_brand || "", userId, tx);
     
     await this.assertValidProduct(data, "SNAPSHOT");
     await this.assertTypeRules(data.catalog_type || ProductType.material, {}, "SNAPSHOT");
@@ -426,6 +407,7 @@ export class LibraryService {
         catalog_reference_url: this.normalizeOptional(data.catalog_reference_url),
         catalog_folder_url: this.normalizeOptional(data.catalog_folder_url),
         catalog_price: data.catalog_price ?? null,
+        status: data.status || "APPROVED",
         metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
         physical_samples: data.physical_samples ? {
           create: data.physical_samples.map(s => ({
@@ -461,8 +443,8 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Updated product with relations.
    */
-  static async updateProduct(id: string, data: Partial<ProductCatalogInput>, userId: string, tx: PrismaTransaction) {
-    await this.assertEditable(tx, id);
+  static async updateProduct(id: string, data: Partial<ProductCatalogInput>, userId: string, tx: PrismaTransaction, role?: Role) {
+    await this.assertEditable(tx, id, role);
     if (data.catalog_category !== undefined && !data.catalog_category.trim()) throw new ActionError("Category is required.", "CATEGORY_REQUIRED");
     
     const existing = await tx.productCatalog.findUnique({ where: { id } });
@@ -538,7 +520,7 @@ export class LibraryService {
 
     // CRITICAL: Category registration ONLY on APPROVE
     if (data.status === "APPROVED") {
-      await this.assertValidProduct(updated as any, "CATALOG");
+      await this.assertValidProduct(updated as unknown as ProductCatalogInput, "CATALOG");
       
       await settingsService.executeUpsertScheduleCategoryConfig(tx, {
         section: updated.catalog_type, 
@@ -546,8 +528,6 @@ export class LibraryService {
         userId,
       });
 
-      // SYNC back to ALL un-locked project schedules
-      await this.syncCatalogToSchedules(tx, id, userId);
     }
 
     return updated;
@@ -576,9 +556,7 @@ export class LibraryService {
       }
     });
 
-    // Also update snapshots in all schedules using these products (Bulk sync)
-    const productIds = source.products.map(p => p.id);
-    await Promise.all(productIds.map(pid => this.syncCatalogToSchedules(tx, pid, userId)));
+    // Note: Project snapshots are historical; not auto-synced during merge.
 
     // Soft delete source vendor
     await tx.vendor.update({
@@ -597,7 +575,8 @@ export class LibraryService {
    * Syncs a schedule item to the library, ensuring no duplicates.
    * Based on Brand + Name match.
    */
-  static async ensureProductInLibrary(tx: PrismaTransaction, data: {
+  static async ensureProductInLibrary(tx: PrismaTransaction, userId: string, data: {
+    catalog_sku?: string | null;
     catalog_product_name: string;
     catalog_brand: string;
     catalog_category: string;
@@ -607,47 +586,57 @@ export class LibraryService {
     catalog_color?: string | null;
     catalog_finishing?: string | null;
     catalog_motif?: string | null;
+    catalog_reference_url?: string | null;
+    catalog_dimension?: string | null;
+    catalog_type?: ProductType;
   }) {
     if (!data.catalog_brand?.trim()) {
       throw new ActionError("Brand is required for library sync", "BRAND_REQUIRED");
     }
-    if (!data.catalog_product_name?.trim()) {
-      throw new ActionError("Name is required for library sync", "NAME_REQUIRED");
-    }
 
     const brand = data.catalog_brand.trim();
-    const name = data.catalog_product_name.trim();
+    
+    // Identity Resolution Hierarchy
+    const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
+    const isPlaceholder = (val?: string | null) => !val || placeholders.includes(val.trim().toUpperCase());
 
+    const rawSku = data.catalog_sku?.trim();
+    const rawName = data.catalog_product_name?.trim();
+
+    let effectiveId: string;
+    if (!isPlaceholder(rawSku)) {
+      effectiveId = rawSku!;
+    } else if (!isPlaceholder(rawName)) {
+      effectiveId = rawName!;
+    } else {
+      throw new ActionError("Sync failed: No valid primary identity (SKU or Name) provided.", "IDENTITY_REQUIRED");
+    }
 
     // Skip system-reserved brands from being created as vendors
     if (brand === "PENDING" || brand === "RESERVED" || brand === "[RESERVED]") {
-      return null; // Return null to indicate no material was synced
+      return null;
     }
 
-    // 1. Resolve Vendor (Refactored for Anti-Ghosting)
-    const vendorId = await this.resolveVendor(brand, tx);
+    // 1. Resolve Vendor
+    const vendorId = await this.resolveVendor(brand, userId, tx);
 
-
-    // 2. Resolve Product (Deduplication) - Use try-catch to handle race conditions
+    // 2. Resolve Product (Deduplication)
     try {
-      // First, check if product exists
       const existingProduct = await tx.productCatalog.findFirst({
         where: {
           vendor_id: vendorId,
-          catalog_sku: { equals: name, mode: "insensitive" }, // Treat name as SKU/Key in this sync context
+          catalog_sku: { equals: effectiveId, mode: "insensitive" },
           deleted_at: null
         }
       });
 
       if (existingProduct) {
         if (existingProduct.status === "APPROVED") {
-          // High-End Hardening: Never mutate approved items
           return existingProduct;
         }
 
-        // Update existing item to sync latest project data
-        // If it was REJECTED, reset it to PENDING so admin can review again
-        return tx.productCatalog.update({
+        const existingStatus = existingProduct.status;
+        const updated = await tx.productCatalog.update({
           where: { id: existingProduct.id },
           data: {
             catalog_category: data.catalog_category,
@@ -657,56 +646,84 @@ export class LibraryService {
             catalog_color: data.catalog_color || existingProduct.catalog_color,
             catalog_finishing: data.catalog_finishing || existingProduct.catalog_finishing,
             catalog_motif: data.catalog_motif || existingProduct.catalog_motif,
-            catalog_product_name: data.catalog_product_name || existingProduct.catalog_product_name,
+            catalog_product_name: !isPlaceholder(rawName) ? rawName : existingProduct.catalog_product_name,
             status: existingProduct.status === "REJECTED" ? "PENDING" : existingProduct.status
           }
         });
+
+        await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_PRODUCT, "ProductCatalog", updated.id, userId, {
+          catalog_sku: effectiveId,
+          catalog_product_name: updated.catalog_product_name,
+          catalog_brand: brand,
+          source: "PROJECT_SYNC_UPDATE",
+          previous_status: existingStatus
+        });
+
+        return updated;
       }
 
-      // Create new product - race condition possible if concurrent request
-      return await tx.productCatalog.create({
+      // Create new product
+      const created = await tx.productCatalog.create({
         data: {
           vendor_id: vendorId,
           catalog_category: data.catalog_category,
-          catalog_sku: name, // Name from sync is usually the primary key/SKU
-          catalog_product_name: data.catalog_product_name,
+          catalog_sku: effectiveId,
+          // NEVER persist placeholder in primary field; use null if name is invalid
+          catalog_product_name: !isPlaceholder(rawName) ? rawName : null,
           catalog_image_url: data.catalog_image_url,
           catalog_price: data.catalog_price,
           catalog_image_original_url: data.catalog_image_original_url,
-          catalog_color: data.catalog_color,
+          catalog_color: data.catalog_color || "UNSPECIFIED",
           catalog_finishing: data.catalog_finishing,
           catalog_motif: data.catalog_motif,
           status: "PENDING"
         }
       });
+
+      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_PRODUCT, "ProductCatalog", created.id, userId, {
+        catalog_sku: effectiveId,
+        catalog_product_name: created.catalog_product_name,
+        catalog_brand: brand,
+        source: "PROJECT_SYNC_CREATE"
+      });
+
+      return created;
     } catch (error: unknown) {
-      // Handle unique constraint violation (P2002) - race condition fallback
       if (error instanceof Error && error.message.includes("Unique constraint")) {
         const foundProduct = await tx.productCatalog.findFirst({
           where: {
             vendor_id: vendorId,
-            catalog_sku: { equals: name, mode: "insensitive" },
+            catalog_sku: { equals: effectiveId, mode: "insensitive" },
             deleted_at: null
           }
         });
         
         if (foundProduct) {
-          if (foundProduct.status === "APPROVED") {
-            return foundProduct;
-          }
-          return tx.productCatalog.update({
+          if (foundProduct.status === "APPROVED") return foundProduct;
+          const fallbackStatus = foundProduct.status;
+          const updated = await tx.productCatalog.update({
             where: { id: foundProduct.id },
             data: {
-            catalog_category: data.catalog_category,
-            catalog_image_url: data.catalog_image_url || foundProduct.catalog_image_url,
-            catalog_price: data.catalog_price ?? foundProduct.catalog_price,
-            catalog_image_original_url: data.catalog_image_original_url || foundProduct.catalog_image_original_url,
-            catalog_color: data.catalog_color || foundProduct.catalog_color,
-            catalog_finishing: data.catalog_finishing || foundProduct.catalog_finishing,
-            catalog_motif: data.catalog_motif || foundProduct.catalog_motif,
-            catalog_product_name: data.catalog_product_name || foundProduct.catalog_product_name
+              catalog_category: data.catalog_category,
+              catalog_image_url: data.catalog_image_url || foundProduct.catalog_image_url,
+              catalog_price: data.catalog_price ?? foundProduct.catalog_price,
+              catalog_image_original_url: data.catalog_image_original_url || foundProduct.catalog_image_original_url,
+              catalog_color: data.catalog_color || foundProduct.catalog_color,
+              catalog_finishing: data.catalog_finishing || foundProduct.catalog_finishing,
+              catalog_motif: data.catalog_motif || foundProduct.catalog_motif,
+              catalog_product_name: !isPlaceholder(rawName) ? rawName : foundProduct.catalog_product_name
             }
           });
+
+          await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_PRODUCT, "ProductCatalog", updated.id, userId, {
+            catalog_sku: effectiveId,
+            catalog_product_name: updated.catalog_product_name,
+            catalog_brand: brand,
+            source: "PROJECT_SYNC_UPDATE",
+            previous_status: fallbackStatus
+          });
+
+          return updated;
         }
       }
       throw error;
@@ -793,8 +810,7 @@ export class LibraryService {
   }
 
   /**
-   * Creates a project product request.
-   * Supports auto-harvesting to pending library item for custom requests.
+   * Creates a project product request. Strictly project-local.
    * @param data Request payload.
    * @param userId Actor user id for audit.
    * @param tx Prisma transaction client.
@@ -805,55 +821,8 @@ export class LibraryService {
     userId: string,
     tx: PrismaTransaction
   ) {
-    let productCatalogId = data.product_catalog_id;
-
-    // AUTO-HARVESTING: If it's a custom request, create a PENDING catalog item
-    if (!data.product_catalog_id && data.custom_product_name) {
-      // 1. Ensure "Project Harvested" vendor exists
-      let vendorId: string;
-      const customVendor = await tx.vendor.findFirst({
-        where: { brand_name: { equals: "PROJECT_HARVESTED", mode: "insensitive" } }
-      });
-
-
-      if (customVendor) {
-        vendorId = customVendor.id;
-      } else {
-        const newVendor = await tx.vendor.create({
-          data: { 
-            brand_name: "PROJECT_HARVESTED", 
-            company_name: "Vendor generated from Project Product Requests" 
-          }
-        });
-        vendorId = newVendor.id;
-        
-        await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_VENDOR, "VENDOR", vendorId, userId, {
-          brand_name: "PROJECT_HARVESTED",
-          is_auto_generated: true
-        });
-      }
-
-      // 2. Create skeletal PENDING product
-      const newProduct = await tx.productCatalog.create({
-        data: {
-          vendor_id: vendorId,
-          catalog_category: "UNCATEGORIZED", // Default for harvested requests
-          catalog_sku: data.custom_product_name.trim(),
-          catalog_product_name: data.custom_product_name.trim(),
-          status: "PENDING",
-          catalog_image_url: this.normalizeOptional(data.cover_url),
-          catalog_image_original_url: this.normalizeOptional(data.original_url),
-          catalog_reference_url: this.normalizeOptional(data.reference_url),
-          metadata: { harvested_from: "PROJECT_REQUEST", project_id: data.project_id }
-        }
-      });
-      data.product_catalog_id = newProduct.id;
-
-      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_PRODUCT, "ProductCatalog", data.product_catalog_id, userId, {
-        catalog_sku: newProduct.catalog_sku,
-        harvested_from_project: data.project_id
-      });
-    }
+    // Explicitly removed auto-harvesting as per final policy.
+    // ProjectProductRequest remains a local request only.
 
     const request = await tx.projectProductRequest.create({
       data: {
@@ -954,7 +923,7 @@ export class LibraryService {
       },
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_DELETE_REQUEST, "ProjectMaterialRequest", id, userId, {
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_DELETE_REQUEST, "ProjectProductRequest", id, userId, {
       project_id: request.project_id,
       product_catalog_id: request.product_catalog_id
     });
@@ -1018,7 +987,33 @@ export class LibraryService {
       notes?: string;
     }
   ) {
-    return tx.promotionRequest.create({
+    const snapshot = data.snapshot_data as ScheduleOptionSnapshot;
+
+    // Stage 2 Gatekeeping: Mandatory fields for promotion
+    const requiredFields = [
+      { val: snapshot.specs?.catalog_sku, name: "catalog_sku" },
+      { val: snapshot.catalog_product_name, name: "catalog_product_name" },
+      { val: snapshot.catalog_brand, name: "catalog_brand" },
+      { val: snapshot.catalog_image_url, name: "catalog_image_url" }
+    ];
+
+    const missing = requiredFields.filter(f => !f.val || f.val.toString().trim() === "").map(f => f.name);
+    if (missing.length > 0) {
+      throw new ActionError(`Stage 2 Validation Failed: Missing mandatory fields for promotion: ${missing.join(", ")}`, "VALIDATION_FAILED");
+    }
+
+    // Duplicate Protection: One pending request per option
+    const existing = await tx.promotionRequest.findFirst({
+      where: {
+        schedule_option_id: data.schedule_option_id,
+        status: "PENDING"
+      }
+    });
+    if (existing) {
+      throw new ActionError("A promotion request for this option is already pending review.", "DUPLICATE_REQUEST");
+    }
+
+    const request = await tx.promotionRequest.create({
       data: {
         project_id: data.project_id,
         schedule_option_id: data.schedule_option_id,
@@ -1028,6 +1023,13 @@ export class LibraryService {
         status: "PENDING",
       },
     });
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_PROMOTION_REQUEST, "PromotionRequest", request.id, data.requested_by_id, {
+      project_id: data.project_id,
+      option_id: data.schedule_option_id
+    });
+
+    return request;
   }
 
   static async reviewPromotionRequest(
@@ -1039,20 +1041,39 @@ export class LibraryService {
   ) {
     const request = await tx.promotionRequest.findUnique({
       where: { id: requestId },
-      include: { project: true }
     });
 
     if (!request) throw new ActionError("Promotion request not found", "NOT_FOUND");
     if (request.status !== "PENDING") throw new ActionError("Request already processed", "INVALID_STATE");
 
-    let productCatalogId: string | undefined;
-
     if (status === "APPROVED") {
-      const snapshot = request.snapshot_data as any;
+      const snapshot = request.snapshot_data as ScheduleOptionSnapshot;
       if (!snapshot) throw new ActionError("Missing snapshot data", "SNAPSHOT_MISSING");
 
       // 1. Resolve Vendor
-      const vendorId = await this.resolveVendor(snapshot.catalog_brand || "Unknown Brand", tx);
+      const vendorId = await this.resolveVendor(snapshot.catalog_brand || "Unknown Brand", userId, tx);
+
+      // 1.5 Parse dimensions from canonical string if available
+      let dimP = snapshot.specs?.catalog_dimension_p || null;
+      let dimL = snapshot.specs?.catalog_dimension_l || null;
+      let dimT = snapshot.specs?.catalog_dimension_t || null;
+      let dimUnit = snapshot.specs?.catalog_dimension_unit || "cm";
+
+      const canonicalDims = snapshot.specs?.catalog_dimensions;
+      if (canonicalDims && typeof canonicalDims === "string" && canonicalDims !== "N/A") {
+        const parts = canonicalDims.trim().split(/\s+x\s+/);
+        if (parts.length === 3) {
+          dimP = parts[0]?.trim() || dimP;
+          dimL = parts[1]?.trim() || dimL;
+          // Third part might contain unit: "T unit"
+          const lastPart = parts[2]?.trim() || "";
+          const lastParts = lastPart.split(/\s+/);
+          dimT = lastParts[0]?.trim() || dimT;
+          if (lastParts.length > 1) {
+            dimUnit = lastParts[1]?.trim() || dimUnit;
+          }
+        }
+      }
 
       // 2. Create Product Catalog Entry
       const product = await tx.productCatalog.create({
@@ -1061,25 +1082,24 @@ export class LibraryService {
           catalog_category: snapshot.schedule_category || "UNCATEGORIZED",
           catalog_type: snapshot.catalog_type || ProductType.material,
           catalog_sub_category: snapshot.catalog_sub_category || null,
-          catalog_sku: snapshot.catalog_sku || snapshot.catalog_product_name || "N/A",
+          catalog_sku: snapshot.specs?.catalog_sku || "N/A",
           catalog_product_name: snapshot.catalog_product_name || null,
           catalog_brand: snapshot.catalog_brand || null,
-          catalog_motif: snapshot.catalog_motif || null,
-          catalog_color: snapshot.catalog_color || null,
-          catalog_finishing: snapshot.catalog_finishing || null,
-          catalog_dimension_p: snapshot.catalog_dimension_p || snapshot.specs?.catalog_dimension?.p || null,
-          catalog_dimension_l: snapshot.catalog_dimension_l || snapshot.specs?.catalog_dimension?.l || null,
-          catalog_dimension_t: snapshot.catalog_dimension_t || snapshot.specs?.catalog_dimension?.t || null,
-          catalog_dimension_unit: snapshot.catalog_dimension_unit || snapshot.specs?.catalog_dimension?.unit || "cm",
+          catalog_motif: snapshot.specs?.catalog_motif || null,
+          catalog_color: snapshot.specs?.catalog_color || "N/A",
+          catalog_finishing: snapshot.specs?.catalog_finishing || null,
+          catalog_dimension_p: dimP,
+          catalog_dimension_l: dimL,
+          catalog_dimension_t: dimT,
+          catalog_dimension_unit: dimUnit,
           catalog_image_url: snapshot.catalog_image_url || null,
-          catalog_image_original_url: snapshot.catalog_image_original_url || null,
+          catalog_image_original_url: null,
           catalog_reference_url: snapshot.catalog_reference_url || null,
           catalog_price: snapshot.catalog_price || null,
           status: "APPROVED", // Auto-approve promoted items
         }
       });
 
-      productCatalogId = product.id;
 
       // 3. Link back to Project Schedule Option
       await tx.projectScheduleOption.update({

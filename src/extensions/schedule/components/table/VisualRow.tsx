@@ -5,9 +5,9 @@ import { ProductType } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
 import { 
   Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, 
-  ChevronLeft, ChevronRight, Package, GripVertical, MoreHorizontal, Plus
+  ChevronLeft, ChevronRight, GripVertical, Plus
 } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScheduleSampleRequestModal } from "../ScheduleSampleRequestModal";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
@@ -16,8 +16,9 @@ import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
-import { UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
+import { UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
 import type { ProjectScheduleEntryWithRelations } from "../../types";
+import { getEffectiveTitle, isPlaceholder } from "../../lib/display-utils";
 
 interface VisualRowProps {
   entry: ProjectScheduleEntryWithRelations;
@@ -36,7 +37,6 @@ export function VisualRow({
   onEdit, 
   onDelete, 
   onUpdateLocation, 
-  onUpdateQty, 
   onAddAlternative, 
   section = ProductType.material,
   isSelected,
@@ -60,7 +60,7 @@ export function VisualRow({
   };
 
   const [activeOptionIndex, setActiveOptionIndex] = React.useState(() => {
-    const finalIndex = entry.options.findIndex((o: any) => o.is_final);
+    const finalIndex = entry.options.findIndex((o) => o.is_final);
     return finalIndex >= 0 ? finalIndex : 0;
   });
 
@@ -75,10 +75,6 @@ export function VisualRow({
   const [lightboxOpen, setLightboxOpen] = React.useState(false);
   const locationInputRef = React.useRef<HTMLInputElement>(null);
 
-  const [editingQty, setEditingQty] = React.useState(false);
-  const [qtyValue, setQtyValue] = React.useState(String(entry.schedule_qty ?? 0));
-  const [isSavingQty, setIsSavingQty] = React.useState(false);
-  const qtyInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleNextOption = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -124,21 +120,6 @@ export function VisualRow({
     }
   };
 
-  const handleSaveQty = async () => {
-    if (!onUpdateQty) { setEditingQty(false); return; }
-    const num = parseFloat(qtyValue);
-    if (isNaN(num)) {
-      toast.error("Invalid quantity");
-      return;
-    }
-    setIsSavingQty(true);
-    try {
-      await onUpdateQty(entry.id, num);
-    } finally {
-      setIsSavingQty(false);
-      setEditingQty(false);
-    }
-  };
 
   const isFixture = section === ProductType.fixture;
 
@@ -183,7 +164,7 @@ export function VisualRow({
       <div className="flex-1 flex items-center gap-4 min-w-0">
         <div 
           className={cn("w-20 h-20 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_ACTION)}
-          onClick={(e) => { e.stopPropagation(); snapshot?.catalog_image_url && setLightboxOpen(true); }}
+          onClick={(e) => { e.stopPropagation(); if (snapshot?.catalog_image_url) setLightboxOpen(true); }}
         >
           {snapshot?.catalog_image_url ? (
             <img
@@ -210,62 +191,98 @@ export function VisualRow({
             "font-serif text-sm font-semibold truncate transition-colors leading-tight",
             isSelected ? "text-slate-900" : "text-slate-900"
           )}>
-            {snapshot?.catalog_product_name || "Unspecified Product"}
+            {(() => {
+              const primary = [snapshot?.specs?.catalog_sku, snapshot?.catalog_product_name]
+                .filter(v => v && !isPlaceholder(v) && v.toUpperCase() !== "GENERIC")
+                .join(" - ");
+              
+              if (primary) return primary;
+              
+              const secondary = [
+                snapshot?.specs?.catalog_color && !isPlaceholder(snapshot.specs.catalog_color) ? snapshot.specs.catalog_color : null,
+                snapshot?.specs?.catalog_motif && !isPlaceholder(snapshot.specs.catalog_motif) ? snapshot.specs.catalog_motif : null,
+                snapshot?.specs?.catalog_finishing && !isPlaceholder(snapshot.specs.catalog_finishing) ? snapshot.specs.catalog_finishing : null,
+              ].filter(Boolean).join(" - ");
+              
+              return secondary || (snapshot?.catalog_initials_type || "Reserved Slot");
+            })()}
           </h4>
           <div className="flex items-center gap-2 mt-0.5">
              <span className={cn("font-sans text-[11px]", isSelected ? "text-slate-600" : "text-slate-500")}>
-               {snapshot?.catalog_brand || "No Brand"}
+                {(() => {
+                  const primaryExists = [snapshot?.specs?.catalog_sku, snapshot?.catalog_product_name]
+                    .some(v => v && !isPlaceholder(v) && v.toUpperCase() !== "GENERIC");
+
+                  const secondary = [
+                    snapshot?.specs?.catalog_color && !isPlaceholder(snapshot.specs.catalog_color) ? `Color: ${snapshot.specs.catalog_color}` : null,
+                    snapshot?.specs?.catalog_motif && !isPlaceholder(snapshot.specs.catalog_motif) ? `Pattern: ${snapshot.specs.catalog_motif}` : null,
+                    snapshot?.specs?.catalog_finishing && !isPlaceholder(snapshot.specs.catalog_finishing) ? `Finish: ${snapshot.specs.catalog_finishing}` : null,
+                  ].filter(Boolean).join(" - ");
+
+                  if (primaryExists) return secondary || (snapshot?.catalog_brand || "No Specs");
+                  return snapshot?.catalog_brand || "";
+                })()}
              </span>
-             <div className={cn("h-1 w-1 rounded-full", isSelected ? "bg-slate-300" : "bg-slate-200")} />
-             <span className={cn("font-sans text-[10px] font-medium uppercase tracking-widest opacity-60", isSelected ? "text-slate-900" : "text-slate-400")}>
-               {entry.schedule_category}
-             </span>
+             {(!snapshot?.specs?.catalog_color && !snapshot?.specs?.catalog_motif && !snapshot?.specs?.catalog_finishing) && (
+               <>
+                 <div className={cn("h-1 w-1 rounded-full", isSelected ? "bg-slate-300" : "bg-slate-200")} />
+                 <span className={cn("font-sans text-[10px] font-medium uppercase tracking-widest opacity-60", isSelected ? "text-slate-900" : "text-slate-400")}>
+                   {entry.schedule_category}
+                 </span>
+               </>
+             )}
           </div>
           
-          <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-             {(hasMultipleOptions || activeOption?.is_final) && (
-               <div className={cn(
-                 "inline-flex items-center rounded-lg px-2 py-1 shadow-lg border transition-all",
-                 isSelected ? "bg-white/10 border-white/10 shadow-black/10" : "bg-white border-slate-100 shadow-slate-100/50"
-               )}>
-                  <button
-                    onClick={handlePrevOption}
-                    disabled={activeOptionIndex === 0}
-                    className={cn(
-                      "p-1 rounded-lg transition-all",
-                      isSelected ? "text-white/40 hover:text-white" : "text-slate-300 hover:text-slate-900"
-                    )}
-                  >
-                    <ChevronLeft className="h-3 w-3" />
-                  </button>
-                  <div className="px-2 flex flex-col items-center min-w-[32px]">
-                     <span className={cn("text-[6px] font-black uppercase tracking-[0.15em] leading-none", isSelected ? "text-slate-400" : "text-slate-300")}>Opt</span>
-                     <span className={cn("font-inter text-xs font-black leading-none -mt-0.5", isSelected ? "text-slate-900" : "text-slate-900")}>
-                       {activeOptionIndex + 1}
-                     </span>
-                  </div>
-                  <button
-                    onClick={handleNextOption}
-                    disabled={activeOptionIndex === entry.options.length - 1}
-                    className={cn(
-                      "p-1 rounded-lg transition-all",
-                      isSelected ? "text-white/40 hover:text-white" : "text-slate-300 hover:text-slate-900"
-                    )}
-                  >
-                    <ChevronRight className="h-3 w-3" />
-                  </button>
-               </div>
-             )}
-             <button
-               onClick={(e) => { e.stopPropagation(); onAddAlternative?.(); }}
-               className={cn(
-                 "h-7 px-3 rounded-md transition-all flex items-center gap-1.5 group/add",
-                 isSelected ? "bg-white/10 text-white/60 hover:text-white" : "bg-slate-50 text-slate-400 hover:bg-slate-900 hover:text-white"
-               )}
-             >
-               <Plus className="h-3 w-3 transition-transform group-hover/add:rotate-90" />
-               <span className="text-[10px] font-black uppercase tracking-widest">Alt</span>
-             </button>
+          <div className="mt-4 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+             <div className={cn(
+               "inline-flex items-center gap-1 p-1 bg-slate-50/50 border border-slate-200/60 shadow-sm backdrop-blur-sm",
+               UI_ENGINE_RADIUS_CONTROL
+             )}>
+                {entry.options.length > 1 && (
+                  <>
+                    <button
+                      onClick={handlePrevOption}
+                      disabled={activeOptionIndex === 0}
+                      className={cn(
+                        "p-1.5 transition-all disabled:opacity-20",
+                        activeOptionIndex > 0 ? "text-slate-900 hover:bg-white hover:shadow-sm" : "text-slate-300",
+                        UI_ENGINE_RADIUS_ACTION
+                      )}
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <div className="px-2 flex flex-col items-center min-w-[45px]">
+                       <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-400 leading-none mb-0.5">Option</span>
+                       <span className="font-sans text-[11px] font-bold text-slate-900 tabular-nums leading-none">
+                         {activeOptionIndex + 1} <span className="text-slate-300 font-medium mx-0.5">/</span> {entry.options.length}
+                       </span>
+                    </div>
+                    <button
+                      onClick={handleNextOption}
+                      disabled={activeOptionIndex === entry.options.length - 1}
+                      className={cn(
+                        "p-1.5 transition-all disabled:opacity-20",
+                        activeOptionIndex < entry.options.length - 1 ? "text-slate-900 hover:bg-white hover:shadow-sm" : "text-slate-300",
+                        UI_ENGINE_RADIUS_ACTION
+                      )}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                    <div className="w-px h-4 bg-slate-200 mx-1" />
+                  </>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onAddAlternative?.(); }}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:text-slate-900 transition-all group/add",
+                    UI_ENGINE_RADIUS_ACTION,
+                    "hover:bg-white hover:shadow-sm"
+                  )}
+                >
+                  <Plus size={14} className="transition-transform group-hover/add:rotate-90" />
+                  <span className="text-[9px] font-black uppercase tracking-widest">Add Alternative</span>
+                </button>
+             </div>
           </div>
         </div>
       </div>

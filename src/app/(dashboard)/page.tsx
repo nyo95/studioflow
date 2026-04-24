@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { Prisma, Role, PhaseStatus } from "@/generated/prisma";
 import { TodayQuickAddModal } from "@/components/today-quick-add-modal";
 import { TodayView } from "@/components/today-view";
+import { DashboardProject } from "@/types/dashboard";
 import {
   DashboardPageShell,
   PageHeader,
@@ -59,7 +60,7 @@ export default async function HomePage() {
   });
 
   // Filter projects/phases with 0 tasks and transform
-  const projectsWithTasks = projects.map((project) => {
+  const projectsWithTasks: DashboardProject[] = projects.map((project) => {
     const phasesWithTasks = project.phases.map((phase) => {
       const activeRevision = phase.revisions[0];
       const tasks = activeRevision?.activities || [];
@@ -118,7 +119,7 @@ export default async function HomePage() {
           </div>
         </SectionCard>
       ) : (
-        <TodayView projects={projectsWithTasks as any} />
+        <TodayView projects={projectsWithTasks} />
       )}
     </DashboardPageShell>
   );
