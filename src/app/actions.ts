@@ -19,6 +19,7 @@
 import { Role, PhaseName } from "@/generated/prisma";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
+import { sanitizeCssValue } from "@/ui_engine/utils/security";
 import { 
   canEditPhase, 
   canEditProjectMetadata, 
@@ -1623,15 +1624,27 @@ export async function updateUISettings(uiSettings: any, appTitle?: string) {
   const session = await getActorSession();
   assertAdmin(session.role);
 
+  // Sanitize all string values in uiSettings
+  const sanitizedSettings: any = {};
+  if (uiSettings && typeof uiSettings === "object") {
+    for (const key in uiSettings) {
+      if (typeof uiSettings[key] === "string") {
+        sanitizedSettings[key] = sanitizeCssValue(uiSettings[key]);
+      } else {
+        sanitizedSettings[key] = uiSettings[key];
+      }
+    }
+  }
+
   await prisma.systemConfig.upsert({
     where: { id: SYSTEM_CONFIG_ID },
     update: { 
-      ui_settings: uiSettings,
+      ui_settings: sanitizedSettings,
       app_title: appTitle || undefined,
     },
     create: { 
       id: SYSTEM_CONFIG_ID, 
-      ui_settings: uiSettings,
+      ui_settings: sanitizedSettings,
       app_title: appTitle || "StudioFlow",
     },
   });
@@ -1639,6 +1652,6 @@ export async function updateUISettings(uiSettings: any, appTitle?: string) {
   revalidatePath("/", "layout");
   revalidatePath("/settings/studio");
 
-  return uiSettings;
+  return sanitizedSettings;
 }
 
