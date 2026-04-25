@@ -52,6 +52,7 @@ import {
   UI_ENGINE_BORDER_SUBTLE,
   UI_ENGINE_BG_SUBTLE
 } from "@/ui_engine";
+import { ImagePlaceholder } from "@/ui_engine/components/image-placeholder";
 
 import { UniversalImageUploader } from "@/components/ui/universal-image-uploader";
 import { useSession } from "next-auth/react";
@@ -707,10 +708,7 @@ export function LibraryFormModal({
                                   {productData.catalog_image_url ? (
                                     <img src={productData.catalog_image_url} alt="Product" className="w-full h-full object-cover" />
                                   ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 gap-2">
-                                      <ImageIcon className="h-12 w-12" />
-                                      <span className="text-[10px] font-black uppercase tracking-widest">No Image</span>
-                                    </div>
+                                    <ImagePlaceholder iconSize={48} />
                                   )}
                                 </div>
                               )}

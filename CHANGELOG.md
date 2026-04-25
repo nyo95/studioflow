@@ -1,5 +1,47 @@
 # StudioFlow Development Log (Changelog)
 
+## [v2.2.3] — 2026-04-26 (versi 1.8)
+
+### Added
+- **Standardized UI Placeholder Component**: Introduced `ImagePlaceholder` in `UI_ENGINE`. This component restores the clean, stacked "NO IMAGE" visual design from v1.6 while being fully compliant with the new design system tokens.
+- **Visual Identity Alignment (Lora Serif)**: Enforced the use of `font-serif` (Lora) for all product headings in the schedule table (Visual and Standard views), aligning the application with the premium StudioFlow branding rules.
+
+### Changed
+- **Visual Row UX Refinement**: 
+    - Increased product image preview size from `w-14` (56px) to `w-20` (80px) to match the v1.6 "stable UI" aesthetics and improve specification visibility.
+    - Updated metadata styling (Brand/Category) to be bold, uppercase, and tracked-out (`tracking-widest`) for improved readability.
+    - Adjusted vertical spacing in table rows to eliminate "messiness" and restore layout balance.
+- **Global Consistency**: Standardized image placeholders across `ScheduleRow`, `VisualRow`, and `LibraryFormModal` using the new canonical component.
+
+### Technical Debt
+- **Zero Hardcode Compliance**: Replaced remaining hardcoded visual overrides in schedule row components with `UI_ENGINE` tokens.
+
+## [v2.2.2] — 2026-04-26
+
+### Fixed
+- **U-02 & U-04 UI Consistency**: Added required field asterisks to Identity and Vendor fields in `ScheduleSpecEditorModal`. Updated placeholder logic to reflect reserved states.
+- **U-07 Source Context**: Added `[Shared]` indicator badge in `GradualInputForm` search suggestions to clearly differentiate global library results.
+- **U-08 Navigation Hierarchy**: Added "Project Schedule > Specification" breadcrumb context to the `ScheduleSpecEditorModal` header.
+
+### Removed
+- `docs/UI_UX_Audit.md` — 100% of gaps resolved. Deferred un-architectural items and deleted the document. SSOT bumped to v2.2.2.
+
+## [v2.2.1] — 2026-04-26
+
+### Fixed
+- **U-03 Bug Fix**: `isReadyForPromotion` in `ScheduleSpecEditorModal` now correctly
+  requires Stage 1 completeness (`catalog_color`) before enabling Library promotion.
+  Previously, items could be promoted without a color specification, violating SSOT §5.2.
+
+### Changed
+- **Layout Standardization**: Page animation classes moved from inner wrappers to
+  `DashboardPageShell` across Product Catalog, Library, and Phase Detail pages for
+  consistent page transitions.
+
+### Removed
+- `docs/audit-report.md`, `docs/PLAN.md`, `docs/PLAN2.md` — content reconciled into
+  MASTER_SSOT.md and AGENTS.md; documents were stale and created confusion.
+
 ### [2.2.0] - 2026-04-25 (versi 1.7)
 ### System Integrity, Architecture Consolidation & UX Hardening
 - **Four-Layer Architecture Migration**:

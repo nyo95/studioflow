@@ -29,8 +29,10 @@ import {
 } from "@/ui_engine/tokens/typography";
 import {
   UI_ENGINE_BG_SUBTLE,
-  UI_ENGINE_BORDER_SUBTLE
+  UI_ENGINE_BORDER_SUBTLE,
+  UI_ENGINE_ACCENT_PRIMARY
 } from "@/ui_engine/tokens/colors";
+import { ImagePlaceholder } from "@/ui_engine/components/image-placeholder";
 import type { ProjectScheduleEntryWithRelations } from "../../types";
 import { getEffectiveTitle, isPlaceholder } from "../../lib/display-utils";
 
@@ -178,7 +180,7 @@ export function VisualRow({
       {/* 2. Product Visual & Main Specs */}
       <div className="flex-1 flex items-center gap-4 min-w-0">
         <div 
-          className={cn("w-14 h-14 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_IMAGE)}
+          className={cn("w-20 h-20 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_IMAGE)}
           onClick={(e) => { e.stopPropagation(); if (snapshot?.catalog_image_url) setLightboxOpen(true); }}
         >
           {snapshot?.catalog_image_url ? (
@@ -188,10 +190,7 @@ export function VisualRow({
               className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-              <ImageIcon className="text-slate-200 w-8 h-8" />
-              <span className={cn("text-[9px] font-black text-slate-300 uppercase tracking-widest", UI_ENGINE_TYPE_META)}>No Image</span>
-            </div>
+            <ImagePlaceholder iconSize={28} />
           )}
           <div className="absolute inset-0 bg-slate-900/0 group-hover/img:bg-slate-900/20 transition-all flex items-center justify-center">
             <ZoomIn className="text-white opacity-0 group-hover/img:opacity-100 scale-90 group-hover/img:scale-100 transition-all duration-300 w-6 h-6" />
@@ -203,9 +202,8 @@ export function VisualRow({
 
         <div className="flex-1 min-w-0">
           <h4 className={cn(
-            "text-sm font-semibold truncate transition-colors leading-tight",
-            isSelected ? "text-slate-900" : "text-slate-900",
-            UI_ENGINE_TYPE_TITLE
+            "text-base font-semibold truncate transition-colors leading-tight font-serif",
+            isSelected ? "text-slate-900" : "text-slate-900"
           )}>
             {(() => {
               const primary = [snapshot?.specs?.catalog_sku, snapshot?.catalog_product_name]
@@ -224,7 +222,7 @@ export function VisualRow({
             })()}
           </h4>
           <div className="flex items-center gap-2 mt-0.5">
-             <span className={cn("text-[11px]", isSelected ? "text-slate-600" : "text-slate-500", UI_ENGINE_TYPE_META)}>
+             <span className={cn("text-[11px] font-medium uppercase tracking-widest", isSelected ? "text-slate-500" : "text-slate-400", UI_ENGINE_TYPE_META)}>
                 {(() => {
                   const primaryExists = [snapshot?.specs?.catalog_sku, snapshot?.catalog_product_name]
                     .some(v => v && !isPlaceholder(v) && v.toUpperCase() !== "GENERIC");
@@ -249,7 +247,7 @@ export function VisualRow({
              )}
           </div>
           
-          <div className="mt-2 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="mt-4 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
              <div className={cn(
                "inline-flex items-center gap-1 p-1 bg-slate-50/50 border border-slate-200/60 shadow-sm backdrop-blur-sm",
                UI_ENGINE_RADIUS_CONTROL

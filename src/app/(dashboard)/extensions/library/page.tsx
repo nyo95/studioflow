@@ -157,8 +157,8 @@ export default function LibraryPage() {
   }, [debouncedSearch, selectedCategory, showPhysicalOnly, activeTab]);
 
   return (
-    <DashboardPageShell className="max-w-[min(var(--ui-page-max-width,1280px),96rem)]">
-      <div className="space-y-8 animate-in fade-in duration-700">
+    <DashboardPageShell className="max-w-[min(var(--ui-page-max-width,1280px),96rem)] animate-in fade-in duration-700">
+      <div>
         <PageHeader
           eyebrow="Extensions"
           title="Material Library"

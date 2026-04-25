@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 2.2.0 (System Integrity Audit Closure)
-> **Last Updated:** April 25, 2026 (Nomenclature Prefix Alignment & Architecture Layering)
+> **Document Version:** 2.2.3 (v1.8 Release - Visual Alignment & Placeholder Standardization)
+> **Last Updated:** April 26, 2026 (v1.8 Release - Visual Alignment & Placeholder Standardization)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -14,7 +14,7 @@
 ### High-End Minimalist Philosophy
 The application follows a strict high-end minimalist design philosophy:
 - **Cleanliness:** Ample whitespace, subtle borders (border-subtle/slate-200), no visual clutter.
-- **Typography-First:** Font choices drive hierarchy; Lora (serif) for headings, Inter (sans-serif) for UI components.
+- **Typography-First:** Font choices drive hierarchy; Lora (serif) for headings (including product names in tables), Inter (sans-serif) for UI components.
 - **Subtle Interactions:** Hover states use color shifts or subtle background changes, not complex animations.
 - **Purposeful Color:** Minimal color usage—primarily slate neutrals with red accents for urgent/priority items.
 
@@ -37,6 +37,11 @@ The application enforces a "View-First" interaction model for data integrity:
 | H4 | font-sans (Inter) | text-lg | font-semibold | tracking-tight |
 | Body | font-sans (Inter) | text-sm | font-normal | tracking-normal |
 | UI Meta | font-sans (Inter) | text-[10px] | font-bold | tracking-[0.18em] uppercase |
+
+#### Standard Components (`src/ui_engine/components/`)
+| Component | Description | Design Standards |
+|-----------|-------------|------------------|
+| ImagePlaceholder | Standard empty state for images. | Stacked "NO IMAGE" text, font-black 8px, tracking-widest, slate-50 bg. |
 
 #### Color Palette
 | Token | Value | Usage |
@@ -154,6 +159,7 @@ Approving a material option creates a frozen `data_snapshot`.
 - **Strict Gatekeeping:** 
     - **Update Snapshot:** Requires Stage 1 completeness (Mandatory: `catalog_color`).
     - **Promote to Library:** Requires full Stage 2 completeness (Mandatory: `catalog_sku`, `catalog_product_name`, `catalog_brand`, `catalog_image_url`).
+    - **Promotion Readiness Check (v2.2.1):** `isReadyForPromotion` MUST include Stage 1 completeness (`catalog_color` via `isSecondaryComplete`) as a prerequisite — not just Stage 2 fields. Sequence: Stage 1 (color) → Stage 2 (SKU/Name + Brand + Image) → Promotion Eligible.
 - **Ownership Validation:** All mutations (Edit/Delete/Promote) strictly validate that the target belongs to the active project.
 - **Manual Promotion:** Users must explicitly click "Save to Library" (Manual Elevation). Auto-harvesting is disabled for project snapshots to ensure library quality. Project-level custom requests do NOT create library entries.
 

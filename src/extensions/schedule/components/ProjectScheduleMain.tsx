@@ -380,15 +380,12 @@ export function ProjectScheduleMain({
     );
   }
 
-  return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <PageHeader
-        eyebrow="Schedule"
-        title="Project Schedule"
-        description="Manage specifications and procurement for this project."
-        titleClassName="font-lora text-4xl normal-case tracking-tight text-slate-900"
-        descriptionClassName="mt-1 font-inter text-sm text-slate-500 max-w-2xl"
-        className="pb-2"
+   return (
+     <>
+       <PageHeader
+         eyebrow="Schedule"
+         title="Project Schedule"
+         description="Manage specifications and procurement for this project."
         action={
           <div className="flex items-center gap-3 relative">
             <input
@@ -579,6 +576,6 @@ export function ProjectScheduleMain({
           projectId={projectId}
         />
       )}
-    </div>
+      </>
   );
 }

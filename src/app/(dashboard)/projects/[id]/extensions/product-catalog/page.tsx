@@ -30,7 +30,7 @@ export default async function ProductCatalogPage({ params }: ProductCatalogPageP
   }
 
   return (
-    <DashboardPageShell>
+    <DashboardPageShell className="animate-in fade-in duration-700">
       <PageBackLink />
       <ErrorBoundary name="Schedule">
         <ProjectScheduleMain projectId={projectId} userRole={userRole} />

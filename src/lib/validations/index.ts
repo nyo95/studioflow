@@ -226,9 +226,6 @@ const EntrySourceSchema = z.discriminatedUnion("mode", [
     mode: z.literal("manual"), // New: Manual entry that is auto-approved
     catalogCreateData: ScheduleCatalogCreateSchema,
   }),
-  z.object({
-    mode: z.literal("reserve"), // Deprecated: Reserved status entries
-  }),
 ]);
 
 const OptionSourceSchema = z.discriminatedUnion("mode", [
@@ -243,9 +240,6 @@ const OptionSourceSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("manual"), // New: Manual entry that is auto-approved
     catalogCreateData: ScheduleCatalogCreateSchema,
-  }),
-  z.object({
-    mode: z.literal("reserve"),
   }),
 ]);
 

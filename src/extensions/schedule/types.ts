@@ -1,7 +1,7 @@
 import { ProjectScheduleEntry, ProjectScheduleOption, PrefixDictionary, ProductType, ProductCatalog } from "@/generated/prisma";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 export type { ScheduleSnapshot as ScheduleOptionSnapshot } from "@/lib/validations/schedule-snapshot";
-export type { ScheduleSnapshot };
+// export removed to avoid duplicate export; ScheduleSnapshot is re‑exported as ScheduleOptionSnapshot above
 
 export type GradualFormCustomData = {
   // Step 1: Primary

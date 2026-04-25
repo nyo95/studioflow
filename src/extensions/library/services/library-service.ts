@@ -476,6 +476,18 @@ export class LibraryService {
     if (!vendor || vendor.deleted_at) throw new ActionError("Valid Brand is REQUIRED.", "VENDOR_REQUIRED");
     const catalogBrand = vendor.brand_name;
 
+// Deduplication: prevent duplicate SKU+brand
+    const existingDup = await tx.productCatalog.findFirst({
+      where: {
+        vendor_id: resolvedVendorId,
+        catalog_sku: data.catalog_sku.trim(),
+        catalog_brand: catalogBrand,
+        deleted_at: null
+      }
+    });
+    if (existingDup) {
+      throw new ActionError('Duplicate product with same SKU and brand exists.', 'DUPLICATE_PRODUCT');
+    }
     const product = await tx.productCatalog.create({
       data: {
         vendor_id: resolvedVendorId,
@@ -1178,7 +1190,24 @@ export class LibraryService {
       }
 
       // 2. Create Product Catalog Entry
-      const product = await tx.productCatalog.create({
+// Deduplication: prevent duplicate SKU+brand during promotion
+    const dupCheckSku = snapshot.specs?.catalog_sku?.trim();
+    const dupCheckBrand = snapshot.catalog_brand?.trim();
+    if (dupCheckSku && dupCheckBrand) {
+      const existingDup = await tx.productCatalog.findFirst({
+        where: {
+          vendor_id: vendorId,
+          catalog_sku: dupCheckSku,
+          catalog_brand: dupCheckBrand,
+          deleted_at: null
+        }
+      });
+      if (existingDup) {
+        // Idempotent: return existing (approved or pending) entry
+        return existingDup;
+      }
+    }
+    const product = await tx.productCatalog.create({
         data: {
           vendor_id: vendorId,
           catalog_category: snapshot.schedule_category || "UNCATEGORIZED",

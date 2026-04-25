@@ -72,12 +72,6 @@ type SchedulePickerPayload =
         catalog_dimension_p?: string | null;
         catalog_reference_url?: string | null;
       };
-    }
-  | {
-      projectId: string;
-      schedule_category: string;
-      section: ProductType;
-      mode: "reserve";
     };
 
 interface ScheduleProductPickerModalProps {
@@ -246,28 +240,24 @@ export function ScheduleProductPickerModal({
               let payload: SchedulePickerPayload;
 
               if (data.selectedId === "" && data.customData) {
-                // Bespoke or Reserve
-                if (data.customData.catalog_product_name === "RESERVED") {
-                  payload = { projectId, schedule_category: category, section, mode: "reserve" };
-                } else {
-                  payload = {
-                    projectId,
-                    schedule_category: category,
-                    section,
-                    mode: "manual",
-                    catalogCreateData: {
-                      catalog_sku: data.customData.catalog_sku || data.customData.catalog_color || "DRAFT",
-                      catalog_product_name: data.customData.catalog_product_name || data.customData.catalog_color || "New Item",
-                      catalog_brand: data.customData.catalog_brand || "Custom",
-                      catalog_color: data.customData.catalog_color || null,
-                      catalog_motif: data.customData.catalog_motif || null,
-                      catalog_finishing: data.customData.catalog_finishing || null,
-                      catalog_sub_category: data.customData.catalog_sub_category || null,
-                      catalog_dimension_p: data.customData.catalog_dimensions || null,
-                      catalog_reference_url: data.customData.catalog_reference_url || null,
-                    },
-                  };
-                }
+                // Bespoke Manual Entry
+                payload = {
+                  projectId,
+                  schedule_category: category,
+                  section,
+                  mode: "manual",
+                  catalogCreateData: {
+                    catalog_sku: data.customData.catalog_sku || data.customData.catalog_color || "DRAFT",
+                    catalog_product_name: data.customData.catalog_product_name || data.customData.catalog_color || "New Item",
+                    catalog_brand: data.customData.catalog_brand || "Custom",
+                    catalog_color: data.customData.catalog_color || null,
+                    catalog_motif: data.customData.catalog_motif || null,
+                    catalog_finishing: data.customData.catalog_finishing || null,
+                    catalog_sub_category: data.customData.catalog_sub_category || null,
+                    catalog_dimension_p: data.customData.catalog_dimensions || null,
+                    catalog_reference_url: data.customData.catalog_reference_url || null,
+                  },
+                };
               } else {
                 payload = {
                   projectId,

@@ -32,6 +32,7 @@ import {
   UI_ENGINE_BG_SUBTLE,
   UI_ENGINE_BORDER_SUBTLE
 } from "@/ui_engine/tokens/colors";
+import { ImagePlaceholder } from "@/ui_engine/components/image-placeholder";
 
 interface ScheduleRowProps {
   entry: ProjectScheduleEntryWithRelations;
@@ -211,10 +212,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
                 className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110"
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-slate-50 to-slate-100">
-                <ImageIcon className="text-slate-300 w-5 h-5" />
-                <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">No img</span>
-              </div>
+              <ImagePlaceholder iconSize={20} />
             )}
             {/* Zoom hint overlay */}
             {snapshot?.catalog_image_url && (
@@ -229,15 +227,15 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
           </div>
 
           <div className="min-w-0">
-            <div className={cn("font-serif text-sm font-semibold text-slate-900 leading-tight truncate max-w-[240px]", UI_ENGINE_TYPE_TITLE)}>
+            <div className={cn("font-serif text-sm font-semibold text-slate-900 leading-tight truncate max-w-[240px]")}>
               {snapshot?.catalog_product_name || "Unspecified Product"}
             </div>
-            <div className={cn("font-sans text-[11px] text-slate-400 mt-0.5 truncate max-w-[240px]", UI_ENGINE_TYPE_META)}>
+            <div className={cn("font-sans text-[11px] font-medium uppercase tracking-widest text-slate-400 mt-0.5 truncate max-w-[240px]", UI_ENGINE_TYPE_META)}>
               {snapshot?.catalog_brand ? (
-                <span className="font-medium">{snapshot.catalog_brand}</span>
+                <span>{snapshot.catalog_brand}</span>
               ) : null}
               {snapshot?.catalog_brand && entry.schedule_category ? " · " : null}
-              <span className="uppercase tracking-wide">{entry.schedule_category}</span>
+              <span>{entry.schedule_category}</span>
             </div>
             {snapshot?.specs?.catalog_color && (
               <div className={cn("mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-widest", UI_ENGINE_RADIUS_CONTROL)}>

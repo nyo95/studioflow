@@ -183,7 +183,7 @@ export function GradualInputForm({
                   options={products.map(m => ({
                         id: m.id,
                         name: `${m.catalog_sku}${m.catalog_product_name ? ` - ${m.catalog_product_name}` : ""}`,
-                        subText: m.catalog_brand || "Custom Brand"
+                        subText: `[Shared] ${m.catalog_brand || "Custom Brand"}`
                       }))}
                       onSelect={handleSelect}
                       onCreate={(name) => handleSelect("", name)}

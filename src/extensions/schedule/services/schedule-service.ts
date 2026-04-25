@@ -197,8 +197,13 @@ async function resolveCatalogItemForMode(
 
   const normalizedBrand = catalogCreateData?.catalog_brand?.trim() || "Custom";
   const normalizedName = catalogCreateData?.catalog_product_name?.trim();
-  if (!normalizedName) {
-    throw new ActionError("Catalog item name is required", "VALIDATION_FAILED");
+  
+  // Stage 2 Completeness Gatekeeper
+  const hasImage = !!catalogCreateData?.catalog_image_url?.trim();
+  const hasValidSku = !!catalogCreateData?.catalog_sku && catalogCreateData.catalog_sku !== "Generic";
+  
+  if (!normalizedName || !hasImage || !hasValidSku) {
+    throw new ActionError("Promote to Library requires full Stage 2 completeness (Mandatory: SKU, Product Name, Brand, Image URL)", "VALIDATION_FAILED");
   }
 
 // Use LibraryService for server-side operations
@@ -300,7 +305,7 @@ export class ScheduleService {
     projectId: string,
     section: ProductType = ProductType.material
   ) {
-    const [project, templates, prefixes, entriesRaw] = await Promise.all([
+    const [project, templates, entriesRaw] = await Promise.all([
       tx.project.findUniqueOrThrow({
         where: { id: projectId },
         select: {
@@ -311,11 +316,6 @@ export class ScheduleService {
         },
       }),
       this.getActiveScheduleTemplates(tx, section),
-      tx.prefixDictionary.findMany({
-        where: { section },
-        orderBy: { schedule_category: "asc" },
-        select: { schedule_category: true },
-      }),
       tx.projectScheduleEntry.findMany({
         where: {
           project_id: projectId,
@@ -356,7 +356,6 @@ export class ScheduleService {
 
     const allPossibleCategories = [
       ...templates.map((template) => template.schedule_category.toUpperCase()),
-      ...prefixes.map((prefix) => prefix.schedule_category.toUpperCase()),
       ...Array.from(byCategory.keys()),
     ].filter((category, index, all) => all.indexOf(category) === index);
 

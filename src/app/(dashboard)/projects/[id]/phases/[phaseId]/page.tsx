@@ -170,7 +170,7 @@ export default async function PhaseDetailPage({
   );
 
   return (
-    <DashboardPageShell>
+    <DashboardPageShell className="animate-in fade-in duration-700">
       <PhaseLiveProvider phaseId={phaseId} initialSnapshot={initialSnapshot}>
         <PageBackLink />
 
@@ -251,7 +251,7 @@ export default async function PhaseDetailPage({
                   <Heading level={2} className="mt-2 text-slate-900">Overview</Heading>
                 </div>
               }
-              className="animate-in fade-in slide-in-from-bottom-4 duration-700"
+              className=""
             >
               {phase.name_enum === "CD" ? (
                 <Tabs defaultValue="review" className="w-full">

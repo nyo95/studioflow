@@ -19,7 +19,8 @@ import {
   Ruler,
   Building2,
   Layers,
-  Sparkles
+  Sparkles,
+  ChevronRight
 } from "lucide-react";
 import { TagInput } from "@/components/ui/tag-input";
 import { cn } from "@/lib/utils";
@@ -162,7 +163,7 @@ export function ScheduleSpecEditorModal({
   
   const isPrimaryComplete = hasPrimaryIdentity && isBrandComplete;
   const isSecondaryComplete = !!form.catalog_color?.trim() && !isPlaceholder(form.catalog_color);
-  const isReadyForPromotion = isPrimaryComplete && !!form.catalog_image_url;
+  const isReadyForPromotion = isPrimaryComplete && isSecondaryComplete && !!form.catalog_image_url;
   const isDraft = !initialSnapshot.product_catalog_id;
 
   const handleSubmit = async () => {
@@ -330,8 +331,10 @@ export function ScheduleSpecEditorModal({
                     </Badge>
                   )}
                 </div>
-                <DialogTitle className="font-lora text-3xl font-bold text-slate-900">
-                  {isEditMode ? "Modify Specification" : (form.catalog_product_name || "Product Details")}
+                <DialogTitle className="font-lora text-3xl font-bold text-slate-900 flex items-center gap-3">
+                  <span className="text-slate-400 text-xl">Project Schedule</span>
+                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                  <span>{isEditMode ? "Modify Specification" : (form.catalog_product_name || "Product Details")}</span>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400 font-inter">
                   Managing snapshot {initialSnapshot.schedule_code ? `for ${initialSnapshot.schedule_code}` : "details"} in this project.
@@ -366,7 +369,7 @@ export function ScheduleSpecEditorModal({
                       <div className={cn("p-8 space-y-6 border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                         <div className="grid grid-cols-2 gap-6">
                            <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SKU / Catalog Code</Label>
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SKU / Catalog Code <span className="text-red-500">*</span></Label>
                             <Input 
                               value={form.catalog_sku} 
                               onChange={(e) => setForm({...form, catalog_sku: e.target.value})}
@@ -375,17 +378,17 @@ export function ScheduleSpecEditorModal({
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Product Name</Label>
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Product Name <span className="text-red-500">*</span></Label>
                             <Input 
                               value={form.catalog_product_name} 
                               onChange={(e) => setForm({...form, catalog_product_name: e.target.value})}
-                              placeholder="e.g. Oak Wood Texture" 
+                              placeholder={isReserved ? "Pending Specification" : "e.g. Oak Wood Texture"} 
                               className={cn("h-12 bg-white border-slate-200 focus:border-slate-900 transition-all text-sm font-medium", UI_ENGINE_RADIUS_CONTROL)}
                             />
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Brand / Vendor Name</Label>
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Brand / Vendor Name <span className="text-red-500">*</span></Label>
                           <CreatableSearch 
                             value={suggestions.brands.find(b => b.name === form.catalog_brand)?.id || ""}
                             placeholder="Search or type brand name..."
@@ -411,7 +414,7 @@ export function ScheduleSpecEditorModal({
                       
                       <div className={cn("p-8 bg-white border shadow-sm space-y-6", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                         <div className="space-y-2">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-950 ml-1">Color (Mandatory) *</Label>
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-slate-950 ml-1">Color (Mandatory) <span className="text-red-500">*</span></Label>
                           <Input 
                             value={form.catalog_color} 
                             onChange={(e) => setForm({...form, catalog_color: e.target.value})}
