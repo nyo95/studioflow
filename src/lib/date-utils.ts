@@ -22,12 +22,14 @@ export const NATIONAL_HOLIDAYS_2026 = [
   "2026-12-25", // Christmas
 ];
 
+const HOLIDAYS_2026_SET = new Set(NATIONAL_HOLIDAYS_2026);
+
 export function isHolidayOrWeekend(date: Date): boolean {
   const day = date.getDay();
   if (day === 0 || day === 6) return true; // Sunday = 0, Saturday = 6
 
   const isoDate = date.toISOString().split("T")[0];
-  return NATIONAL_HOLIDAYS_2026.includes(isoDate);
+  return HOLIDAYS_2026_SET.has(isoDate);
 }
 
 /**
