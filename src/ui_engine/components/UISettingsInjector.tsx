@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { sanitizeCssValue } from "@/ui_engine/utils/security";
 
 interface UISettings {
   canvasBg?: string;
@@ -31,15 +32,15 @@ export async function UISettingsInjector() {
   const settings = config.ui_settings as UISettings;
 
   const variables = [
-    settings.canvasBg && `--ui-canvas-bg: ${settings.canvasBg};`,
-    settings.radiusCard && `--ui-radius-card: ${settings.radiusCard};`,
-    settings.sectionPx && `--ui-section-px: ${settings.sectionPx};`,
-    settings.sectionPy && `--ui-section-py: ${settings.sectionPy};`,
-    settings.rowPaddingY && `--ui-row-padding-y: ${settings.rowPaddingY};`,
-    settings.sidebarWidth && `--ui-sidebar-width: ${settings.sidebarWidth};`,
-    settings.containerMaxWidth && `--ui-container-max-width: ${settings.containerMaxWidth};`,
-    settings.fontSerif && `--ui-font-serif: ${settings.fontSerif.replace('--font-lora', '--font-lora-base')};`,
-    settings.fontSans && `--ui-font-sans: ${settings.fontSans.replace('--font-inter', '--font-inter-base')};`,
+    settings.canvasBg && `--ui-canvas-bg: ${sanitizeCssValue(settings.canvasBg)};`,
+    settings.radiusCard && `--ui-radius-card: ${sanitizeCssValue(settings.radiusCard)};`,
+    settings.sectionPx && `--ui-section-px: ${sanitizeCssValue(settings.sectionPx)};`,
+    settings.sectionPy && `--ui-section-py: ${sanitizeCssValue(settings.sectionPy)};`,
+    settings.rowPaddingY && `--ui-row-padding-y: ${sanitizeCssValue(settings.rowPaddingY)};`,
+    settings.sidebarWidth && `--ui-sidebar-width: ${sanitizeCssValue(settings.sidebarWidth)};`,
+    settings.containerMaxWidth && `--ui-container-max-width: ${sanitizeCssValue(settings.containerMaxWidth)};`,
+    settings.fontSerif && `--ui-font-serif: ${sanitizeCssValue(settings.fontSerif.replace('--font-lora', '--font-lora-base'))};`,
+    settings.fontSans && `--ui-font-sans: ${sanitizeCssValue(settings.fontSans.replace('--font-inter', '--font-inter-base'))};`,
   ].filter(Boolean);
 
   if (variables.length === 0) {
