@@ -134,8 +134,10 @@ export function ProjectChatSidebar({
         "fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl hover:bg-slate-800 transition-transform active:scale-95",
         isSidebarOpen && "hidden" // Hide when sidebar is open
       )}
+      aria-label="Toggle project discussion"
+      title="Toggle project discussion"
     >
-      <MessageSquare className="h-6 w-6" />
+      <MessageSquare className="h-6 w-6" aria-hidden="true" />
       {comments.length > 0 && (
         <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold ring-2 ring-white">
           {comments.length > 99 ? '99+' : comments.length}
@@ -235,8 +237,10 @@ export function ProjectChatSidebar({
               <button 
                 onClick={toggleSidebar}
                 className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+                aria-label="Close project discussion"
+                title="Close"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             
