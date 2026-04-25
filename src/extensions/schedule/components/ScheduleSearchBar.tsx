@@ -8,13 +8,26 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { ProductType } from "@/generated/prisma";
-import { getProductsAction } from "@/extensions/library/actions/library-actions";
+import { LibraryFacade } from "@/extensions/library/facade";
 import { 
   addScheduleEntryWithProductAction, 
-} from "@/actions/schedule-actions";
+} from "@/extensions/schedule/actions/schedule-actions";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
+import { 
+  UI_ENGINE_RADIUS_CONTROL, 
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_RADIUS_IMAGE
+} from "@/ui_engine/tokens/layout";
+import {
+  UI_ENGINE_TYPE_BODY,
+  UI_ENGINE_TYPE_META,
+  UI_ENGINE_TYPE_TITLE
+} from "@/ui_engine/tokens/typography";
+import {
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE
+} from "@/ui_engine/tokens/colors";
 import type { ProductCatalogWithRelations } from "@/extensions/library/types";
 
 import { QuickDraftDialog } from "./QuickDraftDialog";
@@ -57,11 +70,11 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
     }
     setIsSearching(true);
     try {
-      const result = unwrapActionResult(await getProductsAction({ 
-        search: q,
-        type: section,
-      })) as { items: ProductCatalogWithRelations[] };
-      setProducts(result.items);
+      const { items } = unwrapActionResult(await LibraryFacade.searchProducts({ 
+        search: q, 
+        pageSize: 10,
+      }));
+      setProducts(items);
     } catch (err) {
       console.error(err);
     } finally {
@@ -166,20 +179,20 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
                       <button
                         key={m.id}
                         onClick={() => handleSelectProduct(m)}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-50 transition-colors group"
+                        className={cn("flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 transition-colors group", UI_ENGINE_RADIUS_CONTROL)}
                       >
-                        <div className="h-10 w-10 rounded-lg bg-slate-100 overflow-hidden shrink-0 border border-slate-100">
+                        <div className={cn("h-10 w-10 bg-slate-100 overflow-hidden shrink-0 border border-slate-100", UI_ENGINE_RADIUS_IMAGE)}>
                           {m.catalog_image_url ? (
                             <img src={m.catalog_image_url} alt="" className="h-full w-full object-cover" />
                           ) : (
-                            <div className="h-full w-full bg-slate-50 flex items-center justify-center text-[10px] text-slate-300 uppercase font-black font-sans">NA</div>
+                            <div className={cn("h-full w-full bg-slate-50 flex items-center justify-center text-[10px] text-slate-300 uppercase font-black", UI_ENGINE_TYPE_META)}>NA</div>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold text-slate-900 truncate group-hover:text-slate-950 font-sans">
+                          <div className={cn("text-sm font-semibold text-slate-900 truncate group-hover:text-slate-950", UI_ENGINE_TYPE_TITLE)}>
                             {m.catalog_product_name}
                           </div>
-                          <div className="text-[11px] text-slate-500 truncate font-sans">
+                          <div className={cn("text-[11px] text-slate-500 truncate", UI_ENGINE_TYPE_META)}>
                             {m.catalog_brand || m.vendor?.brand_name || "Unknown Brand"} • {m.catalog_category}
                           </div>
                         </div>
@@ -195,16 +208,16 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
                 {query.trim().length > 0 && (
                   <button
                     onClick={handleStartCreateNew}
-                    className="flex w-full items-center gap-3 rounded-[var(--radius-glass,1rem)] px-3 py-3 text-left hover:bg-slate-900 hover:text-white transition-all group mt-1 border border-transparent hover:border-slate-800"
+                    className={cn("flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-slate-900 hover:text-white transition-all group mt-1 border border-transparent hover:border-slate-800", UI_ENGINE_RADIUS_CONTROL)}
                   >
-                    <div className="h-10 w-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center group-hover:bg-slate-800 group-hover:text-white transition-colors">
+                    <div className={cn("h-10 w-10 bg-slate-100 text-slate-600 flex items-center justify-center group-hover:bg-slate-800 group-hover:text-white transition-colors", UI_ENGINE_RADIUS_CONTROL)}>
                       <Plus className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
-                       <div className="text-sm font-bold font-sans">Create custom entry</div>
-                       <div className="text-[11px] opacity-70 italic font-sans">&quot;{query}&quot; (not in library)</div>
+                       <div className={cn("text-sm font-bold", UI_ENGINE_TYPE_BODY)}>Create custom entry</div>
+                       <div className={cn("text-[11px] opacity-70 italic", UI_ENGINE_TYPE_META)}>&quot;{query}&quot; (not in library)</div>
                     </div>
-                    <div className="px-2 py-1 bg-white group-hover:bg-slate-800 rounded text-[10px] font-bold text-slate-400 group-hover:text-slate-300 shadow-sm border border-slate-200 group-hover:border-slate-700 font-sans flex items-center gap-1">
+                    <div className={cn("px-2 py-1 bg-white group-hover:bg-slate-800 text-[10px] font-bold text-slate-400 group-hover:text-slate-300 shadow-sm border border-slate-200 group-hover:border-slate-700 flex items-center gap-1", UI_ENGINE_RADIUS_ACTION)}>
                       Press Enter <span className="text-[12px]">↵</span>
                     </div>
                   </button>

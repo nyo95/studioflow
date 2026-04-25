@@ -3,7 +3,7 @@
 import { signOut } from "@/auth";
 import { createAction } from "@/lib/action-wrapper";
 import { userService } from "@/lib/services/user-service";
-import { assertAdmin, assertSelfOrAdmin } from "@/lib/permissions";
+import { assertAdmin, assertSelfOrAdmin } from "@/core/rbac/permissions";
 import { Role } from "@/generated/prisma";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_SETTINGS } from "@/lib/revalidation-tags";

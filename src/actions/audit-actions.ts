@@ -1,8 +1,8 @@
 "use server";
 
 import { createAction } from "@/lib/action-wrapper";
-import { auditService } from "@/lib/services/audit";
-import { assertAdmin, throwActionError } from "@/lib/permissions";
+import { auditService } from "@/core/platform/audit";
+import { assertAdmin, throwActionError } from "@/core/rbac/permissions";
 import { Role } from "@/generated/prisma";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_ACTIVITY, REVALIDATE_HOME, REVALIDATE_TODAY } from "@/lib/revalidation-tags";

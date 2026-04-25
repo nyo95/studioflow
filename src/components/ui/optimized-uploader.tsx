@@ -176,7 +176,7 @@ export function OptimizedUploader({
 }
 
 // Helper to handle coordinate conversion
-async function getCroppedImg(imageSrc: string, pixelCrop: any): Promise<File> {
+async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<File> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");

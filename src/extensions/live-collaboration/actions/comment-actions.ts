@@ -1,11 +1,11 @@
 "use server";
 
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { CommentWithAuthor } from "../types/comment";
 import { getProjectDiscussionSnapshot } from "@/lib/project-discussion";
 import { throwActionError } from "@/lib/error-types";
-import { getProjectMembershipOrThrow } from "@/lib/permissions";
+import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_CUSTOM } from "@/lib/revalidation-tags";
 

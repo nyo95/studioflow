@@ -3,7 +3,8 @@ import { requireSession } from "@/lib/auth";
 import { ActionError, throwActionError } from "@/lib/error-types";
 export { throwActionError };
 import type { PrismaTransaction } from "@/types/common";
-import { evaluateAccess, PERMISSION } from "@/lib/rbac";
+import { evaluateAccess, PERMISSION } from "@/core/rbac/rbac";
+import { PhasePolicy } from "@/lib/domain/phase-policy";
 
 // Re-export constants for consistent error handling
 export const ERR = {
@@ -65,7 +66,7 @@ export function assertPhaseContentMutationAccess(
   userId: string,
   role: Role
 ) {
-  if (phase.is_locked) throwActionError(ERR.INVALID_PHASE_STATE);
+  PhasePolicy.assertModifiable(phase);
 
   const hasAccess = evaluateAccess(role, PERMISSION.PHASE_MUTATE_CONTENT, {
     userId,

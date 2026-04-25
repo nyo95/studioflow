@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Role } from "@/generated/prisma";
 import { getSession } from "@/lib/auth";
-import { auditService, type AuditFiltersInput } from "@/lib/services/audit";
+import { auditService, type AuditFiltersInput } from "@/core/platform/audit";
 import { ActivityLogTable } from "@/components/activity-log-table";
 import { DashboardPageShell, PageBackLink, PageHeader, TableCard } from "@/ui_engine";
 

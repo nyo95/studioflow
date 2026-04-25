@@ -1,10 +1,11 @@
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
-import { isGlobalChecklistTemplate } from "@/lib/permissions";
+import { isGlobalChecklistTemplate } from "@/core/rbac/permissions";
 import { insertAuditLog, getSystemConfigTx, upsertClientByName } from "@/actions/_shared";
 import { calculateBackwardTimeline } from "@/lib/date-utils";
 import { PhaseName, ProjectPriority, ProjectStatus, TimelineStatus, PhaseStatus } from "@/generated/prisma";
-import { AUDIT_ACTIONS } from "@/lib/services/audit";
+import { AUDIT_ACTIONS } from "@/core/platform/audit";
+import { projectNamingPolicy } from "@/core/domain-shared/project-naming";
 
 /**
  * Functional Service Layer for Project operations.
@@ -35,39 +36,48 @@ export const projectService = {
     const client = await upsertClientByName(tx, client_name, { address });
     if (!normalizedName) throw new ActionError("INVALID_INPUT", "NAME_REQUIRED");
 
-    const systemConfig = await getSystemConfigTx(tx);
-    let formattedName = normalizedName;
+    let project;
+    let attempts = 0;
+    const maxAttempts = 5;
 
-    if (systemConfig.is_auto_naming_enabled) {
-      if (/^\d{4}-\d{3} .+/.test(normalizedName)) {
-        throw new ActionError("Enter only the readable project name. Year and sequence are generated automatically.", "AUTO_NAMING_CONFLICT");
+    while (attempts < maxAttempts) {
+      try {
+        const systemConfig = await getSystemConfigTx(tx);
+        let formattedName = normalizedName;
+
+        if (systemConfig.is_auto_naming_enabled) {
+          formattedName = await projectNamingPolicy.generateAutoName(tx, normalizedName);
+        } else {
+          projectNamingPolicy.validateManualFormat(normalizedName);
+        }
+
+        project = await tx.project.create({
+          data: {
+            name: formattedName,
+            pic_designer_id,
+            pic_drafter_id,
+            clientId: client?.id,
+            opening_date,
+            core_project_type: core_project_type ?? "RETAIL",
+            client_contact,
+            address,
+            area,
+            status_progress: ProjectStatus.ACTIVE,
+          },
+        });
+        break; // Success
+      } catch (error: unknown) {
+        if ((error as { code?: string }).code === "P2002" && attempts < maxAttempts - 1) {
+          attempts++;
+          // Wait a bit before retry to let the other transaction finish
+          await new Promise(resolve => setTimeout(resolve, 100 * attempts));
+          continue;
+        }
+        throw error;
       }
-
-      const currentYear = new Date().getFullYear();
-      const yearPrefix = `${currentYear}-`;
-      const projectCount = await tx.project.count({
-        where: { name: { startsWith: yearPrefix } },
-      });
-      const nnn = String(projectCount + 1).padStart(3, "0");
-      formattedName = `${currentYear}-${nnn} ${normalizedName}`;
-    } else if (!/^\d{4}-\d{3} .+/.test(normalizedName)) {
-      throw new ActionError("Project name must use the format: [YYYY]-[NNN] [Name].", "INVALID_FORMAT");
     }
 
-    const project = await tx.project.create({
-      data: {
-        name: formattedName,
-        pic_designer_id,
-        pic_drafter_id,
-        clientId: client?.id,
-        opening_date,
-        core_project_type: core_project_type ?? "RETAIL",
-        client_contact,
-        address,
-        area,
-        status_progress: ProjectStatus.ACTIVE,
-      },
-    });
+    if (!project) throw new ActionError("FAILED_TO_CREATE_PROJECT", "CONCURRENCY_ERROR");
 
     const PHASE_ORDER: Array<{ name: PhaseName; index: number }> = [
       { name: "MOODBOARD", index: 1 },
@@ -214,6 +224,13 @@ export const projectService = {
       } else if (client_name !== undefined) {
         const client = await upsertClientByName(tx, client_name);
         resolvedClientId = client?.id ?? null;
+      }
+    }
+
+    if (userRole === "ADMIN" && normalizedName) {
+      // Validate naming protocol if ADMIN manually changes the name
+      if (!/^\d{4}-\d{3} .+/.test(normalizedName)) {
+        throw new ActionError("ADMIN: Manual project rename MUST follow the protocol: [YYYY]-[NNN] [Name].", "PROTOCOL_VIOLATION");
       }
     }
 
@@ -396,8 +413,8 @@ export const projectService = {
     await tx.projectProductRequest.deleteMany({ where: { project_id: projectId } });
     await tx.projectScheduleEntry.deleteMany({ where: { project_id: projectId } });
     
-    // As per SSOT Section 17, purge audit logs related to this project
-    await tx.auditLog.deleteMany({ where: { project_id: projectId } });
+    // Audit logs are preserved via onDelete: SetNull in schema.prisma.
+    // Manual purge removed to comply with forensic trail requirements.
 
 
     await insertAuditLog(tx, AUDIT_ACTIONS.DELETE_PROJECT, "Project", projectId, userId, { project_id: projectId });

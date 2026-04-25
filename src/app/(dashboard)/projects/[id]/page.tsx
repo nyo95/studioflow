@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { Role } from "@/generated/prisma";
-import { canEditProjectMetadata } from "@/lib/permissions";
+import { canEditProjectMetadata } from "@/core/rbac/permissions";
 import { ProjectOverviewForm } from "@/components/project-overview-form";
 import { ProjectChecklistOverview } from "@/components/project-checklist-overview";
 import { DashboardPageShell, PageBackLink, PageHeader, StatusBadge, ActionSidebar, ActionSidebarSection } from "@/ui_engine";

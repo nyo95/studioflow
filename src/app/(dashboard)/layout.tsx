@@ -3,11 +3,11 @@ import { NavOuter } from "@/components/nav-outer";
 import { TopHeader } from "@/components/top-header";
 import { SidebarProvider } from "@/context/sidebar-context";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { UI_ENGINE_CANVAS_CLASS } from "@/ui_engine/tokens";
 import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 import { sanitizeUISettings, uiSettingsToStyle } from "@/lib/ui-settings";
-import { SYSTEM_CONFIG_ID } from "@/lib/permissions";
+import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import type { UISettings } from "@/types/common";
 import type { Prisma } from "@/generated/prisma";
 

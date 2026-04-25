@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { MoveHorizontal, Trash2, Edit3, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
-import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/actions/schedule-actions";
+import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/extensions/schedule/actions/schedule-actions";
 import type { ProjectScheduleEntry, ProjectScheduleOption } from "@/generated/prisma";
 import type { ProjectScheduleEntryWithRelations } from "../../types";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";

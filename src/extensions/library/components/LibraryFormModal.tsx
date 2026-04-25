@@ -41,11 +41,17 @@ import {
   ChevronRight,
   Save,
   X,
-  Edit2
+  Edit3
 } from "lucide-react";
 import { unwrapActionResult } from "@/lib/result";
 import { cn } from "@/lib/utils";
-import { UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
+import { 
+  UI_ENGINE_RADIUS_CARD, 
+  UI_ENGINE_RADIUS_CONTROL, 
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_BORDER_SUBTLE,
+  UI_ENGINE_BG_SUBTLE
+} from "@/ui_engine";
 
 import { UniversalImageUploader } from "@/components/ui/universal-image-uploader";
 import { useSession } from "next-auth/react";
@@ -66,9 +72,9 @@ interface LibraryFormModalProps {
   /** Flat list of category strings (all sections combined), used for filter UI */
   categories?: string[];
   /** Categories belonging to the PRODUCT section from PrefixDictionary */
-  productCategories?: string[];
+  materialsCategories?: string[];
   /** Categories belonging to the FIXTURE section from PrefixDictionary */
-  ffeCategories?: string[];
+  fixturesCategories?: string[];
   /** Unique sub_category values from existing catalog entries */
   subCategories?: string[];
   /** Unique finishing values from existing catalog entries (merged with presets) */
@@ -84,8 +90,8 @@ export function LibraryFormModal({
   initialData,
   vendors = [],
   categories = [],
-  productCategories = [],
-  ffeCategories = [],
+  materialsCategories = [],
+  fixturesCategories = [],
   subCategories = [],
   finishings = [],
   onSuccess,
@@ -122,7 +128,7 @@ export function LibraryFormModal({
     catalog_sku: "",
     catalog_product_name: "",
     catalog_motif: "",
-    tags: [],
+    catalog_tags: [],
     catalog_dimension_p: "",
     catalog_dimension_l: "",
     catalog_dimension_t: "",
@@ -134,9 +140,9 @@ export function LibraryFormModal({
     catalog_reference_url: "",
     catalog_folder_url: "",
     catalog_price: null,
-    metadata: undefined,
-    status: "APPROVED" as LibraryItemStatus,
-    physical_samples: [{ rack_number: "", box_number: "", notes: "" }]
+    catalog_metadata: undefined,
+    catalog_status: "APPROVED" as LibraryItemStatus,
+    physical_samples: [{ catalog_rack_number: "", catalog_box_number: "", catalog_notes: "" }]
   });
 
   React.useEffect(() => {
@@ -163,7 +169,7 @@ export function LibraryFormModal({
           });
         } else {
           const productInitial = initialData as ProductCatalogWithRelations;
-          const physical = productInitial.physical_samples?.[0] || { rack_number: "", box_number: "", notes: "" };
+          const physical = productInitial.physical_samples?.[0] || { catalog_rack_number: "", catalog_box_number: "", catalog_notes: "" };
           setProductData({
             vendor_id: productInitial.vendor_id || "",
             catalog_category: productInitial.catalog_category || "",
@@ -171,7 +177,7 @@ export function LibraryFormModal({
             catalog_sku: productInitial.catalog_sku || "",
             catalog_product_name: productInitial.catalog_product_name || "",
             catalog_motif: productInitial.catalog_motif || "",
-            tags: productInitial.tags || [],
+            catalog_tags: productInitial.catalog_tags || [],
             catalog_dimension_p: productInitial.catalog_dimension_p || "",
             catalog_dimension_l: productInitial.catalog_dimension_l || "",
             catalog_dimension_t: productInitial.catalog_dimension_t || "",
@@ -183,12 +189,12 @@ export function LibraryFormModal({
             catalog_reference_url: productInitial.catalog_reference_url || "",
             catalog_folder_url: productInitial.catalog_folder_url || "",
             catalog_price: productInitial.catalog_price || null,
-            metadata: (productInitial.metadata as Record<string, unknown> | null) || undefined,
-            status: productInitial.status || "APPROVED",
+            catalog_metadata: (productInitial.catalog_metadata as Record<string, unknown> | null) || undefined,
+            catalog_status: productInitial.catalog_status || "APPROVED",
             physical_samples: [{ 
-              rack_number: physical.rack_number || "", 
-              box_number: physical.box_number || "", 
-              notes: physical.notes || "" 
+              catalog_rack_number: physical.catalog_rack_number || "", 
+              catalog_box_number: physical.catalog_box_number || "", 
+              catalog_notes: physical.catalog_notes || "" 
             }]
           });
         }
@@ -205,7 +211,7 @@ export function LibraryFormModal({
           catalog_sku: "",
           catalog_product_name: "",
           catalog_motif: "",
-          tags: [],
+          catalog_tags: [],
           catalog_dimension_p: "",
           catalog_dimension_l: "",
           catalog_dimension_t: "",
@@ -213,9 +219,9 @@ export function LibraryFormModal({
           catalog_color: "",
           catalog_finishing: "",
           catalog_price: null,
-          metadata: undefined,
-          status: "APPROVED",
-          physical_samples: [{ rack_number: "", box_number: "", notes: "" }]
+          catalog_metadata: undefined,
+          catalog_status: "APPROVED",
+          physical_samples: [{ catalog_rack_number: "", catalog_box_number: "", catalog_notes: "" }]
         });
         setProductSection(ProductType.material);
       }
@@ -273,7 +279,7 @@ export function LibraryFormModal({
           catalog_sku: productData.catalog_sku.trim(),
           vendor_name: productData.vendor_name?.trim() || undefined,
         };
-        if (!finalProduct.physical_samples?.[0]?.rack_number && !finalProduct.physical_samples?.[0]?.box_number) {
+        if (!finalProduct.physical_samples?.[0]?.catalog_rack_number && !finalProduct.physical_samples?.[0]?.catalog_box_number) {
             finalProduct.physical_samples = [];
         }
 
@@ -354,7 +360,7 @@ export function LibraryFormModal({
 
           {/* Main Content Area: Single Scrollable Form */}
           <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
-            <DialogHeader className="p-10 pb-6 border-b border-slate-50 flex flex-row items-center justify-between">
+            <DialogHeader className={cn("p-10 pb-6 border-b flex flex-row items-center justify-between", UI_ENGINE_BORDER_SUBTLE)}>
               <div className="flex items-center gap-4">
                 <DialogTitle className="font-lora text-2xl font-bold text-slate-900">
                   {type === "PRODUCT" ? "Product Specification" : "Vendor Details"}
@@ -372,7 +378,7 @@ export function LibraryFormModal({
                       UI_ENGINE_RADIUS_ACTION
                     )}
                   >
-                    {isEditMode ? <><Save className="h-3 w-3 mr-2" /> Editing</> : <><Edit2 className="h-3 w-3 mr-2" /> Modify</>}
+                    {isEditMode ? <><Save className="h-3 w-3 mr-2" /> Editing</> : <><Edit3 className="h-3 w-3 mr-2" /> Modify</>}
                   </Button>
                 )}
               </div>
@@ -410,7 +416,7 @@ export function LibraryFormModal({
                               className="h-12"
                             />
                           ) : (
-                            <div className={cn("h-12 px-4 flex items-center bg-slate-50 text-sm font-bold", UI_ENGINE_RADIUS_CONTROL)}>
+                            <div className={cn("h-12 px-4 flex items-center text-sm font-bold", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                               {vendors.find(v => v.id === productData.vendor_id)?.brand_name || productData.vendor_name || "—"}
                             </div>
                           )}
@@ -423,17 +429,17 @@ export function LibraryFormModal({
                                 value={productSection} 
                                 onValueChange={(val) => setProductSection(val as ProductType)}
                               >
-                                <SelectTrigger className={cn("h-12 bg-slate-50 border-transparent text-xs font-bold uppercase tracking-widest", UI_ENGINE_RADIUS_CONTROL)}>
+                                <SelectTrigger className={cn("h-12 border-transparent text-xs font-bold uppercase tracking-widest", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value={ProductType.material}>Material (Architectural)</SelectItem>
-                                  <SelectItem value={ProductType.fixture}>Fixture (FF&E)</SelectItem>
+                                  <SelectItem value={ProductType.material}>Materials</SelectItem>
+                                  <SelectItem value={ProductType.fixture}>Fixtures</SelectItem>
                                 </SelectContent>
                               </Select>
                             ) : (
-                              <div className={cn("h-12 px-4 flex items-center bg-slate-50 text-[10px] font-black uppercase tracking-widest", UI_ENGINE_RADIUS_CONTROL)}>
-                                {productSection === ProductType.material ? "Material (Architectural)" : "Fixture (FF&E)"}
+                              <div className={cn("h-12 px-4 flex items-center text-[10px] font-black uppercase tracking-widest", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                                {productSection === ProductType.material ? "Materials" : "Fixtures"}
                               </div>
                             )}
                           </div>
@@ -441,7 +447,7 @@ export function LibraryFormModal({
                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Category *</Label>
                             {isEditMode ? (
                               <CreatableSearch
-                                options={(productSection === ProductType.material ? productCategories : ffeCategories).map(cat => ({ id: cat, name: cat }))}
+                                options={(productSection === ProductType.material ? materialsCategories : fixturesCategories).map(cat => ({ id: cat, name: cat }))}
                                 value={productData.catalog_category}
                                 onSelect={(_, name) => setProductData({ ...productData, catalog_category: name })}
                                 onCreate={(name) => setProductData({ ...productData, catalog_category: name.toUpperCase() })}
@@ -449,7 +455,7 @@ export function LibraryFormModal({
                                 className="h-12"
                               />
                             ) : (
-                              <div className={cn("h-12 px-4 flex items-center bg-slate-50 text-sm font-bold", UI_ENGINE_RADIUS_CONTROL)}>
+                              <div className={cn("h-12 px-4 flex items-center text-sm font-bold", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                 {productData.catalog_category || "—"}
                               </div>
                             )}
@@ -463,10 +469,10 @@ export function LibraryFormModal({
                                 value={productData.catalog_sku}
                                 onChange={(e) => setProductData({ ...productData, catalog_sku: e.target.value })}
                                 placeholder="e.g. PT-01" 
-                                className={cn("h-12 bg-slate-50 border-transparent focus:bg-white focus:border-slate-200 transition-all text-sm font-medium", UI_ENGINE_RADIUS_CONTROL)}
+                                className={cn("h-12 border-transparent focus:bg-white focus:border-slate-200 transition-all text-sm font-medium", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                               />
                             ) : (
-                              <div className={cn("h-12 px-4 flex items-center bg-slate-50 text-sm font-bold", UI_ENGINE_RADIUS_CONTROL)}>
+                              <div className={cn("h-12 px-4 flex items-center text-sm font-bold", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                 {productData.catalog_sku || "—"}
                               </div>
                             )}
@@ -478,10 +484,10 @@ export function LibraryFormModal({
                                 value={productData.catalog_product_name}
                                 onChange={(e) => setProductData({ ...productData, catalog_product_name: e.target.value })}
                                 placeholder="e.g. Oak Wood Texture" 
-                                className={cn("h-12 bg-slate-50 border-transparent focus:bg-white focus:border-slate-200 transition-all text-sm font-medium", UI_ENGINE_RADIUS_CONTROL)}
+                                className={cn("h-12 border-transparent focus:bg-white focus:border-slate-200 transition-all text-sm font-medium", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                               />
                             ) : (
-                              <div className={cn("h-12 px-4 flex items-center bg-slate-50 text-sm font-bold", UI_ENGINE_RADIUS_CONTROL)}>
+                              <div className={cn("h-12 px-4 flex items-center text-sm font-bold", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                 {productData.catalog_product_name || "—"}
                               </div>
                             )}
@@ -519,10 +525,10 @@ export function LibraryFormModal({
                                 value={productData.catalog_motif}
                                 onChange={(e) => setProductData({ ...productData, catalog_motif: e.target.value })}
                                 placeholder="e.g. Grainy" 
-                                className={cn("h-12 bg-slate-50 border-transparent text-sm font-medium", UI_ENGINE_RADIUS_CONTROL)}
+                                className={cn("h-12 border-transparent text-sm font-medium", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                               />
                             ) : (
-                              <div className={cn("h-12 px-4 flex items-center bg-slate-50 text-sm font-medium", UI_ENGINE_RADIUS_CONTROL)}>
+                              <div className={cn("h-12 px-4 flex items-center text-sm font-medium", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                 {productData.catalog_motif || "—"}
                               </div>
                             )}
@@ -539,12 +545,12 @@ export function LibraryFormModal({
                                 className="h-12"
                               />
                             ) : (
-                              <div className={cn("h-12 px-4 flex items-center bg-slate-50 text-sm font-medium", UI_ENGINE_RADIUS_CONTROL)}>
+                              <div className={cn("h-12 px-4 flex items-center text-sm font-medium", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                 {productData.catalog_finishing || "—"}
                               </div>
                             )}
                          </div>
-                         <div className="grid grid-cols-4 gap-4 col-span-2 p-6 bg-slate-50/50 border border-slate-100 rounded-[20px]">
+                         <div className={cn("grid grid-cols-4 gap-4 col-span-2 p-6 border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                             <div className="space-y-1.5">
                               <Label className="text-[9px] font-black uppercase text-slate-400 text-center block">P</Label>
                               {isEditMode ? (
@@ -596,7 +602,7 @@ export function LibraryFormModal({
                         <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-950">Logistics & Approval</h4>
                       </div>
                       <div className="space-y-6">
-                         <div className={cn("p-8 bg-slate-50 border border-slate-100 flex items-center gap-8", UI_ENGINE_RADIUS_CARD)}>
+                         <div className={cn("p-8 border flex items-center gap-8", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                            <div className="h-14 w-14 bg-white shadow-md flex items-center justify-center rounded-2xl text-slate-400">
                              <Warehouse className="h-7 w-7" />
                            </div>
@@ -605,30 +611,30 @@ export function LibraryFormModal({
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Rack Location</Label>
                                 {isEditMode ? (
                                   <Input 
-                                    value={productData.physical_samples?.[0]?.rack_number} 
-                                    onChange={e => {
-                                      const s = [...productData.physical_samples!]; s[0].rack_number = e.target.value; setProductData({...productData, physical_samples: s});
+                                    value={productData.physical_samples?.[0]?.catalog_rack_number} 
+                                    onChange={(e) => {
+                                      const s = [...productData.physical_samples!]; s[0].catalog_rack_number = e.target.value; setProductData({...productData, physical_samples: s});
                                     }}
                                     placeholder="e.g. R-01"
                                     className="h-11 bg-white border-none shadow-sm" 
                                   />
                                 ) : (
-                                  <div className="h-11 px-4 flex items-center bg-white rounded-lg text-sm font-bold shadow-sm">{productData.physical_samples?.[0]?.rack_number || "—"}</div>
+                                  <div className="h-11 px-4 flex items-center bg-white rounded-lg text-sm font-bold shadow-sm">{productData.physical_samples?.[0]?.catalog_rack_number || "—"}</div>
                                 )}
                               </div>
                               <div className="space-y-1.5">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Box Number</Label>
                                 {isEditMode ? (
                                   <Input 
-                                    value={productData.physical_samples?.[0]?.box_number} 
-                                    onChange={e => {
-                                      const s = [...productData.physical_samples!]; s[0].box_number = e.target.value; setProductData({...productData, physical_samples: s});
+                                    value={productData.physical_samples?.[0]?.catalog_box_number} 
+                                    onChange={(e) => {
+                                      const s = [...productData.physical_samples!]; s[0].catalog_box_number = e.target.value; setProductData({...productData, physical_samples: s});
                                     }}
                                     placeholder="e.g. B-01"
                                     className="h-11 bg-white border-none shadow-sm" 
                                   />
                                 ) : (
-                                  <div className="h-11 px-4 flex items-center bg-white rounded-lg text-sm font-bold shadow-sm">{productData.physical_samples?.[0]?.box_number || "—"}</div>
+                                  <div className="h-11 px-4 flex items-center bg-white rounded-lg text-sm font-bold shadow-sm">{productData.physical_samples?.[0]?.catalog_box_number || "—"}</div>
                                 )}
                               </div>
                            </div>
@@ -638,8 +644,8 @@ export function LibraryFormModal({
                             <div className="space-y-2">
                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Library Approval Status</Label>
                                {isEditMode ? (
-                                 <Select value={productData.status} onValueChange={v => setProductData({...productData, status: v as LibraryItemStatus})}>
-                                   <SelectTrigger className={cn("h-12 bg-slate-50 border-transparent text-xs font-bold", UI_ENGINE_RADIUS_CONTROL)}>
+                                 <Select value={productData.catalog_status} onValueChange={v => setProductData({...productData, catalog_status: v as LibraryItemStatus})}>
+                                   <SelectTrigger className={cn("h-12 border-transparent text-xs font-bold", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                      <SelectValue />
                                    </SelectTrigger>
                                    <SelectContent>
@@ -649,12 +655,12 @@ export function LibraryFormModal({
                                    </SelectContent>
                                  </Select>
                                ) : (
-                                 <div className={cn("h-12 px-4 flex items-center bg-slate-50 text-[10px] font-black uppercase tracking-widest", UI_ENGINE_RADIUS_CONTROL)}>
+                                 <div className={cn("h-12 px-4 flex items-center text-[10px] font-black uppercase tracking-widest", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                    <span className={cn(
-                                     productData.status === "APPROVED" ? "text-emerald-600" :
-                                     productData.status === "PENDING" ? "text-amber-600" : "text-rose-600"
+                                     productData.catalog_status === "APPROVED" ? "text-emerald-600" :
+                                     productData.catalog_status === "PENDING" ? "text-amber-600" : "text-rose-600"
                                    )}>
-                                     {productData.status}
+                                     {productData.catalog_status}
                                    </span>
                                  </div>
                                )}
@@ -662,10 +668,10 @@ export function LibraryFormModal({
                             <div className="space-y-2">
                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Search Tags</Label>
                                {isEditMode ? (
-                                 <TagInput tags={productData.tags || []} onChange={tags => setProductData({...productData, tags})} placeholder="Type and press enter..." />
+                                 <TagInput tags={productData.catalog_tags || []} onChange={catalog_tags => setProductData({...productData, catalog_tags})} placeholder="Type and press enter..." />
                                ) : (
-                                 <div className="flex flex-wrap gap-2 py-2">
-                                   {productData.tags?.length ? productData.tags.map(tag => (
+                                 <div className="flex flex-wrap gap-1.5 mt-3">
+                                   {productData.catalog_tags?.length ? productData.catalog_tags.map(tag => (
                                      <span key={tag} className="px-3 py-1 bg-slate-100 text-[10px] font-bold uppercase tracking-tighter rounded-full">{tag}</span>
                                    )) : <span className="text-slate-300 text-xs italic">No tags</span>}
                                  </div>
@@ -682,7 +688,7 @@ export function LibraryFormModal({
                         <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-950">Visual Assets & References</h4>
                       </div>
                       <div className="grid gap-8">
-                         <div className="p-10 bg-slate-50 border border-dashed border-slate-200 rounded-[32px] flex flex-col items-center gap-6">
+                         <div className={cn("p-10 border border-dashed flex flex-col items-center gap-6", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                             <div className="w-56 aspect-square">
                               {isEditMode ? (
                                 <UniversalImageUploader
@@ -718,9 +724,9 @@ export function LibraryFormModal({
                             <div className="space-y-2">
                               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Reference URL</Label>
                               {isEditMode ? (
-                                <Input value={productData.catalog_reference_url || ""} onChange={e => setProductData({...productData, catalog_reference_url: e.target.value})} placeholder="https://..." className={cn("h-11 bg-slate-50 border-none", UI_ENGINE_RADIUS_CONTROL)} />
+                                <Input value={productData.catalog_reference_url || ""} onChange={e => setProductData({...productData, catalog_reference_url: e.target.value})} placeholder="https://..." className={cn("h-11 border-none", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} />
                               ) : (
-                                <div className={cn("h-11 px-4 flex items-center bg-slate-50 text-xs font-medium text-slate-600 truncate", UI_ENGINE_RADIUS_CONTROL)}>
+                                <div className={cn("h-11 px-4 flex items-center text-xs font-medium text-slate-600 truncate", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                   {productData.catalog_reference_url || "—"}
                                 </div>
                               )}
@@ -728,9 +734,9 @@ export function LibraryFormModal({
                             <div className="space-y-2">
                               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Asset Folder</Label>
                               {isEditMode ? (
-                                <Input value={productData.catalog_folder_url || ""} onChange={e => setProductData({...productData, catalog_folder_url: e.target.value})} placeholder="Drive Link..." className={cn("h-11 bg-slate-50 border-none", UI_ENGINE_RADIUS_CONTROL)} />
+                                <Input value={productData.catalog_folder_url || ""} onChange={e => setProductData({...productData, catalog_folder_url: e.target.value})} placeholder="Drive Link..." className={cn("h-11 border-none", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} />
                               ) : (
-                                <div className={cn("h-11 px-4 flex items-center bg-slate-50 text-xs font-medium text-slate-600 truncate", UI_ENGINE_RADIUS_CONTROL)}>
+                                <div className={cn("h-11 px-4 flex items-center text-xs font-medium text-slate-600 truncate", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                   {productData.catalog_folder_url || "—"}
                                 </div>
                               )}
@@ -751,7 +757,7 @@ export function LibraryFormModal({
                           <div className="space-y-2">
                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Public Brand Name *</Label>
                             {isEditMode ? (
-                              <Input value={vendorData.brand_name} onChange={e => setVendorData({...vendorData, brand_name: e.target.value})} className={cn("h-12 bg-slate-50 border-none font-bold text-lg", UI_ENGINE_RADIUS_CONTROL)} placeholder="e.g. TACO" />
+                              <Input value={vendorData.brand_name} onChange={e => setVendorData({...vendorData, brand_name: e.target.value})} className={cn("h-12 border-none font-bold text-lg", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} placeholder="e.g. TACO" />
                             ) : (
                               <div className={cn("h-12 px-4 flex items-center bg-slate-900 text-white font-bold text-lg", UI_ENGINE_RADIUS_CONTROL)}>
                                 {vendorData.brand_name || "—"}
@@ -762,9 +768,9 @@ export function LibraryFormModal({
                              <div className="space-y-2">
                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Legal Entity (PT)</Label>
                                {isEditMode ? (
-                                 <Input value={vendorData.company_pt} onChange={e => setVendorData({...vendorData, company_pt: e.target.value})} className={cn("h-11 bg-slate-50 border-none", UI_ENGINE_RADIUS_CONTROL)} placeholder="e.g. PT Arta Prima" />
+                                 <Input value={vendorData.company_pt} onChange={e => setVendorData({...vendorData, company_pt: e.target.value})} className={cn("h-11 border-none", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} placeholder="e.g. PT Arta Prima" />
                                ) : (
-                                 <div className={cn("h-11 px-4 flex items-center bg-slate-50 text-sm font-bold", UI_ENGINE_RADIUS_CONTROL)}>
+                                 <div className={cn("h-11 px-4 flex items-center text-sm font-bold", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                    {vendorData.company_pt || "—"}
                                  </div>
                                )}
@@ -772,9 +778,9 @@ export function LibraryFormModal({
                              <div className="space-y-2">
                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Business Name</Label>
                                {isEditMode ? (
-                                 <Input value={vendorData.company_name} onChange={e => setVendorData({...vendorData, company_name: e.target.value})} className={cn("h-11 bg-slate-50 border-none", UI_ENGINE_RADIUS_CONTROL)} placeholder="e.g. Taco Group" />
+                                 <Input value={vendorData.company_name} onChange={e => setVendorData({...vendorData, company_name: e.target.value})} className={cn("h-11 border-none", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} placeholder="e.g. Taco Group" />
                                ) : (
-                                 <div className={cn("h-11 px-4 flex items-center bg-slate-50 text-sm font-bold", UI_ENGINE_RADIUS_CONTROL)}>
+                                 <div className={cn("h-11 px-4 flex items-center text-sm font-bold", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                    {vendorData.company_name || "—"}
                                  </div>
                                )}
@@ -783,9 +789,9 @@ export function LibraryFormModal({
                           <div className="space-y-2">
                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Headquarters Address</Label>
                             {isEditMode ? (
-                              <textarea value={vendorData.address} onChange={e => setVendorData({...vendorData, address: e.target.value})} className={cn("w-full h-32 bg-slate-50 border-none p-6 text-sm font-medium resize-none", UI_ENGINE_RADIUS_CONTROL)} placeholder="Full legal or business address..." />
+                              <textarea value={vendorData.address} onChange={e => setVendorData({...vendorData, address: e.target.value})} className={cn("w-full h-32 border-none p-6 text-sm font-medium resize-none", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} placeholder="Full legal or business address..." />
                             ) : (
-                              <div className={cn("w-full min-h-[80px] p-6 bg-slate-50 text-sm font-medium leading-relaxed", UI_ENGINE_RADIUS_CONTROL)}>
+                              <div className={cn("w-full min-h-[80px] p-6 text-sm font-medium leading-relaxed", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                 {vendorData.address || "—"}
                               </div>
                             )}
@@ -807,7 +813,7 @@ export function LibraryFormModal({
                        </div>
                        <div className="space-y-6">
                           {vendorData.contacts.map((contact, idx) => (
-                            <div key={idx} className={cn("p-8 bg-slate-50 border border-slate-100 relative group transition-all hover:bg-white hover:shadow-xl hover:shadow-slate-100", UI_ENGINE_RADIUS_CARD)}>
+                            <div key={idx} className={cn("p-8 border relative group transition-all hover:bg-white hover:shadow-xl hover:shadow-slate-100", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                                {vendorData.contacts.length > 1 && isEditMode && (
                                  <Button variant="ghost" size="icon" onClick={() => removeContact(idx)} className="absolute -top-3 -right-3 h-8 w-8 bg-slate-900 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
                                    <X className="h-4 w-4" />
@@ -863,9 +869,9 @@ export function LibraryFormModal({
                             <div className="relative">
                               <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                               {isEditMode ? (
-                                <Input value={vendorData.website_url} onChange={e => setVendorData({...vendorData, website_url: e.target.value})} className={cn("h-12 bg-slate-50 border-none pl-12", UI_ENGINE_RADIUS_CONTROL)} placeholder="https://..." />
+                                <Input value={vendorData.website_url} onChange={e => setVendorData({...vendorData, website_url: e.target.value})} className={cn("h-12 border-none pl-12", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} placeholder="https://..." />
                               ) : (
-                                <div className={cn("h-12 pl-12 pr-4 flex items-center bg-slate-50 text-xs font-medium text-blue-600 underline truncate", UI_ENGINE_RADIUS_CONTROL)}>
+                                <div className={cn("h-12 pl-12 pr-4 flex items-center text-xs font-medium text-blue-600 underline truncate", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                   <a href={vendorData.website_url} target="_blank" rel="noopener noreferrer">{vendorData.website_url || "—"}</a>
                                 </div>
                               )}
@@ -876,9 +882,9 @@ export function LibraryFormModal({
                             <div className="relative">
                               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">@</span>
                               {isEditMode ? (
-                                <Input value={vendorData.instagram_url} onChange={e => setVendorData({...vendorData, instagram_url: e.target.value})} className={cn("h-12 bg-slate-50 border-none pl-10", UI_ENGINE_RADIUS_CONTROL)} placeholder="username" />
+                                <Input value={vendorData.instagram_url} onChange={e => setVendorData({...vendorData, instagram_url: e.target.value})} className={cn("h-12 border-none pl-10", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} placeholder="username" />
                               ) : (
-                                <div className={cn("h-12 pl-10 pr-4 flex items-center bg-slate-50 text-xs font-medium text-slate-900 truncate", UI_ENGINE_RADIUS_CONTROL)}>
+                                <div className={cn("h-12 pl-10 pr-4 flex items-center text-xs font-medium text-slate-900 truncate", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                   {vendorData.instagram_url || "—"}
                                 </div>
                               )}
@@ -892,7 +898,7 @@ export function LibraryFormModal({
             </ScrollArea>
 
             {/* Footer Actions */}
-            <div className="p-10 pt-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div className={cn("p-10 pt-6 border-t flex items-center justify-between", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
               <Button 
                 variant="ghost" 
                 onClick={() => onOpenChange(false)}

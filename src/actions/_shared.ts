@@ -1,4 +1,4 @@
-import { TxClient, SYSTEM_CONFIG_ID } from "@/lib/permissions";
+import { TxClient, SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import { throwActionError } from "@/lib/error-types";
 import type { Prisma } from "@/generated/prisma";
 

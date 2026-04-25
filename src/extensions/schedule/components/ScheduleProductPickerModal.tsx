@@ -21,13 +21,12 @@ import {
   Sparkles
 } from "lucide-react";
 import {
-  getProductsAction,
-  getVendorsAction,
-} from "../../library/actions/library-actions";
+  LibraryFacade,
+} from "@/extensions/library/facade";
 import {
   addScheduleEntryAction,
   addScheduleOptionAction,
-} from "@/actions/schedule-actions";
+} from "@/extensions/schedule/actions/schedule-actions";
 import { 
   Dialog, 
   DialogContent, 
@@ -43,7 +42,7 @@ import { GradualInputForm } from "./GradualInputForm";
 import type {
   ProductCatalogWithRelations,
   LibraryVendor,
-} from "../../library/types";
+} from "@/extensions/library/facade";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { ProductType } from "@/generated/prisma";
@@ -107,7 +106,7 @@ export function ScheduleProductPickerModal({
 
   const fetchVendors = React.useCallback(async () => {
     try {
-      const res = unwrapActionResult(await getVendorsAction(undefined));
+      const res = unwrapActionResult<LibraryVendor[]>(await LibraryFacade.getVendors(undefined));
       setVendors(res);
     } catch (e) {
       console.error("Failed to fetch vendors", e);
@@ -117,7 +116,7 @@ export function ScheduleProductPickerModal({
   const fetchProducts = React.useCallback(async () => {
     setIsSearching(true);
     try {
-      const res = unwrapActionResult<{ items: ProductCatalogWithRelations[]; total: number }>(await getProductsAction({ 
+      const res = unwrapActionResult<{ items: ProductCatalogWithRelations[]; total: number }>(await LibraryFacade.searchProducts({ 
         search: searchQuery,
         type: section
       }));
@@ -143,7 +142,7 @@ export function ScheduleProductPickerModal({
       setIsSearching(true);
       try {
         const results = unwrapActionResult(
-          await getProductsAction({
+          await LibraryFacade.searchProducts({
             category: searchQuery.trim() ? undefined : (category !== "all" ? category : undefined),
             search: searchQuery.trim() || undefined,
             type: section,

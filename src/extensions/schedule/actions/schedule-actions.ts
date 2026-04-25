@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { createAction } from "@/lib/action-wrapper";
-import { ScheduleService } from "@/lib/services/schedule-service";
+import { ScheduleService } from "@/extensions/schedule/services/schedule-service";
 import { 
   AddScheduleEntrySchema, 
   AddScheduleEntryInstantSchema,
@@ -20,14 +20,15 @@ import {
 } from "@/lib/validations";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_PROJECT } from "@/lib/revalidation-tags";
-import { insertAuditLog } from "./_shared";
-import { AUDIT_ACTIONS } from "@/lib/services/audit/types";
-import { evaluateAccess, PERMISSION, RBAC } from "@/lib/rbac";
+import { insertAuditLog } from "@/actions/_shared";
+import { AUDIT_ACTIONS } from "@/core/platform/audit/types";
+import { evaluateAccess, PERMISSION, RBAC } from "@/core/rbac/rbac";
 import { ActionError } from "@/lib/error-types";
-import { getProjectMembershipOrThrow } from "@/lib/permissions";
+import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
 import { Role, ProductType } from "@/generated/prisma";
 import { parseGSheetsProductCsv } from "@/lib/schedule/csv-parse";
 import { importScheduleFromCsv } from "@/lib/schedule/csv-import";
+import { LibraryService } from "@/extensions/library/services/library-service";
 
 /**
  * RBAC Helper for Scheduler
@@ -78,6 +79,9 @@ export const getScheduleCategoriesAction = createAction(
   { schema: z.object({ section: z.nativeEnum(ProductType) }) }
 );
 
+
+
+
 export const addScheduleEntryAction = createAction(
   async ({ input, ctx, tx }) => {
     await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
@@ -94,6 +98,13 @@ export const addScheduleEntryAction = createAction(
       input.section,
       ctx.userId
     );
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_CREATE_ENTRY, "Project", input.projectId, ctx.userId, {
+      entryId: entry.id,
+      category: input.schedule_category,
+      mode: input.mode,
+      section: input.section
+    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return entry;
@@ -118,6 +129,14 @@ export const addScheduleEntryInstantAction = createAction(
       ctx.userId
     );
 
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_CREATE_ENTRY, "Project", input.projectId, ctx.userId, {
+      entryId: entry.id,
+      category: input.schedule_category,
+      mode: "reserve",
+      section: input.section,
+      instant: true
+    });
+
     // Fetch entry with options for immediate use
     const entryWithOptions = await tx.projectScheduleEntry.findUnique({
       where: { id: entry.id },
@@ -136,11 +155,9 @@ export const addScheduleEntryWithProductAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_ADD);
 
-    // Get product from catalog
-    const product = await tx.productCatalog.findUniqueOrThrow({
-      where: { id: input.product_catalog_id },
-      include: { vendor: true },
-    });
+    // Get product from catalog via Facade
+    const product = await LibraryService.getProductById(tx, input.product_catalog_id);
+    if (!product) throw new ActionError("Product not found in Catalog", "NOT_FOUND");
 
     // Create entry with category from product (in same transaction)
     const { entry } = await ScheduleService.addEntryToSchedule(
@@ -153,6 +170,13 @@ export const addScheduleEntryWithProductAction = createAction(
       input.section,
       ctx.userId
     );
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_CREATE_ENTRY, "Project", input.projectId, ctx.userId, {
+      entryId: entry.id,
+      productId: product.id,
+      category: product.catalog_category,
+      section: input.section
+    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
 
@@ -185,6 +209,12 @@ export const addScheduleOptionAction = createAction(
       ctx.userId
     );
 
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_ADD_OPTION, "Project", entry.project_id, ctx.userId, {
+      entryId: input.entryId,
+      optionId: option.id,
+      mode: input.mode
+    });
+
     invalidateCache({ scope: REVALIDATE_PROJECT, id: entry.project_id });
     return option;
   },
@@ -209,6 +239,11 @@ export const approveScheduleOptionAction = createAction(
 
     const result = await ScheduleService.approveOption(tx, input.optionId, input.entryId, ctx.userId);
 
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_APPROVE_OPTION, "Project", option.entry.project_id, ctx.userId, {
+      entryId: input.entryId,
+      optionId: input.optionId
+    });
+
     invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
     return result;
   },
@@ -225,6 +260,11 @@ export const updateScheduleEntryAction = createAction(
     await ScheduleService.validateOwnership(tx, input.projectId, input.entryId);
 
     const result = await ScheduleService.updateEntry(tx, input.entryId, input.data, ctx.userId);
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_ENTRY, "Project", input.projectId, ctx.userId, {
+      entryId: input.entryId,
+      updatedFields: Object.keys(input.data)
+    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return result;
@@ -247,6 +287,11 @@ export const updateScheduleOptionSnapshotAction = createAction(
 
     const result = await ScheduleService.updateOptionSnapshot(tx, input.optionId, input.data, ctx.userId);
 
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_SNAPSHOT, "Project", option.entry.project_id, ctx.userId, {
+      optionId: input.optionId,
+      updatedFields: Object.keys(input.data)
+    });
+
     invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
     return result;
   },
@@ -265,6 +310,10 @@ export const deleteScheduleOptionAction = createAction(
 
     const result = await ScheduleService.smartDeleteOption(tx, input.optionId, ctx.userId);
 
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_DELETE_OPTION, "Project", input.projectId, ctx.userId, {
+      optionId: input.optionId
+    });
+
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return result;
   },
@@ -281,6 +330,11 @@ export const deleteScheduleEntryAction = createAction(
     await ScheduleService.validateOwnership(tx, input.projectId, input.entryId);
 
     const deletedEntry = await ScheduleService.deleteEntry(tx, input.entryId, ctx.userId);
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_DELETE_ENTRY, "Project", input.projectId, ctx.userId, {
+      entryId: input.entryId,
+      code: `${deletedEntry.schedule_prefix}-${String(deletedEntry.schedule_increment).padStart(2, "0")}`
+    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return deletedEntry;
@@ -302,6 +356,12 @@ export const bulkDeleteScheduleEntriesAction = createAction(
       input.schedule_category,
       ctx.userId
     );
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_DELETE_ENTRY, "Project", input.projectId, ctx.userId, {
+      count: result.count,
+      category: input.schedule_category,
+      section: input.section
+    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return result;
@@ -330,6 +390,12 @@ export const reorderScheduleEntriesAction = createAction(
 
     await ScheduleService.reorderEntries(tx, input.projectId, input.section, input.schedule_category, input.items, ctx.userId);
 
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_REORDER, "Project", input.projectId, ctx.userId, {
+      category: input.schedule_category,
+      section: input.section,
+      itemCount: input.items.length
+    });
+
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return { success: true };
   },
@@ -352,6 +418,11 @@ export const moveEntryToCategoryAction = createAction(
       input.newIndex + 1, // normalize to 1-based sort order
       ctx.userId
     );
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_ENTRY, "Project", input.projectId, ctx.userId, {
+      entryId: input.entryId,
+      move: { toCategory: input.toCategory }
+    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return { success: true };
@@ -405,53 +476,7 @@ export const importScheduleAction = createAction(
 
 export const getScheduleSuggestionsAction = createAction(
   async ({ tx }) => {
-    const [vendors, products] = await Promise.all([
-      tx.vendor.findMany({
-        where: { deleted_at: null },
-        select: { id: true, brand_name: true },
-        orderBy: { brand_name: "asc" }
-      }),
-      tx.productCatalog.findMany({
-        where: { 
-          deleted_at: null,
-          status: "APPROVED" 
-        },
-        include: { vendor: true },
-        orderBy: { created_at: "desc" }
-      })
-    ]);
-
-    return {
-      brands: vendors.map(v => ({
-        id: v.id,
-        name: v.brand_name
-      })),
-      products: products.map(m => {
-        const sku = m.catalog_sku || "";
-        const name = m.catalog_product_name || "";
-        
-        // Logical Format: [SKU] - [Name] or fallback
-        let label = "";
-        if (sku && name) label = `[${sku}] - ${name}`;
-        else label = sku || name || "Unnamed Product";
-
-        return {
-          id: m.id,
-          name: label,
-          brand: m.vendor.brand_name,
-          catalog_category: m.catalog_category,
-          metadata: {
-            catalog_sku: sku,
-            catalog_product_name: name,
-            catalog_motif: m.catalog_motif,
-            catalog_color: m.catalog_color,
-            catalog_finishing: m.catalog_finishing,
-            catalog_dimensions: `${m.catalog_dimension_p || "X"} x ${m.catalog_dimension_l || "X"} x ${m.catalog_dimension_t || "X"} ${m.catalog_dimension_unit}`.replace(/X/g, "x"),
-            catalog_reference_url: m.catalog_reference_url
-          }
-        };
-      })
-    };
+    return LibraryService.getSuggestions(tx);
   },
   { schema: z.object({ projectId: IdSchema.optional() }) }
 );
@@ -464,9 +489,14 @@ export const swapScheduleEntriesAction = createAction(
 
     await ScheduleService.swapEntries(tx, input.projectId, input.idA, input.idB);
 
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_REORDER, "Project", input.projectId, ctx.userId, {
+      idA: input.idA,
+      idB: input.idB,
+      type: "SWAP"
+    });
+
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return { success: true };
   },
   { schema: SwapScheduleEntriesSchema }
 );
-

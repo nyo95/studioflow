@@ -1,7 +1,7 @@
 import { DashboardPageShell, PageHeader, TableCard } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { Role } from "@/generated/prisma";
-import { auditService } from "@/lib/services/audit";
+import { auditService } from "@/core/platform/audit";
 import { ActivityLogTable } from "@/components/activity-log-table";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;

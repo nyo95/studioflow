@@ -78,4 +78,4 @@ export const SketchUpImportRowSchema = z.object({
 
 export type SketchUpImportRow = z.infer<typeof SketchUpImportRowSchema>;
 
-export interface ScheduleEntryWithOptions extends Prisma.ProjectScheduleEntryGetPayload<{ include: { options: true } }> {}
+export type ScheduleEntryWithOptions = Prisma.ProjectScheduleEntryGetPayload<{ include: { options: true } }>;

@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ActionSidebar, ActionSidebarSection, ActionSidebarItem, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
+import { UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE } from "@/ui_engine/tokens/colors";
+import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens/typography";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ErrorFallback } from "@/components/shared/error-fallback";
 
@@ -29,8 +31,8 @@ interface LibraryTabsProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   categories: string[];
-  productCategories?: string[];
-  ffeCategories?: string[];
+  materialsCategories?: string[];
+  fixturesCategories?: string[];
   subCategories?: string[];
   finishings?: string[];
   searchQuery: string;
@@ -41,7 +43,22 @@ interface LibraryTabsProps {
   setShowPhysicalOnly: (val: boolean) => void;
   userRole: string;
   requests: ProjectProductRequestWithDetails[];
-  promotionRequests?: any[];
+  promotionRequests?: Array<{
+    id: string;
+    status: string;
+    snapshot_data: {
+      catalog_image_url?: string | null;
+      catalog_product_name?: string | null;
+      catalog_brand?: string | null;
+      catalog_category?: string | null;
+    } | null;
+    notes?: string | null;
+    reviewed_at?: string | null;
+    created_at?: string;
+    project?: { id: string; name: string } | null;
+    requested_by?: { id: string; name: string } | null;
+    reviewed_by?: { id: string; name: string } | null;
+  }>;
   isRefreshing?: boolean;
   activeTab: string;
   onTabChange: (val: string) => void;
@@ -55,8 +72,8 @@ export function LibraryTabs({
   pageSize,
   onPageChange,
   categories,
-  productCategories = [],
-  ffeCategories = [],
+  materialsCategories = [],
+  fixturesCategories = [],
   subCategories = [],
   finishings = [],
   searchQuery,
@@ -127,7 +144,7 @@ export function LibraryTabs({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
                     <Input
                       placeholder="Search Library..."
-                      className={cn("pl-9 w-full bg-slate-50/50 border-slate-100 focus:bg-white focus:border-slate-200 focus:ring-0 h-10 font-inter text-xs shadow-none transition-all", UI_ENGINE_RADIUS_CONTROL)}
+                      className={cn("pl-9 w-full border-transparent focus:bg-white focus:border-slate-200 focus:ring-0 h-10 shadow-none transition-all", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META)}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -136,13 +153,13 @@ export function LibraryTabs({
 
               <ActionSidebarItem label="Collection Category">
                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger className={cn("w-full h-10 border-slate-100 bg-slate-50/50 font-inter text-xs focus:ring-0 shadow-none transition-all", UI_ENGINE_RADIUS_CONTROL)}>
+                    <SelectTrigger className={cn("w-full h-10 border-transparent focus:ring-0 shadow-none transition-all", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META)}>
                       <div className="flex items-center gap-2">
                         <Filter className="h-3 w-3 text-slate-400" />
                         <SelectValue placeholder="All Categories" />
                       </div>
                     </SelectTrigger>
-                    <SelectContent className={cn("font-inter text-xs border-slate-100 shadow-2xl", UI_ENGINE_RADIUS_CONTROL)}>
+                    <SelectContent className={cn("border-transparent shadow-2xl", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META)}>
                       <SelectItem value="all">Every Category</SelectItem>
                       {categories.map((cat) => (
                         <SelectItem key={cat} value={cat}>
@@ -154,10 +171,10 @@ export function LibraryTabs({
               </ActionSidebarItem>
 
               <ActionSidebarItem label="Options">
-                 <div className={cn("flex items-center justify-between p-4 bg-slate-50/50 border border-slate-50 transition-all hover:border-slate-100", UI_ENGINE_RADIUS_CONTROL)}>
+                 <div className={cn("flex items-center justify-between p-4 border transition-all hover:border-slate-100", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] font-black text-slate-900 font-inter uppercase tracking-widest">Physical Only</span>
-                      <span className="text-[9px] text-slate-400 font-inter">Filter items with samples</span>
+                      <span className={cn("font-black text-slate-900 uppercase tracking-widest", UI_ENGINE_TYPE_META)}>Physical Only</span>
+                      <span className={cn("text-slate-400 font-inter", UI_ENGINE_TYPE_META)}>Filter items with samples</span>
                     </div>
                     <label htmlFor="physical-toggle" className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -181,7 +198,7 @@ export function LibraryTabs({
                 setSelectedData(null);
                 setIsFormModalOpen(true);
               }}
-              className={cn("w-full bg-slate-900 hover:bg-slate-800 text-white font-inter text-[10px] font-black uppercase tracking-widest h-12 px-4 shadow-lg flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]", UI_ENGINE_RADIUS_CONTROL)}
+              className={cn("w-full bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest h-12 px-4 shadow-lg flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]", UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META)}
             >
               <Plus className="h-4 w-4" />
               <span>Add Product</span>
@@ -191,7 +208,7 @@ export function LibraryTabs({
 
         {/* Right Column: Premium Storefront Grid */}
         <main className="flex-1 w-full animate-in fade-in slide-in-from-right-4 duration-1500">
-          <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-0.5">
+          <div className={cn("flex items-center justify-between mb-10 border-b pb-0.5", UI_ENGINE_BORDER_SUBTLE)}>
              <TabsList className="bg-transparent border-none h-auto p-0 flex gap-8">
                 <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                   <div className="flex items-center gap-3">
@@ -229,7 +246,7 @@ export function LibraryTabs({
                 )}
              </TabsList>
              
-             <div className="hidden lg:flex text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
+             <div className={cn("hidden lg:flex font-black uppercase tracking-[0.2em] text-slate-300", UI_ENGINE_TYPE_META)}>
                 {products.length} Active Items 
              </div>
           </div>
@@ -310,8 +327,8 @@ export function LibraryTabs({
         initialData={selectedData}
         vendors={vendors}
         categories={categories}
-        productCategories={productCategories}
-        ffeCategories={ffeCategories}
+        materialsCategories={materialsCategories}
+        fixturesCategories={fixturesCategories}
         onSuccess={handleSuccess}
       />
     </Tabs>

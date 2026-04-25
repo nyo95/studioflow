@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { DeliverablesTable, type DeliverablePhaseRow } from "@/components/deliverables-table";
 import { DashboardPageShell, PageBackLink, PageHeader } from "@/ui_engine";

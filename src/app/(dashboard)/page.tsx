@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { Prisma, Role, PhaseStatus } from "@/generated/prisma";
 import { TodayQuickAddModal } from "@/components/today-quick-add-modal";
 import { TodayView } from "@/components/today-view";

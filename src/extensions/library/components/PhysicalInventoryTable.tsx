@@ -28,6 +28,14 @@ import { Button } from "@/components/ui/button";
 import { unwrapActionResult } from "@/lib/result";
 import { useRouter } from "next/navigation";
 import { SampleAction } from "@/generated/prisma";
+import { cn } from "@/lib/utils";
+import {
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE,
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_RADIUS_CARD,
+  UI_ENGINE_RADIUS_CONTROL,
+} from "@/ui_engine";
 import {
   Tooltip,
   TooltipContent,
@@ -44,9 +52,9 @@ interface PhysicalInventoryTableProps {
 type FlattenedSampleRow = {
   id: string;
   sampleId: string;
-  rack_number: string;
-  box_number: string;
-  notes: string;
+  catalog_rack_number: string;
+  catalog_box_number: string;
+  catalog_notes: string;
   product: ProductCatalogWithRelations;
 };
 
@@ -62,9 +70,9 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
       return {
         id: `row-${p.id}`,
         sampleId: sample?.id || "",
-        rack_number: sample?.rack_number || "-",
-        box_number: sample?.box_number || "-",
-        notes: sample?.notes || "-",
+        catalog_rack_number: sample?.catalog_rack_number || "-",
+        catalog_box_number: sample?.catalog_box_number || "-",
+        catalog_notes: sample?.catalog_notes || "-",
         product: p
       };
     });
@@ -106,12 +114,9 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
   }
 
   if (products.length === 0) {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/cd158293-dca0-40ab-802e-0d83dd59ba8f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H1',location:'src/extensions/library/components/PhysicalInventoryTable.tsx:109',message:'PhysicalInventoryTable empty state rendered',data:{productsCount:products.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
     return (
       <div className="py-24 text-center animate-in fade-in duration-700">
-        <div className="h-16 w-16 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-4">
+        <div className={cn("h-16 w-16 flex items-center justify-center mx-auto mb-4", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
           <Warehouse className="h-6 w-6 text-slate-200" />
         </div>
         <h3 className="font-lora text-lg text-slate-900 mb-1">Inventory Empty</h3>
@@ -124,10 +129,10 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="rounded-[2rem] border border-slate-100 bg-white overflow-hidden shadow-sm">
+      <div className={cn("border bg-white overflow-hidden shadow-sm", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 h-14">
+            <TableRow className={cn("hover:bg-transparent h-14 border-b", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
               <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400 pl-8 w-[180px]">Rak / Box</TableHead>
               <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Product Specification</TableHead>
               <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Brand Provider</TableHead>
@@ -136,16 +141,16 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
             </TableRow>
           </TableHeader>
           <TableBody>
-            {flattenedSamples.map((row: any) => (
-              <TableRow key={row.id} className="hover:bg-slate-50/30 group border-slate-50/50 h-[80px] transition-colors">
+            {flattenedSamples.map((row: FlattenedSampleRow) => (
+              <TableRow key={row.id} className={cn("group h-[80px] transition-colors border-b", UI_ENGINE_BORDER_SUBTLE)}>
                 <TableCell className="pl-8">
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col gap-1.5">
-                       <span className="flex items-center gap-2 text-[10px] font-black text-slate-900 font-inter uppercase tracking-tight bg-slate-100/50 px-2.5 py-1 rounded-full w-fit">
-                          <MapPin className="h-2.5 w-2.5 text-slate-400" /> Rak {row.rack_number}
+                       <span className={cn("flex items-center gap-2 text-[10px] font-black text-slate-900 font-inter uppercase tracking-tight px-2.5 py-1 w-fit", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                          <MapPin className="h-2.5 w-2.5 text-slate-400" /> Rak {row.catalog_rack_number}
                        </span>
-                       <span className="flex items-center gap-2 text-[10px] font-black text-slate-900 font-inter uppercase tracking-tight bg-slate-100/50 px-2.5 py-1 rounded-full w-fit">
-                          <Box className="h-2.5 w-2.5 text-slate-400" /> Box {row.box_number}
+                       <span className={cn("flex items-center gap-2 text-[10px] font-black text-slate-900 font-inter uppercase tracking-tight px-2.5 py-1 w-fit", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                          <Box className="h-2.5 w-2.5 text-slate-400" /> Box {row.catalog_box_number}
                        </span>
                     </div>
                   </div>
@@ -165,13 +170,13 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                 </TableCell>
                 <TableCell>
                   <p className="text-[11px] text-slate-400 italic max-w-[200px] truncate leading-tight font-inter">
-                    {row.notes !== "-" ? row.notes : "No recent activity notes recorded."}
+                    {row.catalog_notes !== "-" ? row.catalog_notes : "No recent activity notes recorded."}
                   </p>
                 </TableCell>
                 <TableCell className="text-right pr-8">
                   <div className="flex justify-end gap-2">
                     {/* Log Actions (Check-out / Check-in) */}
-                    <div className="flex gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
+                    <div className={cn("flex gap-1 p-1 border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                        <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
@@ -179,7 +184,7 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                               size="icon"
                               onClick={() => handleMovement(row.sampleId, SampleAction.CHECK_OUT)}
                               disabled={!row.sampleId || processingId === row.sampleId}
-                              className="h-8 w-8 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50"
+                              className={cn("h-8 w-8 text-slate-400 hover:text-orange-600 hover:bg-orange-50", UI_ENGINE_RADIUS_CONTROL)}
                             >
                                {processingId === row.sampleId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
                             </Button>
@@ -193,7 +198,7 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                               size="icon"
                               onClick={() => handleMovement(row.sampleId, SampleAction.CHECK_IN)}
                               disabled={!row.sampleId || processingId === row.sampleId}
-                              className="h-8 w-8 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50"
+                              className={cn("h-8 w-8 text-slate-400 hover:text-teal-600 hover:bg-teal-50", UI_ENGINE_RADIUS_CONTROL)}
                             >
                                <ArrowDownLeft className="h-4 w-4" />
                             </Button>
@@ -203,13 +208,13 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                     </div>
 
                      {/* Standard Actions */}
-                    <div className="flex gap-1 ml-4 border-l border-slate-100 pl-4 items-center">
+                    <div className={cn("flex gap-1 ml-4 border-l pl-4 items-center", UI_ENGINE_BORDER_SUBTLE)}>
                        {onEdit && (
                          <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => onEdit(row.product)}
-                          className="h-8 w-8 text-slate-300 hover:text-slate-900"
+                          className={cn("h-8 w-8 text-slate-300 hover:text-slate-900", UI_ENGINE_RADIUS_CONTROL)}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -220,7 +225,7 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                           size="icon"
                           onClick={() => handleDelete(row.product.id)}
                           disabled={deletingId === row.product.id}
-                          className="h-8 w-8 text-slate-300 hover:text-rose-600"
+                          className={cn("h-8 w-8 text-slate-300 hover:text-rose-600", UI_ENGINE_RADIUS_CONTROL)}
                         >
                           {deletingId === row.product.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </Button>

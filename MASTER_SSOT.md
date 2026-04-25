@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 1.9.0 (versi 1.6 Alignment)
-> **Last Updated:** April 2026 (UI Hierarchy & Search Optimization)
+> **Document Version:** 2.2.0 (System Integrity Audit Closure)
+> **Last Updated:** April 25, 2026 (Nomenclature Prefix Alignment & Architecture Layering)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -20,10 +20,11 @@ The application follows a strict high-end minimalist design philosophy:
 
 ### View-First Protocol (UX Refactor v1.5)
 The application enforces a "View-First" interaction model for data integrity:
-- **Default State:** All forms/modals for existing data MUST open in a Read-Only state.
+- **Default State:** All forms/modals for existing data MUST open in a Read-Only state by default.
 - **Modify Toggle:** Privileged users are presented with a "Modify" (Edit Symbol) button to explicitly unlock field mutations.
+- **Domain Exception (Project Schedule):** Project Schedule entries are EXEMPTED from View-First protocol—they open directly in Edit Mode by default since data is project-local and does not affect Master Catalog safety.
 - **Visual Hierarchy Priority (Generic Items):** For items where primary identifiers (SKU, Name) are missing or marked as "Generic", the UI must automatically promote technical specifications (Color, Pattern, Finish) to the primary display line to ensure physical recognizability.
-- **Safety:** This prevents accidental data changes during inspection and provides a consistent interface for all user roles.
+- **Safety:** This prevents accidental data changes in the Master Catalog while providing a flexible interface for project-level specification.
 
 ### UI Engine Rules
 
@@ -77,6 +78,7 @@ Tracks every mutation in the system for accountability.
 - **action:** Descriptive action name.
 - **project_id / phase_id:** Optional context fields for filtering.
 - **details:** JSON snapshot of the change.
+- **Persistence Policy:** Audit logs are preserved indefinitely for forensic trails. Deleting a Project or Phase will NOT delete its associated AuditLog entries; instead, the relation is set to null to maintain historical accountability.
 
 #### ProductCatalog (Library SSOT)
 The global reusable material and fixture database.
@@ -86,7 +88,7 @@ The global reusable material and fixture database.
 - **Status:** `PENDING`, `APPROVED`, `REJECTED`.
 - **Resilience:** `catalog_brand` is stored directly on the material to ensure product identity persists even if vendor relationships change.
 - **Deleted_at:** Soft-delete timestamp (no hard deletes allowed).
-- **Physical Samples:** Tracks physical sample location (`catalog_rak_location`, `catalog_box_number`).
+- **Physical Samples:** Tracks physical sample location via the `PhysicalSample` model strictly using the `catalog_` prefix (`catalog_rack_number`, `catalog_box_number`, `catalog_notes`, `catalog_status`), decoupled from root catalog fields.
 
 #### Project (Identity & Naming)
 - **Canonical Naming Format:** `[YYYY]-[NNN] [Project Name]` (e.g., `2025-429 Heloskin Cimanggu`).
@@ -102,7 +104,7 @@ The global reusable material and fixture database.
 #### ProjectScheduleEntry
 Represents a single row in the project's specification sheet.
 - **Scope & Uniqueness:** Uniqueness is scoped to `[project_id, section, schedule_prefix, schedule_increment]`. This allows identical codes (e.g., PT-01) across different projects while maintaining absolute uniqueness within a project's domain.
-- **Namespaced Classification:** Uses `schedule_category` (e.g., PAINT, SANITARY) and `section` (type: `ProductType`: material, fixture).
+- **Namespaced Classification:** Uses `schedule_category` (e.g., PAINT, SANITARY) and `section` (type: `ProductType`: `material` (Materials), `fixture` (Fixtures)).
 - **Code:** Deterministic code generated as `[Prefix]-[Index]`.
 - **Qty / Unit / schedule_location:** Project-specific metadata fields.
 
@@ -181,8 +183,10 @@ Approving a material option creates a frozen `data_snapshot`.
 
 ## 7. SYSTEM RESILIENCE & AUDIT
 
-### 7.1 Soft Delete Policy
-No hard deletes for `Vendor` or `MaterialCatalog` to prevent orphaned records in historical project schedules.
+### 7.1 Data Retention & Soft Delete Policy
+- **Vendor & ProductCatalog:** No hard deletes allowed to prevent orphaned records in historical project schedules.
+- **Project & Phase Deletion:** While projects can be hard-deleted, their associated **AuditLog** records MUST be preserved (SetNull) to maintain a complete forensic history of the studio's operations.
+- **Manual Purge:** Manual purging of audit logs during project deletion is strictly FORBIDDEN.
 
 ### 7.2 Database Preflight (`src/lib/db.ts`)
 The system enforces strict schema validation on startup via `ensureDbSchemaPreflight`. This blocks execution if critical tables or columns (like `AuditLog` fields) are missing.
@@ -218,6 +222,8 @@ This matrix defines the canonical mapping between concepts, labels, and persiste
 | Category| Schedule Group | Category | `ProjectScheduleEntry.schedule_category` | `category` (scheduler domain) |
 | Order   | Display Order  | Sort     | `ProjectScheduleEntry.schedule_sort_order` | `sort_order` |
 | Pending | Queue          | Queue    | `LibraryItemStatus.PENDING` | `Under Review` |
+| Materials| Material Section| Materials| `ProductType.material` | `Architectural` |
+| Fixtures | Fixture Section | Fixtures | `ProductType.fixture` | `FF&E` |
 
 ## 10. BANNED LEGACY VARIANTS
 
@@ -236,3 +242,25 @@ The following terms and fields are BANNED in new code and must be phased out fro
 ---
 
 *This document is the single source of truth for StudioFlow development. All code changes must align with these directives.*
+
+---
+
+## 11. GOVERNANCE & ARCHITECTURE
+
+### 11.1 Documentation Synchronization Policy
+- **Trigger**: Task completion + Semantical Change assessment.
+- **Action**: Mandatory update to `MASTER_SSOT.md` for architectural/contractual changes; `CHANGELOG.md` for material progress and hardening.
+- **Source of Truth**: The codebase is considered the "Leading Truth" only after explicit user verification of undocumented drifts.
+
+### 11.2 Four-Layer Architecture Boundary
+The system is divided into four strictly isolated layers:
+1. **core/platform**: Low-level infrastructure (Auth, DB initialization, Audit engine, Configuration, Session management).
+2. **core/rbac**: Identity governance (Role-Permission matrix, Access guards, Project membership policies).
+3. **core/domain-shared**: Cross-cutting business logic (Project Naming, Phase lifecycle helpers, Code normalization, Snapshot contracts).
+4. **extensions/***: Feature modules (Schedule, Product Catalog, etc.).
+
+### 11.3 Public Internal API & Facade Rule
+- **Isolation**: Extensions MUST NOT import internal helpers, actions, or private types from other extensions.
+- **Dependency**: Cross-extension communication must happen via a **Public Facade** or **Application Service** defined at the module boundary.
+- **Centralization**: Any utility used by more than one extension must be promoted to `core/domain-shared`.
+

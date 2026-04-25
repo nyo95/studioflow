@@ -9,25 +9,29 @@ import { unwrapActionResult } from "@/lib/result";
 import { reviewPromotionRequestAction } from "@/extensions/library/actions/library-actions";
 import { cn } from "@/lib/utils";
 import { 
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE,
   UI_ENGINE_RADIUS_CARD, 
   UI_ENGINE_RADIUS_CONTROL, 
   UI_ENGINE_RADIUS_ACTION,
   UI_ENGINE_TYPE_META
 } from "@/ui_engine";
 
+type PromotionSnapshot = {
+  catalog_image_url?: string | null;
+  catalog_product_name?: string | null;
+  catalog_brand?: string | null;
+  catalog_category?: string | null;
+};
+
 interface PromotionRequest {
   id: string;
-  project_id: string;
-  schedule_option_id: string;
-  requested_by_id: string;
   status: string;
-  snapshot_data: any;
-  notes: string | null;
-  reviewed_by_id: string | null;
-  reviewed_at: string | null;
-  created_at: string;
+  snapshot_data: PromotionSnapshot | null;
+  notes?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string;
   project?: { id: string; name: string } | null;
-  schedule_option?: any;
   requested_by?: { id: string; name: string } | null;
   reviewed_by?: { id: string; name: string } | null;
 }
@@ -67,7 +71,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
   if (requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className={cn("h-16 w-16 bg-slate-100 flex items-center justify-center mb-6", UI_ENGINE_RADIUS_CARD)}>
+        <div className={cn("h-16 w-16 flex items-center justify-center mb-6", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
           <Clock className="h-8 w-8 text-slate-300" />
         </div>
         <h3 className="font-lora text-lg font-medium text-slate-900 mb-2">No Pending Requests</h3>
@@ -93,11 +97,11 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
             {pendingRequests.map((req) => (
               <div
                 key={req.id}
-                className={cn("bg-white border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow", UI_ENGINE_RADIUS_CARD)}
+                className={cn("bg-white border shadow-sm overflow-hidden hover:shadow-md transition-shadow", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}
               >
                 <div className="p-6 flex items-start gap-6">
                   {req.snapshot_data?.catalog_image_url && (
-                    <div className={cn("w-20 h-20 overflow-hidden bg-slate-50 flex-shrink-0", UI_ENGINE_RADIUS_CARD)}>
+                    <div className={cn("w-20 h-20 overflow-hidden flex-shrink-0", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                       <img
                         src={req.snapshot_data.catalog_image_url}
                         alt=""
@@ -116,7 +120,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                           <span className="font-medium text-slate-600">
                             {req.snapshot_data?.catalog_brand || "No Brand"}
                           </span>
-                          <span className="w-1 h-1 rounded-full bg-slate-200" />
+                          <span className={cn("w-1 h-1 rounded-full", UI_ENGINE_BG_SUBTLE)} />
                           <span>{req.snapshot_data?.catalog_category || "Uncategorized"}</span>
                         </div>
                       </div>
@@ -127,7 +131,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                             variant="outline"
                             size="sm"
                             onClick={() => handleReject(req)}
-                            className={cn("h-10 w-10 p-0 border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-100 hover:bg-red-50", UI_ENGINE_RADIUS_CONTROL)}
+                            className={cn("h-10 w-10 p-0 border text-slate-400 hover:text-red-500 hover:border-red-100 hover:bg-red-50", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -152,12 +156,12 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Clock className="h-3 w-3" />
-                        <span>{new Date(req.created_at).toLocaleDateString()}</span>
+                        <span>{req.created_at ? new Date(req.created_at).toLocaleDateString() : "Unknown date"}</span>
                       </div>
                     </div>
 
                     {req.notes && (
-                      <p className="mt-3 text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+                      <p className={cn("mt-3 text-xs text-slate-500 p-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                         {req.notes}
                       </p>
                     )}
@@ -183,9 +187,10 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
               <div
                 key={req.id}
                 className={cn(
-                  "flex items-center gap-4 p-4 border border-slate-100 transition-all",
+                  "flex items-center gap-4 p-4 border transition-all",
                   UI_ENGINE_RADIUS_CONTROL,
-                  req.status === "APPROVED" ? "bg-emerald-50/50" : "bg-slate-50/50"
+                  UI_ENGINE_BORDER_SUBTLE,
+                  req.status === "APPROVED" ? "bg-emerald-50/50" : UI_ENGINE_BG_SUBTLE
                 )}
               >
                 <Badge
@@ -195,7 +200,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                     UI_ENGINE_TYPE_META,
                     req.status === "APPROVED"
                       ? "border-emerald-200 bg-emerald-100 text-emerald-700"
-                      : "border-slate-200 bg-slate-100 text-slate-500"
+                      : cn("border text-slate-500", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_BG_SUBTLE)
                   )}
                 >
                   {req.status === "APPROVED" ? "Approved" : "Rejected"}
@@ -208,7 +213,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                 </div>
 
                 <div className="text-xs text-slate-400">
-                  {req.reviewed_by?.name || "Unknown"} • {new Date(req.reviewed_at || "").toLocaleDateString()}
+                  {req.reviewed_by?.name || "Unknown"} • {req.reviewed_at ? new Date(req.reviewed_at).toLocaleDateString() : "Unknown date"}
                 </div>
               </div>
             ))}

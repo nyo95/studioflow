@@ -33,7 +33,7 @@ model Client {
 
 model Project {
   id                String                   @id @default(uuid())
-  name              String
+  name              String                   @unique
   pic_designer_id   String
   pic_drafter_id    String
   clientId          String?
@@ -129,8 +129,8 @@ model AuditLog {
   details     Json?
   created_at  DateTime  @default(now())
   reverted_at DateTime?
-  phase       Phase?    @relation(fields: [phase_id], references: [id], onDelete: Cascade)
-  project     Project?  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  phase       Phase?    @relation(fields: [phase_id], references: [id], onDelete: SetNull)
+  project     Project?  @relation(fields: [project_id], references: [id], onDelete: SetNull)
   user        User      @relation(fields: [user_id], references: [id])
 }
 
@@ -200,7 +200,7 @@ model ProductCatalog {
   catalog_brand       String?
   catalog_product_name String?
   catalog_motif       String?
-  tags                String[]                 @default([])
+  catalog_tags        String[]                 @default([])
   catalog_dimension_p String?
   catalog_dimension_l String?
   catalog_dimension_t String?
@@ -213,10 +213,10 @@ model ProductCatalog {
   catalog_reference_url String?
   catalog_folder_url  String?
   catalog_type        ProductType              @default(material)
-  metadata            Json?
+  catalog_metadata    Json?
   catalog_price       Float?
   created_at          DateTime                 @default(now())
-  status              LibraryItemStatus        @default(PENDING)
+  catalog_status      LibraryItemStatus        @default(PENDING)
   deleted_at          DateTime?
   vendor              Vendor                   @relation(fields: [vendor_id], references: [id])
   physical_samples    PhysicalSample[]
@@ -231,10 +231,10 @@ model ProductCatalog {
 model PhysicalSample {
   id            String          @id @default(uuid())
   product_id    String
-  rack_number   String
-  box_number    String
-  notes         String?
-  status        SampleStatus    @default(AVAILABLE)
+  catalog_rack_number   String
+  catalog_box_number    String
+  catalog_notes         String?
+  catalog_status        SampleStatus    @default(AVAILABLE)
   current_borrower_name String?
   created_at    DateTime        @default(now())
   updated_at    DateTime        @updatedAt

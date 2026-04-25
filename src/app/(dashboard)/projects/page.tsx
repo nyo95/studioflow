@@ -1,11 +1,11 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { ProjectListClient } from "@/components/project-list-client";
 import { getSession } from "@/lib/auth";
 import { Role } from "@/generated/prisma";
 import { DashboardPageShell, PageHeader } from "@/ui_engine";
 import { DEFAULT_PAGINATION_LIMIT } from "@/lib/constants";
-import { SYSTEM_CONFIG_ID } from "@/lib/permissions";
+import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 
 export default async function ProjectsPage() {
   const { userId, role } = await getSession();

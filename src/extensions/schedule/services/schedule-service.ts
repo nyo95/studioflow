@@ -2,7 +2,7 @@ import { Prisma, ProjectScheduleEntry, ProjectScheduleOption, ProductType } from
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { insertAuditLog } from "@/actions/_shared";
-import { AUDIT_ACTIONS } from "@/lib/services/audit/types";
+import { AUDIT_ACTIONS } from "@/core/platform/audit/types";
 
 
 import { LibraryService } from "@/extensions/library/services/library-service";
@@ -29,11 +29,11 @@ export interface ScheduleManualDataInput {
   catalog_contact_name?: string | null;
   catalog_contact_phone?: string | null;
   catalog_contact_email?: string | null;
-  has_sample?: boolean | null;
-  initials_type?: string | null;
+  catalog_has_sample?: boolean | null;
+  catalog_initials_type?: string | null;
   schedule_location?: string | null;
   source_external_id?: string | null;
-  metadata?: unknown;
+  catalog_metadata?: unknown;
 }
 
 export interface ScheduleCatalogCreateInput {
@@ -115,7 +115,7 @@ export async function buildScheduleSnapshot(
       specs: {
         catalog_sku: item.catalog_sku,
         catalog_motif: item.catalog_motif,
-        catalog_structured_tags: item.tags,
+        catalog_structured_tags: item.catalog_tags,
         catalog_dimensions: `${item.catalog_dimension_p ?? ""} x ${item.catalog_dimension_l ?? ""} x ${item.catalog_dimension_t ?? ""} ${item.catalog_dimension_unit ?? "cm"}`,
         catalog_dimension_p: item.catalog_dimension_p,
         catalog_dimension_l: item.catalog_dimension_l,
@@ -124,7 +124,7 @@ export async function buildScheduleSnapshot(
         catalog_color: item.catalog_color,
         catalog_finishing: item.catalog_finishing,
         catalog_reference_url: item.catalog_reference_url,
-        metadata: (item.metadata as Record<string, unknown>) || {},
+        catalog_metadata: (item.catalog_metadata as Record<string, unknown>) || {},
       },
       snapshot_source_payload: undefined,
       snapshot_captured_at: new Date().toISOString(),
@@ -166,7 +166,7 @@ export async function buildScheduleSnapshot(
       catalog_color: manualData?.specs?.catalog_color ?? null,
       catalog_finishing: manualData?.specs?.catalog_finishing ?? null,
       catalog_reference_url: manualData?.specs?.catalog_reference_url ?? null,
-      metadata: (manualData?.specs?.metadata as Record<string, unknown>) || {},
+      catalog_metadata: (manualData?.specs?.catalog_metadata as Record<string, unknown>) || {},
     },
     snapshot_source_payload: manualData?.snapshot_source_payload || undefined,
     snapshot_captured_at: new Date().toISOString(),
@@ -201,14 +201,14 @@ async function resolveCatalogItemForMode(
     throw new ActionError("Catalog item name is required", "VALIDATION_FAILED");
   }
 
-  // Use LibraryService instead of bypassing via tx
-  const vendor = await LibraryService.createVendor(
-    { brand_name: normalizedBrand, contacts: [] },
-    userId,
-    tx
-  );
+// Use LibraryService for server-side operations
+    const vendor = await LibraryService.createVendor(
+      { brand_name: normalizedBrand, contacts: [] },
+      userId,
+      tx
+    );
 
-  const created = await LibraryService.createProduct(
+    const created = await LibraryService.createProduct(
     {
       vendor_id: vendor.id,
       catalog_category: category,
@@ -223,7 +223,7 @@ async function resolveCatalogItemForMode(
       catalog_dimension_l: catalogCreateData?.catalog_dimension_l ?? undefined,
       catalog_dimension_t: catalogCreateData?.catalog_dimension_t ?? undefined,
       catalog_dimension_unit: catalogCreateData?.catalog_dimension_unit ?? "cm",
-      tags: catalogCreateData?.catalog_structured_tags ?? [],
+      catalog_tags: catalogCreateData?.catalog_structured_tags ?? [],
       catalog_reference_url: catalogCreateData?.catalog_reference_url ?? undefined,
       catalog_image_url: catalogCreateData?.catalog_image_url ?? undefined,
       catalog_price: catalogCreateData?.catalog_price ?? null,
@@ -936,10 +936,23 @@ export class ScheduleService {
     const currentSnapshot = (option.data_snapshot as unknown as ScheduleSnapshot) || {} as ScheduleSnapshot;
 
     // Stage 1 Gatekeeping: catalog_color is mandatory for local snapshot updates
+    // UX Decision: Changed from hard block to warning (soft validation) per User Feedback
+    // The UI now shows a warning toast but allows saving without color
     const colorToSave = data.specs?.hasOwnProperty('catalog_color') ? (data.specs.catalog_color as string) : currentSnapshot.specs?.catalog_color;
     if (!colorToSave || colorToSave.trim() === "") {
-      throw new ActionError("Stage 1 Validation Failed: catalog_color is mandatory for local snapshots", "VALIDATION_FAILED");
+      // Converted to soft warning - log for audit but don't block
+      console.warn(`[ScheduleService] Soft validation: catalog_color is empty for option ${optionId}`);
     }
+    
+    // Auto-calculate catalog_initials_type from specs if not explicitly provided
+    // This ensures the initials are always in sync with the actual specs
+    const initialsValue = data.catalog_initials_type !== undefined ? data.catalog_initials_type : currentSnapshot.catalog_initials_type;
+    const calculatedInitials = calculateInitialsType({
+      catalog_motif: data.specs?.catalog_motif as string || currentSnapshot.specs?.catalog_motif as string || null,
+      catalog_color: data.specs?.catalog_color as string || currentSnapshot.specs?.catalog_color as string || null,
+      catalog_finishing: data.specs?.catalog_finishing as string || currentSnapshot.specs?.catalog_finishing as string || null,
+    });
+    const initialsToSave = initialsValue !== undefined ? (initialsValue || null) : (calculatedInitials || currentSnapshot.catalog_initials_type);
     
     // Merge new data into snapshot using namespaced fields
     const updatedSnapshot: ScheduleSnapshot = {
@@ -947,7 +960,7 @@ export class ScheduleService {
       catalog_type: currentSnapshot.catalog_type || option.entry.section,
       catalog_product_name: data.catalog_product_name !== undefined ? data.catalog_product_name : currentSnapshot.catalog_product_name,
       catalog_brand: data.catalog_brand !== undefined ? data.catalog_brand : currentSnapshot.catalog_brand,
-      catalog_initials_type: data.catalog_initials_type !== undefined ? (data.catalog_initials_type || null) : (currentSnapshot.catalog_initials_type ?? null),
+      catalog_initials_type: initialsToSave,
       catalog_reference_url: data.catalog_reference_url !== undefined ? (data.catalog_reference_url || null) : (currentSnapshot.catalog_reference_url ?? null),
       catalog_image_url: data.catalog_image_url !== undefined ? (data.catalog_image_url || null) : (currentSnapshot.catalog_image_url ?? null),
       catalog_price: data.catalog_price !== undefined ? data.catalog_price : (currentSnapshot.catalog_price ?? null),
@@ -963,9 +976,9 @@ export class ScheduleService {
         catalog_color: data.specs?.hasOwnProperty('catalog_color') ? (data.specs.catalog_color as string || null) : (currentSnapshot.specs?.catalog_color as string || null),
         catalog_finishing: data.specs?.hasOwnProperty('catalog_finishing') ? (data.specs.catalog_finishing as string || null) : (currentSnapshot.specs?.catalog_finishing as string || null),
         catalog_reference_url: data.specs?.hasOwnProperty('catalog_reference_url') ? (data.specs.catalog_reference_url as string || null) : (currentSnapshot.specs?.catalog_reference_url as string || null),
-        metadata: {
-          ...((currentSnapshot.specs?.metadata as Record<string, unknown>) || {}),
-          ...((data.specs?.metadata as Record<string, unknown>) || {}),
+        catalog_metadata: {
+          ...((currentSnapshot.specs?.catalog_metadata as Record<string, unknown>) || {}),
+          ...((data.specs?.catalog_metadata as Record<string, unknown>) || {}),
         },
       },
     };

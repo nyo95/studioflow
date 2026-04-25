@@ -2,7 +2,7 @@
 
 import { createAction } from "@/lib/action-wrapper";
 import { projectService } from "@/lib/services/project-service";
-import { assertAdmin, getProjectMetadataAccessOrThrow, getProjectSyncChecklistAccessOrThrow } from "@/lib/permissions";
+import { assertAdmin, getProjectMetadataAccessOrThrow, getProjectSyncChecklistAccessOrThrow } from "@/core/rbac/permissions";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_ACTIVITY, REVALIDATE_HOME, REVALIDATE_PROJECT } from "@/lib/revalidation-tags";
 import { 

@@ -48,12 +48,12 @@ export function CreateProjectDialog({
   const [clientNameInput, setClientNameInput] = React.useState("");
 
   const trimmedName = nameInput.trim();
-  const hasPrefixedName = /^\d{4}-\d{3}-/.test(trimmedName);
+  const hasPrefixedName = /^\d{4}-\d{3} /.test(trimmedName);
   const namingPreview = isAutoNamingEnabled
     ? trimmedName
-      ? `${currentYear}-AUTO-${trimmedName}`
-      : `${currentYear}-NNN-Project Name`
-    : trimmedName || `${currentYear}-001-Project Name`;
+      ? `${currentYear}-AUTO ${trimmedName}`
+      : `${currentYear}-NNN Project Name`
+    : trimmedName || `${currentYear}-001 Project Name`;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,14 +73,14 @@ export function CreateProjectDialog({
         return;
     }
 
-    if (isAutoNamingEnabled && /^\d{4}-\d{3}-/.test(name.trim())) {
+    if (isAutoNamingEnabled && /^\d{4}-\d{3} /.test(name.trim())) {
       setError("Enter only the readable project name. Year and sequence are generated automatically.");
       setLoading(false);
       return;
     }
 
-    if (!isAutoNamingEnabled && !/^\d{4}-\d{3}-.+/.test(name.trim())) {
-      setError("Project name must use the format: [YYYY]-[NNN]-[Name].");
+    if (!isAutoNamingEnabled && !/^\d{4}-\d{3} .+/.test(name.trim())) {
+      setError("Project name must use the format: [YYYY]-[NNN] [Name] (Note: Use SPACE after the code).");
       setLoading(false);
       return;
     }
@@ -128,7 +128,7 @@ export function CreateProjectDialog({
             <Label htmlFor="name">Project Name <span className="text-red-500">*</span></Label>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Format</p>
-              <p className="mt-1 font-mono text-xs text-slate-700">[YYYY]-[NNN]-[Name]</p>
+              <p className="mt-1 font-mono text-xs text-slate-700">[YYYY]-[NNN] [Name]</p>
               <p className="mt-2 text-xs text-slate-500">
                 {isAutoNamingEnabled
                   ? "Auto-naming is enabled. Type only the readable project title."
@@ -144,7 +144,7 @@ export function CreateProjectDialog({
                 placeholder={
                   isAutoNamingEnabled
                     ? "e.g., Kopi Kenangan Mall"
-                    : `${currentYear}-001-Kopi Kenangan Mall`
+                    : `${currentYear}-001 Kopi Kenangan Mall`
                 }
                 required
                 className="pl-9"
@@ -153,11 +153,11 @@ export function CreateProjectDialog({
               />
             </div>
             {isAutoNamingEnabled && hasPrefixedName ? (
-              <p className="text-xs text-red-600">Use only the project title. The `YYYY-NNN-` prefix is added automatically.</p>
+              <p className="text-xs text-red-600">Use only the project title. The `YYYY-NNN` prefix and space are added automatically.</p>
             ) : !isAutoNamingEnabled ? (
-              <p className="text-xs text-slate-500">Format: [YYYY]-[NNN]-[Name]</p>
+              <p className="text-xs text-slate-500">Format: [YYYY]-[NNN] [Name]</p>
             ) : (
-              <p className="text-xs text-slate-500">Type only the project title. Sequence number is assigned when the project is created.</p>
+              <p className="text-xs text-slate-500">Type only the project title. Sequence number and space are assigned when the project is created.</p>
             )}
           </div>
           <div className="grid gap-2">

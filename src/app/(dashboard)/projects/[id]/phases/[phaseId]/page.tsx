@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Clock } from "lucide-react";
@@ -16,7 +16,7 @@ import { getPhaseHeartbeatSnapshot } from "@/lib/phase-heartbeat";
 import { HydrationGuard } from "@/ui_engine/components/HydrationGuard";
 import { AdminRevisionOverride } from "@/components/admin-revision-override";
 import { cn } from "@/lib/utils";
-import { evaluateAccess, PERMISSION } from "@/lib/rbac";
+import { evaluateAccess, PERMISSION } from "@/core/rbac/rbac";
 
 export const generateStaticParams = async () => {
   return [];
@@ -295,8 +295,8 @@ export default async function PhaseDetailPage({
               </HydrationGuard>
             </ActionSidebarSection>
             
-            <ActionSidebarSection title="Internal Notes" className="bg-slate-900 text-white border-slate-900 border-none shadow-xl">
-              <p className="font-sans text-xs font-light leading-relaxed opacity-80 italic text-slate-300">
+            <ActionSidebarSection title="Internal Notes" subtitle="Guidelines">
+              <p className="font-sans text-xs font-light leading-relaxed text-slate-500 italic">
                 &quot;Ensure all checklist items above are resolved before submitting for formal internal review. Formal client approval will lock the phase.&quot;
               </p>
             </ActionSidebarSection>

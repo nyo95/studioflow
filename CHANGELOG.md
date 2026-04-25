@@ -1,5 +1,32 @@
 # StudioFlow Development Log (Changelog)
 
+### [2.2.0] - 2026-04-25 (versi 1.7)
+### System Integrity, Architecture Consolidation & UX Hardening
+- **Four-Layer Architecture Migration**:
+    - Successfully migrated core platform, RBAC, and domain-shared logic into `src/core`.
+    - Encapsulated extension-specific services and actions within their respective `src/extensions` directories.
+    - Deleted legacy `src/lib/db.ts`, `src/lib/rbac.ts`, and redundant service files to eliminate architectural debt.
+- **Nomenclature & Database Realignment**:
+    - Completed global namespacing (`catalog_`, `schedule_`) across Prisma schema, TypeScript interfaces, and UI components.
+    - Executed `nomenclature_prefix_alignment` migration to synchronize the PostgreSQL database with the namespaced schema.
+    - Renamed all remaining legacy fields in `ProductCatalog` and `PhysicalSample` to strictly use the `catalog_` prefix.
+- **UX Safety & View-First Protocol**:
+    - Implemented a global "Read-Only by Default" (View-First) model for the Master Product Catalog with an explicit "Modify" gatekeeper.
+    - Exempted the Project Schedule from the View-First protocol to prioritize rapid drafting and project-local flexibility.
+    - Standardized font hierarchy: Lora (serif) for titles/headings and Inter (sans) for functional UI elements.
+- **Build Hardening & Audit Resilience**:
+    - Achieved 100% production build success and type-safety verification.
+    - Enforced mandatory `insertAuditLog` for every mutation in `LibraryService` and `ScheduleService` to maintain Pillar 2 compliance.
+    - Standardized all visual properties (radii, typography, borders) using `UI_ENGINE` semantic tokens, eliminating hardcoded values.
+- **Schedule UX Enhancements**:
+    - Project Schedule entries now open directly in Edit Mode for a faster user experience.
+    - Implemented "Soft Validation" for project snapshots (Color field changed from mandatory block to warning toast).
+    - Enhanced `CreatableSearch` with multi-field filtering and improved product mapping in `GradualInputForm`.
+- **Governance & Documentation**:
+    - Updated `MASTER_SSOT.md` to v2.2.0 reflecting the new architecture and nomenclature standards.
+    - Formalized AI "Main Lead" governance and semantic assessment protocols in `AGENTS.md`.
+    - Completed a comprehensive three-stage system audit (`audit.md`) covering SSOT drift, backend workflows, and frontend ergonomics.
+
 ## [1.16.0] - 2026-04-24 (versi 1.6)
 ### Added
 - **Visual Hierarchy Refactor (Schedule Table)**:

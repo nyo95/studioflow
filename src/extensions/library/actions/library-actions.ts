@@ -3,7 +3,7 @@
 import { createAction } from "@/lib/action-wrapper";
 import { LibraryService } from "../services/library-service";
 import { ProductCatalog } from "@/generated/prisma";
-import { assertAdmin, assertAdminOrStaff } from "@/lib/permissions";
+import { assertAdmin, assertAdminOrStaff } from "@/core/rbac/permissions";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_CUSTOM } from "@/lib/revalidation-tags";
 import { 
@@ -18,8 +18,8 @@ import {
 } from "../types";
 import { ProductRequestStatus, LibraryItemStatus, SampleAction, ProductType, SampleMovementLog, PromotionRequest } from "@/generated/prisma";
 import { REVALIDATE_LIBRARY } from "@/lib/revalidation-tags";
-import { RBAC } from "@/lib/rbac";
-import { getProjectMembershipOrThrow } from "@/lib/permissions";
+import { RBAC } from "@/core/rbac/rbac";
+import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
 
 interface PromotionRequestWithRelations {
   id: string;
@@ -128,46 +128,14 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
   }
 );
 
-export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, { success: boolean; productsUpdated: number }>(
+export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, { success: boolean }>(
   async ({ input, ctx, tx }) => {
     assertAdminOrStaff(ctx.role);
 
-    if (input.sourceVendorId === input.targetVendorId) {
-      throw new Error("Cannot merge vendor with itself");
-    }
-
-    const [sourceVendor, targetVendor] = await Promise.all([
-      tx.vendor.findUnique({ where: { id: input.sourceVendorId } }),
-      tx.vendor.findUnique({ where: { id: input.targetVendorId } })
-    ]);
-
-    if (!sourceVendor || !targetVendor) {
-      throw new Error("One or both vendors not found");
-    }
-
-    const productsUpdated = await tx.productCatalog.updateMany({
-      where: { vendor_id: input.sourceVendorId },
-      data: { vendor_id: input.targetVendorId }
-    });
-
-    await tx.vendor.update({
-      where: { id: input.targetVendorId },
-      data: {
-        company_name: targetVendor.company_name || sourceVendor.company_name,
-        company_pt: targetVendor.company_pt || sourceVendor.company_pt,
-        address: targetVendor.address || sourceVendor.address,
-        website_url: targetVendor.website_url || sourceVendor.website_url,
-        instagram_url: targetVendor.instagram_url || sourceVendor.instagram_url,
-      }
-    });
-
-    await tx.vendor.update({
-      where: { id: input.sourceVendorId },
-      data: { deleted_at: new Date() }
-    });
+    await LibraryService.mergeVendors(tx, input.sourceVendorId, input.targetVendorId, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_LIBRARY });
-    return { success: true, productsUpdated: productsUpdated.count };
+    return { success: true };
   }
 );
 
@@ -197,25 +165,7 @@ export const getProductsAction = createAction<
  */
 export const getProductMetadataAction = createAction<void, { subCategories: string[]; finishings: string[] }>(
   async ({ tx }) => {
-    const [subCats, finishings] = await Promise.all([
-      tx.productCatalog.findMany({
-        select: { catalog_sub_category: true },
-        distinct: ["catalog_sub_category"],
-        where: { catalog_sub_category: { not: null } },
-        orderBy: { catalog_sub_category: "asc" },
-      }),
-      tx.productCatalog.findMany({
-        select: { catalog_finishing: true },
-        distinct: ["catalog_finishing"],
-        where: { catalog_finishing: { not: null } },
-        orderBy: { catalog_finishing: "asc" },
-      }),
-    ]);
-
-    return {
-      subCategories: subCats.map((r) => r.catalog_sub_category as string).filter(Boolean),
-      finishings: finishings.map((r) => r.catalog_finishing as string).filter(Boolean),
-    };
+    return LibraryService.getProductMetadata(tx);
   }
 );
 
@@ -224,10 +174,17 @@ export const getProductMetadataAction = createAction<void, { subCategories: stri
 export const createProductAction = createAction<ProductCatalogInput, ProductCatalog>(
   async ({ input, ctx, tx }) => {
     assertAdminOrStaff(ctx.role);
+
+    // GATEKEEPING: Only ADMIN can approve global library items directly.
+    // STAFF entries default to PENDING.
+    const statusToApply = ctx.role === "ADMIN" 
+      ? (input.catalog_status ? LibraryItemStatusSchema.parse(input.catalog_status) : "APPROVED")
+      : "PENDING";
+
     const validatedInput: ProductCatalogInput = {
       ...input,
-      status: input.status ? LibraryItemStatusSchema.parse(input.status) : undefined,
-      metadata: input.metadata ? ProductMetadataSchema.parse(input.metadata) : undefined,
+      catalog_status: statusToApply,
+      catalog_metadata: input.catalog_metadata ? ProductMetadataSchema.parse(input.catalog_metadata) : undefined,
     };
 
     const result = await LibraryService.createProduct(validatedInput, ctx.userId, tx);
@@ -242,8 +199,8 @@ export const updateProductAction = createAction<{ id: string; data: Partial<Prod
     assertAdminOrStaff(ctx.role);
     const validatedData: Partial<ProductCatalogInput> = {
       ...input.data,
-      status: input.data.status ? LibraryItemStatusSchema.parse(input.data.status) : undefined,
-      metadata: input.data.metadata ? ProductMetadataSchema.parse(input.data.metadata) : undefined,
+      catalog_status: input.data.catalog_status ? LibraryItemStatusSchema.parse(input.data.catalog_status) : undefined,
+      catalog_metadata: input.data.catalog_metadata ? ProductMetadataSchema.parse(input.data.catalog_metadata) : undefined,
     };
 
     const result = await LibraryService.updateProduct(input.id, validatedData, ctx.userId, tx, ctx.role);
@@ -272,7 +229,7 @@ export const getLibraryCategoriesAction = createAction<void, string[]>(async ({ 
  */
 export const getGroupedCategoriesAction = createAction<
   void,
-  { architectural: string[]; ffe: string[] }
+  { materials: string[]; fixtures: string[] }
 >(async ({ tx }) => {
   const rows = await tx.prefixDictionary.findMany({
     select: { schedule_category: true, section: true },
@@ -280,22 +237,26 @@ export const getGroupedCategoriesAction = createAction<
     orderBy: { schedule_category: "asc" },
   });
 
-  const architectural: string[] = [];
-  const ffe: string[] = [];
+  const materials: string[] = [];
+  const fixtures: string[] = [];
 
   for (const r of rows) {
-    if (r.section === ProductType.fixture) ffe.push(r.schedule_category.toUpperCase());
-    else architectural.push(r.schedule_category.toUpperCase());
+    if (r.section === ProductType.fixture) fixtures.push(r.schedule_category.toUpperCase());
+    else materials.push(r.schedule_category.toUpperCase());
   }
 
-  return { architectural, ffe };
+  return { materials, fixtures };
 });
-
-
 
 export const getMyRoleAction = createAction<void, string>(async ({ ctx }) => {
   return ctx.role;
 });
+
+export const getCatalogSuggestionsAction = createAction<void, Awaited<ReturnType<typeof LibraryService.getSuggestions>>>(
+  async ({ tx }) => {
+    return LibraryService.getSuggestions(tx);
+  }
+);
 
 // --- PROJECT PRODUCT REQUEST ACTIONS ---
 
@@ -325,6 +286,16 @@ export const createProjectProductRequestAction = createAction<ProjectProductRequ
 
 export const updateProductRequestStatusAction = createAction<{ id: string; status: ProductRequestStatus; staffName?: string | null }, ProjectProductRequestWithDetails>(
   async ({ input, ctx, tx }) => {
+    // AUTHORIZATION GATE: Verify project membership before update
+    const request = await tx.projectProductRequest.findUnique({
+      where: { id: input.id },
+      select: { project_id: true }
+    });
+    if (!request) throw new Error("Product request not found");
+    
+    await getProjectMembershipOrThrow(tx, request.project_id, ctx.userId, ctx.role);
+    RBAC.assert(tx, "plugin.library.manage", ctx.role);
+
     // If RECEIVED and no name provided, use the current user's name
     const staffToRecord = input.staffName || (input.status === "RECEIVED" ? (ctx.user.name ?? null) : null);
     const result = (await LibraryService.updateProjectProductRequestStatus(input.id, input.status, staffToRecord, ctx.userId, tx)) as ProjectProductRequestWithDetails;

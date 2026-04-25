@@ -5,17 +5,21 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { ScheduleTableHeader } from "./ScheduleTableHeader";
 import { ScheduleRow } from "./ScheduleRow";
 import { cn } from "@/lib/utils";
-import type { ProjectScheduleSheetPayload } from "../../types";
+import type { ProjectScheduleEntryWithRelations, ProjectScheduleSheetPayload } from "../../types";
 import { ProductType } from "@/generated/prisma";
 import { 
   SortableContext, 
   verticalListSortingStrategy 
 } from "@dnd-kit/sortable";
+import { 
+  UI_ENGINE_RADIUS_CARD,
+  UI_ENGINE_RADIUS_CONTROL
+} from "@/ui_engine/tokens/layout";
 
 interface ScheduleTableProps {
   sheet: ProjectScheduleSheetPayload;
   section?: ProductType;
-  onEditEntry?: (entry: any) => void;
+  onEditEntry?: (entry: ProjectScheduleEntryWithRelations) => void;
   onDeleteEntry?: (id: string) => void;
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
   onUpdateQty?: (entryId: string, qty: number) => Promise<void>;
@@ -39,7 +43,7 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
   };
 
   return (
-    <div className="w-full bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+    <div className={cn("w-full bg-white border border-slate-200 overflow-hidden shadow-sm", UI_ENGINE_RADIUS_CARD)}>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <ScheduleTableHeader isFixture={isFixture} />
@@ -56,7 +60,7 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
                   >
                     <td colSpan={isFixture ? 5 : 4} className="px-5 py-2.5">
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-400 group-hover/category:text-slate-600 transition-colors">
+                        <div className={cn("flex items-center justify-center w-5 h-5 bg-white border border-slate-200 text-slate-400 group-hover/category:text-slate-600 transition-colors", UI_ENGINE_RADIUS_CONTROL)}>
                           {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                         </div>
                         <span className="font-lora text-xs font-bold text-slate-700 uppercase tracking-[0.18em]">

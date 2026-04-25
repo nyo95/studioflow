@@ -17,8 +17,8 @@ import {
   throwActionError,
 
   ERR,
-} from "@/lib/permissions";
-import { evaluateAccess, PERMISSION } from "@/lib/rbac";
+} from "@/core/rbac/permissions";
+import { evaluateAccess, PERMISSION } from "@/core/rbac/rbac";
 import { createAction } from "@/lib/action-wrapper";
 import { phaseService } from "@/lib/services/phase-service";
 import { invalidateCache } from "@/lib/revalidation";

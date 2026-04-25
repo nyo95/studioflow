@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectDiscussionSnapshot } from "@/lib/project-discussion";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { getProjectMembershipOrThrow } from "@/lib/permissions";
+import { prisma } from "@/core/platform/db";
+import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
 
 export async function GET(
   request: NextRequest,

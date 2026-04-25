@@ -28,6 +28,14 @@ import { ProjectProductRequestWithDetails } from "../types";
 import { updateProductRequestStatusAction, deleteProjectProductRequestAction } from "../actions/library-actions";
 import { unwrapActionResult } from "@/lib/result";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import {
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE,
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_RADIUS_CARD,
+  UI_ENGINE_RADIUS_CONTROL,
+} from "@/ui_engine";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -49,7 +57,7 @@ const STATUS_CONFIG: Record<ProductRequestStatus, { label: string; color: string
   SHIPPED: { label: "Shipped", color: "bg-purple-50 text-purple-700 border-purple-100", icon: Box },
   RECEIVED: { label: "Received", color: "bg-emerald-50 text-emerald-700 border-emerald-100", icon: CheckCircle2 },
   UNAVAILABLE: { label: "Unavailable", color: "bg-rose-50 text-rose-700 border-rose-100", icon: AlertCircle },
-  CANCELLED: { label: "Cancelled", color: "bg-slate-100 text-slate-700 border-slate-200", icon: AlertCircle },
+  CANCELLED: { label: "Cancelled", color: "bg-slate-50 text-slate-700 border-transparent", icon: AlertCircle },
 };
 
 export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRequestTableProps) {
@@ -85,7 +93,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
   if (requests.length === 0) {
     return (
       <div className="py-24 text-center animate-in fade-in duration-500">
-        <div className="h-16 w-16 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-4">
+        <div className={cn("h-16 w-16 flex items-center justify-center mx-auto mb-4", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
           <Box className="h-6 w-6 text-slate-200" />
         </div>
         <h3 className="font-lora text-lg text-slate-900 mb-1">No requests active</h3>
@@ -95,10 +103,10 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
   }
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+    <div className={cn("border bg-white overflow-hidden shadow-sm", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 h-14">
+          <TableRow className={cn("hover:bg-transparent h-14 border-b", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
             <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400 pl-6">Project Context</TableHead>
             <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Product Requested</TableHead>
             <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Requestor</TableHead>
@@ -113,7 +121,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
             const mat = req.product_catalog;
 
             return (
-              <TableRow key={req.id} className="hover:bg-slate-50/30 group transition-colors border-slate-50 min-h-[70px]">
+              <TableRow key={req.id} className={cn("group transition-colors border-b min-h-[70px]", UI_ENGINE_BORDER_SUBTLE)}>
                 <TableCell className="pl-6">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-xs font-inter font-bold text-slate-900 truncate max-w-[150px]">
@@ -127,7 +135,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-md bg-slate-50 overflow-hidden flex-shrink-0 border border-slate-100">
+                    <div className={cn("h-10 w-10 overflow-hidden flex-shrink-0 border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                       {mat?.catalog_image_url ? (
                         <img src={mat.catalog_image_url} alt={mat.catalog_sku} className="w-full h-full object-cover" />
                       ) : (
@@ -190,15 +198,15 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors"
+                          className={cn("h-8 w-8 p-0 text-slate-400 hover:text-slate-900 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
                           disabled={updatingId === req.id}
                         >
                           {updatingId === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[180px] rounded-xl shadow-2xl border-slate-100 p-2 font-inter bg-white">
+                      <DropdownMenuContent align="end" className={cn("w-[180px] shadow-2xl p-2 font-inter bg-white", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                         <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black px-2 py-2">Set Status</DropdownMenuLabel>
-                        <DropdownMenuSeparator className="bg-slate-50" />
+                        <DropdownMenuSeparator className={cn(UI_ENGINE_BG_SUBTLE)} />
                         {(Object.keys(STATUS_CONFIG) as ProductRequestStatus[]).map((status) => (
                           <DropdownMenuItem 
                             key={status}
@@ -213,7 +221,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                         ))}
                         {(userRole === "ADMIN" || userRole === "STAFF") && (
                           <>
-                            <DropdownMenuSeparator className="bg-slate-50" />
+                            <DropdownMenuSeparator className={cn(UI_ENGINE_BG_SUBTLE)} />
                             <DropdownMenuItem 
                               onClick={() => handleDelete(req.id)}
                               className="rounded-lg cursor-pointer text-rose-500 focus:bg-rose-50 focus:text-rose-600 py-1.5 font-bold text-[11px]"

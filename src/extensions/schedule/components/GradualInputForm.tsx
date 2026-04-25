@@ -10,8 +10,16 @@ import { CreatableSearch } from "@/components/ui/creatable-search";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { OptimizedUploader } from "@/components/ui/optimized-uploader";
-import { uploadLibraryImage } from "@/extensions/library/lib/upload-client";
+import { LibraryFacade } from "@/extensions/library/facade";
 import type { GradualFormData, GradualFormProducts } from "../types";
+import { 
+  UI_ENGINE_RADIUS_CARD, 
+  UI_ENGINE_RADIUS_CONTROL, 
+  UI_ENGINE_RADIUS_ACTION, 
+  UI_ENGINE_TYPE_META,
+  UI_ENGINE_BORDER_SUBTLE,
+  UI_ENGINE_BG_SUBTLE
+} from "@/ui_engine";
 
 interface GradualInputFormProps {
   section: string;
@@ -100,8 +108,8 @@ export function GradualInputForm({
   const currentStepIndex = steps.indexOf(step);
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="px-8 py-6 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+    <div className={cn("flex flex-col h-full bg-white", UI_ENGINE_RADIUS_CARD)}>
+      <div className={cn("px-8 py-6 border-b flex items-center justify-between", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
          <div className="flex items-center gap-2">
             {steps.map((s, i) => (
               <React.Fragment key={s}>
@@ -138,7 +146,8 @@ export function GradualInputForm({
                 <button 
                   onClick={() => { setCustomData(p => ({...p, catalog_type: "material"})); setStep("SELECT"); }}
                   className={cn(
-                    "p-6 rounded-[var(--radius-premium)] border-2 transition-all text-left group",
+                    "p-6 border-2 transition-all text-left group",
+                    UI_ENGINE_RADIUS_CARD,
                     customData.catalog_type === "material" ? "border-slate-900 bg-slate-50" : "border-slate-100 hover:border-slate-300"
                   )}
                 >
@@ -149,7 +158,8 @@ export function GradualInputForm({
                 <button 
                   onClick={() => { setCustomData(p => ({...p, catalog_type: "fixture"})); setStep("SELECT"); }}
                   className={cn(
-                    "p-6 rounded-[var(--radius-premium)] border-2 transition-all text-left group",
+                    "p-6 border-2 transition-all text-left group",
+                    UI_ENGINE_RADIUS_CARD,
                     customData.catalog_type === "fixture" ? "border-slate-900 bg-slate-50" : "border-slate-100 hover:border-slate-300"
                   )}
                 >
@@ -185,7 +195,7 @@ export function GradualInputForm({
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
                     <button 
                       onClick={() => handleSelect("", "RESERVED")}
-                      className="p-6 rounded-[var(--radius-premium)] border-2 border-dashed border-slate-100 hover:border-slate-900 hover:bg-slate-50 transition-all text-left group"
+                      className={cn("p-6 border-2 border-dashed border-slate-100 hover:border-slate-900 hover:bg-slate-50 transition-all text-left group", UI_ENGINE_RADIUS_CARD)}
                     >
                       <div className="h-10 w-10 rounded-lg bg-slate-50 group-hover:bg-slate-900 text-slate-300 group-hover:text-white flex items-center justify-center mb-4 transition-all">
                          <Sparkles size={20} />
@@ -193,7 +203,7 @@ export function GradualInputForm({
                       <h5 className="font-lora text-lg font-medium text-slate-900">Reserve Placeholder</h5>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">Add an empty slot to the schedule to be filled later.</p>
                     </button>
-                    <Button variant="ghost" onClick={() => setStep("TYPE")} className="h-full rounded-[var(--radius-premium)] border-2 border-slate-50">
+                    <Button variant="ghost" onClick={() => setStep("TYPE")} className={cn("h-full border-2 border-slate-50", UI_ENGINE_RADIUS_CARD)}>
                        <ChevronLeft className="mr-2" /> Back
                     </Button>
                  </div>
@@ -222,7 +232,7 @@ export function GradualInputForm({
                           const timestamp = Date.now();
                           const fileName = `${timestamp}-${file.name.replace(/\s/g, "_")}`;
                           const coverPath = `covers/${fileName}`;
-                          const url = await uploadLibraryImage(file, coverPath);
+                          const url = await LibraryFacade.uploadProductImage(file, coverPath);
                           setCustomData(prev => ({ ...prev, catalog_image_url: url }));
                           return url;
                         }}
@@ -244,7 +254,7 @@ export function GradualInputForm({
                      value={customData.catalog_color} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_color: e.target.value}))}
                      placeholder="e.g. Matte Black (Color) or MB-01"
-                     className="h-12 rounded-lg border-none bg-slate-50 shadow-inner font-bold text-slate-900" 
+                     className={cn("h-12 border-none bg-slate-50 shadow-inner font-bold text-slate-900", UI_ENGINE_RADIUS_ACTION)} 
                    />
                 </div>
              </div>
@@ -277,7 +287,7 @@ export function GradualInputForm({
                      value={customData.catalog_brand} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_brand: e.target.value}))}
                      placeholder="e.g. Roman, Kohler (Brand)"
-                     className="h-12 rounded-lg border-none bg-slate-50 shadow-inner font-bold text-slate-900" 
+                     className={cn("h-12 border-none bg-slate-50 shadow-inner font-bold text-slate-900", UI_ENGINE_RADIUS_ACTION)} 
                    />
                 </div>
                 <div className="space-y-2">
@@ -286,7 +296,7 @@ export function GradualInputForm({
                      value={customData.catalog_sub_category} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_sub_category: e.target.value}))}
                      placeholder="e.g. Wall Tiles"
-                     className="h-12 rounded-lg border-none bg-slate-50 shadow-inner font-medium" 
+                     className={cn("h-12 border-none bg-slate-50 shadow-inner font-medium", UI_ENGINE_RADIUS_ACTION)} 
                    />
                 </div>
              </div>
@@ -312,13 +322,13 @@ export function GradualInputForm({
                 <p className="text-sm text-slate-400 font-inter">Verify the snapshot details before final synchronization.</p>
              </div>
 
-             <div className="bg-slate-900 rounded-[2rem] p-8 text-white space-y-4">
+             <div className={cn("bg-slate-900 p-8 text-white space-y-4", UI_ENGINE_RADIUS_CARD)}>
                 <div className="flex justify-between items-start border-b border-white/10 pb-4">
                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-lg bg-white/10 border border-white/20 overflow-hidden flex-shrink-0">
+                      <div className={cn("h-12 w-12 bg-white/10 border border-white/20 overflow-hidden flex-shrink-0", UI_ENGINE_RADIUS_ACTION)}>
                         {(selectedId ? selectedProduct?.catalog_image_url : customData.catalog_image_url) ? (
                           <img 
-                            src={selectedId ? selectedProduct?.catalog_image_url! : customData.catalog_image_url!} 
+                            src={(selectedId ? selectedProduct?.catalog_image_url : customData.catalog_image_url) || ""} 
                             className="w-full h-full object-cover" 
                           />
                         ) : <Package className="w-full h-full p-3 text-white/20" />}
@@ -367,7 +377,7 @@ export function GradualInputForm({
         )}
       </div>
 
-      <div className="px-8 py-6 border-t border-slate-50 bg-slate-50/10 flex items-center justify-between">
+      <div className={cn("px-8 py-6 border-t flex items-center justify-between", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
          <div className="flex items-center gap-2 text-slate-300">
             <Boxes size={14} />
             <span className="text-[10px] font-black uppercase tracking-widest leading-none">StudioFlow Catalyst Engine</span>

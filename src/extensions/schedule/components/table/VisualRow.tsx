@@ -11,12 +11,26 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScheduleSampleRequestModal } from "../ScheduleSampleRequestModal";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
-import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/actions/schedule-actions";
+import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/extensions/schedule/actions/schedule-actions";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
-import { UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
+import { 
+  UI_ENGINE_RADIUS_CONTROL, 
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_RADIUS_CARD,
+  UI_ENGINE_RADIUS_IMAGE
+} from "@/ui_engine/tokens/layout";
+import {
+  UI_ENGINE_TYPE_BODY,
+  UI_ENGINE_TYPE_META,
+  UI_ENGINE_TYPE_TITLE
+} from "@/ui_engine/tokens/typography";
+import {
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE
+} from "@/ui_engine/tokens/colors";
 import type { ProjectScheduleEntryWithRelations } from "../../types";
 import { getEffectiveTitle, isPlaceholder } from "../../lib/display-utils";
 
@@ -129,7 +143,7 @@ export function VisualRow({
       style={style} 
       onClick={onClick}
       className={cn(
-        "group relative flex items-center gap-6 p-2 border transition-all duration-300",
+        "group relative flex items-center gap-4 p-2 border transition-all duration-300",
         UI_ENGINE_RADIUS_CONTROL,
         isSelected 
           ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900 shadow-xl z-10 scale-[1.01]" 
@@ -143,8 +157,9 @@ export function VisualRow({
           {...attributes} 
           {...listeners}
           className={cn(
-            "p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing",
-            isSelected ? "text-white/40 hover:text-white" : "text-slate-300 hover:text-slate-900 hover:bg-slate-100"
+            "p-2 transition-colors cursor-grab active:cursor-grabbing",
+            isSelected ? "text-white/40 hover:text-white" : "text-slate-300 hover:text-slate-900 hover:bg-slate-100",
+            UI_ENGINE_RADIUS_CONTROL
           )}
         >
           <GripVertical size={18} />
@@ -163,7 +178,7 @@ export function VisualRow({
       {/* 2. Product Visual & Main Specs */}
       <div className="flex-1 flex items-center gap-4 min-w-0">
         <div 
-          className={cn("w-20 h-20 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_ACTION)}
+          className={cn("w-14 h-14 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_IMAGE)}
           onClick={(e) => { e.stopPropagation(); if (snapshot?.catalog_image_url) setLightboxOpen(true); }}
         >
           {snapshot?.catalog_image_url ? (
@@ -175,7 +190,7 @@ export function VisualRow({
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center gap-2">
               <ImageIcon className="text-slate-200 w-8 h-8" />
-              <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">No Image</span>
+              <span className={cn("text-[9px] font-black text-slate-300 uppercase tracking-widest", UI_ENGINE_TYPE_META)}>No Image</span>
             </div>
           )}
           <div className="absolute inset-0 bg-slate-900/0 group-hover/img:bg-slate-900/20 transition-all flex items-center justify-center">
@@ -188,8 +203,9 @@ export function VisualRow({
 
         <div className="flex-1 min-w-0">
           <h4 className={cn(
-            "font-serif text-sm font-semibold truncate transition-colors leading-tight",
-            isSelected ? "text-slate-900" : "text-slate-900"
+            "text-sm font-semibold truncate transition-colors leading-tight",
+            isSelected ? "text-slate-900" : "text-slate-900",
+            UI_ENGINE_TYPE_TITLE
           )}>
             {(() => {
               const primary = [snapshot?.specs?.catalog_sku, snapshot?.catalog_product_name]
@@ -208,7 +224,7 @@ export function VisualRow({
             })()}
           </h4>
           <div className="flex items-center gap-2 mt-0.5">
-             <span className={cn("font-sans text-[11px]", isSelected ? "text-slate-600" : "text-slate-500")}>
+             <span className={cn("text-[11px]", isSelected ? "text-slate-600" : "text-slate-500", UI_ENGINE_TYPE_META)}>
                 {(() => {
                   const primaryExists = [snapshot?.specs?.catalog_sku, snapshot?.catalog_product_name]
                     .some(v => v && !isPlaceholder(v) && v.toUpperCase() !== "GENERIC");
@@ -226,14 +242,14 @@ export function VisualRow({
              {(!snapshot?.specs?.catalog_color && !snapshot?.specs?.catalog_motif && !snapshot?.specs?.catalog_finishing) && (
                <>
                  <div className={cn("h-1 w-1 rounded-full", isSelected ? "bg-slate-300" : "bg-slate-200")} />
-                 <span className={cn("font-sans text-[10px] font-medium uppercase tracking-widest opacity-60", isSelected ? "text-slate-900" : "text-slate-400")}>
+                 <span className={cn("text-[10px] font-medium uppercase tracking-widest opacity-60", isSelected ? "text-slate-900" : "text-slate-400", UI_ENGINE_TYPE_META)}>
                    {entry.schedule_category}
                  </span>
                </>
              )}
           </div>
           
-          <div className="mt-4 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="mt-2 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
              <div className={cn(
                "inline-flex items-center gap-1 p-1 bg-slate-50/50 border border-slate-200/60 shadow-sm backdrop-blur-sm",
                UI_ENGINE_RADIUS_CONTROL
@@ -288,7 +304,7 @@ export function VisualRow({
       </div>
 
       {/* 3. Metadata & Actions (Location, Qty, Menu) */}
-      <div className="flex items-center gap-8 pl-6 border-l border-slate-100 transition-colors">
+      <div className="flex items-center gap-6 pl-4 border-l border-slate-100 transition-colors">
         {/* Location */}
         <div className="w-40">
           {editingLocation ? (
@@ -302,24 +318,25 @@ export function VisualRow({
                 placeholder="Loc..."
                 autoFocus
               />
-              <button onClick={handleSaveLocation} className="p-2 bg-slate-900 text-white rounded-xl">
+              <button onClick={handleSaveLocation} className={cn("p-2 bg-slate-900 text-white shadow-lg flex items-center justify-center transition-all hover:scale-105", UI_ENGINE_RADIUS_CONTROL)}>
                 {isSavingLocation ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
               </button>
             </div>
           ) : (
             <button
               onClick={(e) => { e.stopPropagation(); setEditingLocation(true); }}
-              className="flex items-start gap-2.5 group/loc p-1.5 rounded-lg transition-all text-left"
+              className={cn("flex items-start gap-2.5 group/loc p-1.5 transition-all text-left", UI_ENGINE_RADIUS_CONTROL)}
             >
               <div className={cn(
-                "mt-0.5 p-1.5 rounded-lg transition-all",
-                isSelected ? "bg-white/10 text-white" : "bg-slate-50 text-slate-300 group-hover/loc:bg-slate-900 group-hover/loc:text-white"
+                "mt-0.5 p-1.5 transition-all",
+                isSelected ? "bg-white/10 text-white" : "bg-slate-50 text-slate-300 group-hover/loc:bg-slate-900 group-hover/loc:text-white",
+                UI_ENGINE_RADIUS_CONTROL
               )}>
                 <MapPin size={12} />
               </div>
               <div className="flex flex-col">
-                <span className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", isSelected ? "text-white/40" : "text-slate-300")}>Location</span>
-                <span className={cn("text-xs font-bold truncate max-w-[120px]", isSelected ? "text-white" : "text-slate-900")}>
+                <span className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", isSelected ? "text-white/40" : "text-slate-300", UI_ENGINE_TYPE_META)}>Location</span>
+                <span className={cn("text-xs font-bold truncate max-w-[120px]", isSelected ? "text-white" : "text-slate-900", UI_ENGINE_TYPE_BODY)}>
                   {entry.schedule_location || <span className="opacity-30 italic font-medium">Global</span>}
                 </span>
               </div>
@@ -330,12 +347,12 @@ export function VisualRow({
         {/* Qty */}
         {isFixture && (
           <div className="w-24 flex flex-col items-center">
-            <span className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", isSelected ? "text-white/40" : "text-slate-300")}>Qty</span>
+            <span className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", isSelected ? "text-white/40" : "text-slate-300", UI_ENGINE_TYPE_META)}>Qty</span>
             <div className="flex items-baseline gap-1">
-              <span className={cn("text-xl font-black tracking-tighter", isSelected ? "text-white" : "text-slate-900")}>
+              <span className={cn("text-xl font-black tracking-tighter", isSelected ? "text-white" : "text-slate-900", UI_ENGINE_TYPE_TITLE)}>
                 {entry.schedule_qty ?? 0}
               </span>
-              <span className={cn("text-[9px] font-bold uppercase tracking-widest opacity-60", isSelected ? "text-white" : "text-slate-400")}>
+              <span className={cn("text-[9px] font-bold uppercase tracking-widest opacity-60", isSelected ? "text-white" : "text-slate-400", UI_ENGINE_TYPE_META)}>
                 {entry.schedule_unit || "unit"}
               </span>
             </div>
@@ -347,8 +364,9 @@ export function VisualRow({
            <button
              onClick={(e) => { e.stopPropagation(); onEdit?.(entry); }}
              className={cn(
-               "h-8 w-8 rounded-md flex items-center justify-center transition-all",
-               isSelected ? "bg-white/10 hover:bg-white text-white hover:text-slate-900" : "hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+               "h-8 w-8 flex items-center justify-center transition-all",
+               isSelected ? "bg-white/10 hover:bg-white text-white hover:text-slate-900" : "hover:bg-slate-100 text-slate-400 hover:text-slate-600",
+               UI_ENGINE_RADIUS_CONTROL
              )}
            >
              <Edit3 size={14} />
@@ -356,8 +374,9 @@ export function VisualRow({
            <button
              onClick={handleDelete}
              className={cn(
-               "h-8 w-8 rounded-md flex items-center justify-center transition-all",
-               isSelected ? "bg-white/10 hover:bg-red-500 text-white" : "hover:bg-red-50 text-slate-400 hover:text-red-500"
+               "h-8 w-8 flex items-center justify-center transition-all",
+               isSelected ? "bg-white/10 hover:bg-red-500 text-white" : "hover:bg-red-50 text-slate-400 hover:text-red-500",
+               UI_ENGINE_RADIUS_CONTROL
              )}
            >
              <Trash2 size={14} />
@@ -367,11 +386,12 @@ export function VisualRow({
 
       {/* Lightbox & Sample Request Modals */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-          <DialogContent className="p-0 border-none bg-transparent shadow-none max-w-[90vw] w-auto overflow-visible rounded-3xl">
+          <DialogContent className={cn("p-0 border-none bg-transparent shadow-none max-w-[90vw] w-auto overflow-visible", UI_ENGINE_RADIUS_CARD)}>
              <div className="relative">
                 <img
                   src={snapshot?.catalog_image_url || ""}
-                  className="max-h-[85vh] rounded-[2rem] shadow-2xl border-4 border-white/20"
+                  className={cn("max-h-[85vh] shadow-2xl border-4 border-white/20", UI_ENGINE_RADIUS_CARD)}
+                  style={{ borderRadius: "2rem" }}
                   alt="Full size preview"
                 />
                 <button

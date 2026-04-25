@@ -12,7 +12,6 @@ import {
   Info,
   AlertCircle,
   ImageIcon,
-  Edit3,
   Eye,
   X,
   ExternalLink,
@@ -25,7 +24,7 @@ import {
 import { TagInput } from "@/components/ui/tag-input";
 import { cn } from "@/lib/utils";
 import { OptimizedUploader } from "@/components/ui/optimized-uploader";
-import { uploadLibraryImage } from "@/extensions/library/lib/upload-client";
+import { LibraryFacade } from "@/extensions/library/facade";
 import { 
   Dialog, 
   DialogContent, 
@@ -41,13 +40,21 @@ import { Badge } from "@/components/ui/badge";
 import { 
   updateScheduleOptionSnapshotAction, 
   getScheduleSuggestionsAction,
-} from "@/actions/schedule-actions";
-import { createPromotionRequestAction } from "@/extensions/library/actions/library-actions";
+} from "@/extensions/schedule/actions/schedule-actions";
+// createPromotionRequestAction removed, using LibraryFacade instead
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { ScheduleOptionSnapshot } from "../types";
 import { CreatableSearch } from "@/components/ui/creatable-search";
-import { UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION, UI_ENGINE_TYPE_META } from "@/ui_engine";
+import { 
+  UI_ENGINE_RADIUS_CARD, 
+  UI_ENGINE_RADIUS_CONTROL, 
+  UI_ENGINE_RADIUS_ACTION, 
+  UI_ENGINE_TYPE_META,
+  UI_ENGINE_BORDER_SUBTLE,
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_TYPE_H4
+} from "@/ui_engine";
 
 interface ProductSuggestion {
   id: string;
@@ -88,7 +95,10 @@ export function ScheduleSpecEditorModal({
 }: ScheduleSpecEditorModalProps) {
   const isAdmin = ["ADMIN", "DIC", "DRIC"].includes(userRole);
   
-  const [isEditMode, setIsEditMode] = React.useState(false);
+  const isReserved = initialSnapshot.catalog_product_name === "[RESERVED]";
+  
+  // Domain Exception: Authorized users (DIC, DRIC, ADMIN) or uninitialized entries open in Edit Mode by default
+  const [isEditMode, setIsEditMode] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [suggestions, setSuggestions] = React.useState<{
     brands: { id: string, name: string }[],
@@ -126,7 +136,8 @@ export function ScheduleSpecEditorModal({
 
   React.useEffect(() => {
     if (isOpen && !isSubmitting) {
-      setIsEditMode(false);
+      // Re-evaluate initial edit mode state when modal opens
+      setIsEditMode(true);
       setForm({
         catalog_product_name: initialSnapshot.catalog_product_name === "[RESERVED]" ? "" : (initialSnapshot.catalog_product_name || ""),
         catalog_brand: initialSnapshot.catalog_brand || "",
@@ -141,7 +152,7 @@ export function ScheduleSpecEditorModal({
         catalog_structured_tags: initialSnapshot.specs?.catalog_structured_tags || [],
       });
     }
-  }, [isOpen, initialSnapshot, isSubmitting]);
+  }, [isOpen, initialSnapshot, isSubmitting, isAdmin, isReserved]);
 
   const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
   const isPlaceholder = (val?: string | null) => !val || placeholders.includes(val.trim().toUpperCase());
@@ -156,8 +167,7 @@ export function ScheduleSpecEditorModal({
 
   const handleSubmit = async () => {
     if (!isSecondaryComplete) {
-      toast.error("Color is mandatory for project snapshots");
-      return;
+      toast.warning("Color is mandatory for project snapshots - saving as draft");
     }
     setIsSubmitting(true);
     try {
@@ -198,7 +208,7 @@ export function ScheduleSpecEditorModal({
       <DialogContent 
         onKeyDown={(e) => e.stopPropagation()}
         className={cn(
-          "p-0 overflow-hidden border-none shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] bg-white",
+          "p-0 overflow-hidden border-none shadow-[var(--ui-surface-shadow-premium,0_32px_64px_-12px_rgba(0,0,0,0.14))] bg-white",
           UI_ENGINE_RADIUS_CARD,
           "max-w-[1100px] w-[95vw]"
         )}
@@ -208,7 +218,7 @@ export function ScheduleSpecEditorModal({
           <div className="w-full md:w-[380px] bg-slate-50 border-r border-slate-100 flex flex-col relative overflow-hidden">
              <div className="flex-1 flex flex-col p-8 pt-10">
                {/* Hero Image Card */}
-               <div className={cn("relative group w-full aspect-square bg-white shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden flex items-center justify-center mb-10", UI_ENGINE_RADIUS_CARD)}>
+               <div className={cn("relative group w-full aspect-square bg-white shadow-xl shadow-slate-200/50 border", UI_ENGINE_BORDER_SUBTLE, "overflow-hidden flex items-center justify-center mb-10", UI_ENGINE_RADIUS_CARD)}>
                  {form.catalog_image_url ? (
                    <img 
                     src={form.catalog_image_url} 
@@ -236,13 +246,13 @@ export function ScheduleSpecEditorModal({
                {/* Promotion Readiness Checklist */}
                <div className="space-y-6">
                  <div className="flex items-center gap-3">
-                   <div className="h-5 w-5 bg-slate-950 rounded-md flex items-center justify-center">
+                   <div className={cn("h-5 w-5 bg-slate-950 flex items-center justify-center", UI_ENGINE_RADIUS_ACTION)}>
                       <Sparkles className="h-3 w-3 text-white" />
                     </div>
                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-950">Library Readiness</h4>
                  </div>
                  
-                 <div className="space-y-5 p-5 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                 <div className={cn("space-y-5 p-5 bg-white border shadow-sm", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                     {/* Stage 1: Project Minimum */}
                     <div className="flex items-start gap-3">
                       <div className={cn(
@@ -308,7 +318,7 @@ export function ScheduleSpecEditorModal({
 
           {/* Right Panel: Content / Form */}
           <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
-            <DialogHeader className="p-10 pb-6 border-b border-slate-50 flex flex-row items-center justify-between">
+            <DialogHeader className={cn("p-10 pb-6 border-b flex flex-row items-center justify-between", UI_ENGINE_BORDER_SUBTLE)}>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 mb-1">
                   <Badge className={cn("bg-slate-900 text-white font-black uppercase tracking-widest px-2 py-0.5", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL)}>
@@ -327,31 +337,20 @@ export function ScheduleSpecEditorModal({
                   Managing snapshot {initialSnapshot.schedule_code ? `for ${initialSnapshot.schedule_code}` : "details"} in this project.
                 </DialogDescription>
               </div>
-              <div className="flex items-center gap-3">
-                 {isAdmin && !isEditMode && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsEditMode(true)}
-                      className={cn("h-10 px-5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-950 hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all gap-2", UI_ENGINE_RADIUS_ACTION)}
-                    >
-                      <Edit3 className="h-3.5 w-3.5" />
-                      Modify Snapshot
-                    </Button>
-                 )}
-                 <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => onOpenChange(false)}
-                  className={cn("h-10 w-10 text-slate-400 hover:text-slate-900 hover:bg-slate-50", UI_ENGINE_RADIUS_ACTION)}
-                 >
-                   <X className="h-5 w-5" />
-                 </Button>
+<div className="flex items-center gap-3">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => onOpenChange(false)}
+                    className={cn("h-10 w-10 text-slate-400 hover:text-slate-900 hover:bg-slate-50", UI_ENGINE_RADIUS_ACTION)}
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
               </div>
             </DialogHeader>
 
             <ScrollArea className="flex-1">
-              <div className="p-10">
+              <div className="p-[var(--ui-modal-padding,2.5rem)]">
                 {isEditMode ? (
                   <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Section 1: Identity & Brand (Required for Catalog) */}
@@ -364,7 +363,7 @@ export function ScheduleSpecEditorModal({
                         </div>
                       </div>
                       
-                      <div className={cn("p-8 bg-slate-50/50 border border-slate-100 space-y-6", UI_ENGINE_RADIUS_CONTROL)}>
+                      <div className={cn("p-8 space-y-6 border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                         <div className="grid grid-cols-2 gap-6">
                            <div className="space-y-2">
                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SKU / Catalog Code</Label>
@@ -406,11 +405,11 @@ export function ScheduleSpecEditorModal({
                         <div className={cn("h-8 w-8 bg-slate-200 text-slate-600 flex items-center justify-center text-[10px] font-bold", UI_ENGINE_RADIUS_ACTION)}>02</div>
                         <div>
                           <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-950">Secondary Specs</h4>
-                          <p className="text-[10px] text-slate-400">Mandatory "Initials" for project schedule visualization.</p>
+                          <p className="text-[10px] text-slate-400">Mandatory &quot;Initials&quot; for project schedule visualization.</p>
                         </div>
                       </div>
                       
-                      <div className={cn("p-8 bg-white border border-slate-200 shadow-sm space-y-6", UI_ENGINE_RADIUS_CONTROL)}>
+                      <div className={cn("p-8 bg-white border shadow-sm space-y-6", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                         <div className="space-y-2">
                           <Label className="text-[10px] font-black uppercase tracking-widest text-slate-950 ml-1">Color (Mandatory) *</Label>
                           <Input 
@@ -492,7 +491,7 @@ export function ScheduleSpecEditorModal({
                                 onUpload={async (file) => {
                                   const timestamp = Date.now();
                                   const fileName = `${timestamp}-${file.name.replace(/\s/g, "_")}`;
-                                  const url = await uploadLibraryImage(file, `covers/${fileName}`);
+                                  const url = await LibraryFacade.uploadProductImage(file, `covers/${fileName}`);
                                   setForm(prev => ({ ...prev, catalog_image_url: url }));
                                   return url;
                                 }}
@@ -520,14 +519,14 @@ export function ScheduleSpecEditorModal({
                         <div className="grid grid-cols-2 gap-6">
                            <div className="space-y-1">
                               <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Brand Name</span>
-                              <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                              <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                 <Building2 className="h-4 w-4 text-slate-400" />
                                 <span className="text-sm font-bold text-slate-900">{form.catalog_brand || "Not Set"}</span>
                               </div>
                            </div>
                            <div className="space-y-1">
                               <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Catalog SKU</span>
-                              <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                              <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                 <Tag className="h-4 w-4 text-slate-400" />
                                 <span className="font-mono text-sm font-bold text-slate-900">{form.catalog_sku || "N/A"}</span>
                               </div>
@@ -544,21 +543,21 @@ export function ScheduleSpecEditorModal({
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                            <div className="space-y-1">
                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Color</span>
-                             <div className={cn("p-5 bg-white border border-slate-200 shadow-sm flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                             <div className={cn("p-5 bg-white border shadow-sm flex items-center gap-3", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                <Palette className="h-4 w-4 text-slate-400" />
                                <span className="text-sm font-bold text-slate-900">{form.catalog_color || "—"}</span>
                              </div>
                            </div>
                            <div className="space-y-1">
                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Pattern</span>
-                             <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                             <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                <Layers className="h-4 w-4 text-slate-400" />
                                <span className="text-sm font-medium text-slate-600">{form.catalog_motif || "—"}</span>
                              </div>
                            </div>
                            <div className="space-y-1">
                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Finishing</span>
-                             <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                             <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                <Sparkles className="h-4 w-4 text-slate-400" />
                                <span className="text-sm font-medium text-slate-600">{form.catalog_finishing || "—"}</span>
                              </div>
@@ -566,7 +565,7 @@ export function ScheduleSpecEditorModal({
                         </div>
                         <div className="space-y-1">
                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Dimensions</span>
-                             <div className={cn("p-5 bg-slate-50 border border-slate-100 flex items-center gap-3", UI_ENGINE_RADIUS_CONTROL)}>
+                             <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                <Ruler className="h-4 w-4 text-slate-400" />
                                <span className="text-sm font-medium text-slate-600">{form.catalog_dimensions || "Standard Dimensions"}</span>
                              </div>
@@ -581,7 +580,7 @@ export function ScheduleSpecEditorModal({
                             <div className="h-px flex-1 bg-slate-100" />
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {form.catalog_structured_tags.map((tag, i) => (
+                            {form.catalog_structured_tags.map((tag: string, i: number) => (
                               <Badge key={i} className={cn("bg-slate-100 text-slate-600 border-none font-bold px-3 py-1", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_ACTION)}>
                                 {tag}
                               </Badge>
@@ -595,7 +594,7 @@ export function ScheduleSpecEditorModal({
               </div>
             </ScrollArea>
 
-            <div className="p-10 pt-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div className={cn("p-10 pt-6 border-t flex items-center justify-between", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
               {isEditMode ? (
                 <>
                   <Button
@@ -607,7 +606,7 @@ export function ScheduleSpecEditorModal({
                   </Button>
                   <Button 
                     onClick={handleSubmit} 
-                    disabled={isSubmitting || !isSecondaryComplete}
+                    disabled={isSubmitting}
                     className={cn("bg-slate-950 hover:bg-black text-white h-12 px-12 shadow-xl shadow-slate-200 font-black text-[10px] uppercase tracking-widest gap-3 transition-all", UI_ENGINE_RADIUS_CONTROL)}
                   >
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> Finalize Snapshot</>}
@@ -633,7 +632,7 @@ export function ScheduleSpecEditorModal({
                         onClick={async () => {
                           const toastId = toast.loading("Requesting promotion to Master Catalog...");
                           try {
-                            unwrapActionResult(await createPromotionRequestAction({ 
+                            unwrapActionResult(await LibraryFacade.requestPromotionFromSnapshot({ 
                               schedule_option_id: optionId,
                               project_id: projectId 
                             }));

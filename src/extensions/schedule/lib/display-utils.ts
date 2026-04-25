@@ -1,4 +1,4 @@
-import type { ScheduleSnapshot } from "../types";
+import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 
 const PLACEHOLDERS = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
 

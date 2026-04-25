@@ -104,6 +104,22 @@ export function CreatableSearch({
 
   const hasResults = groups ? (filteredGroups?.length ?? 0) > 0 : filteredFlat.length > 0;
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && search.trim()) {
+      e.preventDefault();
+      const exactMatch = allOptions.find(
+        (o) => o.name.toLowerCase() === search.trim().toLowerCase()
+      );
+      if (exactMatch) {
+        handleSelect(exactMatch);
+      } else if (showCreateOption) {
+        handleCreate(search.trim());
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
   // Close on outside click
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -112,15 +128,11 @@ export function CreatableSearch({
         !containerRef.current.contains(event.target as Node)
       ) {
         setOpen(false);
-        // In allowFreeText mode, commit whatever is in the input as the value
-        if (allowFreeText && search.trim() && search !== allOptions.find(o => o.id === value)?.name) {
-          onCreate?.(search.trim());
-        }
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [allowFreeText, search, allOptions, value, onCreate]);
+  }, []);
 
   const handleSelect = (option: Option) => {
     onSelect?.(option.id, option.name);
@@ -131,7 +143,6 @@ export function CreatableSearch({
   const handleCreate = (name: string) => {
     onCreate?.(name);
     if (allowFreeText) {
-      // In free-text mode, also call onSelect with empty id so parent can store the raw string
       onSelect?.("", name);
     }
     setSearch(name);
@@ -184,6 +195,7 @@ export function CreatableSearch({
             setOpen(true);
             onSearchChange?.(val);
           }}
+          onKeyDown={handleKeyDown}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
           disabled={disabled}

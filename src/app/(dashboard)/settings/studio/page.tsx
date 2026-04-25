@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import { Role } from "@/generated/prisma";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { setAutoNamingEnabled, updateUISettings } from "@/actions/settings-actions";
 import { StudioSettingsPanel } from "@/components/studio-settings-panel";
 import { unwrapActionResult } from "@/lib/result";
 import { SettingsShell } from "@/ui_engine";
 import { sanitizeUISettings } from "@/lib/ui-settings";
-import { SYSTEM_CONFIG_ID } from "@/lib/permissions";
+import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import type { UISettings } from "@/types/common";
 
 export default async function StudioSettingsPage() {

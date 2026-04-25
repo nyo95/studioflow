@@ -16,20 +16,36 @@ import {
 } from "@/extensions/library/actions/library-actions";
 import { toast } from "sonner";
 import { ProductCatalogWithRelations, LibraryVendor, ProjectProductRequestWithDetails } from "@/extensions/library/types";
-import { unwrapActionResult } from "@/lib/result";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useSearchParams } from "next/navigation";
+
+type PromotionRequestSummary = {
+  id: string;
+  status: string;
+  snapshot_data: {
+    catalog_image_url?: string | null;
+    catalog_product_name?: string | null;
+    catalog_brand?: string | null;
+    catalog_category?: string | null;
+  } | null;
+  notes?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string;
+  project?: { id: string; name: string } | null;
+  requested_by?: { id: string; name: string } | null;
+  reviewed_by?: { id: string; name: string } | null;
+};
 
 export default function LibraryPage() {
   const [vendors, setVendors] = React.useState<LibraryVendor[]>([]);
   const [products, setProducts] = React.useState<ProductCatalogWithRelations[]>([]);
   const [totalProducts, setTotalProducts] = React.useState(0);
   const [requests, setRequests] = React.useState<ProjectProductRequestWithDetails[]>([]);
-  const [promotionRequests, setPromotionRequests] = React.useState<any[]>([]);
+  const [promotionRequests, setPromotionRequests] = React.useState<PromotionRequestSummary[]>([]);
   
   const [categories, setCategories] = React.useState<string[]>([]);
-  const [productCategories, setProductCategories] = React.useState<string[]>([]);
-  const [ffeCategories, setFFECategories] = React.useState<string[]>([]);
+  const [materialsCategories, setMaterialsCategories] = React.useState<string[]>([]);
+  const [fixturesCategories, setFixturesCategories] = React.useState<string[]>([]);
   const [subCategories, setSubCategories] = React.useState<string[]>([]);
   const [finishings, setFinishings] = React.useState<string[]>([]);
   
@@ -49,6 +65,16 @@ export default function LibraryPage() {
   const [isRefreshingProducts, setIsRefreshingProducts] = React.useState(false);
   const [role, setRole] = React.useState<string>("STAFF");
 
+  const normalizePromotionRequests = React.useCallback((items: PromotionRequestSummary[]) => {
+    return items.map((item) => ({
+      ...item,
+      snapshot_data:
+        item.snapshot_data && typeof item.snapshot_data === "object"
+          ? item.snapshot_data
+          : null,
+    }));
+  }, []);
+
   // Initial Data Load (Vendors, Metadata, Categories, Requests)
   React.useEffect(() => {
     async function init() {
@@ -66,7 +92,9 @@ export default function LibraryPage() {
 
         if (vendorsRes.success) setVendors(vendorsRes.data);
         if (requestsRes.success) setRequests(requestsRes.data);
-        if (promoRes.success) setPromotionRequests(promoRes.data);
+        if (promoRes.success) {
+          setPromotionRequests(normalizePromotionRequests(promoRes.data as unknown as PromotionRequestSummary[]));
+        }
         if (catsRes.success) setCategories(catsRes.data);
         if (roleRes.success) setRole(roleRes.data);
         if (metaRes.success) {
@@ -74,8 +102,8 @@ export default function LibraryPage() {
           setFinishings(metaRes.data.finishings);
         }
         if (groupedCatsRes.success) {
-          setProductCategories(groupedCatsRes.data.architectural);
-          setFFECategories(groupedCatsRes.data.ffe);
+          setMaterialsCategories(groupedCatsRes.data.materials);
+          setFixturesCategories(groupedCatsRes.data.fixtures);
         }
       } catch {
         toast.error("Failed to load library metadata");
@@ -84,7 +112,7 @@ export default function LibraryPage() {
       }
     }
     init();
-  }, []);
+  }, [normalizePromotionRequests]);
 
   // Product Data Load (Triggered by filters/pagination)
   const fetchProducts = React.useCallback(async () => {
@@ -117,7 +145,7 @@ export default function LibraryPage() {
     } finally {
       setIsRefreshingProducts(false);
     }
-  }, [debouncedSearch, selectedCategory, showPhysicalOnly, currentPage, pageSize, activeTab]);
+  }, [debouncedSearch, selectedCategory, showPhysicalOnly, currentPage, pageSize, activeTab, role]);
 
   React.useEffect(() => {
     fetchProducts();
@@ -154,8 +182,8 @@ export default function LibraryPage() {
               pageSize={pageSize}
               onPageChange={setCurrentPage}
               categories={categories}
-              productCategories={productCategories}
-              ffeCategories={ffeCategories}
+              materialsCategories={materialsCategories}
+              fixturesCategories={fixturesCategories}
               subCategories={subCategories}
               finishings={finishings}
               requests={requests}

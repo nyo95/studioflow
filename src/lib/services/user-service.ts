@@ -3,7 +3,7 @@ import { Role } from "@/generated/prisma";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { insertAuditLog } from "@/actions/_shared";
-import { AUDIT_ACTIONS } from "@/lib/services/audit";
+import { AUDIT_ACTIONS } from "@/core/platform/audit";
 
 /**
  * Functional Service Layer for User operations.

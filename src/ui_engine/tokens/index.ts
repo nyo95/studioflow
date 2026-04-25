@@ -38,8 +38,10 @@ export const UI_ENGINE_CANVAS_BG = colors.CANVAS_BG;
 export const UI_ENGINE_CANVAS_CLASS = colors.CANVAS_BG;
 export const UI_ENGINE_NAV_BG = "bg-white";
 export const UI_ENGINE_CARD_BG = "bg-white";
+export const UI_ENGINE_BG_SUBTLE = colors.BG_SUBTLE;
 export const UI_ENGINE_ACCENT_PRIMARY = "text-slate-900";
 export const UI_ENGINE_BORDER_COLOR = colors.BORDER_COLOR || "border-slate-200";
+export const UI_ENGINE_BORDER_SUBTLE = colors.BORDER_SUBTLE;
 
 // 3. Typography Tokens
 export const TYPE_H1 = typography.TEXT_H1;

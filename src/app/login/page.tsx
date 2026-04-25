@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { LoginForm } from "@/components/login-form";
-import { SYSTEM_CONFIG_ID } from "@/lib/permissions";
+import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 
 // Cache config: revalidate every 1 hour to prevent excessive DB queries
 export const revalidate = 3600;

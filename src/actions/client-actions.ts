@@ -1,7 +1,7 @@
 "use server";
 
 import { createAction } from "@/lib/action-wrapper";
-import { assertAdmin } from "@/lib/permissions";
+import { assertAdmin } from "@/core/rbac/permissions";
 import { clientService } from "@/lib/services/client-service";
 import { invalidateCache } from "@/lib/revalidation";
 import {

@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProductCatalogWithRelations } from "../types";
 import { Button } from "@/components/ui/button";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,18 +31,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE,
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_RADIUS_CARD,
+  UI_ENGINE_RADIUS_CONTROL,
+  UI_ENGINE_TYPE_BODY,
+  UI_ENGINE_TYPE_META,
+} from "@/ui_engine";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { 
-  UI_ENGINE_RADIUS_CARD, 
-  UI_ENGINE_RADIUS_CONTROL, 
-  UI_ENGINE_RADIUS_ACTION,
-  UI_ENGINE_TYPE_META
-} from "@/ui_engine";
-import { cn } from "@/lib/utils";
 
 interface ProductTableProps {
   products: ProductCatalogWithRelations[];
@@ -59,20 +62,20 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
   if (products.length === 0) {
     return (
       <div className="py-24 text-center animate-in fade-in duration-500">
-        <div className={cn("h-16 w-16 bg-slate-50 flex items-center justify-center mx-auto mb-4", UI_ENGINE_RADIUS_ACTION)}>
+        <div className={cn("h-16 w-16 flex items-center justify-center mx-auto mb-4", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
           <ImageIcon className="h-6 w-6 text-slate-200" />
         </div>
         <h3 className="font-lora text-lg text-slate-900 mb-1">No items found</h3>
-        <p className="text-sm text-slate-400 font-inter">Try adjusting your search or filters.</p>
+        <p className={cn("text-slate-400 font-inter", UI_ENGINE_TYPE_BODY)}>Try adjusting your search or filters.</p>
       </div>
     );
   }
 
   return (
-    <div className={cn("border border-slate-100 bg-white overflow-hidden shadow-sm", UI_ENGINE_RADIUS_CARD)}>
+    <div className={cn("border bg-white overflow-hidden shadow-sm", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 h-12">
+          <TableRow className={cn("hover:bg-transparent h-12 border-b", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
             <TableHead className={cn("w-[80px] font-inter font-bold uppercase tracking-wider text-slate-400 pl-6", UI_ENGINE_TYPE_META)}>Image</TableHead>
             <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Product Info</TableHead>
             <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Vendor</TableHead>
@@ -83,7 +86,7 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
         </TableHeader>
         <TableBody>
           {products.map((m) => (
-            <TableRow key={m.id} className="hover:bg-slate-50/30 group transition-colors border-slate-50 h-20">
+            <TableRow key={m.id} className={cn("group transition-colors border-b h-20", UI_ENGINE_BORDER_SUBTLE)}>
               <TableCell className="pl-6">
                 {m.catalog_image_url ? (
                   <button 
@@ -91,7 +94,7 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
                         src: m.catalog_image_original_url || m.catalog_image_url!, 
                         alt: m.catalog_sku 
                     })}
-                    className={cn("relative h-14 w-14 overflow-hidden bg-slate-100 group/img focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-sm border border-slate-200", UI_ENGINE_RADIUS_CONTROL)}
+                    className={cn("relative h-14 w-14 overflow-hidden group/img focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-sm border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                   >
                     <img 
                       src={m.catalog_image_url} 
@@ -103,14 +106,14 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
                     </div>
                   </button>
                 ) : (
-                  <div className={cn("h-14 w-14 bg-slate-50 flex items-center justify-center border border-dashed border-slate-200", UI_ENGINE_RADIUS_CONTROL)}>
+                  <div className={cn("h-14 w-14 flex items-center justify-center border border-dashed", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                     <ImageIcon className="h-6 w-6 text-slate-200" />
                   </div>
                 )}
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-lora font-semibold text-slate-900 text-[13px]">
+                  <span className={cn("font-lora font-semibold text-slate-900", UI_ENGINE_TYPE_BODY)}>
                     {m.catalog_sku} - {m.catalog_product_name || m.catalog_motif || 'Item'} ex. {m.catalog_brand || m.vendor.brand_name}
                   </span>
                   <span className={cn("text-slate-400 font-inter font-medium truncate max-w-[250px]", UI_ENGINE_TYPE_META)}>
@@ -119,7 +122,7 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
                 </div>
               </TableCell>
               <TableCell>
-                <span className="text-xs font-inter font-semibold text-slate-600">
+                <span className={cn("font-semibold text-slate-600", UI_ENGINE_TYPE_META)}>
                   {m.catalog_brand || m.vendor.brand_name}
                 </span>
               </TableCell>
@@ -133,12 +136,12 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
                 <Badge 
                   variant="outline"
                   className={cn("font-bold uppercase tracking-widest px-1.5 py-0 border-none", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL, 
-                    m.status === 'APPROVED' 
+                    m.catalog_status === 'APPROVED' 
                       ? 'bg-emerald-50 text-emerald-700' 
                       : 'bg-orange-50 text-orange-700'
                   )}
                 >
-                  {m.status}
+                  {m.catalog_status}
                 </Badge>
               </TableCell>
               <TableCell className="text-right pr-6">

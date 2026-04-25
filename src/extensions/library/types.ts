@@ -46,10 +46,10 @@ export type LibraryVendorInput = {
 
 export type PhysicalSampleInput = {
   id?: string;
-  rack_number: string;
-  box_number: string;
-  notes?: string;
-  status?: "AVAILABLE" | "BORROWED" | "SENT_TO_CLIENT";
+  catalog_rack_number: string;
+  catalog_box_number: string;
+  catalog_notes?: string;
+  catalog_status?: "AVAILABLE" | "BORROWED" | "SENT_TO_CLIENT";
   current_borrower_name?: string;
 };
 
@@ -63,7 +63,7 @@ export type ProductCatalogInput = {
   catalog_brand?: string;
   catalog_product_name?: string;
   catalog_motif?: string;
-  tags?: string[];
+  catalog_tags?: string[];
   catalog_dimension_p?: string;
   catalog_dimension_l?: string;
   catalog_dimension_t?: string;
@@ -75,8 +75,8 @@ export type ProductCatalogInput = {
   catalog_image_original_url?: string;
   catalog_reference_url?: string;
   catalog_folder_url?: string;
-  metadata?: Record<string, unknown>;
-  status?: LibraryItemStatus;
+  catalog_metadata?: Record<string, unknown>;
+  catalog_status?: LibraryItemStatus;
   catalog_price?: number | null;
   // We'll handle physical samples as an optional nested creation/update
   physical_samples?: PhysicalSampleInput[];

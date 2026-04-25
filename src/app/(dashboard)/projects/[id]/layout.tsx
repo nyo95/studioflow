@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { ProjectLayoutShell, ProjectLiveProvider } from "@/ui_engine";
 import { ProjectChatSidebar } from "@/extensions/live-collaboration/components/project-chat-sidebar";
 import { getProjectDiscussionSnapshot } from "@/lib/project-discussion";

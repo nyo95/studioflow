@@ -4,7 +4,7 @@ import * as React from "react";
 import { CheckCircle2, Package, Clock, XCircle, Plus, Sparkles } from "lucide-react";
 import { ProjectScheduleOptionWithProduct, ScheduleOptionSnapshot } from "../types";
 import { getEffectiveTitle } from "../lib/display-utils";
-import { approveScheduleOptionAction } from "@/actions/schedule-actions";
+import { approveScheduleOptionAction } from "@/extensions/schedule/actions/schedule-actions";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { ImageLightbox } from "@/components/ui/image-lightbox";

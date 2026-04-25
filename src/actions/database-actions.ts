@@ -1,8 +1,8 @@
 "use server";
 
 import { Role } from "@/generated/prisma";
-import { assertAdmin } from "@/lib/permissions";
-import { DatabaseService } from "@/lib/services/system/database-service";
+import { assertAdmin } from "@/core/rbac/permissions";
+import { DatabaseService } from "@/core/platform/system/database-service";
 import { Database } from "lucide-react";
 import { createAction } from "@/lib/action-wrapper";
 import { invalidateCache } from "@/lib/revalidation";

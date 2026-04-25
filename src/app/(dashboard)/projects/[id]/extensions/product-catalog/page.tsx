@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { ProjectScheduleMain } from "@/extensions/schedule/components/ProjectScheduleMain";
 import { ErrorBoundary } from "@/components/shared/error-boundary";

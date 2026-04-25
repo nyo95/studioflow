@@ -1,9 +1,10 @@
 import { Activity, ActivityStatus, PhaseStatus, RevisionStatus, CDItemStatus, ProjectStatus } from "@/generated/prisma";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
-import { ERR } from "@/lib/permissions";
+import { ERR } from "@/core/rbac/permissions";
 import { insertAuditLog, getActiveRevision, normalizeDrawingCode } from "@/actions/_shared";
-import { AUDIT_ACTIONS } from "@/lib/services/audit";
+import { AUDIT_ACTIONS } from "@/core/platform/audit";
+import { PhasePolicy } from "@/lib/domain/phase-policy";
 
 /**
  * Functional Service Layer for Phase operations.
@@ -21,8 +22,8 @@ export const phaseService = {
     });
 
     if (!phase) throw new ActionError("Phase not found", "NOT_FOUND");
-    if (phase.status_enum === PhaseStatus.COMPLETED || phase.status_enum === PhaseStatus.READY_FOR_NEXT) {
-      throw new ActionError("Phase is already completed.", "INVALID_STATE");
+    if (!PhasePolicy.isValidTransition(phase.status_enum as PhaseStatus, PhaseStatus.IN_PROGRESS)) {
+      throw new ActionError(`Phase is already in ${phase.status_enum} state.`, "INVALID_STATE");
     }
 
     // Note: We enforce sequential phase activation per SSOT 4.1.
@@ -34,14 +35,9 @@ export const phaseService = {
         },
       });
 
-      if (
-        prevPhase && 
-        prevPhase.status_enum !== PhaseStatus.READY_FOR_NEXT && 
-        prevPhase.status_enum !== PhaseStatus.COMPLETED &&
-        !phase.allow_parallel
-      ) {
+      if (!PhasePolicy.canActivate(phase, prevPhase || undefined)) {
         throw new ActionError(
-          `Cannot activate "${phase.name_enum}". Previous phase "${prevPhase.name_enum}" must be READY_FOR_NEXT first.`,
+          `Cannot activate "${phase.name_enum}". Previous phase "${prevPhase?.name_enum}" must be READY_FOR_NEXT first.`,
           "SEQUENTIAL_VIOLATION"
         );
       }
@@ -164,7 +160,9 @@ export const phaseService = {
     if (!phase) throw new ActionError("Phase not found", "NOT_FOUND");
 
     if (phase.is_locked) throw new ActionError(ERR.PHASE_ALREADY_LOCKED, "LOCKED");
-    if (phase.status_enum !== PhaseStatus.IN_PROGRESS) throw new ActionError(ERR.INVALID_PHASE_STATE, "INVALID_STATE");
+    if (!PhasePolicy.isValidTransition(phase.status_enum as PhaseStatus, PhaseStatus.ON_REVIEW_INTERNAL)) {
+      throw new ActionError(ERR.INVALID_PHASE_STATE, "INVALID_STATE");
+    }
 
     const activeRevision = await getActiveRevision(tx, phaseId, { includeActivities: true });
     if (!activeRevision) {

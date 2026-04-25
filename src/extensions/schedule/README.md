@@ -44,7 +44,7 @@ StudioFlow follows a strict **Snapshot-First** architecture to ensure data integ
 - **From Library**: Search and pick from the `ProductCatalog`. A snapshot is created automatically.
 - **Hybrid Quick Draft**: Triggered from the search bar when a product is not found in the library. Mandates Category, Brand, and Classification (Stage 1 Draft).
 - **Manual Creation (Legacy)**: Input data manually via the picker modal.
-- **CSV Import (Deferred)**: Batch import from Google Sheets.
+- **CSV Import**: Batch import from Google Sheets. Imports are tagged as `snapshot_source_origin: "gsheets_import"`.
 - **SketchUp Import (Deferred)**: Batch import from SketchUp plugin.
 
 ### **Alternative Options**

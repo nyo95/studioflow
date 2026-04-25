@@ -10,13 +10,28 @@ import { ScheduleSampleRequestModal } from "../ScheduleSampleRequestModal";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
-import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/actions/schedule-actions";
+import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/extensions/schedule/actions/schedule-actions";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ProjectScheduleEntryWithRelations } from "../../types";
+import { 
+  UI_ENGINE_RADIUS_CONTROL,
+  UI_ENGINE_RADIUS_CARD,
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_RADIUS_IMAGE
+} from "@/ui_engine/tokens/layout";
+import {
+  UI_ENGINE_TYPE_BODY,
+  UI_ENGINE_TYPE_META,
+  UI_ENGINE_TYPE_TITLE
+} from "@/ui_engine/tokens/typography";
+import {
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE
+} from "@/ui_engine/tokens/colors";
 
 interface ScheduleRowProps {
   entry: ProjectScheduleEntryWithRelations;
@@ -48,7 +63,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
 
   const [activeOptionIndex, setActiveOptionIndex] = React.useState(() => {
 
-    const finalIndex = entry.options.findIndex((o: any) => o.is_final);
+    const finalIndex = entry.options.findIndex((o) => o.is_final);
     return finalIndex >= 0 ? finalIndex : 0;
   });
 
@@ -158,19 +173,19 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
   return (
     <tr 
       ref={setNodeRef} 
-      style={style} 
+      style={style}
       className={cn(
         "group border-b border-slate-100 hover:bg-slate-50/60 transition-colors",
         isDragging && "bg-slate-50 shadow-sm"
       )}
     >
       {/* Drag Handle & Code */}
-      <td className="px-5 py-3">
+      <td className="px-5 py-2">
         <div className="flex items-center gap-2">
           <div 
             {...attributes} 
             {...listeners}
-            className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 rounded transition-colors"
+            className={cn("p-1 -ml-1 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
           >
             <GripVertical size={14} />
           </div>
@@ -181,11 +196,11 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
       </td>
 
       {/* Product Details – with prominent image */}
-      <td className="px-5 py-3">
+      <td className="px-5 py-2">
         <div className="flex items-center gap-4">
           {/* Visual anchor: larger, elevated image */}
           <div
-            className="relative flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white group/img cursor-pointer"
+            className={cn("relative flex-shrink-0 w-10 h-10 overflow-hidden border border-slate-200 shadow-sm bg-white group/img cursor-pointer", UI_ENGINE_RADIUS_IMAGE)}
             onClick={() => snapshot?.catalog_image_url && setLightboxOpen(true)}
             title={snapshot?.catalog_image_url ? "Click to enlarge" : undefined}
           >
@@ -214,10 +229,10 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
           </div>
 
           <div className="min-w-0">
-            <div className="font-serif text-sm font-semibold text-slate-900 leading-tight truncate max-w-[240px]">
+            <div className={cn("font-serif text-sm font-semibold text-slate-900 leading-tight truncate max-w-[240px]", UI_ENGINE_TYPE_TITLE)}>
               {snapshot?.catalog_product_name || "Unspecified Product"}
             </div>
-            <div className="font-sans text-[11px] text-slate-400 mt-0.5 truncate max-w-[240px]">
+            <div className={cn("font-sans text-[11px] text-slate-400 mt-0.5 truncate max-w-[240px]", UI_ENGINE_TYPE_META)}>
               {snapshot?.catalog_brand ? (
                 <span className="font-medium">{snapshot.catalog_brand}</span>
               ) : null}
@@ -225,7 +240,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
               <span className="uppercase tracking-wide">{entry.schedule_category}</span>
             </div>
             {snapshot?.specs?.catalog_color && (
-              <div className="mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-widest">
+              <div className={cn("mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[9px] font-bold uppercase tracking-widest", UI_ENGINE_RADIUS_CONTROL)}>
                 {snapshot.specs.catalog_color}
               </div>
             )}
@@ -241,7 +256,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
                   >
                     <ChevronLeft className="h-3 w-3" />
                   </button>
-                  <span className="px-2 font-inter text-[10px] font-bold text-slate-700 tracking-wider">
+                  <span className={cn("px-2 text-[10px] font-bold text-slate-700 tracking-wider", UI_ENGINE_TYPE_META)}>
                     Option {activeOptionIndex + 1}
                     {activeOption?.is_final && <span className="text-emerald-600 ml-1">(Approved)</span>}
                   </span>
@@ -272,7 +287,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
       </td>
 
       {/* Location – inline editable, tied to the code/entry */}
-      <td className="px-5 py-3 min-w-[130px]">
+      <td className="px-5 py-2 min-w-[130px]">
         {editingLocation ? (
           <div className="flex items-center gap-1.5">
             <input
@@ -281,7 +296,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
               onChange={(e) => setLocationValue(e.target.value)}
               onKeyDown={handleLocationKeyDown}
               placeholder="e.g. Front wall"
-              className="h-7 text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded-lg px-2 flex-1 outline-none focus:ring-1 focus:ring-slate-900 w-24"
+              className={cn("h-7 text-xs font-medium text-slate-900 bg-white border border-slate-300 px-2 flex-1 outline-none focus:ring-1 focus:ring-slate-900 w-24", UI_ENGINE_RADIUS_CONTROL)}
             />
             {isSavingLocation ? (
               <Loader2 size={12} className="animate-spin text-slate-400 flex-shrink-0" />
@@ -295,10 +310,10 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
         ) : (
           <button
             onClick={() => { setLocationValue(entry.schedule_location || ""); setEditingLocation(true); }}
-            className="group/loc flex items-center gap-1.5 text-left rounded-lg px-2 py-1 hover:bg-slate-100 transition-colors max-w-[150px]"
+            className={cn("group/loc flex items-center gap-1.5 text-left px-2 py-1 hover:bg-slate-100 transition-colors max-w-[150px]", UI_ENGINE_RADIUS_CONTROL)}
           >
             <MapPin size={10} className="text-slate-300 group-hover/loc:text-slate-500 flex-shrink-0 transition-colors" />
-            <span className="font-sans text-[10px] font-medium text-slate-500 uppercase tracking-wider truncate group-hover/loc:text-slate-700 transition-colors">
+            <span className={cn("text-[10px] font-medium text-slate-500 uppercase tracking-wider truncate group-hover/loc:text-slate-700 transition-colors", UI_ENGINE_TYPE_META)}>
               {entry.schedule_location || <span className="text-slate-300 italic normal-case">Add location...</span>}
             </span>
           </button>
@@ -307,7 +322,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
 
       {/* Qty (fixture only) */}
       {isFixture && (
-        <td className="px-5 py-3 text-center">
+        <td className="px-5 py-2 text-center">
           {editingQty ? (
             <div className="flex items-center justify-center gap-1">
               <input
@@ -317,7 +332,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
                 value={qtyValue}
                 onChange={(e) => setQtyValue(e.target.value)}
                 onKeyDown={handleQtyKeyDown}
-                className="h-7 w-16 text-xs font-bold text-center text-slate-900 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-slate-900"
+                className={cn("h-7 w-16 text-xs font-bold text-center text-slate-900 bg-white border border-slate-300 outline-none focus:ring-1 focus:ring-slate-900", UI_ENGINE_RADIUS_CONTROL)}
               />
               {isSavingQty ? (
                 <Loader2 size={12} className="animate-spin text-slate-400" />
@@ -331,7 +346,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
           ) : (
             <button 
               onClick={() => { setQtyValue(String(entry.schedule_qty ?? 0)); setEditingQty(true); }}
-              className="group/qty px-3 py-1 hover:bg-slate-100 rounded-lg transition-colors inline-flex items-center gap-1.5"
+              className={cn("group/qty px-3 py-1 hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5", UI_ENGINE_RADIUS_CONTROL)}
             >
               <span className="font-sans text-sm font-bold text-slate-700 group-hover/qty:text-slate-900 transition-colors">
                 {entry.schedule_qty ?? 0}
@@ -345,19 +360,19 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
       )}
 
       {/* Actions */}
-      <td className="px-5 py-3 text-right">
+      <td className="px-5 py-2 text-right">
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end gap-1">
           <button
             onClick={() => onEdit?.(entry)}
             title="Edit specification"
-            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors"
+            className={cn("p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
           >
             <Edit3 size={13} />
           </button>
           <button
             onClick={handleDelete}
             title="Delete alternative or entry"
-            className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+            className={cn("p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
           >
             <Trash2 size={13} />
           </button>
@@ -367,7 +382,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
               setSampleModalOpen(true);
             }}
             title="Request sample"
-            className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
+            className={cn("p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
           >
             <Package size={13} />
           </button>
@@ -392,10 +407,10 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
               <img
                 src={snapshot.catalog_image_url}
                 alt={snapshot.catalog_product_name || "Product image"}
-                className="max-h-[85vh] max-w-[85vw] w-auto h-auto rounded-2xl shadow-2xl object-contain"
+                className={cn("max-h-[85vh] max-w-[85vw] w-auto h-auto shadow-2xl object-contain", UI_ENGINE_RADIUS_CARD)}
               />
               {/* Caption */}
-              <div className="absolute bottom-0 left-0 right-0 px-6 py-4 bg-gradient-to-t from-black/60 to-transparent rounded-b-2xl opacity-0 group-hover/lbox:opacity-100 transition-opacity">
+              <div className={cn("absolute bottom-0 left-0 right-0 px-6 py-4 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover/lbox:opacity-100 transition-opacity", UI_ENGINE_RADIUS_CARD)} style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                 <p className="font-serif text-white text-base font-semibold truncate">
                   {snapshot.catalog_product_name || "Unnamed Product"}
                 </p>

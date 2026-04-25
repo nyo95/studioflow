@@ -1,6 +1,6 @@
 import "server-only";
 
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { MILLISECONDS_PER_DAY } from "@/lib/constants";
 import type { ProjectDiscussionSnapshot } from "@/types/common";
 

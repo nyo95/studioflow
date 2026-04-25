@@ -1,6 +1,6 @@
 import "server-only";
 
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { unlink } from "fs/promises";
 import path from "path";
 import { existsSync } from "fs";

@@ -1,7 +1,7 @@
 import { Prisma, ProductType } from "@/generated/prisma";
 import { ActionError } from "@/lib/error-types";
-import { TxClient } from "@/lib/permissions";
-import { buildScheduleSnapshot, ScheduleService, SourceOrigin } from "@/lib/services/schedule-service";
+import { TxClient } from "@/core/rbac/permissions";
+import { buildScheduleSnapshot, ScheduleService, SourceOrigin } from "@/extensions/schedule/services/schedule-service";
 import { ScheduleCsvImportRow } from "./csv-types";
 
 export interface ImportScheduleOptions {

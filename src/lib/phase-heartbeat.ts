@@ -1,6 +1,6 @@
 import "server-only";
 
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { ACTIVITY_FETCH_LIMIT, MILLISECONDS_PER_DAY } from "@/lib/constants";
 import type { PhaseHeartbeatSnapshot } from "@/types/common";
 

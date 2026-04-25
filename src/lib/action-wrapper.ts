@@ -1,4 +1,4 @@
-import { prisma, ensureDbSchemaPreflight } from "@/lib/db";
+import { prisma, ensureDbSchemaPreflight } from "@/core/platform/db";
 import { requireSession } from "@/lib/auth";
 import { ActionError } from "@/lib/error-types";
 import { Role } from "@/generated/prisma";

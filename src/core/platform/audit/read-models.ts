@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { AUDIT_LOG_LIMIT } from "@/lib/constants";
 import { AuditFiltersInput, AuditLogWithUser, AuditReferenceRecord, AUDIT_ACTIONS } from "./types";
 import { buildWhere, getPhaseIdFromReference } from "./query-builder";

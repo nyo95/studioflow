@@ -3,19 +3,28 @@
 import React from "react";
 import { ChevronDown, ChevronRight, List, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ProjectScheduleSheetPayload } from "../../types";
+import type { ProjectScheduleEntryWithRelations, ProjectScheduleSheetPayload } from "../../types";
 import { ProductType } from "@/generated/prisma";
 import { 
   SortableContext, 
   verticalListSortingStrategy 
 } from "@dnd-kit/sortable";
-import { UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL } from "@/ui_engine";
+import { 
+  UI_ENGINE_RADIUS_CARD, 
+  UI_ENGINE_RADIUS_CONTROL,
+  UI_ENGINE_RADIUS_ACTION 
+} from "@/ui_engine/tokens/layout";
+import {
+  UI_ENGINE_TYPE_TITLE,
+  UI_ENGINE_TYPE_BODY,
+  UI_ENGINE_TYPE_META
+} from "@/ui_engine/tokens/typography";
 import { VisualRow } from "./VisualRow";
 
 interface VisualTableProps {
   sheet: ProjectScheduleSheetPayload;
   section?: ProductType;
-  onEditEntry?: (entry: any) => void;
+  onEditEntry?: (entry: ProjectScheduleEntryWithRelations) => void;
   onDeleteEntry?: (id: string) => void;
   onUpdateLocation?: (entryId: string, location: string) => Promise<void>;
   onAddAlternative?: (entryId: string, category: string) => void;
@@ -66,15 +75,15 @@ export function VisualTable({
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => toggleCategory(group.schedule_category)}
-                  className="flex items-center justify-center w-6 h-6 rounded-md bg-white border border-slate-200 text-slate-400 hover:text-slate-900 transition-colors"
+                  className={cn("flex items-center justify-center w-6 h-6 bg-white border border-slate-200 text-slate-400 hover:text-slate-900 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
                 >
                   <div className={cn("transition-transform duration-300", isCollapsed ? "-rotate-90" : "rotate-0")}>
                     <ChevronDown size={14} />
                   </div>
                 </button>
-                <h3 className="font-serif text-base font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                <h3 className={cn("text-base font-bold text-slate-800 tracking-tight flex items-center gap-2", UI_ENGINE_TYPE_TITLE)}>
                   {group.schedule_category}
-                  <span className="font-sans text-[10px] font-black bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full">
+                  <span className={cn("text-[10px] font-black bg-slate-200 text-slate-500 px-1.5 py-0.5", UI_ENGINE_TYPE_META, UI_ENGINE_RADIUS_CONTROL)}>
                     {group.entries.length}
                   </span>
                 </h3>
@@ -104,7 +113,7 @@ export function VisualTable({
                       ))
                     ) : (
                       <div className={cn("py-12 flex flex-col items-center gap-2 bg-white/50 border border-dashed border-slate-200", UI_ENGINE_RADIUS_CONTROL)}>
-                        <span className="font-sans text-[10px] uppercase font-bold tracking-widest text-slate-400">Empty Category</span>
+                        <span className={cn("text-[10px] uppercase font-bold tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Empty Category</span>
                       </div>
                     )}
                   </SortableContext>
@@ -118,12 +127,12 @@ export function VisualTable({
       {sheet.groups.length === 0 && (
         <div className={cn("py-24 text-center bg-slate-50/50 border border-dashed border-slate-200", UI_ENGINE_RADIUS_CARD)}>
           <div className="max-w-xs mx-auto flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-200 border border-slate-100">
+            <div className={cn("w-16 h-16 bg-white shadow-sm flex items-center justify-center text-slate-200 border border-slate-100", UI_ENGINE_RADIUS_CARD)}>
               <List className="h-8 w-8" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-serif text-xl font-medium text-slate-800">No specifications yet</h4>
-              <p className="font-sans text-xs text-slate-400 leading-relaxed">
+              <h4 className={cn("text-xl font-medium text-slate-800", UI_ENGINE_TYPE_TITLE)}>No specifications yet</h4>
+              <p className={cn("text-xs text-slate-400 leading-relaxed", UI_ENGINE_TYPE_BODY)}>
                 Start building your project schedule by adding products or importing from CSV.
               </p>
             </div>

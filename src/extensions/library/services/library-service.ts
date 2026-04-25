@@ -10,9 +10,9 @@ import {
   CatalogApprovalValidationSchema,
   ProductCatalogWithRelations
 } from "../types";
-import { ScheduleOptionSnapshot } from "../../schedule/types";
+import { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 import { insertAuditLog } from "@/actions/_shared";
-import { AUDIT_ACTIONS } from "@/lib/services/audit/types";
+import { AUDIT_ACTIONS } from "@/core/platform/audit/types";
 
 
 export class LibraryService {
@@ -57,7 +57,7 @@ export class LibraryService {
       where: { id: productId }
     });
 
-    if (product?.status === LibraryItemStatus.APPROVED && role !== Role.ADMIN) {
+    if (product?.catalog_status === LibraryItemStatus.APPROVED && role !== Role.ADMIN) {
       throw new ActionError("APPROVED global items are read-only. Only ADMIN can override.", "CATALOG_LOCKED");
     }
   }
@@ -247,6 +247,60 @@ export class LibraryService {
   }
 
   /**
+   * Returns a consolidated object of brands and products for UI suggestions/search.
+   * COMPLIANCE: Used by ScheduleFacade to prevent direct database access from other extensions.
+   */
+  static async getSuggestions(tx: PrismaTransaction) {
+    const [vendors, products] = await Promise.all([
+      tx.vendor.findMany({
+        where: { deleted_at: null },
+        select: { id: true, brand_name: true },
+        orderBy: { brand_name: "asc" }
+      }),
+      tx.productCatalog.findMany({
+        where: { 
+          deleted_at: null,
+          catalog_status: LibraryItemStatus.APPROVED 
+        },
+        include: { vendor: true },
+        orderBy: { created_at: "desc" }
+      })
+    ]);
+
+    return {
+      brands: vendors.map(v => ({
+        id: v.id,
+        name: v.brand_name
+      })),
+      products: products.map(m => {
+        const sku = m.catalog_sku || "";
+        const name = m.catalog_product_name || "";
+        
+        // Logical Format: [SKU] - [Name] or fallback
+        let label = "";
+        if (sku && name) label = `[${sku}] - ${name}`;
+        else label = sku || name || "Unnamed Product";
+
+        return {
+          id: m.id,
+          name: label,
+          brand: m.vendor.brand_name,
+          catalog_category: m.catalog_category,
+          metadata: {
+            catalog_sku: sku,
+            catalog_product_name: name,
+            catalog_motif: m.catalog_motif,
+            catalog_color: m.catalog_color,
+            catalog_finishing: m.catalog_finishing,
+            catalog_dimensions: `${m.catalog_dimension_p || "X"} x ${m.catalog_dimension_l || "X"} x ${m.catalog_dimension_t || "X"} ${m.catalog_dimension_unit}`.replace(/X/g, "x"),
+            catalog_reference_url: m.catalog_reference_url
+          }
+        };
+      })
+    };
+  }
+
+  /**
    * Reads product catalog list with optional filters.
    * @param tx Prisma transaction client.
    * @param filters Optional list filters.
@@ -269,7 +323,7 @@ export class LibraryService {
       deleted_at: null
     };
 
-    if (filters?.status) where.status = filters.status;
+    if (filters?.status) where.catalog_status = filters.status;
     if (filters?.category && filters.category !== "all") where.catalog_category = filters.category;
     if (filters?.vendorId) where.vendor_id = filters.vendorId;
     if (filters?.type) where.catalog_type = filters.type;
@@ -309,6 +363,19 @@ export class LibraryService {
     ]);
 
     return { items, total };
+  }
+
+  /**
+   * Retrieves a single product by ID.
+   */
+  static async getProductById(tx: PrismaTransaction, id: string) {
+    return tx.productCatalog.findUnique({
+      where: { id, deleted_at: null },
+      include: { 
+        vendor: { include: { contacts: true } }, 
+        physical_samples: true 
+      }
+    });
   }
 
   /**
@@ -369,9 +436,34 @@ export class LibraryService {
   }
 
   /**
+   * Returns unique values for sub_category and finishing fields.
+   */
+  static async getProductMetadata(tx: PrismaTransaction) {
+    const [subCats, finishings] = await Promise.all([
+      tx.productCatalog.findMany({
+        select: { catalog_sub_category: true },
+        distinct: ["catalog_sub_category"],
+        where: { catalog_sub_category: { not: null } },
+        orderBy: { catalog_sub_category: "asc" },
+      }),
+      tx.productCatalog.findMany({
+        select: { catalog_finishing: true },
+        distinct: ["catalog_finishing"],
+        where: { catalog_finishing: { not: null } },
+        orderBy: { catalog_finishing: "asc" },
+      }),
+    ]);
+
+    return {
+      subCategories: subCats.map((r) => r.catalog_sub_category as string).filter(Boolean),
+      finishings: finishings.map((r) => r.catalog_finishing as string).filter(Boolean),
+    };
+  }
+
+  /**
    * @returns Created product with relations.
    */
-  static async createProduct(data: ProductCatalogInput, userId: string, tx: PrismaTransaction) {
+  static async createProduct(data: ProductCatalogInput, userId: string, tx: PrismaTransaction): Promise<ProductCatalogWithRelations> {
     const resolvedVendorId = data.vendor_id || await this.resolveVendor(data.vendor_name || data.catalog_brand || "", userId, tx);
     
     await this.assertValidProduct(data, "SNAPSHOT");
@@ -394,7 +486,7 @@ export class LibraryService {
         catalog_brand: catalogBrand,
         catalog_product_name: this.normalizeOptional(data.catalog_product_name), 
         catalog_motif: this.normalizeOptional(data.catalog_motif),
-        tags: data.tags || [],
+        catalog_tags: data.catalog_tags || [],
         catalog_dimension_p: this.normalizeOptional(data.catalog_dimension_p),
         catalog_dimension_l: this.normalizeOptional(data.catalog_dimension_l),
         catalog_dimension_t: this.normalizeOptional(data.catalog_dimension_t),
@@ -407,14 +499,14 @@ export class LibraryService {
         catalog_reference_url: this.normalizeOptional(data.catalog_reference_url),
         catalog_folder_url: this.normalizeOptional(data.catalog_folder_url),
         catalog_price: data.catalog_price ?? null,
-        status: data.status || "APPROVED",
-        metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+        catalog_status: data.catalog_status || "APPROVED",
+        catalog_metadata: data.catalog_metadata ? (data.catalog_metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
         physical_samples: data.physical_samples ? {
           create: data.physical_samples.map(s => ({
-            rack_number: s.rack_number,
-            box_number: s.box_number,
-            notes: this.normalizeOptional(s.notes),
-            status: s.status || "AVAILABLE",
+            catalog_rack_number: s.catalog_rack_number,
+            catalog_box_number: s.catalog_box_number,
+            catalog_notes: this.normalizeOptional(s.catalog_notes),
+            catalog_status: s.catalog_status || "AVAILABLE",
             current_borrower_name: s.current_borrower_name
           }))
         } : undefined
@@ -425,11 +517,22 @@ export class LibraryService {
       },
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_PRODUCT, "ProductCatalog", product.id, userId, {
-      catalog_sku: product.catalog_sku,
-      catalog_category: product.catalog_category,
-      brand: product.vendor.brand_name
+    await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_CREATE, "ProductCatalog", product.id, userId, {
+      sku: product.catalog_sku,
+      category: product.catalog_category
     });
+
+    // Log initial sample creation as inventory log
+    if (product.physical_samples.length > 0) {
+      await Promise.all(product.physical_samples.map(sample => 
+        this.logSampleAction(tx, {
+          sample_id: sample.id,
+          action: SampleAction.CHECK_IN,
+          notes: "Initial inventory registration",
+          userId
+        })
+      ));
+    }
 
     return product;
   }
@@ -443,7 +546,7 @@ export class LibraryService {
    * @param tx Prisma transaction client.
    * @returns Updated product with relations.
    */
-  static async updateProduct(id: string, data: Partial<ProductCatalogInput>, userId: string, tx: PrismaTransaction, role?: Role) {
+  static async updateProduct(id: string, data: Partial<ProductCatalogInput>, userId: string, tx: PrismaTransaction, role?: Role): Promise<ProductCatalogWithRelations> {
     await this.assertEditable(tx, id, role);
     if (data.catalog_category !== undefined && !data.catalog_category.trim()) throw new ActionError("Category is required.", "CATEGORY_REQUIRED");
     
@@ -459,10 +562,10 @@ export class LibraryService {
     const sampleOps = data.physical_samples ? {
       deleteMany: {},
       create: data.physical_samples.map(s => ({
-        rack_number: s.rack_number,
-        box_number: s.box_number,
-        notes: this.normalizeOptional(s.notes),
-        status: s.status || "AVAILABLE",
+        catalog_rack_number: s.catalog_rack_number,
+        catalog_box_number: s.catalog_box_number,
+        catalog_notes: this.normalizeOptional(s.catalog_notes),
+        catalog_status: s.catalog_status || "AVAILABLE",
         current_borrower_name: s.current_borrower_name
       }))
     } : undefined;
@@ -478,7 +581,7 @@ export class LibraryService {
         ...(data.catalog_product_name !== undefined ? { catalog_product_name: this.normalizeOptional(data.catalog_product_name) } : {}),
         ...(data.catalog_motif !== undefined ? { catalog_motif: this.normalizeOptional(data.catalog_motif) } : {}),
         ...(data.catalog_type !== undefined ? { catalog_type: data.catalog_type } : {}),
-        ...(data.tags !== undefined ? { tags: data.tags } : {}),
+        ...(data.catalog_tags !== undefined ? { catalog_tags: data.catalog_tags } : {}),
         ...(data.catalog_dimension_p !== undefined ? { catalog_dimension_p: this.normalizeOptional(data.catalog_dimension_p) } : {}),
         ...(data.catalog_dimension_l !== undefined ? { catalog_dimension_l: this.normalizeOptional(data.catalog_dimension_l) } : {}),
         ...(data.catalog_dimension_t !== undefined ? { catalog_dimension_t: this.normalizeOptional(data.catalog_dimension_t) } : {}),
@@ -491,35 +594,34 @@ export class LibraryService {
         ...(data.catalog_reference_url !== undefined ? { catalog_reference_url: this.normalizeOptional(data.catalog_reference_url) } : {}),
         ...(data.catalog_folder_url !== undefined ? { catalog_folder_url: this.normalizeOptional(data.catalog_folder_url) } : {}),
         ...(data.catalog_price !== undefined ? { catalog_price: data.catalog_price } : {}),
-        ...(data.metadata !== undefined ? { metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : Prisma.JsonNull } : {}),
-        status: data.status,
+        ...(data.catalog_metadata !== undefined ? { catalog_metadata: data.catalog_metadata ? (data.catalog_metadata as Prisma.InputJsonValue) : Prisma.JsonNull } : {}),
+        catalog_status: data.catalog_status,
         physical_samples: sampleOps
       },
       include: { 
         vendor: { include: { contacts: true } },
         physical_samples: true
-      },
+      }
     });
 
-    // Record Inventory Logs for new samples - ONLY for fixture
-    if (data.physical_samples && updated.catalog_type === "fixture") {
+    await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_UPDATE, "ProductCatalog", updated.id, userId, {
+      changes: data
+    });
+
+    // If inventory was updated, log specifically to sample history
+    if (sampleOps) {
       await Promise.all(updated.physical_samples.map(sample => 
         this.logSampleAction(tx, {
           sample_id: sample.id,
           action: SampleAction.CHECK_IN,
-          notes: `Inventory updated: Rack ${sample.rack_number}, Box ${sample.box_number}`,
+          notes: `Inventory updated: Rack ${sample.catalog_rack_number}, Box ${sample.catalog_box_number}`,
           userId
         })
       ));
     }
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_PRODUCT, "ProductCatalog", id, userId, {
-      catalog_sku: updated.catalog_sku,
-      status: updated.status
-    });
-
     // CRITICAL: Category registration ONLY on APPROVE
-    if (data.status === "APPROVED") {
+    if (data.catalog_status === "APPROVED") {
       await this.assertValidProduct(updated as unknown as ProductCatalogInput, "CATALOG");
       
       await settingsService.executeUpsertScheduleCategoryConfig(tx, {
@@ -631,11 +733,11 @@ export class LibraryService {
       });
 
       if (existingProduct) {
-        if (existingProduct.status === "APPROVED") {
+        if (existingProduct.catalog_status === "APPROVED") {
           return existingProduct;
         }
 
-        const existingStatus = existingProduct.status;
+        const existingStatus = existingProduct.catalog_status;
         const updated = await tx.productCatalog.update({
           where: { id: existingProduct.id },
           data: {
@@ -647,11 +749,11 @@ export class LibraryService {
             catalog_finishing: data.catalog_finishing || existingProduct.catalog_finishing,
             catalog_motif: data.catalog_motif || existingProduct.catalog_motif,
             catalog_product_name: !isPlaceholder(rawName) ? rawName : existingProduct.catalog_product_name,
-            status: existingProduct.status === "REJECTED" ? "PENDING" : existingProduct.status
+            catalog_status: existingProduct.catalog_status === "REJECTED" ? "PENDING" : existingProduct.catalog_status
           }
         });
 
-        await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_PRODUCT, "ProductCatalog", updated.id, userId, {
+        await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_UPDATE, "ProductCatalog", updated.id, userId, {
           catalog_sku: effectiveId,
           catalog_product_name: updated.catalog_product_name,
           catalog_brand: brand,
@@ -676,11 +778,11 @@ export class LibraryService {
           catalog_color: data.catalog_color || "UNSPECIFIED",
           catalog_finishing: data.catalog_finishing,
           catalog_motif: data.catalog_motif,
-          status: "PENDING"
+          catalog_status: "PENDING"
         }
       });
 
-      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_PRODUCT, "ProductCatalog", created.id, userId, {
+      await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_CREATE, "ProductCatalog", created.id, userId, {
         catalog_sku: effectiveId,
         catalog_product_name: created.catalog_product_name,
         catalog_brand: brand,
@@ -699,8 +801,8 @@ export class LibraryService {
         });
         
         if (foundProduct) {
-          if (foundProduct.status === "APPROVED") return foundProduct;
-          const fallbackStatus = foundProduct.status;
+          if (foundProduct.catalog_status === "APPROVED") return foundProduct;
+          const fallbackStatus = foundProduct.catalog_status;
           const updated = await tx.productCatalog.update({
             where: { id: foundProduct.id },
             data: {
@@ -715,7 +817,7 @@ export class LibraryService {
             }
           });
 
-          await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_PRODUCT, "ProductCatalog", updated.id, userId, {
+          await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_UPDATE, "ProductCatalog", updated.id, userId, {
             catalog_sku: effectiveId,
             catalog_product_name: updated.catalog_product_name,
             catalog_brand: brand,
@@ -746,7 +848,7 @@ export class LibraryService {
       include: { vendor: true }
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_DELETE_PRODUCT, "ProductCatalog", id, userId, {
+    await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_DELETE, "ProductCatalog", id, userId, {
       catalog_sku: product.catalog_sku,
       brand: product.vendor.brand_name
     });
@@ -987,7 +1089,7 @@ export class LibraryService {
       notes?: string;
     }
   ) {
-    const snapshot = data.snapshot_data as ScheduleOptionSnapshot;
+    const snapshot = data.snapshot_data as ScheduleSnapshot;
 
     // Stage 2 Gatekeeping: Mandatory fields for promotion
     const requiredFields = [
@@ -1047,7 +1149,7 @@ export class LibraryService {
     if (request.status !== "PENDING") throw new ActionError("Request already processed", "INVALID_STATE");
 
     if (status === "APPROVED") {
-      const snapshot = request.snapshot_data as ScheduleOptionSnapshot;
+      const snapshot = request.snapshot_data as ScheduleSnapshot;
       if (!snapshot) throw new ActionError("Missing snapshot data", "SNAPSHOT_MISSING");
 
       // 1. Resolve Vendor
@@ -1096,7 +1198,7 @@ export class LibraryService {
           catalog_image_original_url: null,
           catalog_reference_url: snapshot.catalog_reference_url || null,
           catalog_price: snapshot.catalog_price || null,
-          status: "APPROVED", // Auto-approve promoted items
+          catalog_status: "APPROVED", // Auto-approve promoted items
         }
       });
 

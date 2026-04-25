@@ -1,4 +1,5 @@
 import { DESIGN_SYSTEM_CONFIG } from "../design-system.config";
+import { cn } from "@/lib/utils";
 
 export const FONT_HEADING = DESIGN_SYSTEM_CONFIG.typography.h1.family;
 export const FONT_BODY = DESIGN_SYSTEM_CONFIG.typography.body.family;
@@ -40,3 +41,27 @@ export const TEXT_SIZE_BADGE = DESIGN_SYSTEM_CONFIG.typography.uiMeta.size;
 export const TEXT_WEIGHT_BADGE = DESIGN_SYSTEM_CONFIG.typography.uiMeta.weight;
 export const TEXT_TRACKING_BADGE = DESIGN_SYSTEM_CONFIG.typography.uiMeta.tracking;
 export const TEXT_COLOR_BADGE = DESIGN_SYSTEM_CONFIG.typography.uiMeta.color;
+
+export const UI_ENGINE_TYPE_TITLE = cn(
+  FONT_HEADING,
+  TEXT_H3,
+  TEXT_WEIGHT_H3,
+  TEXT_TRACKING_H3,
+  TEXT_COLOR_HEADING_3
+);
+export const UI_ENGINE_TYPE_H3 = UI_ENGINE_TYPE_TITLE;
+export const UI_ENGINE_TYPE_BODY = cn(
+  FONT_BODY,
+  TEXT_SIZE_BODY,
+  TEXT_WEIGHT_BODY,
+  TEXT_TRACKING_BODY,
+  TEXT_COLOR_BODY
+);
+export const UI_ENGINE_TYPE_META = cn(
+  FONT_BODY,
+  TEXT_SIZE_BADGE,
+  TEXT_WEIGHT_BADGE,
+  TEXT_TRACKING_BADGE,
+  TEXT_COLOR_BADGE,
+  "uppercase"
+);

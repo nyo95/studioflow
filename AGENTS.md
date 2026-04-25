@@ -25,7 +25,7 @@ This project uses specific Next.js APIs and Prisma configurations that may diffe
 "Format nama proyek WAJIB menggunakan: `[Tahun]-[Nomor] [Nama Proyek]`. Contoh: `2025-429 Heloskin Cimanggu`. Pastikan ada spasi (bukan dash) antara nomor urut dan nama proyek."
 
 ## 👁️ View-First Protocol
-"Setiap modal/form untuk data yang sudah ada WAJIB dibuka dalam mode read-only secara default. Gunakan tombol 'Modify' (icon Edit3) sebagai gatekeeper untuk masuk ke mode edit. Pastikan transisi antara mode read-only dan edit bersifat smooth dan tidak merusak layout."
+"Setiap modal/form untuk data yang sudah ada WAJIB dibuka dalam mode read-only secara default. Gunakan tombol 'Modify' (icon Edit3) sebagai gatekeeper untuk masuk ke mode edit. DOMAIN EXCEPTION: Project Schedule entries LANGSUNG terbuka dalam mode edit (tidak perlu Gatekeeper Modify) karena data bersifat lokal/project-level yang tidak mempengaruhi Master Catalog."
 
 ## 📐 Design System Enforcement (Zero Hardcode Policy)
 "DILARANG KERAS menggunakan nilai hardcoded untuk visual properties (misalnya `rounded-xl`, `p-5`, `shadow-md`, `text-2xl`). Kamu WAJIB melakukan hal berikut:
@@ -50,5 +50,7 @@ This project uses specific Next.js APIs and Prisma configurations that may diffe
 As the **Main Lead**, the AI Assistant is the designated custodian of the project's architectural integrity and documentation.
 1. **SSOT Enforcement**: All code changes must be validated against `MASTER_SSOT.md`.
 2. **Rule Custodian**: The AI is responsible for updating `AGENTS.md` and `MASTER_SSOT.md` to reflect architectural evolutions.
-3. **Tracking**: Every major change, decision, or bug fix MUST be recorded in `CHANGELOG.md`.
-4. **Deviation Blocking**: If a request conflicts with established SSOT rules, the AI must block the implementation, flag the conflict, and seek explicit user override.
+3. **Tracking & Materiality**: Every material change (defined as any change to business logic, persistence schema, or user-facing contracts) MUST be recorded in `CHANGELOG.md`.
+4. **Semantic Assessment Protocol**: Upon completion of every task, the agent MUST evaluate if there were "Semantical Changes" (changes to architecture, workflow, core contracts, or canonical rules). If YES, `MASTER_SSOT.md` MUST be updated immediately.
+5. **Confirm-First Protocol**: If a gap is discovered between the SSOT and the codebase that appears to be the result of a previously approved (but undocumented) user decision, the agent MUST seek explicit confirmation before treating it as a deviation.
+6. **Deviation Blocking**: If a request conflicts with established SSOT rules, the AI must block the implementation, flag the conflict, and seek explicit user override.

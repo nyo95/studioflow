@@ -14,7 +14,7 @@ import {
   moveEntryToCategoryAction,
   bulkDeleteScheduleEntriesAction,
   updateScheduleEntryAction,
-} from "@/actions/schedule-actions";
+} from "@/extensions/schedule/actions/schedule-actions";
 import { ScheduleBoard } from "./board/ScheduleBoard";
 import { VisualTable } from "./table/VisualTable";
 import { ScheduleSearchBar } from "./ScheduleSearchBar";
@@ -470,7 +470,7 @@ export function ProjectScheduleMain({
               UI_ENGINE_RADIUS_ACTION
             )}
           >
-            Architectural
+            Materials
           </TabsTrigger>
           <TabsTrigger
             value={ProductType.fixture}
@@ -479,7 +479,7 @@ export function ProjectScheduleMain({
               UI_ENGINE_RADIUS_ACTION
             )}
           >
-            FF&E
+            Fixtures
           </TabsTrigger>
         </TabsList>
 

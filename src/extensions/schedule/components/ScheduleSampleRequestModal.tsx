@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Package } from "lucide-react";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
-import { createProjectProductRequestAction } from "@/extensions/library/actions/library-actions";
+import { LibraryFacade } from "@/extensions/library/facade";
 
 interface ScheduleSampleRequestModalProps {
   isOpen: boolean;
@@ -52,7 +52,7 @@ export function ScheduleSampleRequestModal({
     setSubmitting(true);
     try {
       unwrapActionResult(
-        await createProjectProductRequestAction({
+        await LibraryFacade.createProjectProductRequest({
           project_id: projectId,
           schedule_entry_id: scheduleEntryId,
           schedule_option_id: scheduleOptionId,

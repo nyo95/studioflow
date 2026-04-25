@@ -23,9 +23,14 @@ import { cn } from "@/lib/utils";
 import { 
   UI_ENGINE_RADIUS_CONTROL, 
   UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_RADIUS_CARD,
+} from "@/ui_engine/tokens/layout";
+import {
+  UI_ENGINE_TYPE_TITLE,
+  UI_ENGINE_TYPE_BODY,
+  UI_ENGINE_TYPE_META,
   UI_ENGINE_TYPE_H3,
-  UI_ENGINE_TYPE_BODY
-} from "@/ui_engine";
+} from "@/ui_engine/tokens/typography";
 import { ProductType } from "@/generated/prisma";
 import { unwrapActionResult } from "@/lib/result";
 import { 
@@ -33,7 +38,7 @@ import {
   updateScheduleOptionSnapshotAction,
   getScheduleCategoriesAction,
   getScheduleSuggestionsAction
-} from "@/actions/schedule-actions";
+} from "@/extensions/schedule/actions/schedule-actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { UniversalImageUploader } from "@/components/ui/universal-image-uploader";
@@ -134,7 +139,16 @@ export function QuickDraftDialog({
       }
 
       // 2. Update with Stage 1 metadata
-      const updateData: any = {
+      const updateData: {
+        catalog_product_name?: string;
+        catalog_brand?: string;
+        catalog_image_url?: string;
+        specs: {
+          catalog_color?: string;
+          catalog_motif?: string;
+          catalog_finishing?: string;
+        };
+      } = {
         catalog_product_name: productName.trim() || undefined,
         catalog_brand: brand.trim() || undefined,
         catalog_image_url: imageUrl || undefined,
@@ -163,9 +177,9 @@ export function QuickDraftDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden gap-0">
+      <DialogContent className={cn("sm:max-w-[480px] p-0 overflow-hidden gap-0", UI_ENGINE_RADIUS_CARD)}>
         <DialogHeader className="p-6 bg-slate-50 border-b border-slate-200">
-          <DialogTitle className={cn(UI_ENGINE_TYPE_H3, "font-serif")}>Quick Draft Entry</DialogTitle>
+          <DialogTitle className={cn(UI_ENGINE_TYPE_TITLE, "text-xl")}>Quick Draft Entry</DialogTitle>
           <DialogDescription className={UI_ENGINE_TYPE_BODY}>
             Create a local project entry following Stage 1 (Draft) standards.
           </DialogDescription>
@@ -176,7 +190,7 @@ export function QuickDraftDialog({
             {/* Specifications Inputs */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Product Name</Label>
+                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Product Name</Label>
                 <input
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
@@ -189,7 +203,7 @@ export function QuickDraftDialog({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Color (Required)</Label>
+                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Color (Required)</Label>
                 <input
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
@@ -202,7 +216,7 @@ export function QuickDraftDialog({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pattern / Motif</Label>
+                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Pattern / Motif</Label>
                 <input
                   value={pattern}
                   onChange={(e) => setPattern(e.target.value)}
@@ -215,7 +229,7 @@ export function QuickDraftDialog({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Finishing</Label>
+                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Finishing</Label>
                 <input
                   value={finishing}
                   onChange={(e) => setFinishing(e.target.value)}
@@ -231,7 +245,7 @@ export function QuickDraftDialog({
             <div className="grid grid-cols-2 gap-4">
               {/* Category Selection */}
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Schedule Category</Label>
+                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Schedule Category</Label>
                 <CreatableSearch
                   value={category}
                   onSearchChange={(val) => {}}
@@ -246,7 +260,7 @@ export function QuickDraftDialog({
 
               {/* Brand Selection */}
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Brand / Vendor (Optional)</Label>
+                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Brand / Vendor (Optional)</Label>
                 <CreatableSearch
                   value={brand}
                   onSearchChange={(val) => {}}
@@ -262,7 +276,7 @@ export function QuickDraftDialog({
 
             {/* Image Upload */}
             <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Visual Image (Optional)</Label>
+              <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Visual Image (Optional)</Label>
               <UniversalImageUploader
                 initialImageUrl={imageUrl}
                 onUploadComplete={(urls) => setImageUrl(urls.cover)}
@@ -276,14 +290,14 @@ export function QuickDraftDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className={cn(UI_ENGINE_RADIUS_ACTION, "font-sans font-bold text-[10px] uppercase tracking-widest")}
+            className={cn(UI_ENGINE_RADIUS_ACTION, "font-bold text-[10px] uppercase tracking-widest", UI_ENGINE_TYPE_META)}
             disabled={isSubmitting}
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
-            className={cn(UI_ENGINE_RADIUS_ACTION, "bg-slate-900 hover:bg-slate-800 font-sans font-bold text-[10px] uppercase tracking-widest")}
+            className={cn(UI_ENGINE_RADIUS_ACTION, "bg-slate-900 hover:bg-slate-800 font-bold text-[10px] uppercase tracking-widest", UI_ENGINE_TYPE_META)}
             disabled={isSubmitting}
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}

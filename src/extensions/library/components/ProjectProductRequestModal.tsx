@@ -28,6 +28,14 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { UniversalImageUploader } from "@/components/ui/universal-image-uploader";
+import { cn } from "@/lib/utils";
+import {
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE,
+  UI_ENGINE_RADIUS_ACTION,
+  UI_ENGINE_RADIUS_CARD,
+  UI_ENGINE_RADIUS_CONTROL,
+} from "@/ui_engine";
 
 interface ProjectProductRequestModalProps {
   isOpen: boolean;
@@ -119,7 +127,7 @@ export function ProjectProductRequestModal({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[85vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
-        <DialogHeader className="p-6 border-b border-slate-100 bg-white">
+        <DialogHeader className={cn("p-6 border-b bg-white", UI_ENGINE_BORDER_SUBTLE)}>
           <DialogTitle className="font-lora text-2xl font-medium">Request Project Product</DialogTitle>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-slate-400 font-inter uppercase tracking-widest">
@@ -137,7 +145,7 @@ export function ProjectProductRequestModal({
                   options={products.map(m => ({ 
                     id: m.id, 
                     name: `${m.catalog_product_name} • ${m.vendor?.brand_name || "Custom"}`,
-                    badge: m.status === 'APPROVED' ? "Gold" : "Queue"
+                    badge: m.catalog_status === 'APPROVED' ? "Gold" : "Queue"
                   }))}
                   value={selectedProductId || undefined}
                   onSelect={(id, name) => {
@@ -169,7 +177,7 @@ export function ProjectProductRequestModal({
                  <Input
                    id="area_location"
                    placeholder="e.g. Master Bedroom, Dining Wall Area"
-                   className="bg-slate-50 border-none h-11 focus:ring-slate-900 text-sm font-inter"
+                   className={cn("border-none h-11 focus:ring-slate-900 text-sm font-inter", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                    value={areaLocation}
                    onChange={(e) => setAreaLocation(e.target.value)}
                  />
@@ -179,7 +187,7 @@ export function ProjectProductRequestModal({
                  <Input
                    id="notes"
                    placeholder="e.g. Needs sample for client meeting"
-                   className="bg-slate-50 border-none h-11 focus:ring-slate-900 text-sm font-inter"
+                   className={cn("border-none h-11 focus:ring-slate-900 text-sm font-inter", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                    value={notes}
                    onChange={(e) => setNotes(e.target.value)}
                  />
@@ -209,7 +217,7 @@ export function ProjectProductRequestModal({
                           <Input
                             id="custom_name"
                             placeholder="e.g. Roman Tile Granit G6022 (Product Name)"
-                            className="bg-white border-2 border-slate-100 focus:border-slate-900 h-12 text-sm font-medium transition-all"
+                            className={cn("bg-white border-2 focus:border-slate-900 h-12 text-sm font-medium transition-all", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                             value={customName}
                             onChange={(e) => setCustomName(e.target.value)}
                           />
@@ -219,7 +227,7 @@ export function ProjectProductRequestModal({
                           <Input
                             id="ref_url"
                             placeholder="https://www.tokopedia.com/product..."
-                            className="bg-white border-2 border-slate-100 focus:border-slate-900 h-12 text-sm font-inter transition-all"
+                            className={cn("bg-white border-2 focus:border-slate-900 h-12 text-sm font-inter transition-all", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                             value={referenceUrl}
                             onChange={(e) => setReferenceUrl(e.target.value)}
                           />
@@ -231,9 +239,9 @@ export function ProjectProductRequestModal({
 
           {!isManualEntry && selectedProductId && (
             <div className="py-6 animate-in zoom-in-95 duration-300">
-{products.filter(m => m.id === selectedProductId).map(m => (
-                  <div key={m.id} className="flex items-start gap-6 p-6 rounded-[2rem] bg-slate-50 border border-slate-100 shadow-sm transition-all hover:shadow-md">
-                     <div className="h-24 w-24 rounded-2xl bg-white shadow-inner overflow-hidden flex-shrink-0 border border-slate-100">
+              {products.filter(m => m.id === selectedProductId).map(m => (
+                  <div key={m.id} className={cn("flex items-start gap-6 p-6 border shadow-sm transition-all hover:shadow-md", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
+                     <div className={cn("h-24 w-24 bg-white shadow-inner overflow-hidden flex-shrink-0 border", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                        {m.catalog_image_url ? (
                          <img src={m.catalog_image_url || ""} alt={m.catalog_product_name || ""} className="w-full h-full object-cover" />
                        ) : (
@@ -245,10 +253,10 @@ export function ProjectProductRequestModal({
                      <div className="flex-1 space-y-2">
                         <div className="flex items-center justify-between">
                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Catalog Match</span>
-                           {m.status === 'APPROVED' ? (
+                           {m.catalog_status === 'APPROVED' ? (
                              <Badge className="bg-emerald-50 text-emerald-600 border-none font-black text-[8px] uppercase px-1.5 h-4">Gold Standard</Badge>
                            ) : (
-                             <Badge className="bg-slate-200 text-slate-600 border-none font-black text-[8px] uppercase px-1.5 h-4">In Queue</Badge>
+                             <Badge className={cn("text-slate-600 border-none font-black text-[8px] uppercase px-1.5 h-4", UI_ENGINE_BG_SUBTLE)}>In Queue</Badge>
                            )}
                         </div>
                         <h3 className="font-lora text-xl font-medium text-slate-900">{m.catalog_product_name}</h3>
@@ -266,14 +274,14 @@ export function ProjectProductRequestModal({
                     <div className="pt-1">
                        <CheckCircle2 className="h-6 w-6 text-emerald-500" />
                     </div>
-                 </div>
+                  </div>
                ))}
             </div>
           )}
 
           {!isManualEntry && !selectedProductId && (
             <div className="py-20 text-center opacity-30 flex flex-col items-center gap-4 animate-in fade-in duration-500">
-               <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center">
+               <div className={cn("h-16 w-16 flex items-center justify-center", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
                   <Search className="h-6 w-6 text-slate-400" />
                </div>
                <p className="text-sm font-medium font-inter">Search the archives to fetch product specs...</p>
@@ -281,7 +289,7 @@ export function ProjectProductRequestModal({
           )}
         </div>
 
-        <DialogFooter className="p-6 border-t border-slate-100 bg-slate-50 mt-auto flex items-center justify-end">
+        <DialogFooter className={cn("p-6 border-t mt-auto flex items-center justify-end", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_BG_SUBTLE)}>
           <Button 
             variant="ghost" 
             onClick={() => onOpenChange(false)}

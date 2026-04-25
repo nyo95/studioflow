@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { ClientManagementTable } from "@/components/client-management-table";
 import { SettingsShell } from "@/ui_engine";

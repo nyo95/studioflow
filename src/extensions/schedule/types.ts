@@ -1,4 +1,7 @@
 import { ProjectScheduleEntry, ProjectScheduleOption, PrefixDictionary, ProductType, ProductCatalog } from "@/generated/prisma";
+import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
+export type { ScheduleSnapshot as ScheduleOptionSnapshot } from "@/lib/validations/schedule-snapshot";
+export type { ScheduleSnapshot };
 
 export type GradualFormCustomData = {
   // Step 1: Primary
@@ -23,43 +26,6 @@ export type GradualFormData = {
 
 export type GradualFormProducts = Pick<ProductCatalog, "id" | "catalog_sku" | "catalog_product_name" | "catalog_brand" | "catalog_image_url">[];
 
-export type ScheduleOptionSnapshot = {
-  snapshot_source_kind: "catalog" | "manual";
-  snapshot_source_origin?: string | null;
-  snapshot_source_external_id?: string | null;
-  product_catalog_id: string | null;
-  catalog_type: ProductType;
-  schedule_category: string;
-  catalog_sub_category?: string | null;
-  catalog_product_name: string;
-  catalog_brand: string;
-  catalog_initials_type?: string | null;
-  catalog_price: number | null;
-  catalog_image_url: string | null;
-  catalog_reference_url: string | null;
-  catalog_contact_name?: string | null;
-  catalog_contact_phone?: string | null;
-  catalog_contact_email?: string | null;
-  catalog_has_sample?: boolean | null;
-  specs: {
-    catalog_sku: string;
-    catalog_motif?: string | null;
-    catalog_structured_tags: string[];
-    catalog_dimensions: string;
-    catalog_dimension_p?: string | null;
-    catalog_dimension_l?: string | null;
-    catalog_dimension_t?: string | null;
-    catalog_dimension_unit?: string | null;
-    catalog_color?: string | null;
-    catalog_finishing?: string | null;
-    catalog_reference_url?: string | null;
-    metadata: unknown;
-  };
-  snapshot_source_payload?: unknown;
-  snapshot_captured_at: string;
-  schedule_code?: string; // Computed
-  project_id?: string;    // Context
-};
 
 export type ProjectScheduleOptionWithProduct = ProjectScheduleOption & {
   product_catalog?: (ProductCatalog & {

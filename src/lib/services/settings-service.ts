@@ -1,10 +1,10 @@
 import { Prisma, ProductType } from "@/generated/prisma";
-import { ScheduleService } from "./schedule-service";
+import { ScheduleService } from "@/extensions/schedule/services/schedule-service";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
-import { SYSTEM_CONFIG_ID, GLOBAL_CHECKLIST_PHASE } from "@/lib/permissions";
+import { SYSTEM_CONFIG_ID, GLOBAL_CHECKLIST_PHASE } from "@/core/rbac/permissions";
 import { insertAuditLog } from "@/actions/_shared";
-import { AUDIT_ACTIONS } from "@/lib/services/audit";
+import { AUDIT_ACTIONS } from "@/core/platform/audit";
 import { sanitizeUISettings } from "@/lib/ui-settings";
 import type { UISettings } from "@/types/common";
 

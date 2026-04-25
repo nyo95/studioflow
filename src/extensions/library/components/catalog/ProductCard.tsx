@@ -77,13 +77,13 @@ export function ProductCard({
           <Badge className={cn("bg-white/95 backdrop-blur-md text-slate-900 border-none font-inter font-black px-2.5 py-1 shadow-sm uppercase tracking-[0.1em] text-[9px]", UI_ENGINE_RADIUS_ACTION)}>
             {category}
           </Badge>
-          {product.status !== "APPROVED" && (
+          {product.catalog_status !== "APPROVED" && (
             <Badge className={cn(
               "backdrop-blur-md border-none font-inter font-black px-2.5 py-1 shadow-sm uppercase tracking-[0.1em] text-[9px]",
-              product.status === "PENDING" ? "bg-amber-500 text-white" : "bg-red-500 text-white",
+              product.catalog_status === "PENDING" ? "bg-amber-500 text-white" : "bg-red-500 text-white",
               UI_ENGINE_RADIUS_ACTION
             )}>
-              {product.status}
+              {product.catalog_status}
             </Badge>
           )}
         </div>

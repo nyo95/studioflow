@@ -14,6 +14,20 @@ import { ProductType } from "@/generated/prisma";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { getAvailableSchedulerCategories } from "@/actions/settings-actions";
 import { unwrapActionResult } from "@/lib/result";
+import { cn } from "@/lib/utils";
+import { 
+  UI_ENGINE_RADIUS_CARD, 
+  UI_ENGINE_RADIUS_CONTROL 
+} from "@/ui_engine/tokens/layout";
+import {
+  UI_ENGINE_TYPE_TITLE,
+  UI_ENGINE_TYPE_BODY,
+  UI_ENGINE_TYPE_META
+} from "@/ui_engine/tokens/typography";
+import {
+  UI_ENGINE_BG_SUBTLE,
+  UI_ENGINE_BORDER_SUBTLE
+} from "@/ui_engine/tokens/colors";
 
 interface ScheduleCategoryPickerModalProps {
   isOpen: boolean;
@@ -55,13 +69,13 @@ export function ScheduleCategoryPickerModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md rounded-3xl border-slate-200 bg-white p-0 shadow-2xl">
+      <DialogContent className={cn("max-w-md border-slate-200 bg-white p-0 shadow-2xl overflow-hidden", UI_ENGINE_RADIUS_CARD)}>
         <DialogHeader className="border-b border-slate-100 px-6 py-5">
-          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white">
+          <div className={cn("mb-3 flex h-11 w-11 items-center justify-center bg-slate-950 text-white", UI_ENGINE_RADIUS_CONTROL)}>
             <FolderPlus className="h-5 w-5" />
           </div>
-          <DialogTitle className="font-lora text-2xl text-slate-900">Add First Row</DialogTitle>
-          <DialogDescription className="font-inter text-sm text-slate-500">
+          <DialogTitle className={cn("font-lora text-slate-900", UI_ENGINE_TYPE_TITLE)}>Add First Row</DialogTitle>
+          <DialogDescription className={cn("text-slate-500", UI_ENGINE_TYPE_BODY)}>
             Choose a {sectionLabel} category before opening the manual/catalog picker.
           </DialogDescription>
         </DialogHeader>
@@ -84,13 +98,13 @@ export function ScheduleCategoryPickerModal({
           <div className="flex items-center justify-end gap-3">
             <Button
               variant="ghost"
-              className="rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-500"
+              className={cn("text-xs font-bold uppercase tracking-widest text-slate-500", UI_ENGINE_RADIUS_CONTROL)}
               onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
             <Button
-              className="rounded-2xl bg-slate-950 px-6 text-xs font-bold uppercase tracking-widest text-white hover:bg-slate-800"
+              className={cn("bg-slate-950 px-6 text-xs font-bold uppercase tracking-widest text-white hover:bg-slate-800", UI_ENGINE_RADIUS_CONTROL)}
               disabled={!selectedCategory}
               onClick={() => {
                 onSelect(selectedCategory);
