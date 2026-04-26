@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { toast } from "sonner";
 import {
   DndContext,
   closestCorners,
@@ -68,22 +69,8 @@ export function ScheduleBoard({
     if (!activeContainer || !overContainer) return;
 
     if (activeContainer.schedule_category !== overContainer.schedule_category) {
-      // Logic for moving between categories
-      const activeEntries = activeContainer.entries;
-      const overEntries = overContainer.entries;
-      const oldIndex = activeEntries.findIndex(e => e.id === activeId);
-      const newIndex = overContainer.schedule_category === overId 
-        ? overEntries.length 
-        : overEntries.findIndex(e => e.id === overId);
-
-      if (onMoveBetweenCategories) {
-        await onMoveBetweenCategories(
-          activeId, 
-          activeContainer.schedule_category, 
-          overContainer.schedule_category, 
-          newIndex
-        );
-      }
+      toast.error("Memindahkan item antar kategori tidak diizinkan.");
+      return;
     } else {
       // Reordering within the same category
       const entries = activeContainer.entries;

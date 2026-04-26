@@ -368,19 +368,8 @@ export const moveEntryToCategoryAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
 
-    // Validate ownership
-    await ScheduleService.validateOwnership(tx, input.projectId, input.entryId);
-
-    await ScheduleService.moveEntryToCategory(
-      tx,
-      input.entryId,
-      input.toCategory,
-      input.newIndex + 1, // normalize to 1-based sort order
-      ctx.userId
-    );
-
-    invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
-    return { success: true };
+    // DEVIATION PREVENTION: Do not allow moving schedule entries to another category to preserve semantic ID integrity.
+    throw new ActionError("Moving items between categories is prohibited to maintain code integrity.", "VALIDATION_FAILED");
   },
   { schema: MoveBetweenCategoriesSchema }
 );

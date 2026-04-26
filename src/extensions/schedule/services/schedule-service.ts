@@ -1130,38 +1130,8 @@ export class ScheduleService {
       return;
     }
 
-    // Find prefix for target category
-    const prefixRef = await tx.prefixDictionary.findUnique({
-      where: { 
-        section_schedule_category: {
-          section: entry.section,
-          schedule_category: normalizedTarget
-        }
-      }
-    });
-
-    // Update entry
-    await tx.projectScheduleEntry.update({
-      where: { id: entryId },
-      data: {
-        schedule_category: normalizedTarget,
-        prefix_id: prefixRef?.id || null,
-        schedule_sort_order: newSortOrder
-      }
-    });
-
-    // Normalize both
-    await this.normalizeCodes(tx, entry.project_id, entry.section, sourceCategory);
-    await this.normalizeCodes(tx, entry.project_id, entry.section, normalizedTarget);
-
-    if (userId) {
-      await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_ENTRY, "ProjectScheduleEntry", entryId, userId, {
-        project_id: entry.project_id,
-        from_category: sourceCategory,
-        to_category: normalizedTarget,
-        action: "MOVE_CATEGORY"
-      });
-    }
+    // DEVIATION PREVENTION: Do not allow moving schedule entries to another category to preserve semantic ID integrity.
+    throw new Error("Moving items between categories is prohibited to maintain schedule code integrity.");
   }
 
   static async normalizeAllProjectsCodesForCategory(tx: PrismaTransaction, category: string, section: ProductType, userId?: string) {

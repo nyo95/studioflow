@@ -236,29 +236,8 @@ export function ProjectScheduleMain({
 
       await handleReorder(sourceGroup.schedule_category, reorderItems);
     } else {
-      const newIndex = targetGroup.entries.findIndex((e) => e.id === over.id);
-      
-      const updatedGroups = sheet.groups.map(g => {
-        if (g.schedule_category === sourceGroup.schedule_category) {
-          return { ...g, entries: g.entries.filter((e) => e.id !== active.id) };
-        }
-        if (g.schedule_category === targetGroup.schedule_category) {
-          const next = [...g.entries];
-          if (activeEntry) {
-            next.splice(newIndex, 0, activeEntry);
-          }
-          return { ...g, entries: next };
-        }
-        return g;
-      });
-      setSheet({ ...sheet, groups: updatedGroups });
-
-      await handleMoveBetweenCategories(
-        active.id as string, 
-        sourceGroup.schedule_category, 
-        targetGroup.schedule_category, 
-        newIndex
-      );
+      toast.error("Memindahkan item antar kategori tidak diizinkan.");
+      return;
     }
   };
 

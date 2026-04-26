@@ -8,7 +8,12 @@
 - **Linting & Code Quality**: Resolved residual ESLint warnings (`prefer-const`, synchronous state in effect) to ensure production-grade cleanliness.
 - **Full Application Readiness**: Architecture (View-First, Zero Hardcode) is verified, backend snapshot logic is hardened, and UI inconsistency has been fully patched. The application is now ready for daily usage in the firm.
 
-## [v2.3.1] — 2026-04-27 (versi 1.9.5)
+## [v2.4.1] — 2026-04-27 (versi 1.9.1 Beta)
+
+### Fixed
+- **Cross-Category Drag Deviation (BUG-09)**: Architecturally blocked the ability to drag and drop or swap schedule entries into a different category (e.g., preventing PL-1 from being dragged into the Paint category to become PT-1). This includes explicit UI guardrails (`toast.error`) in `ProjectScheduleMain.tsx` and `ScheduleBoard.tsx`, and backend validation throwing `ActionError` in `schedule-actions.ts` and `schedule-service.ts`.
+
+## [v2.4.0] — 2026-04-27 (versi 1.9.0 Beta)
 
 ### UI Changes
 - **Zero Hardcode Compliance**: 
