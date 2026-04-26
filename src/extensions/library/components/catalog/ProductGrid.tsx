@@ -35,8 +35,8 @@ export function ProductGrid({
         <div className="h-16 w-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
           <PackageOpen className="h-8 w-8 text-slate-200" />
         </div>
-        <h3 className="font-lora text-lg font-medium text-slate-900">No products found</h3>
-        <p className="text-sm text-slate-500 font-inter mt-1">Try adjusting your filters or search query.</p>
+        <h3 className="font-serif text-lg font-medium text-slate-900">No products found</h3>
+        <p className="text-sm text-slate-500 font-sans mt-1">Try adjusting your filters or search query.</p>
       </div>
     );
   }
@@ -64,7 +64,7 @@ export function ProductGrid({
             size="sm"
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="h-10 px-4 rounded-xl font-inter text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+            className="h-10 px-4 rounded-xl font-sans text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30"
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
             Previous
@@ -77,7 +77,7 @@ export function ProductGrid({
                 variant={currentPage === page ? "default" : "ghost"}
                 size="sm"
                 onClick={() => onPageChange(page)}
-                className={`h-10 w-10 rounded-xl font-inter text-xs font-bold ${
+                className={`h-10 w-10 rounded-xl font-sans text-xs font-bold ${
                   currentPage === page 
                     ? "bg-slate-900 text-white shadow-lg" 
                     : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
@@ -93,7 +93,7 @@ export function ProductGrid({
             size="sm"
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="h-10 px-4 rounded-xl font-inter text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+            className="h-10 px-4 rounded-xl font-sans text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30"
           >
             Next
             <ChevronRight className="h-4 w-4 ml-2" />

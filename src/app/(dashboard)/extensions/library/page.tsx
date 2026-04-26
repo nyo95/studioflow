@@ -17,7 +17,8 @@ import {
 import { toast } from "sonner";
 import { ProductCatalogWithRelations, LibraryVendor, ProjectProductRequestWithDetails } from "@/extensions/library/types";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
 
 type PromotionRequestSummary = {
   id: string;
@@ -37,6 +38,7 @@ type PromotionRequestSummary = {
 };
 
 export default function LibraryPage() {
+  const router = useRouter();
   const [vendors, setVendors] = React.useState<LibraryVendor[]>([]);
   const [products, setProducts] = React.useState<ProductCatalogWithRelations[]>([]);
   const [totalProducts, setTotalProducts] = React.useState(0);
@@ -76,43 +78,46 @@ export default function LibraryPage() {
   }, []);
 
   // Initial Data Load (Vendors, Metadata, Categories, Requests)
+  const fetchMetadata = React.useCallback(async () => {
+    try {
+      const [vendorsRes, catsRes, roleRes, metaRes, groupedCatsRes, requestsRes, promoRes] = await Promise.all([
+        getVendorsAction(undefined),
+        getLibraryCategoriesAction(undefined),
+        getMyRoleAction(undefined),
+        getProductMetadataAction(undefined),
+        getGroupedCategoriesAction(undefined),
+        getAllProductRequestsAction(undefined),
+        getPromotionRequestsAction(undefined),
+      ]);
+
+      if (vendorsRes.success) setVendors(vendorsRes.data);
+      if (requestsRes.success) setRequests(requestsRes.data);
+      if (promoRes.success) {
+        setPromotionRequests(normalizePromotionRequests(promoRes.data as unknown as PromotionRequestSummary[]));
+      }
+      if (catsRes.success) setCategories(catsRes.data);
+      if (roleRes.success) setRole(roleRes.data);
+      if (metaRes.success) {
+        setSubCategories(metaRes.data.subCategories);
+        setFinishings(metaRes.data.finishings);
+      }
+      if (groupedCatsRes.success) {
+        setMaterialsCategories(groupedCatsRes.data.materials);
+        setFixturesCategories(groupedCatsRes.data.fixtures);
+      }
+    } catch {
+      toast.error("Failed to load library metadata");
+    }
+  }, [normalizePromotionRequests]);
+
   React.useEffect(() => {
     async function init() {
       setIsLoading(true);
-      try {
-        const [vendorsRes, catsRes, roleRes, metaRes, groupedCatsRes, requestsRes, promoRes] = await Promise.all([
-          getVendorsAction(undefined),
-          getLibraryCategoriesAction(undefined),
-          getMyRoleAction(undefined),
-          getProductMetadataAction(undefined),
-          getGroupedCategoriesAction(undefined),
-          getAllProductRequestsAction(undefined),
-          getPromotionRequestsAction(undefined),
-        ]);
-
-        if (vendorsRes.success) setVendors(vendorsRes.data);
-        if (requestsRes.success) setRequests(requestsRes.data);
-        if (promoRes.success) {
-          setPromotionRequests(normalizePromotionRequests(promoRes.data as unknown as PromotionRequestSummary[]));
-        }
-        if (catsRes.success) setCategories(catsRes.data);
-        if (roleRes.success) setRole(roleRes.data);
-        if (metaRes.success) {
-          setSubCategories(metaRes.data.subCategories);
-          setFinishings(metaRes.data.finishings);
-        }
-        if (groupedCatsRes.success) {
-          setMaterialsCategories(groupedCatsRes.data.materials);
-          setFixturesCategories(groupedCatsRes.data.fixtures);
-        }
-      } catch {
-        toast.error("Failed to load library metadata");
-      } finally {
-        setIsLoading(false);
-      }
+      await fetchMetadata();
+      setIsLoading(false);
     }
     init();
-  }, [normalizePromotionRequests]);
+  }, [fetchMetadata]);
 
   // Product Data Load (Triggered by filters/pagination)
   const fetchProducts = React.useCallback(async () => {
@@ -124,7 +129,7 @@ export default function LibraryPage() {
       const statusFilter = activeTab === "queue" 
         ? "PENDING" 
         : activeTab === "catalog" 
-          ? (isAdminOrStaff ? undefined : "APPROVED") 
+          ? "APPROVED" 
           : undefined;
       
       const res = await getProductsAction({
@@ -156,22 +161,27 @@ export default function LibraryPage() {
     setCurrentPage(1);
   }, [debouncedSearch, selectedCategory, showPhysicalOnly, activeTab]);
 
+  const handleRefreshAll = React.useCallback(async () => {
+    setIsRefreshingProducts(true);
+    await Promise.all([
+      fetchProducts(),
+      fetchMetadata()
+    ]);
+    setIsRefreshingProducts(false);
+    router.refresh();
+  }, [fetchProducts, fetchMetadata, router]);
+
   return (
-    <DashboardPageShell className="max-w-[min(var(--ui-page-max-width,1280px),96rem)] animate-in fade-in duration-700">
+    <DashboardPageShell>
       <div>
         <PageHeader
           eyebrow="Extensions"
-          title="Material Library"
+          title="Product Library"
           description="Manage products, vendors, and inventory samples."
         />
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-24">
-            <div className="flex flex-col items-center gap-4">
-               <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-100 border-t-slate-900" />
-               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Syncing Catalog...</span>
-            </div>
-          </div>
+          <PageSkeleton type="grid" className="p-0 py-0" />
         ) : (
           <ErrorBoundary name="Library">
             <LibraryTabs
@@ -198,6 +208,7 @@ export default function LibraryPage() {
               isRefreshing={isRefreshingProducts}
               activeTab={activeTab}
               onTabChange={setActiveTab}
+              onRefreshAll={handleRefreshAll}
             />
           </ErrorBoundary>
         )}

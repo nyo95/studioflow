@@ -1,6 +1,77 @@
 # StudioFlow Development Log (Changelog)
 
+## [v2.4.0] — 2026-04-27 (versi 1.9.0 Beta)
+
+### Production Validation
+- **System Stability Verified**: Successfully ran `npx tsc --noEmit` with zero errors, confirming type safety across 100% of the codebase.
+- **Production Build Passed**: Executed Next.js optimized production build (`npm run build`) without any static generation or hydration errors.
+- **Linting & Code Quality**: Resolved residual ESLint warnings (`prefer-const`, synchronous state in effect) to ensure production-grade cleanliness.
+- **Full Application Readiness**: Architecture (View-First, Zero Hardcode) is verified, backend snapshot logic is hardened, and UI inconsistency has been fully patched. The application is now ready for daily usage in the firm.
+
+## [v2.3.1] — 2026-04-27 (versi 1.9.5)
+
+### UI Changes
+- **Zero Hardcode Compliance**: 
+    - Replaced hardcoded `font-lora` and `font-inter` with semantic design system tokens (`font-serif` and `font-sans`) across the codebase.
+    - Replaced hardcoded "Premium Vibe" colors (`bg-blue-600`, `bg-blue-50`) with semantic accent colors (`bg-slate-900`, `bg-slate-50`) to comply with the Zero Hardcode policy.
+- **Animation Encapsulation**: Moved `animate-in fade-in duration-700` into `DashboardPageShell` and removed redundancies from individual pages.
+
+### Changed
+- **Library Workflow**: Catalog tab now enforces `APPROVED` item visibility for all roles, resolving UX redundancy where Admin/Staff saw `PENDING` items mixed with production data.
+
+## [v2.3.0] — 2026-04-27 (versi 1.9.4)
+
+### UI Changes
+- **Color Selector (BUG-08)**: 
+    - Introduced `VisualAsset` component to handle both image URLs and solid color swatches via `color:` prefixing.
+    - Updated `OptimizedUploader` with a dual-mode toggle ("Image" vs "Color") for premium asset harvesting.
+    - Standardized asset rendering across `ScheduleRow`, `VisualRow`, and `ScheduleSpecEditorModal` hero sections.
+- **Sample Request Visibility (BUG-04)**: Moved the "Request Sample" button out of the hover-only group in schedule rows, ensuring it is always visible and accessible for linked products.
+- **Terminology Update (BUG-02)**: Renamed "Material Library" to "Product Library" across the application to reflect the broader inclusion of fixtures and samples.
+
+### Fixed
+- **Library Auto-Refresh (BUG-01)**: Implemented a robust `refreshAll` callback chain in `LibraryPage`, ensuring that product additions, metadata updates, and promotion reviews trigger immediate UI synchronization without page reloads.
+- **Security Hardening (BUG-03 & BUG-05)**:
+    - Added category and section validation to `ScheduleService.addOptionToEntry` and `addEntryToSchedule` to prevent cross-category product injection.
+    - Enforced project-local and category-specific guards in `swapEntries`, ensuring data integrity during schedule reordering.
+- **Promotion Return Type (BUG-07)**: Fixed a return type mismatch in `reviewPromotionRequestAction` that previously caused runtime errors when linking to existing duplicate catalog items.
+- **Double Audit Logging (BUG-06)**: Optimized `schedule-actions.ts` by removing redundant `insertAuditLog` calls, deferring all mutation logging to the service layer for a single source of truth.
+- **Syntactic Integrity**: Restored `schedule-actions.ts` and `PromotionQueueTable.tsx` after temporary corruption, ensuring production-ready code stability.
+
+### Added
+- **Deterministic Code Normalization**: integrated `normalizeCodes` into `swapEntries` to maintain sequential integrity of schedule codes after reordering.
+
+## [v2.2.4] — 2026-04-26 (versi 1.9.3)
+
+### UI Changes
+- **Layout Alignment Fix (Miring)**: Removed redundant horizontal padding (`px-[1.5rem]`) from `DashboardPageShell` to perfectly align page content with the `TopHeader` padded container.
+- **Container De-nesting**: 
+    - Removed redundant background/padding wrappers from `VisualTable` and `ProjectChecklistOverview` to achieve a flatter, cleaner UI as requested.
+    - Simplified `ProjectChecklistOverview` by removing internal `Card` and `Heading` elements that duplicated parent sidebar section context.
+- **Premium Image Uploader**: Redesigned `UniversalImageUploader` with solid borders, subtle background tints, and refined hover states, replacing generic dashed-border styles.
+- **Table Layout Hardening**: 
+    - Enforced `table-fixed` layout in `ScheduleTable` and removed `overflow-x-auto` to eliminate unintended horizontal scrolling and ensure consistent column widths (Locked Table Layout).
+    - Fixed a UI regression in `TableCardHead` where the `div` wrapper caused `text-[10px]` styling to cascade incorrectly, restoring the correct 10px uppercase metadata typography.
+    - Tokenized the interactive column resizer handle using the `UI_ENGINE_INTERACTIVE_RESIZER` design token.
+- **Modal Flow Optimization**: Updated `GradualInputForm` to dynamically exclude the "Classification" (TYPE) step when the product section (Material/Fixture) is already known, reducing redundant user input.
+
+### Fixed
+- **Table Body Typography Regression**: Restored `text-sm` to the underlying `<table />` container in `TableCard` to fix an issue where the body font size defaulted to `text-base` after stripping the Shadcn container.
+- **Resizer Hydration Error**: Fixed a React hydration mismatch in `useTableResizer` by enforcing the default column widths on initial client render and syncing with `localStorage` via a `useEffect`.
+- **Schedule Prefix Overwriting**: Resolved a logic defect in `schedule-service.ts` where custom category prefixes in the `PrefixDictionary` were being overwritten by generic two-letter defaults during entry creation.
+- **Dynamic Step Counter**: Fixed the step progress indicator in the gradual input form to correctly reflect the total number of active steps after dynamic filtering.
+
+### Added
+- **Dynamic Product Type Context**: Improved the `Add Alternative` flow to automatically pass section context, bypassing redundant classification questions.
+
+
 ## [v2.2.3] — 2026-04-26 (versi 1.8)
+
+### UI Changes
+- **Phase Detail Hierarchy Flattening**: Removed the redundant `SectionCard` wrapper around the main content area in `PhaseDetailPage` to reduce visual clutter and excess padding.
+- **Visual Row Contrast Polish**: Updated the selected row state in `VisualRow` to use a high-contrast dark background (`bg-slate-900`) for improved legibility of the white text overlay.
+- **Optimized Uploader Premium Restyling**: Restyled `OptimizedUploader` using design tokens, fixing hardcoded radii and standardizing the gradient/shadow visual profile.
+- **Table Card Scroll Fix**: Wrapped `TableCard` children in an `overflow-x-auto` container to restore proper horizontal scrolling.
 
 ### Added
 - **Standardized UI Placeholder Component**: Introduced `ImagePlaceholder` in `UI_ENGINE`. This component restores the clean, stacked "NO IMAGE" visual design from v1.6 while being fully compliant with the new design system tokens.

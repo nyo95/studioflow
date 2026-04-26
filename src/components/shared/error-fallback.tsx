@@ -15,8 +15,8 @@ export function ErrorFallback({
 }: ErrorFallbackProps) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center">
-      <p className="font-lora text-xl text-slate-900">{title}</p>
-      <p className="mt-2 font-inter text-sm text-slate-500">{message}</p>
+      <p className="font-serif text-xl text-slate-900">{title}</p>
+      <p className="mt-2 font-sans text-sm text-slate-500">{message}</p>
       {onRetry ? (
         <Button
           type="button"

@@ -74,7 +74,7 @@ export function ScheduleCategoryPickerModal({
           <div className={cn("mb-3 flex h-11 w-11 items-center justify-center bg-slate-950 text-white", UI_ENGINE_RADIUS_CONTROL)}>
             <FolderPlus className="h-5 w-5" />
           </div>
-          <DialogTitle className={cn("font-lora text-slate-900", UI_ENGINE_TYPE_TITLE)}>Add First Row</DialogTitle>
+          <DialogTitle className={cn("font-serif text-slate-900", UI_ENGINE_TYPE_TITLE)}>Add First Row</DialogTitle>
           <DialogDescription className={cn("text-slate-500", UI_ENGINE_TYPE_BODY)}>
             Choose a {sectionLabel} category before opening the manual/catalog picker.
           </DialogDescription>

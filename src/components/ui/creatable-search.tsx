@@ -71,9 +71,12 @@ export function CreatableSearch({
     if (selected) {
       // Only sync when a real selection is made (not during typing)
       setSearch(selected.name);
+    } else if (allowFreeText && value) {
+      // For free text usage, value itself is the text
+      setSearch(value);
     }
     // Don't clear search when value is unset - let user keep typing
-  }, [value, allOptions]);
+  }, [value, allOptions, allowFreeText]);
 
   const filterOptions = React.useCallback((opts: Option[]) => {
     const normalized = search.trim().toLowerCase();
@@ -199,7 +202,7 @@ export function CreatableSearch({
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
           disabled={disabled}
-          className="pl-9 pr-4 bg-slate-50 border-none focus-visible:ring-slate-900 transition-all font-inter"
+          className="pl-9 pr-4 bg-slate-50 border-none focus-visible:ring-slate-900 transition-all font-sans"
         />
       </div>
 

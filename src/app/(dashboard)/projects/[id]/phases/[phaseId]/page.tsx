@@ -130,35 +130,17 @@ export default async function PhaseDetailPage({
 
       <HydrationGuard>
         {activeRevision ? (
-          <SectionCard
-            padding="sm"
-            className="animate-in fade-in slide-in-from-bottom-4 duration-700"
-            header={
-              <>
-                <span className="font-serif text-xs font-black uppercase tracking-widest">Tasks & Action Items</span>
-                <span className="text-[9px] font-mono uppercase tracking-widest opacity-60">
-                  {activeRevision.status_enum}
-                </span>
-              </>
-            }
-            headerVariant="dark"
-          >
-            <div className="grid grid-cols-1 gap-6">
-              <div className="space-y-6">
-                <ActivityManager
-                  revisionId={activeRevision.id}
-                  isLocked={phase.is_locked || activeRevision.status_enum !== "ACTIVE"}
-                  phaseStatus={phase.status_enum}
-                  phaseName={phase.name_enum as PhaseName}
-                  userId={userId}
-                  userRole={role as Role}
-                  canMutate={canMutateContent}
-                />
-              </div>
-
-
-            </div>
-          </SectionCard>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <ActivityManager
+              revisionId={activeRevision.id}
+              isLocked={phase.is_locked || activeRevision.status_enum !== "ACTIVE"}
+              phaseStatus={phase.status_enum}
+              phaseName={phase.name_enum as PhaseName}
+              userId={userId}
+              userRole={role as Role}
+              canMutate={canMutateContent}
+            />
+          </div>
         ) : (
           <div className="rounded-2xl border-2 border-dashed border-zinc-100 bg-zinc-50/10 py-20 text-center font-sans text-slate-400">
             <Clock className="mx-auto mb-4 h-10 w-10 opacity-20" />
@@ -170,7 +152,7 @@ export default async function PhaseDetailPage({
   );
 
   return (
-    <DashboardPageShell className="animate-in fade-in duration-700">
+    <DashboardPageShell>
       <PhaseLiveProvider phaseId={phaseId} initialSnapshot={initialSnapshot}>
         <PageBackLink />
 
@@ -243,45 +225,37 @@ export default async function PhaseDetailPage({
         />
 
         <div className="grid grid-cols-1 gap-10 xl:grid-cols-12">
-          <div className="space-y-12 xl:col-span-8">
-            <SectionCard
-              header={
-                <div>
-                  <Heading variant="uiMeta" level={6}>Phase Metadata</Heading>
-                  <Heading level={2} className="mt-2 text-slate-900">Overview</Heading>
-                </div>
-              }
-              className=""
-            >
-              {phase.name_enum === "CD" ? (
-                <Tabs defaultValue="review" className="w-full">
-                  <TabsList className="grid h-auto w-full grid-cols-2 border border-slate-200 bg-slate-50 p-1">
-                    <TabsTrigger value="review" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
-                      Active Review
-                    </TabsTrigger>
-                    <TabsTrigger value="cd-list" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
-                      CD List
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="review" className="mt-6">
-                    {reviewPanel}
-                  </TabsContent>
-                  <TabsContent value="cd-list" className="mt-6">
-                    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-                      <CDListTable
-                        phaseId={phase.id}
-                        items={phase.cd_lists}
-                        userId={userId}
-                        userRole={role as Role}
-                        canMutate={canManagePhase}
-                      />
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              ) : (
-                reviewPanel
-              )}
-            </SectionCard>
+          <div className="space-y-8 xl:col-span-8">
+
+            
+            {phase.name_enum === "CD" ? (
+              <Tabs defaultValue="review" className="w-full">
+                <TabsList className="grid h-auto w-full grid-cols-2 border border-slate-200 bg-slate-50 p-1 mb-8">
+                  <TabsTrigger value="review" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
+                    Active Review
+                  </TabsTrigger>
+                  <TabsTrigger value="cd-list" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
+                    CD List
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="review" className="mt-0">
+                  {reviewPanel}
+                </TabsContent>
+                <TabsContent value="cd-list" className="mt-0">
+                  <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+                    <CDListTable
+                      phaseId={phase.id}
+                      items={phase.cd_lists}
+                      userId={userId}
+                      userRole={role as Role}
+                      canMutate={canManagePhase}
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
+            ) : (
+              reviewPanel
+            )}
           </div>
 
           <ActionSidebar className="xl:col-span-4">

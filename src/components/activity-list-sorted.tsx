@@ -51,10 +51,10 @@ export function ActivityListSorted({
         <TabsList className="grid w-full grid-cols-2 bg-slate-100 p-1 rounded-lg">
           <TabsTrigger 
             value="ongoing" 
-            className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-slate-500 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
+            className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
           >
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]" />
+              <div className="h-1.5 w-1.5 rounded-full bg-slate-800 animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]" />
               Ongoing ({ongoing.length})
             </div>
           </TabsTrigger>

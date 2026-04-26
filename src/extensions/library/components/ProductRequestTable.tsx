@@ -52,7 +52,7 @@ interface ProductRequestTableProps {
 }
 
 const STATUS_CONFIG: Record<ProductRequestStatus, { label: string; color: string; icon: LucideIcon }> = {
-  REQUESTED: { label: "Requested", color: "bg-blue-50 text-blue-700 border-blue-100", icon: ArrowRightCircle },
+  REQUESTED: { label: "Requested", color: "bg-slate-50 text-slate-900 border-slate-200", icon: ArrowRightCircle },
   ORDERED: { label: "Ordered", color: "bg-amber-50 text-amber-700 border-amber-100", icon: History },
   SHIPPED: { label: "Shipped", color: "bg-purple-50 text-purple-700 border-purple-100", icon: Box },
   RECEIVED: { label: "Received", color: "bg-emerald-50 text-emerald-700 border-emerald-100", icon: CheckCircle2 },
@@ -96,8 +96,8 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
         <div className={cn("h-16 w-16 flex items-center justify-center mx-auto mb-4", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
           <Box className="h-6 w-6 text-slate-200" />
         </div>
-        <h3 className="font-lora text-lg text-slate-900 mb-1">No requests active</h3>
-        <p className="text-sm text-slate-400 font-inter font-medium tracking-tight">Project product requests will appear here for review.</p>
+        <h3 className="font-serif text-lg text-slate-900 mb-1">No requests active</h3>
+        <p className="text-sm text-slate-400 font-sans font-medium tracking-tight">Project product requests will appear here for review.</p>
       </div>
     );
   }
@@ -107,11 +107,11 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
       <Table>
         <TableHeader>
           <TableRow className={cn("hover:bg-transparent h-14 border-b", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400 pl-6">Project Context</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Product Requested</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Requestor</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400">Spec Status</TableHead>
-            <TableHead className="font-inter font-bold text-[10px] uppercase tracking-wider text-slate-400 text-right pr-6">Actions</TableHead>
+            <TableHead className="font-sans font-bold text-[10px] uppercase tracking-wider text-slate-400 pl-6">Project Context</TableHead>
+            <TableHead className="font-sans font-bold text-[10px] uppercase tracking-wider text-slate-400">Product Requested</TableHead>
+            <TableHead className="font-sans font-bold text-[10px] uppercase tracking-wider text-slate-400">Requestor</TableHead>
+            <TableHead className="font-sans font-bold text-[10px] uppercase tracking-wider text-slate-400">Spec Status</TableHead>
+            <TableHead className="font-sans font-bold text-[10px] uppercase tracking-wider text-slate-400 text-right pr-6">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -124,10 +124,10 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
               <TableRow key={req.id} className={cn("group transition-colors border-b min-h-[70px]", UI_ENGINE_BORDER_SUBTLE)}>
                 <TableCell className="pl-6">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-inter font-bold text-slate-900 truncate max-w-[150px]">
+                    <span className="text-xs font-sans font-bold text-slate-900 truncate max-w-[150px]">
                       {req.project.name}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-inter flex items-center gap-1">
+                    <span className="text-[10px] text-slate-400 font-sans flex items-center gap-1">
                       <MapPin className="h-2.5 w-2.5" />
                       {req.area_location || "Universal"}
                     </span>
@@ -145,11 +145,11 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                       )}
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-lora font-medium text-slate-900 text-xs">
+                      <span className="font-serif font-medium text-slate-900 text-xs">
                         {mat?.catalog_sku || req.custom_product_name || "Custom Product"}
                         {!mat && <Badge className="ml-2 bg-amber-50 text-amber-600 border-none text-[8px] h-4 px-1">Manual</Badge>}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-inter uppercase tracking-widest font-bold">
+                      <span className="text-[10px] text-slate-400 font-sans uppercase tracking-widest font-bold">
                         {mat?.catalog_brand || mat?.vendor?.brand_name || "Custom Source"}
                       </span>
                     </div>
@@ -157,11 +157,11 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1.5 text-slate-700 font-inter font-semibold text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-700 font-sans font-semibold text-xs">
                        <UserIcon className="h-3 w-3 text-slate-300" />
                        {req.requested_by.name}
                     </div>
-                    <span className="text-[9px] text-slate-400 font-inter">
+                    <span className="text-[9px] text-slate-400 font-sans">
                       {new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(req.created_at))}
                     </span>
                   </div>
@@ -173,7 +173,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                       {config.label}
                     </Badge>
                     {req.status === "RECEIVED" && (
-                      <span className="text-[9px] text-emerald-600 font-bold font-inter ml-1">
+                      <span className="text-[9px] text-emerald-600 font-bold font-sans ml-1">
                         By {req.staff_name_override || "Admin"}
                       </span>
                     )}
@@ -204,7 +204,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                           {updatingId === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className={cn("w-[180px] shadow-2xl p-2 font-inter bg-white", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
+                      <DropdownMenuContent align="end" className={cn("w-[180px] shadow-2xl p-2 font-sans bg-white", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                         <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black px-2 py-2">Set Status</DropdownMenuLabel>
                         <DropdownMenuSeparator className={cn(UI_ENGINE_BG_SUBTLE)} />
                         {(Object.keys(STATUS_CONFIG) as ProductRequestStatus[]).map((status) => (

@@ -263,7 +263,7 @@ export function ActivityManager({
                         onClick={() => handleDefer(activity.id)}
                         disabled={loading === `defer-${activity.id}`}
                         title="Defer to project level"
-                        className="p-1 text-slate-300 hover:text-blue-600 transition-colors"
+                        className="p-1 text-slate-300 hover:text-slate-900 transition-colors"
                       >
                         {loading === `defer-${activity.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightCircle className="w-4 h-4" />}
                       </button>

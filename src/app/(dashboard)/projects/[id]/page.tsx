@@ -139,7 +139,7 @@ export default async function ProjectOverviewPage({
     : "";
 
   return (
-    <DashboardPageShell className="animate-in fade-in duration-700">
+    <DashboardPageShell>
       <PageBackLink />
       <PageHeader
         title={project.name}

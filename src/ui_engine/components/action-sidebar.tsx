@@ -66,10 +66,10 @@ export function ActionSidebarItem({
   ...props
 }: ActionSidebarItemProps) {
   return (
-    <div className={cn("flex flex-col gap-3", className)} {...props}>
-      <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 font-inter">
+    <div className={cn("flex flex-col gap-2.5", className)} {...props}>
+      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 font-sans">
         {label}
-      </h2>
+      </span>
       {children}
     </div>
   );

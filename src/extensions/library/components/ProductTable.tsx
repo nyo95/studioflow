@@ -65,8 +65,8 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
         <div className={cn("h-16 w-16 flex items-center justify-center mx-auto mb-4", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
           <ImageIcon className="h-6 w-6 text-slate-200" />
         </div>
-        <h3 className="font-lora text-lg text-slate-900 mb-1">No items found</h3>
-        <p className={cn("text-slate-400 font-inter", UI_ENGINE_TYPE_BODY)}>Try adjusting your search or filters.</p>
+        <h3 className="font-serif text-lg text-slate-900 mb-1">No items found</h3>
+        <p className={cn("text-slate-400 font-sans", UI_ENGINE_TYPE_BODY)}>Try adjusting your search or filters.</p>
       </div>
     );
   }
@@ -76,12 +76,12 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
       <Table>
         <TableHeader>
           <TableRow className={cn("hover:bg-transparent h-12 border-b", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
-            <TableHead className={cn("w-[80px] font-inter font-bold uppercase tracking-wider text-slate-400 pl-6", UI_ENGINE_TYPE_META)}>Image</TableHead>
-            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Product Info</TableHead>
-            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Vendor</TableHead>
-            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Category</TableHead>
-            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Status</TableHead>
-            <TableHead className={cn("font-inter font-bold uppercase tracking-wider text-slate-400 text-right pr-6", UI_ENGINE_TYPE_META)}>Actions</TableHead>
+            <TableHead className={cn("w-[80px] font-sans font-bold uppercase tracking-wider text-slate-400 pl-6", UI_ENGINE_TYPE_META)}>Image</TableHead>
+            <TableHead className={cn("font-sans font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Product Info</TableHead>
+            <TableHead className={cn("font-sans font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Vendor</TableHead>
+            <TableHead className={cn("font-sans font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Category</TableHead>
+            <TableHead className={cn("font-sans font-bold uppercase tracking-wider text-slate-400", UI_ENGINE_TYPE_META)}>Status</TableHead>
+            <TableHead className={cn("font-sans font-bold uppercase tracking-wider text-slate-400 text-right pr-6", UI_ENGINE_TYPE_META)}>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -113,10 +113,10 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-0.5">
-                  <span className={cn("font-lora font-semibold text-slate-900", UI_ENGINE_TYPE_BODY)}>
+                  <span className={cn("font-serif font-semibold text-slate-900", UI_ENGINE_TYPE_BODY)}>
                     {m.catalog_sku} - {m.catalog_product_name || m.catalog_motif || 'Item'} ex. {m.catalog_brand || m.vendor.brand_name}
                   </span>
-                  <span className={cn("text-slate-400 font-inter font-medium truncate max-w-[250px]", UI_ENGINE_TYPE_META)}>
+                  <span className={cn("text-slate-400 font-sans font-medium truncate max-w-[250px]", UI_ENGINE_TYPE_META)}>
                     {m.catalog_motif || "No Variant"} {m.catalog_finishing ? `· ${m.catalog_finishing}` : ""}
                   </span>
                 </div>
@@ -128,8 +128,8 @@ export function ProductTable({ products, onEdit, onDelete, onApprove, onReject, 
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-0.5">
-                  <span className={cn("font-black uppercase tracking-tight text-slate-900 font-inter", UI_ENGINE_TYPE_META)}>{m.catalog_category}</span>
-                  {m.catalog_sub_category && <span className={cn("text-slate-400 font-inter", UI_ENGINE_TYPE_META)}>{m.catalog_sub_category}</span>}
+                  <span className={cn("font-black uppercase tracking-tight text-slate-900 font-sans", UI_ENGINE_TYPE_META)}>{m.catalog_category}</span>
+                  {m.catalog_sub_category && <span className={cn("text-slate-400 font-sans", UI_ENGINE_TYPE_META)}>{m.catalog_sub_category}</span>}
                 </div>
               </TableCell>
               <TableCell>

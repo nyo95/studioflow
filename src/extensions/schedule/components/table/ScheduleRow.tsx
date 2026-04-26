@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, ChevronLeft, ChevronRight, Package, Plus, MoreHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { VisualAsset } from "@/components/ui/visual-asset";
 import { ScheduleSampleRequestModal } from "../ScheduleSampleRequestModal";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -32,7 +33,7 @@ import {
   UI_ENGINE_BG_SUBTLE,
   UI_ENGINE_BORDER_SUBTLE
 } from "@/ui_engine/tokens/colors";
-import { ImagePlaceholder } from "@/ui_engine/components/image-placeholder";
+
 
 interface ScheduleRowProps {
   entry: ProjectScheduleEntryWithRelations;
@@ -199,27 +200,19 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
       {/* Product Details – with prominent image */}
       <td className="px-5 py-2">
         <div className="flex items-center gap-4">
-          {/* Visual anchor: larger, elevated image */}
-          <div
-            className={cn("relative flex-shrink-0 w-10 h-10 overflow-hidden border border-slate-200 shadow-sm bg-white group/img cursor-pointer", UI_ENGINE_RADIUS_IMAGE)}
-            onClick={() => snapshot?.catalog_image_url && setLightboxOpen(true)}
-            title={snapshot?.catalog_image_url ? "Click to enlarge" : undefined}
+          <div 
+            className={cn("w-14 h-14 bg-white border border-slate-200 overflow-hidden shrink-0 group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_IMAGE)}
+            onClick={() => { if (activeOption?.data_snapshot) setLightboxOpen(true); }}
           >
-            {snapshot?.catalog_image_url ? (
-              <img
-                src={snapshot.catalog_image_url}
-                alt={snapshot.catalog_product_name || ""}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110"
-              />
-            ) : (
-              <ImagePlaceholder iconSize={20} />
-            )}
-            {/* Zoom hint overlay */}
-            {snapshot?.catalog_image_url && (
-              <div className="absolute inset-0 bg-slate-900/0 group-hover/img:bg-slate-900/30 transition-colors duration-200 flex items-center justify-center">
-                <ZoomIn className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 w-5 h-5 drop-shadow" />
-              </div>
-            )}
+            <VisualAsset 
+              src={snapshot?.catalog_image_url} 
+              alt={snapshot?.catalog_product_name || ""} 
+              iconSize={20}
+              className="transition-transform duration-700 group-hover/img:scale-110"
+            />
+            <div className="absolute inset-0 bg-slate-900/0 group-hover/img:bg-slate-900/10 transition-colors flex items-center justify-center">
+              <ZoomIn className="text-white opacity-0 group-hover/img:opacity-100 scale-90 group-hover/img:scale-100 transition-all duration-300 w-4 h-4" />
+            </div>
             {/* Finalized indicator */}
             {activeOption?.is_final && (
               <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-emerald-400 shadow-sm ring-2 ring-white" />
@@ -274,10 +267,10 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
                   e.stopPropagation();
                   onAddAlternative?.();
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50/50 hover:bg-blue-100 text-blue-600 transition-colors border border-blue-100/50"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-50/50 hover:bg-slate-100 text-slate-900 transition-colors border border-slate-200/50"
               >
                 <Plus className="h-3 w-3" />
-                <span className="font-inter text-[9px] font-bold uppercase tracking-wider">Add Alternative</span>
+                <span className="font-sans text-[9px] font-bold uppercase tracking-wider">Add Alternative</span>
               </button>
             </div>
           </div>
@@ -359,71 +352,59 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
 
       {/* Actions */}
       <td className="px-5 py-2 text-right">
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end gap-1">
-          <button
-            onClick={() => onEdit?.(entry)}
-            title="Edit specification"
-            className={cn("p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
-          >
-            <Edit3 size={13} />
-          </button>
-          <button
-            onClick={handleDelete}
-            title="Delete alternative or entry"
-            className={cn("p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
-          >
-            <Trash2 size={13} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setSampleModalOpen(true);
-            }}
-            title="Request sample"
-            className={cn("p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
-          >
-            <Package size={13} />
-          </button>
+        <div className="flex items-center justify-end gap-2">
+          {/* Sample Request - Persistent visibility if product linked */}
+          {activeOption?.product_catalog_id && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSampleModalOpen(true);
+              }}
+              title="Request sample"
+              className={cn("p-1.5 bg-slate-50 text-slate-900 hover:bg-slate-100 transition-colors shadow-sm", UI_ENGINE_RADIUS_CONTROL)}
+            >
+              <Package size={13} strokeWidth={2.5} />
+            </button>
+          )}
+
+          {/* Destructive/Edit Actions - Hover only */}
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+            <button
+              onClick={() => onEdit?.(entry)}
+              title="Edit specification"
+              className={cn("p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
+            >
+              <Edit3 size={13} />
+            </button>
+            <button
+              onClick={handleDelete}
+              title="Delete alternative or entry"
+              className={cn("p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors", UI_ENGINE_RADIUS_CONTROL)}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
         </div>
       </td>
 
       {/* Image Lightbox */}
       {snapshot?.catalog_image_url && (
         <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-          <DialogContent
-            className="p-0 border-none bg-transparent shadow-none max-w-[90vw] w-auto"
-            onKeyDown={(e) => e.key === "Escape" && setLightboxOpen(false)}
-            showCloseButton={false}
-          >
-            <DialogTitle className="sr-only">
-              {snapshot.catalog_product_name || "Product image"}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Full size image preview of {snapshot.catalog_product_name || "the product"}
-            </DialogDescription>
-            <div className="relative group/lbox">
-              <img
-                src={snapshot.catalog_image_url}
-                alt={snapshot.catalog_product_name || "Product image"}
-                className={cn("max-h-[85vh] max-w-[85vw] w-auto h-auto shadow-2xl object-contain", UI_ENGINE_RADIUS_CARD)}
-              />
-              {/* Caption */}
-              <div className={cn("absolute bottom-0 left-0 right-0 px-6 py-4 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover/lbox:opacity-100 transition-opacity", UI_ENGINE_RADIUS_CARD)} style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-                <p className="font-serif text-white text-base font-semibold truncate">
-                  {snapshot.catalog_product_name || "Unnamed Product"}
-                </p>
-                {snapshot.catalog_brand && (
-                  <p className="font-sans text-white/70 text-xs mt-0.5">{snapshot.catalog_brand}</p>
-                )}
-              </div>
-              {/* Close button */}
-              <button
-                onClick={() => setLightboxOpen(false)}
-                className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
+          <DialogContent className={cn("p-0 border-none bg-transparent shadow-none max-w-[90vw] w-auto overflow-visible", UI_ENGINE_RADIUS_CARD)}>
+             <div className="relative">
+                <div className={cn("max-h-[85vh] shadow-2xl border-4 border-white/20 overflow-hidden", UI_ENGINE_RADIUS_CARD)} style={{ borderRadius: "2rem" }}>
+                  <VisualAsset 
+                    src={snapshot?.catalog_image_url} 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <button
+                  onClick={() => setLightboxOpen(false)}
+                  className="absolute -top-4 -right-4 h-12 w-12 rounded-full bg-white text-slate-900 shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-[100]"
+                >
+                  <X size={20} strokeWidth={3} />
+                </button>
+             </div>
           </DialogContent>
         </Dialog>
       )}

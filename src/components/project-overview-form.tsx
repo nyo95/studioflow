@@ -466,30 +466,30 @@ export function ProjectOverviewForm({
 
       {/* Deferred Tasks Section */}
       {deferredActivities.length > 0 && (
-        <div className="mt-12 rounded-xl border border-amber-100 bg-amber-50/30 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-              <ArrowRightCircle className="h-4 w-4" />
+        <div className="mt-12 pt-8 border-t border-slate-100">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
+              <ArrowRightCircle className="h-5 w-5" />
             </div>
             <div>
-              <Heading level={6} className="text-amber-900 font-bold uppercase tracking-wider text-[11px]">Deferred Project Tasks</Heading>
-              <p className="text-xs text-amber-600 font-medium">Items moved from phases to maintain momentum</p>
+              <Heading level={6} className="text-slate-900 font-bold uppercase tracking-wider text-[11px]">Deferred Project Tasks</Heading>
+              <p className="text-xs text-slate-400 font-medium">Items moved from phases to maintain momentum</p>
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {deferredActivities.map((activity) => {
               const originPhase = phases?.find(p => p.id === activity.phase_id);
               return (
                 <div 
                   key={activity.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-white border border-amber-100 shadow-sm"
+                  className="flex items-center justify-between p-4 rounded-xl bg-slate-50/50 border border-slate-100 group hover:bg-white hover:shadow-md transition-all duration-300"
                 >
                   <div className="flex items-center gap-3">
                     {activity.status === "DONE" || activity.status === "COMPLETED" ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                     ) : (
-                      <Circle className="w-4 h-4 text-amber-300 shrink-0" />
+                      <Circle className="w-4 h-4 text-slate-300 group-hover:text-amber-400 shrink-0 transition-colors" />
                     )}
                     <span className={cn(
                       "text-sm font-sans text-slate-700",
@@ -500,8 +500,8 @@ export function ProjectOverviewForm({
                   </div>
                   
                   {originPhase && (
-                    <Badge variant="outline" className="text-[10px] bg-amber-100/50 border-amber-200 text-amber-800 font-bold px-2 py-0.5 whitespace-nowrap">
-                      Deferred from {formatPhaseName(originPhase.name_enum)} ({activity.deferred_from_version})
+                    <Badge variant="outline" className="text-[9px] bg-white border-slate-200 text-slate-400 font-bold px-2 py-0.5 whitespace-nowrap">
+                      Phase {formatPhaseName(originPhase.name_enum)}
                     </Badge>
                   )}
                 </div>

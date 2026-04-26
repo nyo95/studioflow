@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { VisualAsset } from "@/components/ui/visual-asset";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -136,9 +137,9 @@ export function ScheduleSpecEditorModal({
   }, []);
 
   React.useEffect(() => {
-    if (isOpen && !isSubmitting) {
-      // Re-evaluate initial edit mode state when modal opens
-      setIsEditMode(true);
+    if (isOpen) {
+      // Initialize form state when modal opens
+      setIsEditMode(true); // Domain Exception: Project Schedule entries open in edit mode directly
       setForm({
         catalog_product_name: initialSnapshot.catalog_product_name === "[RESERVED]" ? "" : (initialSnapshot.catalog_product_name || ""),
         catalog_brand: initialSnapshot.catalog_brand || "",
@@ -153,7 +154,8 @@ export function ScheduleSpecEditorModal({
         catalog_structured_tags: initialSnapshot.specs?.catalog_structured_tags || [],
       });
     }
-  }, [isOpen, initialSnapshot, isSubmitting, isAdmin, isReserved]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialSnapshot]); // Only re-run when opened or if the snapshot actually changes
 
   const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
   const isPlaceholder = (val?: string | null) => !val || placeholders.includes(val.trim().toUpperCase());
@@ -219,30 +221,51 @@ export function ScheduleSpecEditorModal({
           <div className="w-full md:w-[380px] bg-slate-50 border-r border-slate-100 flex flex-col relative overflow-hidden">
              <div className="flex-1 flex flex-col p-8 pt-10">
                {/* Hero Image Card */}
-               <div className={cn("relative group w-full aspect-square bg-white shadow-xl shadow-slate-200/50 border", UI_ENGINE_BORDER_SUBTLE, "overflow-hidden flex items-center justify-center mb-10", UI_ENGINE_RADIUS_CARD)}>
-                 {form.catalog_image_url ? (
-                   <img 
-                    src={form.catalog_image_url} 
-                    alt={form.catalog_product_name} 
-                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
-                   />
-                 ) : (
-                   <div className="flex flex-col items-center gap-4 text-slate-200">
-                     <Package className="h-16 w-16 stroke-[1]" />
-                     <span className="text-[9px] font-black uppercase tracking-[0.3em]">No Visual Data</span>
+               {isEditMode ? (
+                 <div className="mb-10 space-y-4">
+                   <div className={cn("w-full aspect-square shadow-xl shadow-slate-200/50 rounded-[var(--ui-radius-card,1rem)]")}>
+                     <OptimizedUploader
+                       value={form.catalog_image_url}
+                       onUpload={async (file) => {
+                         const timestamp = Date.now();
+                         const fileName = `${timestamp}-${file.name.replace(/\s/g, "_")}`;
+                         const url = await LibraryFacade.uploadProductImage(file, `covers/${fileName}`);
+                         setForm(prev => ({ ...prev, catalog_image_url: url }));
+                         return url;
+                       }}
+                       onColorSelect={async (colorUri) => {
+                         setForm(prev => ({ ...prev, catalog_image_url: colorUri }));
+                       }}
+                       onClear={() => setForm(prev => ({ ...prev, catalog_image_url: "" }))}
+                       aspect={1}
+                       className="w-full h-full"
+                     />
                    </div>
-                 )}
-                 
-                 {!isEditMode && form.catalog_reference_url && (
-                   <a 
-                    href={form.catalog_reference_url} 
-                    target="_blank" 
-                    className={cn("absolute bottom-4 right-4 h-10 w-10 bg-white/90 backdrop-blur-md shadow-lg flex items-center justify-center text-slate-900 hover:bg-slate-900 hover:text-white transition-all", UI_ENGINE_RADIUS_ACTION)}
-                   >
-                     <ExternalLink className="h-4 w-4" />
-                   </a>
-                 )}
-               </div>
+                   <div className="text-center space-y-1">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-950">Master Catalog Hero Image</p>
+                     <p className="text-[10px] text-slate-400 italic">White background recommended for catalog consistency.</p>
+                   </div>
+                 </div>
+               ) : (
+                 <div className={cn("relative group w-full aspect-square bg-white shadow-xl shadow-slate-200/50 border", UI_ENGINE_BORDER_SUBTLE, "overflow-hidden flex items-center justify-center mb-10", UI_ENGINE_RADIUS_CARD)}>
+                    <VisualAsset 
+                      src={form.catalog_image_url} 
+                      alt={form.catalog_product_name} 
+                      className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+                      iconSize={64}
+                    />
+                   
+                   {!isEditMode && form.catalog_reference_url && (
+                     <a 
+                      href={form.catalog_reference_url} 
+                      target="_blank" 
+                      className={cn("absolute bottom-4 right-4 h-10 w-10 bg-white/90 backdrop-blur-md shadow-lg flex items-center justify-center text-slate-900 hover:bg-slate-900 hover:text-white transition-all", UI_ENGINE_RADIUS_ACTION)}
+                     >
+                       <ExternalLink className="h-4 w-4" />
+                     </a>
+                   )}
+                 </div>
+               )}
 
                {/* Promotion Readiness Checklist */}
                <div className="space-y-6">
@@ -331,12 +354,12 @@ export function ScheduleSpecEditorModal({
                     </Badge>
                   )}
                 </div>
-                <DialogTitle className="font-lora text-3xl font-bold text-slate-900 flex items-center gap-3">
+                <DialogTitle className="font-serif text-3xl font-bold text-slate-900 flex items-center gap-3">
                   <span className="text-slate-400 text-xl">Project Schedule</span>
                   <ChevronRight className="w-5 h-5 text-slate-300" />
                   <span>{isEditMode ? "Modify Specification" : (form.catalog_product_name || "Product Details")}</span>
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-400 font-inter">
+                <DialogDescription className="text-xs text-slate-400 font-sans">
                   Managing snapshot {initialSnapshot.schedule_code ? `for ${initialSnapshot.schedule_code}` : "details"} in this project.
                 </DialogDescription>
               </div>
@@ -390,7 +413,7 @@ export function ScheduleSpecEditorModal({
                         <div className="space-y-2">
                           <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Brand / Vendor Name <span className="text-red-500">*</span></Label>
                           <CreatableSearch 
-                            value={suggestions.brands.find(b => b.name === form.catalog_brand)?.id || ""}
+                            value={suggestions.brands.find(b => b.name === form.catalog_brand)?.id || form.catalog_brand || ""}
                             placeholder="Search or type brand name..."
                             options={suggestions.brands}
                             allowFreeText={true}
@@ -487,26 +510,7 @@ export function ScheduleSpecEditorModal({
                           />
                         </div>
 
-                        <div className={cn("p-10 bg-slate-50 border border-dashed border-slate-200 flex flex-col items-center gap-6", UI_ENGINE_RADIUS_CARD)}>
-                            <div className="w-44 aspect-square">
-                              <OptimizedUploader
-                                value={form.catalog_image_url}
-                                onUpload={async (file) => {
-                                  const timestamp = Date.now();
-                                  const fileName = `${timestamp}-${file.name.replace(/\s/g, "_")}`;
-                                  const url = await LibraryFacade.uploadProductImage(file, `covers/${fileName}`);
-                                  setForm(prev => ({ ...prev, catalog_image_url: url }));
-                                  return url;
-                                }}
-                                onClear={() => setForm(prev => ({ ...prev, catalog_image_url: "" }))}
-                                aspect={1}
-                              />
-                            </div>
-                            <div className="text-center space-y-1">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-950">Master Catalog Hero Image</p>
-                              <p className="text-[10px] text-slate-400 italic">White background recommended for catalog consistency.</p>
-                            </div>
-                        </div>
+
                       </div>
                     </div>
                   </div>

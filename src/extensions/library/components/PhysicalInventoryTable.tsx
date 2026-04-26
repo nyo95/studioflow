@@ -119,8 +119,8 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
         <div className={cn("h-16 w-16 flex items-center justify-center mx-auto mb-4", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
           <Warehouse className="h-6 w-6 text-slate-200" />
         </div>
-        <h3 className="font-lora text-lg text-slate-900 mb-1">Inventory Empty</h3>
-        <p className="text-sm text-slate-400 font-inter font-medium tracking-tight">No physical samples currently tracked in system.</p>
+        <h3 className="font-serif text-lg text-slate-900 mb-1">Inventory Empty</h3>
+        <p className="text-sm text-slate-400 font-sans font-medium tracking-tight">No physical samples currently tracked in system.</p>
       </div>
     );
   }
@@ -133,11 +133,11 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
         <Table>
           <TableHeader>
             <TableRow className={cn("hover:bg-transparent h-14 border-b", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
-              <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400 pl-8 w-[180px]">Rak / Box</TableHead>
-              <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Product Specification</TableHead>
-              <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Brand Provider</TableHead>
-              <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400">Sample History</TableHead>
-              <TableHead className="font-inter font-black text-[10px] uppercase tracking-widest text-slate-400 text-right pr-8">Audit Actions</TableHead>
+              <TableHead className="font-sans font-black text-[10px] uppercase tracking-widest text-slate-400 pl-8 w-[180px]">Rak / Box</TableHead>
+              <TableHead className="font-sans font-black text-[10px] uppercase tracking-widest text-slate-400">Product Specification</TableHead>
+              <TableHead className="font-sans font-black text-[10px] uppercase tracking-widest text-slate-400">Brand Provider</TableHead>
+              <TableHead className="font-sans font-black text-[10px] uppercase tracking-widest text-slate-400">Sample History</TableHead>
+              <TableHead className="font-sans font-black text-[10px] uppercase tracking-widest text-slate-400 text-right pr-8">Audit Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -146,10 +146,10 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                 <TableCell className="pl-8">
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col gap-1.5">
-                       <span className={cn("flex items-center gap-2 text-[10px] font-black text-slate-900 font-inter uppercase tracking-tight px-2.5 py-1 w-fit", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                       <span className={cn("flex items-center gap-2 text-[10px] font-black text-slate-900 font-sans uppercase tracking-tight px-2.5 py-1 w-fit", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                           <MapPin className="h-2.5 w-2.5 text-slate-400" /> Rak {row.catalog_rack_number}
                        </span>
-                       <span className={cn("flex items-center gap-2 text-[10px] font-black text-slate-900 font-inter uppercase tracking-tight px-2.5 py-1 w-fit", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                       <span className={cn("flex items-center gap-2 text-[10px] font-black text-slate-900 font-sans uppercase tracking-tight px-2.5 py-1 w-fit", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                           <Box className="h-2.5 w-2.5 text-slate-400" /> Box {row.catalog_box_number}
                        </span>
                     </div>
@@ -157,19 +157,19 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-0.5">
-                    <div className="font-lora font-medium text-slate-900 text-base leading-tight">
+                    <div className="font-serif font-medium text-slate-900 text-base leading-tight">
                       {row.product.catalog_sku}
                     </div>
-                    <div className="text-[10px] text-slate-400 font-inter font-bold uppercase tracking-widest">
+                    <div className="text-[10px] text-slate-400 font-sans font-bold uppercase tracking-widest">
                       {row.product.catalog_category} {row.product.catalog_sub_category ? `• ${row.product.catalog_sub_category}` : ""}
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="font-inter font-bold text-xs text-slate-500 uppercase tracking-wider">
+                <TableCell className="font-sans font-bold text-xs text-slate-500 uppercase tracking-wider">
                    {row.product.vendor?.brand_name || row.product.catalog_brand || "Standard Source"}
                 </TableCell>
                 <TableCell>
-                  <p className="text-[11px] text-slate-400 italic max-w-[200px] truncate leading-tight font-inter">
+                  <p className="text-[11px] text-slate-400 italic max-w-[200px] truncate leading-tight font-sans">
                     {row.catalog_notes !== "-" ? row.catalog_notes : "No recent activity notes recorded."}
                   </p>
                 </TableCell>
@@ -189,7 +189,7 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                                {processingId === row.sampleId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent><p className="font-inter text-[10px] font-bold uppercase">Log Check-out</p></TooltipContent>
+                          <TooltipContent><p className="font-sans text-[10px] font-bold uppercase">Log Check-out</p></TooltipContent>
                        </Tooltip>
                        <Tooltip>
                           <TooltipTrigger asChild>
@@ -203,7 +203,7 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                                <ArrowDownLeft className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent><p className="font-inter text-[10px] font-bold uppercase">Log Return</p></TooltipContent>
+                          <TooltipContent><p className="font-sans text-[10px] font-bold uppercase">Log Return</p></TooltipContent>
                        </Tooltip>
                     </div>
 

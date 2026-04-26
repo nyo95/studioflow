@@ -71,6 +71,7 @@ type SchedulePickerPayload =
         catalog_sub_category?: string | null;
         catalog_dimension_p?: string | null;
         catalog_reference_url?: string | null;
+        catalog_image_url?: string | null;
       };
     };
 
@@ -256,6 +257,7 @@ export function ScheduleProductPickerModal({
                     catalog_sub_category: data.customData.catalog_sub_category || null,
                     catalog_dimension_p: data.customData.catalog_dimensions || null,
                     catalog_reference_url: data.customData.catalog_reference_url || null,
+                    catalog_image_url: data.customData.catalog_image_url || null,
                   },
                 };
               } else {

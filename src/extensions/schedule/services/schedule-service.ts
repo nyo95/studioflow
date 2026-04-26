@@ -451,6 +451,30 @@ export class ScheduleService {
       throw new ActionError("Valid product category is required. 'General' is no longer supported.", "VALIDATION_FAILED");
     }
 
+    // Validate Catalog Item if provided
+    if (mode === "catalog" && catalogItemId) {
+      const catalogItem = await tx.productCatalog.findUnique({
+        where: { id: catalogItemId },
+        select: { catalog_category: true, catalog_type: true },
+      });
+      if (!catalogItem) {
+        throw new ActionError("Product not found in catalog", "NOT_FOUND");
+      }
+      if (catalogItem.catalog_type !== section) {
+        throw new ActionError(
+          `Type mismatch: schedule section is "${section}" but product is "${catalogItem.catalog_type}"`,
+          "VALIDATION_FAILED"
+        );
+      }
+      const itemCategory = catalogItem.catalog_category.trim().toUpperCase();
+      if (normalizedCategory !== itemCategory) {
+        throw new ActionError(
+          `Category mismatch: schedule category is "${normalizedCategory}" but product is in "${catalogItem.catalog_category}"`,
+          "VALIDATION_FAILED"
+        );
+      }
+    }
+
     // 1. Get Prefix
     const preferredPrefix = this.getPreferredPrefix(normalizedCategory);
     let prefixDict = await tx.prefixDictionary.findFirst({
@@ -468,13 +492,8 @@ export class ScheduleService {
           section,
         },
       });
-    } else if (prefixDict.prefix !== preferredPrefix) {
-      // Self-Correction: ensure existing category uses preferred prefix
-      prefixDict = await tx.prefixDictionary.update({
-        where: { id: prefixDict.id },
-        data: { prefix: preferredPrefix }
-      });
     }
+
 
     // 2. Determine sort order
     const lastEntry = await tx.projectScheduleEntry.findFirst({
@@ -587,6 +606,36 @@ export class ScheduleService {
 
     const lastLabel = existingOptions[existingOptions.length - 1]?.option_label || "@";
     const nextLabel = String.fromCharCode(lastLabel.charCodeAt(0) + 1);
+
+    // Validate Catalog Item if provided
+    if (mode === "catalog" && catalogItemId) {
+      const entry = await tx.projectScheduleEntry.findUnique({
+        where: { id: entryId },
+        select: { section: true }
+      });
+      if (!entry) throw new ActionError("Entry not found", "NOT_FOUND");
+
+      const catalogItem = await tx.productCatalog.findUnique({
+        where: { id: catalogItemId },
+        select: { catalog_category: true, catalog_type: true },
+      });
+      if (!catalogItem) {
+        throw new ActionError("Product not found in catalog", "NOT_FOUND");
+      }
+      if (catalogItem.catalog_type !== entry.section) {
+        throw new ActionError(
+          `Type mismatch: entry section is "${entry.section}" but product is "${catalogItem.catalog_type}"`,
+          "VALIDATION_FAILED"
+        );
+      }
+      const itemCategory = catalogItem.catalog_category.trim().toUpperCase();
+      if (normalizedCategory !== itemCategory) {
+        throw new ActionError(
+          `Category mismatch: entry category is "${normalizedCategory}" but product is in "${catalogItem.catalog_category}"`,
+          "VALIDATION_FAILED"
+        );
+      }
+    }
 
     let resolvedCatalogId = null;
     let finalSnapshot: ScheduleSnapshot;
@@ -1144,7 +1193,7 @@ export class ScheduleService {
    * @param idB Second entry id.
    * @param userId Actor user id for audit.
    */
-  static async swapEntries(tx: PrismaTransaction, projectId: string, idA: string, idB: string) {
+  static async swapEntries(tx: PrismaTransaction, projectId: string, idA: string, idB: string, userId: string) {
     const [entryA, entryB] = await Promise.all([
       tx.projectScheduleEntry.findUnique({ where: { id: idA } }),
       tx.projectScheduleEntry.findUnique({ where: { id: idB } })
@@ -1152,6 +1201,16 @@ export class ScheduleService {
 
     if (!entryA || !entryB) {
       throw new Error("One or both entries not found");
+    }
+
+    if (entryA.project_id !== projectId || entryB.project_id !== projectId) {
+      throw new Error("Entries do not belong to the specified project");
+    }
+    if (entryA.schedule_category !== entryB.schedule_category) {
+      throw new Error("Cannot swap entries from different categories");
+    }
+    if (entryA.section !== entryB.section) {
+      throw new Error("Cannot swap entries from different sections");
     }
 
     const sortOrderA = entryA.schedule_sort_order;
@@ -1167,6 +1226,14 @@ export class ScheduleService {
         data: { schedule_sort_order: sortOrderA }
       })
     ]);
+
+    await this.normalizeCodes(tx, projectId, entryA.section, entryA.schedule_category);
+    
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_REORDER, "Project", projectId, userId, {
+      idA,
+      idB,
+      type: "SWAP"
+    });
   }
 
 

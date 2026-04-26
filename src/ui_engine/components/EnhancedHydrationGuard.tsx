@@ -215,14 +215,14 @@ export function DehydrationDebug() {
 
   return (
     <div
-      className="fixed bottom-4 left-4 max-w-sm rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs font-mono text-blue-900 z-50 pointer-events-none"
+      className="fixed bottom-4 left-4 max-w-sm rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-mono text-slate-950 z-50 pointer-events-none"
       style={{ opacity: 0.9 }}
     >
       <div className="mb-2 font-bold">Hydration Debug</div>
       <div className="space-y-1">
         <div>✓ Client mounted</div>
         {warnings.length > 0 && (
-          <div className="border-t border-blue-200 pt-2 mt-2">
+          <div className="border-t border-slate-200 pt-2 mt-2">
             <div className="font-bold text-red-600">Warnings: {warnings.length}</div>
             {warnings.slice(-3).map((w, i) => (
               <div key={i} className="text-red-600 truncate">

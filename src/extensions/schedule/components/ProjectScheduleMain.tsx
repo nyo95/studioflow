@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { PageHeader, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
 import { LayoutGrid, List } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
 
 import {
   DndContext, 
@@ -86,8 +87,6 @@ export function ProjectScheduleMain({
         section,
       }));
       setSheet(result as ProjectScheduleSheetPayload);
-      // Clear selection on section change or full refresh? 
-      // User says "click outside", but refresh usually stays unless items are gone.
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to fetch schedule");
     } finally {
@@ -99,7 +98,6 @@ export function ProjectScheduleMain({
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        // Only clear if not clicking on a modal/dropdown that might be outside the container
         const isOutside = !containerRef.current.contains(e.target as Node);
         const isModal = (e.target as HTMLElement).closest('[role="dialog"]');
         const isAction = (e.target as HTMLElement).closest('[data-selection-ignore="true"]');
@@ -132,7 +130,6 @@ export function ProjectScheduleMain({
 
     if (!sheet) return;
 
-    // Flatten all entries across categories to allow range select
     const allEntries = sheet.groups.flatMap(g => g.entries);
     const ids = allEntries.map(e => e.id);
 
@@ -150,12 +147,10 @@ export function ProjectScheduleMain({
       const next = new Set(isCtrl ? selectedIds : []);
       range.forEach(rid => next.add(rid));
       setSelectedIds(next);
-      // Anchor stays the same for shift selection to allow range adjustment
     } else if (isCtrl) {
       const next = new Set(selectedIds);
       if (next.has(id)) {
         next.delete(id);
-        // If we unselected the anchor, update it to the last remaining item or null
         if (id === selectionAnchorId) {
           setSelectionAnchorId(Array.from(next).pop() || null);
         }
@@ -205,7 +200,6 @@ export function ProjectScheduleMain({
     const { active, over } = event;
     if (!over || active.id === over.id || !sheet) return;
 
-    // Find source and target groups
     let sourceGroup: ScheduleGroupedByCategory | null = null;
     let targetGroup: ScheduleGroupedByCategory | null = null;
     let activeEntry: ProjectScheduleEntryWithRelations | null = null;
@@ -224,7 +218,6 @@ export function ProjectScheduleMain({
     if (!sourceGroup || !targetGroup) return;
 
     if (sourceGroup.schedule_category === targetGroup.schedule_category) {
-      // Same category: Reorder
       const oldIndex = sourceGroup.entries.findIndex((e) => e.id === active.id);
       const newIndex = targetGroup.entries.findIndex((e) => e.id === over.id);
 
@@ -234,7 +227,6 @@ export function ProjectScheduleMain({
         schedule_sort_order: idx + 1
       }));
 
-      // Optimistic update
       const updatedGroups = sheet.groups.map(g => 
         g.schedule_category === sourceGroup.schedule_category 
           ? { ...g, entries: newEntries } 
@@ -244,10 +236,8 @@ export function ProjectScheduleMain({
 
       await handleReorder(sourceGroup.schedule_category, reorderItems);
     } else {
-      // Different category: Move
       const newIndex = targetGroup.entries.findIndex((e) => e.id === over.id);
       
-      // Optimistic update
       const updatedGroups = sheet.groups.map(g => {
         if (g.schedule_category === sourceGroup.schedule_category) {
           return { ...g, entries: g.entries.filter((e) => e.id !== active.id) };
@@ -285,7 +275,6 @@ export function ProjectScheduleMain({
     }
   };
 
-
   const handleMoveBetweenCategories = async (entryId: string, fromCategory: string, toCategory: string, newIndex: number) => {
     try {
       unwrapActionResult(await moveEntryToCategoryAction({
@@ -310,7 +299,6 @@ export function ProjectScheduleMain({
     const toastId = toast.loading(`Deleting ${selectedIds.size} items...`);
     setLoading(true);
     try {
-      // Group selected IDs by category
       const entriesByGroup: Record<string, string[]> = {};
       sheet.groups.forEach(g => {
         const idsInGroup = g.entries
@@ -321,7 +309,6 @@ export function ProjectScheduleMain({
         }
       });
 
-      // Execute bulk delete for each group
       for (const [category, ids] of Object.entries(entriesByGroup)) {
         unwrapActionResult(await bulkDeleteScheduleEntriesAction({
           projectId,
@@ -344,7 +331,6 @@ export function ProjectScheduleMain({
   React.useEffect(() => {
     fetchSchedule(activeSection);
   }, [fetchSchedule, activeSection]);
-
 
   const handleImport = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -373,19 +359,15 @@ export function ProjectScheduleMain({
   }, [projectId, activeSection, fetchSchedule]);
 
   if (loading && !sheet) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-10 w-10 animate-spin text-slate-200" />
-      </div>
-    );
+    return <PageSkeleton type="list" className="p-0 py-0" />;
   }
 
-   return (
-     <>
-       <PageHeader
-         eyebrow="Schedule"
-         title="Project Schedule"
-         description="Manage specifications and procurement for this project."
+  return (
+    <>
+      <PageHeader
+        eyebrow="Schedule"
+        title="Project Schedule"
+        description="Manage specifications and procurement for this project."
         action={
           <div className="flex items-center gap-3 relative">
             <input
@@ -459,7 +441,7 @@ export function ProjectScheduleMain({
         onValueChange={(value) => setActiveSection(value as ProductType)}
         className="w-full"
       >
-        <TabsList className={cn("h-12 w-full max-w-md border border-slate-200/60 bg-slate-100/50 p-1", UI_ENGINE_RADIUS_CONTROL)}>
+        <TabsList className={cn("h-12 w-full max-w-lg border border-slate-200/60 bg-slate-100/50 p-1", UI_ENGINE_RADIUS_CONTROL)}>
           <TabsTrigger
             value={ProductType.material}
             className={cn(
@@ -563,8 +545,6 @@ export function ProjectScheduleMain({
         </ProjectScheduleProvider>
       )}
 
-
-
       {editorModal && (
         <ScheduleSpecEditorModal
           optionId={editorModal.optionId}
@@ -576,6 +556,6 @@ export function ProjectScheduleMain({
           projectId={projectId}
         />
       )}
-      </>
+    </>
   );
 }

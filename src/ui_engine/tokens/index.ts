@@ -42,6 +42,7 @@ export const UI_ENGINE_BG_SUBTLE = colors.BG_SUBTLE;
 export const UI_ENGINE_ACCENT_PRIMARY = "text-slate-900";
 export const UI_ENGINE_BORDER_COLOR = colors.BORDER_COLOR || "border-slate-200";
 export const UI_ENGINE_BORDER_SUBTLE = colors.BORDER_SUBTLE;
+export const UI_ENGINE_INTERACTIVE_RESIZER = colors.INTERACTIVE_RESIZER;
 
 // 3. Typography Tokens
 export const TYPE_H1 = typography.TEXT_H1;

@@ -105,11 +105,13 @@ export default async function DashboardLayout({
           activityNotifications={recentActivity}
         />
 
-        <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+        <div className="flex flex-1 min-h-0 relative">
           <NavOuter appTitle={appTitle} userRole={user?.role || "STAFF"} />
 
-          <main className={cn("relative flex-1 overflow-y-auto", UI_ENGINE_CANVAS_CLASS)}>
-            {children}
+          <main className={cn("flex-1 overflow-y-auto px-[var(--ui-section-px,1.5rem)] lg:pl-[78px] lg:pr-6", UI_ENGINE_CANVAS_CLASS)}>
+            <div className="w-full">
+              {children}
+            </div>
           </main>
         </div>
 

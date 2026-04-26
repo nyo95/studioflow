@@ -11,12 +11,14 @@ import {
 
 import { SectionCard } from "./section-card";
 import { DESIGN_SYSTEM_CONFIG } from "../design-system.config";
+import { UI_ENGINE_INTERACTIVE_RESIZER } from "../tokens";
 
 interface TableCardProps {
   children: ReactNode;
   className?: string;
   header?: ReactNode;
   headerVariant?: "light" | "dark";
+  layout?: "auto" | "fixed";
 }
 
 /**
@@ -24,17 +26,26 @@ interface TableCardProps {
  * Features: High-radius corners (3xl), subtle borders, and a clean white background with shadow.
  * Refactored to use SectionCard for container consistency.
  */
-export function TableCard({ children, className, header, headerVariant = "light" }: TableCardProps) {
+export function TableCard({ children, className, header, headerVariant = "light", layout = "auto" }: TableCardProps) {
   return (
     <SectionCard 
       padding="none" 
-      className={className}
-      header={header}
+      className={cn("overflow-hidden", className)}
       headerVariant={headerVariant}
     >
-      <Table className="w-full">
-        {children}
-      </Table>
+      {header && (
+        <div className="px-5 py-5 border-b border-slate-100 bg-white">
+          {header}
+        </div>
+      )}
+      <div className="w-full overflow-hidden">
+        <table className={cn(
+          "w-full border-collapse text-sm",
+          layout === "fixed" ? "table-fixed" : "table-auto"
+        )}>
+          {children}
+        </table>
+      </div>
     </SectionCard>
   );
 }
@@ -59,15 +70,19 @@ export function TableCardHead({
   children,
   className,
   align = "left",
+  onResizeStart,
   ...props
-}: React.ComponentProps<typeof TableHead> & { align?: "left" | "right" | "center" }) {
+}: React.ComponentProps<typeof TableHead> & { 
+  align?: "left" | "right" | "center";
+  onResizeStart?: (e: React.MouseEvent) => void;
+}) {
   const alignClass =
     align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
 
   return (
     <TableHead
       className={cn(
-        "px-[var(--ui-section-px,1.5rem)] py-4",
+        "px-3 py-4 first:pl-5 last:pr-5 relative group/head",
         DESIGN_SYSTEM_CONFIG.typography.uiMeta.family,
         DESIGN_SYSTEM_CONFIG.typography.uiMeta.size,
         DESIGN_SYSTEM_CONFIG.typography.uiMeta.weight,
@@ -80,6 +95,14 @@ export function TableCardHead({
       {...props}
     >
       {children}
+      
+      {onResizeStart && (
+        <div 
+          onMouseDown={onResizeStart}
+          className={cn("absolute right-0 top-0 bottom-0 w-1 cursor-col-resize z-20", UI_ENGINE_INTERACTIVE_RESIZER)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
     </TableHead>
   );
 }
@@ -116,7 +139,11 @@ export function TableCardCell({
 
   return (
     <TableCell
-      className={cn("px-[var(--ui-section-px,1.5rem)] py-[var(--ui-row-padding-y,1rem)]", alignClass, className)}
+      className={cn(
+        "px-3 py-[var(--ui-row-padding-y,1rem)] first:pl-5 last:pr-5", 
+        alignClass, 
+        className
+      )}
       {...props}
     >
       {children}

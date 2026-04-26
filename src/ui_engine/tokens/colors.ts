@@ -8,3 +8,5 @@ export const TEXT_ACCENT = "text-slate-700";
 
 export const UI_ENGINE_BG_SUBTLE = BG_SUBTLE;
 export const UI_ENGINE_BORDER_SUBTLE = BORDER_SUBTLE;
+export const UI_ENGINE_INTERACTIVE_RESIZER = "hover:bg-slate-300/50 active:bg-slate-400 transition-colors group-hover/head:bg-slate-200/50";
+export const INTERACTIVE_RESIZER = "hover:bg-slate-300/50 active:bg-slate-400 transition-colors group-hover/head:bg-slate-200/50";

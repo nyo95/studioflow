@@ -128,9 +128,9 @@ export function ProjectProductRequestModal({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[85vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
         <DialogHeader className={cn("p-6 border-b bg-white", UI_ENGINE_BORDER_SUBTLE)}>
-          <DialogTitle className="font-lora text-2xl font-medium">Request Project Product</DialogTitle>
+          <DialogTitle className="font-serif text-2xl font-medium">Request Project Product</DialogTitle>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-xs text-slate-400 font-inter uppercase tracking-widest">
+            <p className="text-xs text-slate-400 font-sans uppercase tracking-widest">
               Standardized procurement workflow
             </p>
             <span className="text-[10px] bg-emerald-50 text-emerald-600 font-black px-1.5 py-0.5 rounded uppercase tracking-tighter" title="Suggested from global archives.">
@@ -164,7 +164,7 @@ export function ProjectProductRequestModal({
                 />
                 {isManualEntry && (
                    <div className="animate-in fade-in slide-in-from-top-1 duration-300">
-                      <Badge className="bg-amber-50 text-amber-600 border-amber-100 py-1 px-2 pointer-events-none lowercase font-inter italic tracking-normal">
+                      <Badge className="bg-amber-50 text-amber-600 border-amber-100 py-1 px-2 pointer-events-none lowercase font-sans italic tracking-normal">
                         Ready for manual entry: &quot;{customName}&quot;
                       </Badge>
                    </div>
@@ -177,7 +177,7 @@ export function ProjectProductRequestModal({
                  <Input
                    id="area_location"
                    placeholder="e.g. Master Bedroom, Dining Wall Area"
-                   className={cn("border-none h-11 focus:ring-slate-900 text-sm font-inter", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
+                   className={cn("border-none h-11 focus:ring-slate-900 text-sm font-sans", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                    value={areaLocation}
                    onChange={(e) => setAreaLocation(e.target.value)}
                  />
@@ -187,7 +187,7 @@ export function ProjectProductRequestModal({
                  <Input
                    id="notes"
                    placeholder="e.g. Needs sample for client meeting"
-                   className={cn("border-none h-11 focus:ring-slate-900 text-sm font-inter", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
+                   className={cn("border-none h-11 focus:ring-slate-900 text-sm font-sans", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                    value={notes}
                    onChange={(e) => setNotes(e.target.value)}
                  />
@@ -227,7 +227,7 @@ export function ProjectProductRequestModal({
                           <Input
                             id="ref_url"
                             placeholder="https://www.tokopedia.com/product..."
-                            className={cn("bg-white border-2 focus:border-slate-900 h-12 text-sm font-inter transition-all", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
+                            className={cn("bg-white border-2 focus:border-slate-900 h-12 text-sm font-sans transition-all", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                             value={referenceUrl}
                             onChange={(e) => setReferenceUrl(e.target.value)}
                           />
@@ -259,8 +259,8 @@ export function ProjectProductRequestModal({
                              <Badge className={cn("text-slate-600 border-none font-black text-[8px] uppercase px-1.5 h-4", UI_ENGINE_BG_SUBTLE)}>In Queue</Badge>
                            )}
                         </div>
-                        <h3 className="font-lora text-xl font-medium text-slate-900">{m.catalog_product_name}</h3>
-                        <div className="flex items-center gap-2 text-xs font-inter text-slate-500">
+                        <h3 className="font-serif text-xl font-medium text-slate-900">{m.catalog_product_name}</h3>
+                        <div className="flex items-center gap-2 text-xs font-sans text-slate-500">
                            <Building2 className="h-3 w-3" />
                            <span>{m.vendor?.brand_name || "Custom / Bespoke"}</span>
                         </div>
@@ -284,7 +284,7 @@ export function ProjectProductRequestModal({
                <div className={cn("h-16 w-16 flex items-center justify-center", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
                   <Search className="h-6 w-6 text-slate-400" />
                </div>
-               <p className="text-sm font-medium font-inter">Search the archives to fetch product specs...</p>
+               <p className="text-sm font-medium font-sans">Search the archives to fetch product specs...</p>
             </div>
           )}
         </div>
@@ -293,14 +293,14 @@ export function ProjectProductRequestModal({
           <Button 
             variant="ghost" 
             onClick={() => onOpenChange(false)}
-            className="text-slate-500 hover:text-slate-900 font-inter text-sm"
+            className="text-slate-500 hover:text-slate-900 font-sans text-sm"
           >
             Cancel
           </Button>
           <Button 
             onClick={handleSubmit}
             disabled={(!isManualEntry && !selectedProductId) || (isManualEntry && !customName.trim()) || submitting}
-            className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl h-11 px-8 shadow-lg shadow-slate-200 font-inter text-xs uppercase tracking-widest font-bold ml-2"
+            className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl h-11 px-8 shadow-lg shadow-slate-200 font-sans text-xs uppercase tracking-widest font-bold ml-2"
           >
             {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Submit Request

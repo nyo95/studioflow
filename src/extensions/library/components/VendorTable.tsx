@@ -61,7 +61,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
 
   if (vendors.length === 0) {
     return (
-      <div className="py-12 text-center text-slate-400 font-inter text-sm">
+      <div className="py-12 text-center text-slate-400 font-sans text-sm">
         No vendors found.
       </div>
     );
@@ -81,7 +81,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
         <TableBody>
           {vendors.map((vendor) => (
             <TableRow key={vendor.id} className={cn("group h-16 border-b transition-colors", UI_ENGINE_BORDER_SUBTLE)}>
-              <TableCell className="font-lora font-medium text-slate-900">
+              <TableCell className="font-serif font-medium text-slate-900">
                 {vendor.brand_name}
               </TableCell>
               <TableCell>
@@ -134,7 +134,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
                         href={vendor.website_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1.5 rounded-md border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all font-inter"
+                        className="p-1.5 rounded-md border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all font-sans"
                         title="Website"
                       >
                         <Globe className="h-4 w-4" />
@@ -145,7 +145,7 @@ export function VendorTable({ vendors, onEdit }: VendorTableProps) {
                         href={vendor.instagram_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={cn("p-1.5 border hover:bg-white text-slate-400 hover:text-slate-900 transition-all font-inter", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
+                        className={cn("p-1.5 border hover:bg-white text-slate-400 hover:text-slate-900 transition-all font-sans", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}
                         title="Instagram"
                       >
                         <AtSign className="h-4 w-4" />

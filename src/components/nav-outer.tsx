@@ -112,8 +112,8 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
   return (
     <TooltipProvider delayDuration={0}>
       <aside 
-        className="hidden h-full flex-shrink-0 border-r border-slate-200 bg-white/96 py-4 text-slate-500 backdrop-blur lg:block"
-        style={{ width: "min(var(--ui-sidebar-rail-width,78px), var(--ui-sidebar-width,272px))" }}
+        className="fixed left-0 top-[var(--ui-header-height,4rem)] bottom-[var(--ui-footer-height,3.5rem)] z-30 hidden border-r border-slate-200 bg-white/96 py-4 text-slate-500 backdrop-blur lg:block"
+        style={{ width: "var(--ui-sidebar-rail-width,78px)" }}
       >
         {renderNavList(false)}
       </aside>

@@ -72,7 +72,7 @@ export const DESIGN_SYSTEM_CONFIG = {
     accent: "bg-slate-900",
   },
   spacing: {
-    containerMaxWidth: "max-w-[var(--ui-container-max-width,1280px)]",
+    containerMaxWidth: "max-w-[var(--ui-container-max-width,1440px)]",
     sectionGap: "space-y-[var(--ui-section-gap,2rem)]",
     cardPaddingX: "px-[var(--ui-section-px,1.5rem)]",
     cardPaddingY: "py-[var(--ui-section-py,1.5rem)]",

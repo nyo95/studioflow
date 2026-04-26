@@ -375,13 +375,13 @@ export function StudioSettingsPanel({
                 <div className="space-y-4">
                   <label className="text-sm font-semibold text-slate-900">Heading Font (Serif)</label>
                   <select
-                    value={localUISettings?.fontSerif || "var(--font-lora-base)"}
+                    value={localUISettings?.fontSerif || "var(--font-serif-base)"}
                     onChange={(e) => handleUISettingChange("fontSerif", e.target.value)}
                     className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
                   >
-                    <option value="var(--font-lora-base)">Lora (StudioFlow Serif)</option>
+                    <option value="var(--font-serif-base)">Lora (StudioFlow Serif)</option>
                     <option value="ui-serif, Georgia, serif">System Serif</option>
-                    <option value="var(--font-inter-base)">Switch to Sans (All-Inter)</option>
+                    <option value="var(--font-sans-base)">Switch to Sans (All-Inter)</option>
                   </select>
                 </div>
  

@@ -97,21 +97,34 @@ export function UniversalImageUploader({
   return (
     <div className={cn("space-y-4", className)}>
       <div 
-        className="relative aspect-square rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-3 overflow-hidden group cursor-pointer hover:bg-slate-100/50 transition-all"
-        onClick={() => !showCropper && document.getElementById("universal-image-input")?.click()}
+        className={cn(
+          "relative aspect-square rounded-[var(--ui-radius-card,1rem)] overflow-hidden group cursor-pointer transition-all duration-500",
+          "border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-400 hover:shadow-xl hover:shadow-slate-200/40",
+          previewUrl && "border-none shadow-md ring-1 ring-slate-200/50"
+        )}
+        onClick={() => !showCropper && uploadStatus === "IDLE" && document.getElementById("universal-image-input")?.click()}
       >
         {previewUrl ? (
-          <img src={previewUrl} className="w-full h-full object-cover" alt="Preview" />
+          <div className="relative h-full w-full">
+            <img src={previewUrl} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Preview" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
+              <div className="translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-xl backdrop-blur-md">
+                   <ImageIcon className="h-5 w-5 text-slate-900" />
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
-          <>
-            <div className="h-12 w-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-400 group-hover:text-slate-900 transition-colors">
-              <Upload className="h-6 w-6" />
+          <div className="flex flex-col items-center justify-center h-full w-full gap-4">
+            <div className="h-16 w-16 rounded-[2rem] bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-300 group-hover:text-slate-900 group-hover:scale-110 group-hover:rounded-2xl transition-all duration-500">
+              <Upload className="h-7 w-7" />
             </div>
-            <div className="text-center">
-              <span className="text-[10px] text-slate-900 font-bold uppercase tracking-widest block">{label}</span>
-              <span className="text-[9px] text-slate-400 font-medium">JPG, PNG up to 5MB</span>
+            <div className="text-center space-y-1">
+              <span className="text-[11px] text-slate-900 font-bold uppercase tracking-[0.15em] block">{label}</span>
+              <span className="text-[10px] text-slate-400 font-medium">Click to browse media library</span>
             </div>
-          </>
+          </div>
         )}
 
         <input
@@ -152,7 +165,7 @@ export function UniversalImageUploader({
       <Dialog open={showCropper} onOpenChange={setShowCropper}>
         <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-[2rem]">
           <DialogHeader className="p-6 bg-slate-900 text-white">
-            <DialogTitle className="font-lora text-xl font-medium flex items-center gap-2">
+            <DialogTitle className="font-serif text-xl font-medium flex items-center gap-2">
               <Crop className="h-5 w-5" /> Adjust Image Crop
             </DialogTitle>
           </DialogHeader>

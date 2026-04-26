@@ -518,7 +518,7 @@ export function TemplateManager({
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"
-                                    className="h-8 w-8 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+                                    className="h-8 w-8 text-slate-400 hover:bg-slate-50 hover:text-slate-900"
                                     onClick={() => handleOpenModal(section, "edit", config)}
                                   >
                                     <Pencil className="h-3.5 w-3.5" />

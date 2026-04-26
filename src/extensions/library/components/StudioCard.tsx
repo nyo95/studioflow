@@ -17,13 +17,13 @@ export const StudioCard = React.forwardRef<HTMLDivElement, StudioCardProps>(
       >
         {title && (
           <SimpleCardHeader className="bg-transparent border-b-slate-100">
-            <SimpleCardTitle className="font-lora text-lg font-medium text-slate-800">
+            <SimpleCardTitle className="font-serif text-lg font-medium text-slate-800">
               {title}
             </SimpleCardTitle>
             {headerAction}
           </SimpleCardHeader>
         )}
-        <SimpleCardBody className="font-inter">
+        <SimpleCardBody className="font-sans">
           {children}
         </SimpleCardBody>
       </SimpleCard>

@@ -62,6 +62,7 @@ interface LibraryTabsProps {
   isRefreshing?: boolean;
   activeTab: string;
   onTabChange: (val: string) => void;
+  onRefreshAll?: () => void;
 }
 
 export function LibraryTabs({
@@ -87,7 +88,8 @@ export function LibraryTabs({
   promotionRequests = [],
   isRefreshing,
   activeTab,
-  onTabChange
+  onTabChange,
+  onRefreshAll
 }: LibraryTabsProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -105,10 +107,10 @@ export function LibraryTabs({
   const [modalType, setModalType] = React.useState<"PRODUCT" | "VENDOR">("PRODUCT");
   const [selectedData, setSelectedData] = React.useState<LibraryVendor | ProductCatalogWithRelations | null>(null);
 
-  const retryTab = () => router.refresh();
+  const retryTab = () => { onRefreshAll?.(); };
 
   const handleSuccess = () => {
-    router.refresh(); 
+    onRefreshAll?.();
   };
 
   const openDetail = (product: ProductCatalogWithRelations) => {
@@ -135,7 +137,7 @@ export function LibraryTabs({
       onValueChange={handleTabChange}
       className="w-full"
     >
-      <div className="flex flex-col lg:flex-row gap-10 items-start">
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* Left Column: Designers/Staff optimized sidebar */}
         <ActionSidebar>
           <ActionSidebarSection title="Filters" subtitle="Refine Catalog">
@@ -174,7 +176,7 @@ export function LibraryTabs({
                  <div className={cn("flex items-center justify-between p-4 border transition-all hover:border-slate-100", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                     <div className="flex flex-col gap-0.5">
                       <span className={cn("font-black text-slate-900 uppercase tracking-widest", UI_ENGINE_TYPE_META)}>Physical Only</span>
-                      <span className={cn("text-slate-400 font-inter", UI_ENGINE_TYPE_META)}>Filter items with samples</span>
+                      <span className={cn("text-slate-400 font-sans", UI_ENGINE_TYPE_META)}>Filter items with samples</span>
                     </div>
                     <label htmlFor="physical-toggle" className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -213,26 +215,26 @@ export function LibraryTabs({
                 <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                   <div className="flex items-center gap-3">
                     <LayoutGrid className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Catalog</span>
+                    <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Catalog</span>
                   </div>
                 </TabsTrigger>
                 <TabsTrigger value="inventory" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                   <div className="flex items-center gap-3">
                     <Warehouse className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Samples</span>
+                    <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Samples</span>
                   </div>
                 </TabsTrigger>
                 <TabsTrigger value="vendors" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                   <div className="flex items-center gap-3">
                     <Users className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Vendors</span>
+                    <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Vendors</span>
                   </div>
                 </TabsTrigger>
                 {canManageCatalog && (
                   <TabsTrigger value="requests" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                     <div className="flex items-center gap-3">
                       <ClipboardList className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                      <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Requests</span>
+                      <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Requests</span>
                     </div>
                   </TabsTrigger>
                 )}
@@ -240,7 +242,7 @@ export function LibraryTabs({
                   <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
                     <div className="flex items-center gap-3">
                       <Clock className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                      <span className="font-lora text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Queue</span>
+                      <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Queue</span>
                     </div>
                   </TabsTrigger>
                 )}

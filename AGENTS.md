@@ -54,3 +54,4 @@ As the **Main Lead**, the AI Assistant is the designated custodian of the projec
 4. **Semantic Assessment Protocol**: Upon completion of every task, the agent MUST evaluate if there were "Semantical Changes" (changes to architecture, workflow, core contracts, or canonical rules). If YES, `MASTER_SSOT.md` MUST be updated immediately.
 5. **Confirm-First Protocol**: If a gap is discovered between the SSOT and the codebase that appears to be the result of a previously approved (but undocumented) user decision, the agent MUST seek explicit confirmation before treating it as a deviation.
 6. **Deviation Blocking**: If a request conflicts with established SSOT rules, the AI must block the implementation, flag the conflict, and seek explicit user override.
+7. **UI Changelog Protocol**: Kamu WAJIB mencatat setiap perubahan pada UI (warna, radius, spacing, skeleton) di `CHANGELOG.md` bagian `## UI Changes` untuk mencegah regresi saat pergantian agent.

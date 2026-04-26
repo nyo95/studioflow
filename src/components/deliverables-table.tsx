@@ -21,6 +21,7 @@ import {
   TableCardCell,
   Heading
 } from "@/ui_engine";
+import { useTableResizer } from "@/hooks/use-table-resizer";
 
 export interface DeliverablePhaseRow {
   phaseId: string;
@@ -73,6 +74,15 @@ export function DeliverablesTable({
   userId,
   userRole,
 }: DeliverablesTableProps) {
+  const { widths, onResizeStart } = useTableResizer("deliverables-table", {
+    phase: 14,
+    revision: 18,
+    file: 30,
+    type: 12,
+    date: 12,
+    action: 14,
+  });
+
   const headerContent = (
     <div className="flex w-full items-start justify-between gap-6 py-2">
       <div>
@@ -87,14 +97,44 @@ export function DeliverablesTable({
   );
 
   return (
-    <TableCard header={headerContent}>
+    <TableCard header={headerContent} layout="fixed">
       <TableCardHeader>
-        <TableCardHead className="w-[14%]">Phase</TableCardHead>
-        <TableCardHead className="w-[18%]">Current Revision</TableCardHead>
-        <TableCardHead className="w-[30%]">File / Deliverable</TableCardHead>
-        <TableCardHead className="w-[12%]">Type</TableCardHead>
-        <TableCardHead className="w-[12%]">Uploaded Date</TableCardHead>
-        <TableCardHead className="w-[14%] align-right">Action</TableCardHead>
+        <TableCardHead 
+          style={{ width: `${widths.phase}%` }}
+          onResizeStart={(e) => onResizeStart("phase", e, "revision")}
+        >
+          Phase
+        </TableCardHead>
+        <TableCardHead 
+          style={{ width: `${widths.revision}%` }}
+          onResizeStart={(e) => onResizeStart("revision", e, "file")}
+        >
+          Current Revision
+        </TableCardHead>
+        <TableCardHead 
+          style={{ width: `${widths.file}%` }}
+          onResizeStart={(e) => onResizeStart("file", e, "type")}
+        >
+          File / Deliverable
+        </TableCardHead>
+        <TableCardHead 
+          style={{ width: `${widths.type}%` }}
+          onResizeStart={(e) => onResizeStart("type", e, "date")}
+        >
+          Type
+        </TableCardHead>
+        <TableCardHead 
+          style={{ width: `${widths.date}%` }}
+          onResizeStart={(e) => onResizeStart("date", e, "action")}
+        >
+          Uploaded Date
+        </TableCardHead>
+        <TableCardHead 
+          style={{ width: `${widths.action}%` }}
+          className="align-right"
+        >
+          Action
+        </TableCardHead>
       </TableCardHeader>
       <TableCardBody>
         {rows.length === 0 ? (

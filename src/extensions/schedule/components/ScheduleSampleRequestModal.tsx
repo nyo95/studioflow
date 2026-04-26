@@ -77,11 +77,11 @@ export function ScheduleSampleRequestModal({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="font-lora text-xl font-medium flex items-center gap-2">
-            <Package className="h-5 w-5 text-blue-600" />
+          <DialogTitle className="font-serif text-xl font-medium flex items-center gap-2">
+            <Package className="h-5 w-5 text-slate-900" />
             Request Product Sample
           </DialogTitle>
-          <p className="text-sm text-slate-500 font-inter mt-1">
+          <p className="text-sm text-slate-500 font-sans mt-1">
             Requesting sample for <strong className="text-slate-900">{productNameFallback}</strong>.
           </p>
         </DialogHeader>
@@ -92,7 +92,7 @@ export function ScheduleSampleRequestModal({
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Installation Area
               </Label>
-              <div className="h-9 px-3 flex items-center bg-slate-50 border border-slate-200 rounded-lg text-sm font-inter text-slate-700">
+              <div className="h-9 px-3 flex items-center bg-slate-50 border border-slate-200 rounded-lg text-sm font-sans text-slate-700">
                 {defaultLocation}
               </div>
             </div>
@@ -104,7 +104,7 @@ export function ScheduleSampleRequestModal({
             <Input
               id="notes"
               placeholder="e.g. Needs sample for client meeting next week"
-              className="bg-slate-50 border-slate-200 h-11 focus:ring-slate-900 text-sm font-inter"
+              className="bg-slate-50 border-slate-200 h-11 focus:ring-slate-900 text-sm font-sans"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
@@ -115,14 +115,14 @@ export function ScheduleSampleRequestModal({
           <Button
             variant="ghost"
             onClick={() => onOpenChange(false)}
-            className="text-slate-500 hover:text-slate-900 font-inter text-sm"
+            className="text-slate-500 hover:text-slate-900 font-sans text-sm"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={submitting}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-8 shadow-sm font-inter text-xs uppercase tracking-widest font-bold ml-2"
+            className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl h-11 px-8 shadow-sm font-sans text-xs uppercase tracking-widest font-bold ml-2"
           >
             {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Submit Request

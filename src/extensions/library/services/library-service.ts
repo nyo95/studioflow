@@ -1146,6 +1146,7 @@ export class LibraryService {
     return request;
   }
 
+
   static async reviewPromotionRequest(
     tx: PrismaTransaction,
     requestId: string,
@@ -1167,70 +1168,52 @@ export class LibraryService {
       // 1. Resolve Vendor
       const vendorId = await this.resolveVendor(snapshot.catalog_brand || "Unknown Brand", userId, tx);
 
-      // 1.5 Parse dimensions from canonical string if available
-      let dimP = snapshot.specs?.catalog_dimension_p || null;
-      let dimL = snapshot.specs?.catalog_dimension_l || null;
-      let dimT = snapshot.specs?.catalog_dimension_t || null;
-      let dimUnit = snapshot.specs?.catalog_dimension_unit || "cm";
+      // 1.5 Parse dimensions
+      const dimP = snapshot.specs?.catalog_dimension_p || null;
+      const dimL = snapshot.specs?.catalog_dimension_l || null;
+      const dimT = snapshot.specs?.catalog_dimension_t || null;
+      const dimUnit = snapshot.specs?.catalog_dimension_unit || "cm";
 
-      const canonicalDims = snapshot.specs?.catalog_dimensions;
-      if (canonicalDims && typeof canonicalDims === "string" && canonicalDims !== "N/A") {
-        const parts = canonicalDims.trim().split(/\s+x\s+/);
-        if (parts.length === 3) {
-          dimP = parts[0]?.trim() || dimP;
-          dimL = parts[1]?.trim() || dimL;
-          // Third part might contain unit: "T unit"
-          const lastPart = parts[2]?.trim() || "";
-          const lastParts = lastPart.split(/\s+/);
-          dimT = lastParts[0]?.trim() || dimT;
-          if (lastParts.length > 1) {
-            dimUnit = lastParts[1]?.trim() || dimUnit;
+      // 2. Create Product Catalog Entry or Resolve Duplicate (BUG-07)
+      const dupCheckSku = snapshot.specs?.catalog_sku?.trim();
+      const dupCheckBrand = snapshot.catalog_brand?.trim();
+      
+      let product;
+      if (dupCheckSku && dupCheckBrand) {
+        product = await tx.productCatalog.findFirst({
+          where: {
+            vendor_id: vendorId,
+            catalog_sku: dupCheckSku,
+            catalog_brand: dupCheckBrand,
+            deleted_at: null
           }
-        }
+        });
       }
 
-      // 2. Create Product Catalog Entry
-// Deduplication: prevent duplicate SKU+brand during promotion
-    const dupCheckSku = snapshot.specs?.catalog_sku?.trim();
-    const dupCheckBrand = snapshot.catalog_brand?.trim();
-    if (dupCheckSku && dupCheckBrand) {
-      const existingDup = await tx.productCatalog.findFirst({
-        where: {
-          vendor_id: vendorId,
-          catalog_sku: dupCheckSku,
-          catalog_brand: dupCheckBrand,
-          deleted_at: null
-        }
-      });
-      if (existingDup) {
-        // Idempotent: return existing (approved or pending) entry
-        return existingDup;
+      if (!product) {
+        product = await tx.productCatalog.create({
+          data: {
+            vendor_id: vendorId,
+            catalog_type: snapshot.catalog_type || ProductType.material,
+            catalog_category: snapshot.schedule_category || "UNCATEGORIZED",
+            catalog_sub_category: snapshot.catalog_sub_category || null,
+            catalog_sku: snapshot.specs?.catalog_sku || "N/A",
+            catalog_product_name: snapshot.catalog_product_name || null,
+            catalog_brand: snapshot.catalog_brand || null,
+            catalog_motif: snapshot.specs?.catalog_motif || null,
+            catalog_color: snapshot.specs?.catalog_color || "N/A",
+            catalog_finishing: snapshot.specs?.catalog_finishing || null,
+            catalog_dimension_p: dimP,
+            catalog_dimension_l: dimL,
+            catalog_dimension_t: dimT,
+            catalog_dimension_unit: dimUnit,
+            catalog_image_url: snapshot.catalog_image_url || null,
+            catalog_reference_url: snapshot.catalog_reference_url || null,
+            catalog_price: snapshot.catalog_price || null,
+            catalog_status: "APPROVED",
+          }
+        });
       }
-    }
-    const product = await tx.productCatalog.create({
-        data: {
-          vendor_id: vendorId,
-          catalog_category: snapshot.schedule_category || "UNCATEGORIZED",
-          catalog_type: snapshot.catalog_type || ProductType.material,
-          catalog_sub_category: snapshot.catalog_sub_category || null,
-          catalog_sku: snapshot.specs?.catalog_sku || "N/A",
-          catalog_product_name: snapshot.catalog_product_name || null,
-          catalog_brand: snapshot.catalog_brand || null,
-          catalog_motif: snapshot.specs?.catalog_motif || null,
-          catalog_color: snapshot.specs?.catalog_color || "N/A",
-          catalog_finishing: snapshot.specs?.catalog_finishing || null,
-          catalog_dimension_p: dimP,
-          catalog_dimension_l: dimL,
-          catalog_dimension_t: dimT,
-          catalog_dimension_unit: dimUnit,
-          catalog_image_url: snapshot.catalog_image_url || null,
-          catalog_image_original_url: null,
-          catalog_reference_url: snapshot.catalog_reference_url || null,
-          catalog_price: snapshot.catalog_price || null,
-          catalog_status: "APPROVED", // Auto-approve promoted items
-        }
-      });
-
 
       // 3. Link back to Project Schedule Option
       await tx.projectScheduleOption.update({
@@ -1241,27 +1224,36 @@ export class LibraryService {
         }
       });
 
-      // 4. Record Audit Log for Approval
+      // 4. Record Audit Log
       await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_APPROVE_PROMOTION, "PromotionRequest", requestId, userId, {
         product_id: product.id,
         project_id: request.project_id
       });
+      
+      // Update Promotion Request with link
+      await tx.promotionRequest.update({
+        where: { id: requestId },
+        data: {
+          status: "APPROVED",
+          notes: notes ? this.normalizeOptional(notes) : undefined,
+        }
+      });
     } else {
-      // Record Audit Log for Rejection
+      await tx.promotionRequest.update({
+        where: { id: requestId },
+        data: {
+          status: "REJECTED",
+          reviewed_by_id: userId,
+          reviewed_at: new Date(),
+          notes: notes ? this.normalizeOptional(notes) : undefined,
+        }
+      });
+
       await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_REJECT_PROMOTION, "PromotionRequest", requestId, userId, {
         project_id: request.project_id
       });
     }
 
-    // Update Request Status
-    return tx.promotionRequest.update({
-      where: { id: requestId },
-      data: {
-        status,
-        reviewed_by_id: userId,
-        reviewed_at: new Date(),
-        notes: notes ? this.normalizeOptional(notes) : undefined,
-      },
-    });
+    return tx.promotionRequest.findUniqueOrThrow({ where: { id: requestId } });
   }
 }

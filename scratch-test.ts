@@ -23,8 +23,8 @@ async function test() {
       },
     });
     console.log("Success:", entries.length);
-  } catch (err: any) {
-    console.error("Error:", err.message);
+  } catch (err: unknown) {
+    console.error("Error:", err instanceof Error ? err.message : String(err));
   } finally {
     await prisma.$disconnect();
   }

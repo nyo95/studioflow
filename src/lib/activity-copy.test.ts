@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { humanizeAuditAction, humanizeEntityType, buildActivitySentence, formatActionLabel } from './activity-copy.ts';
+import { humanizeAuditAction, humanizeEntityType, buildActivitySentence, formatActionLabel } from './activity-copy';
 
 test('humanizeAuditAction - known actions', () => {
   assert.strictEqual(humanizeAuditAction('ACTIVATE_PHASE'), 'memulai fase');

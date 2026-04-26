@@ -10,8 +10,8 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   rowPaddingY: "1rem",
   sidebarWidth: "272px",
   containerMaxWidth: "1280px",
-  fontSerif: "var(--font-lora-base)",
-  fontSans: "var(--font-inter-base)",
+  fontSerif: "var(--font-serif-base)",
+  fontSans: "var(--font-sans-base)",
   pagePaddingY: "2.5rem",
   pageMaxWidth: "1280px",
   tableDensity: "compact", // default to compact for rows

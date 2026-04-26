@@ -99,13 +99,6 @@ export const addScheduleEntryAction = createAction(
       ctx.userId
     );
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_CREATE_ENTRY, "Project", input.projectId, ctx.userId, {
-      entryId: entry.id,
-      category: input.schedule_category,
-      mode: input.mode,
-      section: input.section
-    });
-
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return entry;
   },
@@ -128,14 +121,6 @@ export const addScheduleEntryInstantAction = createAction(
       input.section,
       ctx.userId
     );
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_CREATE_ENTRY, "Project", input.projectId, ctx.userId, {
-      entryId: entry.id,
-      category: input.schedule_category,
-      mode: "reserve",
-      section: input.section,
-      instant: true
-    });
 
     // Fetch entry with options for immediate use
     const entryWithOptions = await tx.projectScheduleEntry.findUnique({
@@ -171,13 +156,6 @@ export const addScheduleEntryWithProductAction = createAction(
       ctx.userId
     );
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_CREATE_ENTRY, "Project", input.projectId, ctx.userId, {
-      entryId: entry.id,
-      productId: product.id,
-      category: product.catalog_category,
-      section: input.section
-    });
-
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
 
     // Return entry with options
@@ -193,11 +171,35 @@ export const addScheduleOptionAction = createAction(
   async ({ input, ctx, tx }) => {
     const entry = await tx.projectScheduleEntry.findUniqueOrThrow({
       where: { id: input.entryId },
-      select: { id: true, project_id: true, schedule_category: true },
+      select: { id: true, project_id: true, schedule_category: true, section: true },
     });
     await getProjectMembershipOrThrow(tx, entry.project_id, ctx.userId, ctx.role);
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_ADD);
+
+    if (input.mode === "catalog" && input.catalogItemId) {
+      const catalogItem = await tx.productCatalog.findUnique({
+        where: { id: input.catalogItemId },
+        select: { catalog_category: true, catalog_type: true },
+      });
+      if (!catalogItem) {
+        throw new ActionError("Product not found in catalog", "NOT_FOUND");
+      }
+      if (catalogItem.catalog_type !== entry.section) {
+        throw new ActionError(
+          `Type mismatch: entry is "${entry.section}" but product is "${catalogItem.catalog_type}"`,
+          "VALIDATION_FAILED"
+        );
+      }
+      const entryCategory = entry.schedule_category.trim().toUpperCase();
+      const itemCategory = catalogItem.catalog_category.trim().toUpperCase();
+      if (entryCategory !== itemCategory) {
+        throw new ActionError(
+          `Category mismatch: entry is "${entry.schedule_category}" but product is in "${catalogItem.catalog_category}"`,
+          "VALIDATION_FAILED"
+        );
+      }
+    }
 
     const { option } = await ScheduleService.addOptionToEntry(
       tx,
@@ -208,12 +210,6 @@ export const addScheduleOptionAction = createAction(
       (input.mode === "create_catalog" || input.mode === "manual") ? input.catalogCreateData : undefined,
       ctx.userId
     );
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_ADD_OPTION, "Project", entry.project_id, ctx.userId, {
-      entryId: input.entryId,
-      optionId: option.id,
-      mode: input.mode
-    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: entry.project_id });
     return option;
@@ -239,11 +235,6 @@ export const approveScheduleOptionAction = createAction(
 
     const result = await ScheduleService.approveOption(tx, input.optionId, input.entryId, ctx.userId);
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_APPROVE_OPTION, "Project", option.entry.project_id, ctx.userId, {
-      entryId: input.entryId,
-      optionId: input.optionId
-    });
-
     invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
     return result;
   },
@@ -260,11 +251,6 @@ export const updateScheduleEntryAction = createAction(
     await ScheduleService.validateOwnership(tx, input.projectId, input.entryId);
 
     const result = await ScheduleService.updateEntry(tx, input.entryId, input.data, ctx.userId);
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_ENTRY, "Project", input.projectId, ctx.userId, {
-      entryId: input.entryId,
-      updatedFields: Object.keys(input.data)
-    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return result;
@@ -287,11 +273,6 @@ export const updateScheduleOptionSnapshotAction = createAction(
 
     const result = await ScheduleService.updateOptionSnapshot(tx, input.optionId, input.data, ctx.userId);
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_SNAPSHOT, "Project", option.entry.project_id, ctx.userId, {
-      optionId: input.optionId,
-      updatedFields: Object.keys(input.data)
-    });
-
     invalidateCache({ scope: REVALIDATE_PROJECT, id: option.entry.project_id });
     return result;
   },
@@ -310,10 +291,6 @@ export const deleteScheduleOptionAction = createAction(
 
     const result = await ScheduleService.smartDeleteOption(tx, input.optionId, ctx.userId);
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_DELETE_OPTION, "Project", input.projectId, ctx.userId, {
-      optionId: input.optionId
-    });
-
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return result;
   },
@@ -330,11 +307,6 @@ export const deleteScheduleEntryAction = createAction(
     await ScheduleService.validateOwnership(tx, input.projectId, input.entryId);
 
     const deletedEntry = await ScheduleService.deleteEntry(tx, input.entryId, ctx.userId);
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_DELETE_ENTRY, "Project", input.projectId, ctx.userId, {
-      entryId: input.entryId,
-      code: `${deletedEntry.schedule_prefix}-${String(deletedEntry.schedule_increment).padStart(2, "0")}`
-    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return deletedEntry;
@@ -356,12 +328,6 @@ export const bulkDeleteScheduleEntriesAction = createAction(
       input.schedule_category,
       ctx.userId
     );
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_DELETE_ENTRY, "Project", input.projectId, ctx.userId, {
-      count: result.count,
-      category: input.schedule_category,
-      section: input.section
-    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return result;
@@ -390,12 +356,6 @@ export const reorderScheduleEntriesAction = createAction(
 
     await ScheduleService.reorderEntries(tx, input.projectId, input.section, input.schedule_category, input.items, ctx.userId);
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_REORDER, "Project", input.projectId, ctx.userId, {
-      category: input.schedule_category,
-      section: input.section,
-      itemCount: input.items.length
-    });
-
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return { success: true };
   },
@@ -418,11 +378,6 @@ export const moveEntryToCategoryAction = createAction(
       input.newIndex + 1, // normalize to 1-based sort order
       ctx.userId
     );
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_ENTRY, "Project", input.projectId, ctx.userId, {
-      entryId: input.entryId,
-      move: { toCategory: input.toCategory }
-    });
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return { success: true };
@@ -487,13 +442,7 @@ export const swapScheduleEntriesAction = createAction(
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
 
-    await ScheduleService.swapEntries(tx, input.projectId, input.idA, input.idB);
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_REORDER, "Project", input.projectId, ctx.userId, {
-      idA: input.idA,
-      idB: input.idB,
-      type: "SWAP"
-    });
+    await ScheduleService.swapEntries(tx, input.projectId, input.idA, input.idB, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     return { success: true };

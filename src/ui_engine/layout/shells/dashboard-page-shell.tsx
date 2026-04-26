@@ -18,7 +18,8 @@ export function DashboardPageShell({
   return (
     <Comp
       className={cn(
-        "mx-auto w-full px-[var(--ui-section-px,1.5rem)] py-[var(--ui-page-padding-y,2.5rem)]",
+        "mx-auto w-full px-[var(--ui-page-padding-x,2.5rem)] py-[var(--ui-page-padding-y,2.5rem)]",
+        "animate-in fade-in duration-700",
         CONTAINER_MAX_WIDTH,
         CANVAS_BG,
         className

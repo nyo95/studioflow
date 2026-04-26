@@ -5,9 +5,10 @@ import { ProductType } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
 import { 
   Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, 
-  ChevronLeft, ChevronRight, GripVertical, Plus
+  ChevronLeft, ChevronRight, GripVertical, Plus, Package
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { VisualAsset } from "@/components/ui/visual-asset";
 import { ScheduleSampleRequestModal } from "../ScheduleSampleRequestModal";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
@@ -30,9 +31,9 @@ import {
 import {
   UI_ENGINE_BG_SUBTLE,
   UI_ENGINE_BORDER_SUBTLE,
-  UI_ENGINE_ACCENT_PRIMARY
+  
 } from "@/ui_engine/tokens/colors";
-import { ImagePlaceholder } from "@/ui_engine/components/image-placeholder";
+
 import type { ProjectScheduleEntryWithRelations } from "../../types";
 import { getEffectiveTitle, isPlaceholder } from "../../lib/display-utils";
 
@@ -148,7 +149,7 @@ export function VisualRow({
         "group relative flex items-center gap-4 p-2 border transition-all duration-300",
         UI_ENGINE_RADIUS_CONTROL,
         isSelected 
-          ? "bg-slate-50 border-slate-900 ring-1 ring-slate-900 shadow-xl z-10 scale-[1.01]" 
+          ? "bg-slate-900 border-slate-900 ring-1 ring-slate-900 shadow-xl z-10 scale-[1.01]" 
           : "bg-white/80 backdrop-blur-md border-slate-200/60 hover:border-slate-300 shadow-sm hover:shadow-md",
         isDragging && "opacity-50 scale-105 z-50 shadow-2xl ring-2 ring-slate-900"
       )}
@@ -169,7 +170,7 @@ export function VisualRow({
         <Badge 
           variant="outline" 
           className={cn(
-            "font-inter text-[10px] font-black tracking-[0.1em] uppercase px-2.5 py-1 transition-colors",
+            "font-sans text-[10px] font-black tracking-[0.1em] uppercase px-2.5 py-1 transition-colors",
             isSelected ? "border-white/20 bg-white/10 text-white" : "border-slate-200 bg-slate-50 text-slate-900 shadow-sm"
           )}
         >
@@ -183,15 +184,12 @@ export function VisualRow({
           className={cn("w-20 h-20 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_IMAGE)}
           onClick={(e) => { e.stopPropagation(); if (snapshot?.catalog_image_url) setLightboxOpen(true); }}
         >
-          {snapshot?.catalog_image_url ? (
-            <img
-              src={snapshot.catalog_image_url}
-              alt={snapshot.catalog_product_name || ""}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
-            />
-          ) : (
-            <ImagePlaceholder iconSize={28} />
-          )}
+          <VisualAsset 
+            src={snapshot?.catalog_image_url} 
+            alt={snapshot?.catalog_product_name || ""} 
+            iconSize={28}
+            className="transition-transform duration-700 group-hover/img:scale-110"
+          />
           <div className="absolute inset-0 bg-slate-900/0 group-hover/img:bg-slate-900/20 transition-all flex items-center justify-center">
             <ZoomIn className="text-white opacity-0 group-hover/img:opacity-100 scale-90 group-hover/img:scale-100 transition-all duration-300 w-6 h-6" />
           </div>
@@ -358,27 +356,47 @@ export function VisualRow({
         )}
 
         {/* Actions Menu */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
-           <button
-             onClick={(e) => { e.stopPropagation(); onEdit?.(entry); }}
-             className={cn(
-               "h-8 w-8 flex items-center justify-center transition-all",
-               isSelected ? "bg-white/10 hover:bg-white text-white hover:text-slate-900" : "hover:bg-slate-100 text-slate-400 hover:text-slate-600",
-               UI_ENGINE_RADIUS_CONTROL
-             )}
-           >
-             <Edit3 size={14} />
-           </button>
-           <button
-             onClick={handleDelete}
-             className={cn(
-               "h-8 w-8 flex items-center justify-center transition-all",
-               isSelected ? "bg-white/10 hover:bg-red-500 text-white" : "hover:bg-red-50 text-slate-400 hover:text-red-500",
-               UI_ENGINE_RADIUS_CONTROL
-             )}
-           >
-             <Trash2 size={14} />
-           </button>
+        <div className="flex items-center gap-2">
+           {/* Sample Request - Persistent visibility if product linked */}
+           {activeOption?.product_catalog_id && (
+             <button
+               onClick={(e) => {
+                 e.stopPropagation();
+                 setSampleModalOpen(true);
+               }}
+               title="Request sample"
+               className={cn(
+                 "h-8 w-8 flex items-center justify-center transition-all bg-slate-50 text-slate-900 hover:bg-slate-100 shadow-sm",
+                 UI_ENGINE_RADIUS_CONTROL
+               )}
+             >
+               <Package size={14} strokeWidth={2.5} />
+             </button>
+           )}
+
+           {/* Destructive/Edit Actions - Hover only */}
+           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit?.(entry); }}
+                className={cn(
+                  "h-8 w-8 flex items-center justify-center transition-all",
+                  isSelected ? "bg-white/10 hover:bg-white text-white hover:text-slate-900" : "hover:bg-slate-100 text-slate-400 hover:text-slate-600",
+                  UI_ENGINE_RADIUS_CONTROL
+                )}
+              >
+                <Edit3 size={14} />
+              </button>
+              <button
+                onClick={handleDelete}
+                className={cn(
+                  "h-8 w-8 flex items-center justify-center transition-all",
+                  isSelected ? "bg-white/10 hover:bg-red-500 text-white" : "hover:bg-red-50 text-slate-400 hover:text-red-500",
+                  UI_ENGINE_RADIUS_CONTROL
+                )}
+              >
+                <Trash2 size={14} />
+              </button>
+           </div>
         </div>
       </div>
 
@@ -386,12 +404,12 @@ export function VisualRow({
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
           <DialogContent className={cn("p-0 border-none bg-transparent shadow-none max-w-[90vw] w-auto overflow-visible", UI_ENGINE_RADIUS_CARD)}>
              <div className="relative">
-                <img
-                  src={snapshot?.catalog_image_url || ""}
-                  className={cn("max-h-[85vh] shadow-2xl border-4 border-white/20", UI_ENGINE_RADIUS_CARD)}
-                  style={{ borderRadius: "2rem" }}
-                  alt="Full size preview"
-                />
+                <div className={cn("max-h-[85vh] shadow-2xl border-4 border-white/20 overflow-hidden", UI_ENGINE_RADIUS_CARD)} style={{ borderRadius: "2rem" }}>
+                  <VisualAsset 
+                    src={snapshot?.catalog_image_url} 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
                 <button
                   onClick={() => setLightboxOpen(false)}
                   className="absolute -top-4 -right-4 h-12 w-12 rounded-full bg-white text-slate-900 shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-[100]"

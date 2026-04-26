@@ -48,7 +48,7 @@ export function ScheduleOptionCard({ option, entryId, onRefresh }: ScheduleOptio
       className={`relative w-24 h-24 rounded-2xl border-2 transition-all cursor-pointer group/opt overflow-hidden ${getStatusStyle()}`}
     >
       {/* Label Badge */}
-      <div className={`absolute top-2 left-2 z-20 h-7 w-7 rounded-lg flex items-center justify-center font-lora text-xs font-black shadow-lg transition-all duration-500 ${option.is_final ? "bg-slate-950 text-white scale-110" : "bg-white/90 backdrop-blur-md text-slate-400 group-hover/opt:text-slate-950 group-hover/opt:scale-110 border border-slate-100"}`}>
+      <div className={`absolute top-2 left-2 z-20 h-7 w-7 rounded-lg flex items-center justify-center font-serif text-xs font-black shadow-lg transition-all duration-500 ${option.is_final ? "bg-slate-950 text-white scale-110" : "bg-white/90 backdrop-blur-md text-slate-400 group-hover/opt:text-slate-950 group-hover/opt:scale-110 border border-slate-100"}`}>
         {option.option_label}
       </div>
 

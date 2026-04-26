@@ -20,6 +20,7 @@ import {
 } from "@/ui_engine";
 import { updateProjectPriority } from "@/actions/project-actions";
 import { unwrapActionResult } from "@/lib/result";
+import { useTableResizer } from "@/hooks/use-table-resizer";
 
 type DashboardProject = Prisma.ProjectGetPayload<{
   select: {
@@ -78,6 +79,16 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
   const [showAll, setShowAll] = useState<boolean>(userRole === Role.ADMIN);
   const [sortColumnId, setSortColumnId] = useState<string | null>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  const { widths, onResizeStart } = useTableResizer("project-list", {
+    name: 25, // 25%
+    client: 15,
+    area: 10,
+    designer: 12,
+    drafter: 12,
+    progress: 18,
+    actions: 8,
+  }); // Total: 100%
 
   const filteredProjects = useMemo(() => {
     return initialProjects.filter((project) => {
@@ -187,56 +198,72 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
       </div>
 
       <div className="w-full">
-        <TableCard>
+        <TableCard layout="fixed">
           <TableCardHeader>
             <TableCardHead 
-              className="w-[30%]" 
+              style={{ width: `${widths.name}%`, cursor: 'pointer', userSelect: 'none' }} 
               onClick={() => handleSort("name")}
-              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onResizeStart={(e) => onResizeStart("name", e, "client")}
             >
-              <div className="flex items-center gap-1.5">
-                PROJECT NAME
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <span className="truncate">PROJECT NAME</span>
                 {sortColumnId === "name" && (
-                  sortDirection === "asc" ? <ArrowUpNarrowWide className="h-3.5 w-3.5 text-slate-400" /> : <ArrowDownWideNarrow className="h-3.5 w-3.5 text-slate-400" />
+                  sortDirection === "asc" ? <ArrowUpNarrowWide className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : <ArrowDownWideNarrow className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
                 )}
               </div>
             </TableCardHead>
             <TableCardHead 
-              className="w-[18%]"
+              style={{ width: `${widths.client}%`, cursor: 'pointer', userSelect: 'none' }}
               onClick={() => handleSort("client")}
-              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onResizeStart={(e) => onResizeStart("client", e, "area")}
             >
-              <div className="flex items-center gap-1.5">
-                CLIENT
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <span className="truncate">CLIENT</span>
                 {sortColumnId === "client" && (
-                  sortDirection === "asc" ? <ArrowUpNarrowWide className="h-3.5 w-3.5 text-slate-400" /> : <ArrowDownWideNarrow className="h-3.5 w-3.5 text-slate-400" />
+                  sortDirection === "asc" ? <ArrowUpNarrowWide className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : <ArrowDownWideNarrow className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
                 )}
               </div>
             </TableCardHead>
             <TableCardHead 
-              className="w-[10%]"
+              style={{ width: `${widths.area}%`, cursor: 'pointer', userSelect: 'none' }}
               onClick={() => handleSort("area")}
-              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onResizeStart={(e) => onResizeStart("area", e, "designer")}
             >
-              <div className="flex items-center gap-1.5">
-                LUAS
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <span className="truncate">LUAS</span>
                 {sortColumnId === "area" && (
-                  sortDirection === "asc" ? <ArrowUpNarrowWide className="h-3.5 w-3.5 text-slate-400" /> : <ArrowDownWideNarrow className="h-3.5 w-3.5 text-slate-400" />
+                  sortDirection === "asc" ? <ArrowUpNarrowWide className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : <ArrowDownWideNarrow className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
                 )}
               </div>
             </TableCardHead>
-            <TableCardHead className="w-[12%] text-center">
+            <TableCardHead 
+              className="text-center"
+              style={{ width: `${widths.designer}%` }}
+              onResizeStart={(e) => onResizeStart("designer", e, "drafter")}
+            >
               <div className="flex justify-center">
                 <Palette className="h-4 w-4 text-slate-400" />
               </div>
             </TableCardHead>
-            <TableCardHead className="w-[12%] text-center">
+            <TableCardHead 
+              className="text-center"
+              style={{ width: `${widths.drafter}%` }}
+              onResizeStart={(e) => onResizeStart("drafter", e, "progress")}
+            >
               <div className="flex justify-center">
                 <PenTool className="h-4 w-4 text-slate-400" />
               </div>
             </TableCardHead>
-            <TableCardHead className="w-[18%]">PROGRESS</TableCardHead>
-            <TableCardHead className="w-16 text-right"></TableCardHead>
+            <TableCardHead 
+              style={{ width: `${widths.progress}%` }}
+              onResizeStart={(e) => onResizeStart("progress", e, "actions")}
+            >
+              PROGRESS
+            </TableCardHead>
+            <TableCardHead 
+              style={{ width: `${widths.actions}%` }}
+              className="text-right"
+            ></TableCardHead>
           </TableCardHeader>
           <TableCardBody>
             {sortedData.length === 0 ? (
@@ -258,19 +285,21 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
                       isUrgent && "bg-rose-50/30 border-l-4 border-red-400"
                     )}
                   >
-                    <TableCardCell>
-                      <Link href={`/projects/${project.id}`} className="font-sans font-medium text-slate-900 hover:text-indigo-600 transition-colors">
+                    <TableCardCell className="overflow-hidden">
+                      <Link href={`/projects/${project.id}`} className="font-sans font-medium text-slate-900 hover:text-indigo-600 transition-colors truncate block">
                         {project.name}
                       </Link>
                     </TableCardCell>
-                    <TableCardCell>
+                    <TableCardCell className="overflow-hidden">
                       {project.client ? (
-                        <ClientBranding
-                          name={project.client.name}
-                          logoUrl={project.client.logo_url}
-                          fallback="text"
-                          imageClassName="max-h-8"
-                        />
+                        <div className="truncate">
+                          <ClientBranding
+                            name={project.client.name}
+                            logoUrl={project.client.logo_url}
+                            fallback="text"
+                            imageClassName="max-h-8"
+                          />
+                        </div>
                       ) : (
                         <span className="font-sans font-normal text-slate-400">-</span>
                       )}

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { reviewPromotionRequestAction } from "@/extensions/library/actions/library-actions";
 import { cn } from "@/lib/utils";
+import { VisualAsset } from "@/components/ui/visual-asset";
 import { 
   UI_ENGINE_BG_SUBTLE,
   UI_ENGINE_BORDER_SUBTLE,
@@ -74,7 +75,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
         <div className={cn("h-16 w-16 flex items-center justify-center mb-6", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
           <Clock className="h-8 w-8 text-slate-300" />
         </div>
-        <h3 className="font-lora text-lg font-medium text-slate-900 mb-2">No Pending Requests</h3>
+        <h3 className="font-serif text-lg font-medium text-slate-900 mb-2">No Pending Requests</h3>
         <p className="text-sm text-slate-400 max-w-xs">
           Promotion requests from project schedules will appear here for admin review.
         </p>
@@ -87,8 +88,8 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
       {pendingRequests.length > 0 && (
         <section>
           <div className="flex items-center gap-3 mb-6">
-            <h2 className="font-lora text-xl font-medium text-slate-900">Pending Review</h2>
-            <Badge variant="outline" className={cn("font-inter", UI_ENGINE_TYPE_META)}>
+            <h2 className="font-serif text-xl font-medium text-slate-900">Pending Review</h2>
+            <Badge variant="outline" className={cn("font-sans", UI_ENGINE_TYPE_META)}>
               {pendingRequests.length}
             </Badge>
           </div>
@@ -100,20 +101,18 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                 className={cn("bg-white border shadow-sm overflow-hidden hover:shadow-md transition-shadow", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}
               >
                 <div className="p-6 flex items-start gap-6">
-                  {req.snapshot_data?.catalog_image_url && (
-                    <div className={cn("w-20 h-20 overflow-hidden flex-shrink-0", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
-                      <img
-                        src={req.snapshot_data.catalog_image_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
+                  <div className={cn("w-20 h-20 overflow-hidden flex-shrink-0", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
+                    <VisualAsset
+                      src={req.snapshot_data?.catalog_image_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h3 className="font-lora text-lg font-medium text-slate-900 truncate">
+                        <h3 className="font-serif text-lg font-medium text-slate-900 truncate">
                           {req.snapshot_data?.catalog_product_name || "Untitled Product"}
                         </h3>
                         <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
@@ -176,8 +175,8 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
       {processedRequests.length > 0 && (
         <section>
           <div className="flex items-center gap-3 mb-6">
-            <h2 className="font-lora text-lg font-medium text-slate-400">Processed</h2>
-            <Badge variant="ghost" className="font-inter text-[10px]">
+            <h2 className="font-serif text-lg font-medium text-slate-400">Processed</h2>
+            <Badge variant="ghost" className="font-sans text-[10px]">
               {processedRequests.length}
             </Badge>
           </div>
@@ -196,7 +195,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                 <Badge
                   variant="outline"
                   className={cn(
-                    "font-inter",
+                    "font-sans",
                     UI_ENGINE_TYPE_META,
                     req.status === "APPROVED"
                       ? "border-emerald-200 bg-emerald-100 text-emerald-700"

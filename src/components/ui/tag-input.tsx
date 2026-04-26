@@ -58,7 +58,7 @@ export function TagInput({
           <Badge
             key={tag}
             variant="secondary"
-            className="pl-2 pr-1 py-1 h-7 border-none bg-white shadow-sm text-slate-700 font-inter text-[11px] font-bold group flex items-center gap-1 animate-in zoom-in-95 duration-200"
+            className="pl-2 pr-1 py-1 h-7 border-none bg-white shadow-sm text-slate-700 font-sans text-[11px] font-bold group flex items-center gap-1 animate-in zoom-in-95 duration-200"
           >
             {tag}
             <button
@@ -76,7 +76,7 @@ export function TagInput({
           onKeyDown={handleKeyDown}
           onBlur={() => addTag(inputValue)}
           placeholder={tags.length === 0 ? placeholder : ""}
-          className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-inter min-w-[120px] h-7"
+          className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-sans min-w-[120px] h-7"
         />
       </div>
       <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest px-1 flex items-center gap-1.5">

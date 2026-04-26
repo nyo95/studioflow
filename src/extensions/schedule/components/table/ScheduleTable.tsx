@@ -15,6 +15,7 @@ import {
   UI_ENGINE_RADIUS_CARD,
   UI_ENGINE_RADIUS_CONTROL
 } from "@/ui_engine/tokens/layout";
+import { useTableResizer } from "@/hooks/use-table-resizer";
 
 interface ScheduleTableProps {
   sheet: ProjectScheduleSheetPayload;
@@ -30,6 +31,14 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
   const isFixture = section === ProductType.fixture;
   const [collapsedCategories, setCollapsedCategories] = React.useState<Set<string>>(new Set());
 
+  const { widths, onResizeStart } = useTableResizer(`schedule-table-${section || 'material'}`, {
+    code: 90,
+    details: 400,
+    location: 160,
+    qty: 90,
+    actions: 90,
+  });
+
   const toggleCategory = (category: string) => {
     setCollapsedCategories(prev => {
       const next = new Set(prev);
@@ -44,9 +53,13 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
 
   return (
     <div className={cn("w-full bg-white border border-slate-200 overflow-hidden shadow-sm", UI_ENGINE_RADIUS_CARD)}>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
-          <ScheduleTableHeader isFixture={isFixture} />
+      <div className="w-full overflow-x-auto scrollbar-hide">
+        <table className="w-full border-collapse table-fixed">
+          <ScheduleTableHeader 
+            isFixture={isFixture} 
+            widths={widths} 
+            onResizeStart={onResizeStart} 
+          />
           <tbody>
             {sheet.groups.map((group) => {
               const isCollapsed = collapsedCategories.has(group.schedule_category);
@@ -63,7 +76,7 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
                         <div className={cn("flex items-center justify-center w-5 h-5 bg-white border border-slate-200 text-slate-400 group-hover/category:text-slate-600 transition-colors", UI_ENGINE_RADIUS_CONTROL)}>
                           {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                         </div>
-                        <span className="font-lora text-xs font-bold text-slate-700 uppercase tracking-[0.18em]">
+                        <span className="font-serif text-xs font-bold text-slate-700 uppercase tracking-[0.18em]">
                           {group.schedule_category}
                         </span>
                         <span className="font-sans text-[10px] font-black bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full leading-none">
@@ -108,7 +121,7 @@ export function ScheduleTable({ sheet, section, onEditEntry, onDeleteEntry, onUp
               <tr>
                 <td colSpan={isFixture ? 5 : 4} className="px-6 py-24 text-center">
                   <div className="flex flex-col items-center gap-2">
-                    <p className="font-lora text-lg text-slate-400">No entries found</p>
+                    <p className="font-serif text-lg text-slate-400">No entries found</p>
                     <p className="font-sans text-sm text-slate-400">Start by adding a product or importing CSV data.</p>
                   </div>
                 </td>

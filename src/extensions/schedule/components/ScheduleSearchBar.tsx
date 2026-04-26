@@ -125,7 +125,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
 
 
   return (
-    <div ref={searchRef} className="relative w-full max-w-2xl">
+    <div ref={searchRef} className="relative w-full max-w-3xl">
       <div className={cn(
         "flex items-center gap-3 px-4 h-12 border transition-all duration-200",
         UI_ENGINE_RADIUS_CONTROL,

@@ -319,7 +319,7 @@ export function LibraryFormModal({
             
             <div className="relative z-10 space-y-10">
               <div className="space-y-2">
-                <h2 className="font-lora text-3xl font-bold tracking-tight">
+                <h2 className="font-serif text-3xl font-bold tracking-tight">
                   {mode === "CREATE" ? "New Entry" : "Modify Entry"}
                 </h2>
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
@@ -363,7 +363,7 @@ export function LibraryFormModal({
           <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
             <DialogHeader className={cn("p-10 pb-6 border-b flex flex-row items-center justify-between", UI_ENGINE_BORDER_SUBTLE)}>
               <div className="flex items-center gap-4">
-                <DialogTitle className="font-lora text-2xl font-bold text-slate-900">
+                <DialogTitle className="font-serif text-2xl font-bold text-slate-900">
                   {type === "PRODUCT" ? "Product Specification" : "Vendor Details"}
                 </DialogTitle>
                 {mode === "EDIT" && canEdit && (
@@ -688,36 +688,35 @@ export function LibraryFormModal({
                         <div className="h-6 w-1 bg-slate-900 rounded-full" />
                         <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-950">Visual Assets & References</h4>
                       </div>
-                      <div className="grid gap-8">
-                         <div className={cn("p-10 border border-dashed flex flex-col items-center gap-6", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
-                            <div className="w-56 aspect-square">
-                              {isEditMode ? (
-                                <UniversalImageUploader
-                                  initialImageUrl={productData.catalog_image_url}
-                                  onUploadComplete={({ original, cover }) => {
-                                    setProductData(prev => ({
-                                      ...prev,
-                                      catalog_image_original_url: original,
-                                      catalog_image_url: cover
-                                    }));
-                                  }}
-                                  className="shadow-2xl shadow-slate-200 rounded-[24px]"
-                                />
+                      <div className="flex flex-col items-center justify-center py-6">
+                        <div className="w-56">
+                          {isEditMode ? (
+                            <UniversalImageUploader
+                              initialImageUrl={productData.catalog_image_url}
+                              onUploadComplete={({ original, cover }) => {
+                                setProductData(prev => ({
+                                  ...prev,
+                                  catalog_image_original_url: original,
+                                  catalog_image_url: cover
+                                }));
+                              }}
+                              className="shadow-2xl shadow-slate-200 rounded-[24px]"
+                            />
+                          ) : (
+                            <div className="w-full aspect-square bg-white rounded-[24px] shadow-2xl shadow-slate-200 overflow-hidden border border-slate-100">
+                              {productData.catalog_image_url ? (
+                                <img src={productData.catalog_image_url} alt="Product" className="w-full h-full object-cover" />
                               ) : (
-                                <div className="w-full h-full bg-white rounded-[24px] shadow-2xl shadow-slate-200 overflow-hidden border border-slate-100">
-                                  {productData.catalog_image_url ? (
-                                    <img src={productData.catalog_image_url} alt="Product" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <ImagePlaceholder iconSize={48} />
-                                  )}
-                                </div>
+                                <ImagePlaceholder iconSize={48} />
                               )}
                             </div>
-                            <div className="text-center space-y-1">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Master Catalog Hero Image</p>
-                              {isEditMode && <p className="text-[10px] text-slate-400 italic">Recommended: 1000x1000px, White Background.</p>}
-                            </div>
-                         </div>
+                          )}
+                        </div>
+                        <div className="text-center space-y-1 mt-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Master Catalog Hero Image</p>
+                          {isEditMode && <p className="text-[10px] text-slate-400 italic">Recommended: 1000x1000px, White Background.</p>}
+                        </div>
+                      </div>
                          <div className="grid grid-cols-2 gap-6">
                             <div className="space-y-2">
                               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Reference URL</Label>
@@ -740,7 +739,6 @@ export function LibraryFormModal({
                               )}
                             </div>
                          </div>
-                      </div>
                     </div>
                   </div>
                 ) : (
@@ -869,7 +867,7 @@ export function LibraryFormModal({
                               {isEditMode ? (
                                 <Input value={vendorData.website_url} onChange={e => setVendorData({...vendorData, website_url: e.target.value})} className={cn("h-12 border-none pl-12", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)} placeholder="https://..." />
                               ) : (
-                                <div className={cn("h-12 pl-12 pr-4 flex items-center text-xs font-medium text-blue-600 underline truncate", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                                <div className={cn("h-12 pl-12 pr-4 flex items-center text-xs font-medium text-slate-900 underline truncate", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                   <a href={vendorData.website_url} target="_blank" rel="noopener noreferrer">{vendorData.website_url || "—"}</a>
                                 </div>
                               )}

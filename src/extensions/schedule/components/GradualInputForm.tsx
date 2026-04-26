@@ -10,6 +10,7 @@ import { CreatableSearch } from "@/components/ui/creatable-search";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { OptimizedUploader } from "@/components/ui/optimized-uploader";
+import { VisualAsset } from "@/components/ui/visual-asset";
 import { LibraryFacade } from "@/extensions/library/facade";
 import type { GradualFormData, GradualFormProducts } from "../types";
 import { 
@@ -53,15 +54,21 @@ export function GradualInputForm({
   onCancel,
   products,
   isSearching,
-  onSearch
-}: GradualInputFormProps) {
-  const [step, setStep] = React.useState<Step>("TYPE");
+  onSearch,
+  initialStepOverride
+}: GradualInputFormProps & { initialStepOverride?: Step }) {
+  // Logic: If section is already clearly defined (material/fixture/ffe/architectural), skip the TYPE step.
+  const isFixtureSection = ["fixture", "fixtures", "ffe"].includes(section.toLowerCase());
+  const isMaterialSection = ["material", "materials", "architectural"].includes(section.toLowerCase());
+  
+  const autoDetectedStep = (isFixtureSection || isMaterialSection) ? "SELECT" : "TYPE";
+  const [step, setStep] = React.useState<Step>(initialStepOverride || autoDetectedStep);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   const [customData, setCustomData] = React.useState({
     ...initialCustomData,
-    catalog_type: (section.toLowerCase() === "ffe" ? "fixture" : "material") as "material" | "fixture"
+    catalog_type: (isFixtureSection ? "fixture" : "material") as "material" | "fixture"
   });
 
   const handleSelect = (id: string, name: string) => {
@@ -104,7 +111,14 @@ export function GradualInputForm({
     }
   };
 
-  const steps: Step[] = ["TYPE", "SELECT", "INITIALS", "VENDOR", "REVIEW"];
+  const steps: Step[] = React.useMemo(() => {
+    const baseSteps: Step[] = ["TYPE", "SELECT", "INITIALS", "VENDOR", "REVIEW"];
+    if (isFixtureSection || isMaterialSection) {
+      return baseSteps.filter(s => s !== "TYPE");
+    }
+    return baseSteps;
+  }, [isFixtureSection, isMaterialSection]);
+
   const currentStepIndex = steps.indexOf(step);
 
   return (
@@ -125,7 +139,7 @@ export function GradualInputForm({
             ))}
          </div>
          <div className="text-right">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 block">Step {currentStepIndex + 1} of 6</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 block">Step {currentStepIndex + 1} of {steps.length}</span>
             <span className="text-xs font-bold text-slate-900">
               {step === "TYPE" ? "Classification" : 
                step === "SELECT" ? "Source Search" : 
@@ -139,8 +153,8 @@ export function GradualInputForm({
         {step === "TYPE" && (
           <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
              <div className="space-y-2">
-                <h3 className="font-lora text-2xl font-medium text-slate-900">Product Classification</h3>
-                <p className="text-sm text-slate-400 font-inter">Determine the fundamental nature of this entry.</p>
+                <h3 className="font-serif text-2xl font-medium text-slate-900">Product Classification</h3>
+                <p className="text-sm text-slate-400 font-sans">Determine the fundamental nature of this entry.</p>
              </div>
              <div className="grid grid-cols-2 gap-4">
                 <button 
@@ -152,7 +166,7 @@ export function GradualInputForm({
                   )}
                 >
                   <Package className="h-8 w-8 mb-4 text-slate-900" />
-                  <h5 className="font-lora text-lg font-bold">Material</h5>
+                  <h5 className="font-serif text-lg font-bold">Material</h5>
                   <p className="text-xs text-slate-400 mt-1">Tiles, Paint, Flooring, Wallpaper, etc.</p>
                 </button>
                 <button 
@@ -164,7 +178,7 @@ export function GradualInputForm({
                   )}
                 >
                   <Building2 className="h-8 w-8 mb-4 text-slate-900" />
-                  <h5 className="font-lora text-lg font-bold">Fixture</h5>
+                  <h5 className="font-serif text-lg font-bold">Fixture</h5>
                   <p className="text-xs text-slate-400 mt-1">Appliances, Furniture, Lighting, etc.</p>
                 </button>
              </div>
@@ -174,8 +188,8 @@ export function GradualInputForm({
         {step === "SELECT" && (
           <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
              <div className="space-y-2">
-                <h3 className="font-lora text-2xl font-medium text-slate-900">Source Search</h3>
-                <p className="text-sm text-slate-400 font-inter">Search the master library or define a bespoke product.</p>
+                <h3 className="font-serif text-2xl font-medium text-slate-900">Source Search</h3>
+                <p className="text-sm text-slate-400 font-sans">Search the master library or define a bespoke product.</p>
              </div>
 
              <div className="space-y-4">
@@ -195,17 +209,19 @@ export function GradualInputForm({
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
                     <button 
                       onClick={() => handleSelect("", "RESERVED")}
-                      className={cn("p-6 border-2 border-dashed border-slate-100 hover:border-slate-900 hover:bg-slate-50 transition-all text-left group", UI_ENGINE_RADIUS_CARD)}
+                      className={cn("p-6 border-2 border-dashed border-slate-100 hover:border-slate-900 hover:bg-slate-50 transition-all text-left group", UI_ENGINE_RADIUS_CARD, steps[0] === "SELECT" ? "md:col-span-2" : "")}
                     >
                       <div className="h-10 w-10 rounded-lg bg-slate-50 group-hover:bg-slate-900 text-slate-300 group-hover:text-white flex items-center justify-center mb-4 transition-all">
                          <Sparkles size={20} />
                       </div>
-                      <h5 className="font-lora text-lg font-medium text-slate-900">Reserve Placeholder</h5>
+                      <h5 className="font-serif text-lg font-medium text-slate-900">Reserve Placeholder</h5>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">Add an empty slot to the schedule to be filled later.</p>
                     </button>
-                    <Button variant="ghost" onClick={() => setStep("TYPE")} className={cn("h-full border-2 border-slate-50", UI_ENGINE_RADIUS_CARD)}>
-                       <ChevronLeft className="mr-2" /> Back
-                    </Button>
+                    {steps[0] === "TYPE" && (
+                      <Button variant="ghost" onClick={() => setStep("TYPE")} className={cn("h-full border-2 border-slate-50", UI_ENGINE_RADIUS_CARD)}>
+                         <ChevronLeft className="mr-2" /> Back
+                      </Button>
+                    )}
                  </div>
              </div>
           </div>
@@ -214,8 +230,8 @@ export function GradualInputForm({
         {step === "INITIALS" && (
           <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
              <div className="space-y-2">
-                <h3 className="font-lora text-2xl font-medium text-slate-900">Secondary / Initials</h3>
-                <p className="text-sm text-slate-400 font-inter">Quick draft: focus on visual representation first.</p>
+                <h3 className="font-serif text-2xl font-medium text-slate-900">Secondary / Initials</h3>
+                <p className="text-sm text-slate-400 font-sans">Quick draft: focus on visual representation first.</p>
              </div>
              
              <div className="space-y-6">
@@ -276,8 +292,8 @@ export function GradualInputForm({
         {step === "VENDOR" && (
           <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
              <div className="space-y-2">
-                <h3 className="font-lora text-2xl font-medium text-slate-900">Brand & Classification</h3>
-                <p className="text-sm text-slate-400 font-inter">Specify the legacy and grouping of this product.</p>
+                <h3 className="font-serif text-2xl font-medium text-slate-900">Brand & Classification</h3>
+                <p className="text-sm text-slate-400 font-sans">Specify the legacy and grouping of this product.</p>
              </div>
 
              <div className="space-y-6">
@@ -318,8 +334,8 @@ export function GradualInputForm({
         {step === "REVIEW" && (
           <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
              <div className="space-y-2">
-                <h3 className="font-lora text-2xl font-medium text-slate-900">Confirm Commitment</h3>
-                <p className="text-sm text-slate-400 font-inter">Verify the snapshot details before final synchronization.</p>
+                <h3 className="font-serif text-2xl font-medium text-slate-900">Confirm Commitment</h3>
+                <p className="text-sm text-slate-400 font-sans">Verify the snapshot details before final synchronization.</p>
              </div>
 
              <div className={cn("bg-slate-900 p-8 text-white space-y-4", UI_ENGINE_RADIUS_CARD)}>
@@ -327,15 +343,15 @@ export function GradualInputForm({
                    <div className="flex items-center gap-4">
                       <div className={cn("h-12 w-12 bg-white/10 border border-white/20 overflow-hidden flex-shrink-0", UI_ENGINE_RADIUS_ACTION)}>
                         {(selectedId ? selectedProduct?.catalog_image_url : customData.catalog_image_url) ? (
-                          <img 
-                            src={(selectedId ? selectedProduct?.catalog_image_url : customData.catalog_image_url) || ""} 
+                          <VisualAsset 
+                            src={(selectedId ? selectedProduct?.catalog_image_url : customData.catalog_image_url)}
                             className="w-full h-full object-cover" 
                           />
                         ) : <Package className="w-full h-full p-3 text-white/20" />}
                       </div>
                       <div>
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Identity</span>
-                        <h4 className="font-lora text-xl font-bold">
+                        <h4 className="font-serif text-xl font-bold">
                           {selectedId ? selectedProduct?.catalog_sku : (customData.catalog_color || "New Item")}
                         </h4>
                         <p className="text-xs text-slate-400">{selectedId ? selectedProduct?.catalog_brand : customData.catalog_brand}</p>

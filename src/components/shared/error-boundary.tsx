@@ -49,11 +49,11 @@ export class ErrorBoundary extends Component<Props, State> {
             <AlertCircle className="h-10 w-10 text-rose-500" />
           </div>
           
-          <h2 className="font-lora text-2xl text-slate-900 mb-2 font-semibold">
+          <h2 className="font-serif text-2xl text-slate-900 mb-2 font-semibold">
             Something went wrong
           </h2>
           
-          <p className="text-sm text-slate-500 font-inter font-medium tracking-tight mb-8 max-w-md mx-auto">
+          <p className="text-sm text-slate-500 font-sans font-medium tracking-tight mb-8 max-w-md mx-auto">
             {this.props.name ? `The ${this.props.name} extension` : "This component"} encountered an unexpected error. Don&apos;t worry, your data is safe.
           </p>
 
@@ -61,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <Button 
               onClick={this.handleReset}
               variant="outline"
-              className="font-inter font-bold text-xs uppercase tracking-widest px-6 h-11 border-slate-200 hover:bg-white hover:border-slate-900 transition-all rounded-xl"
+              className="font-sans font-bold text-xs uppercase tracking-widest px-6 h-11 border-slate-200 hover:bg-white hover:border-slate-900 transition-all rounded-xl"
             >
               <RefreshCcw className="mr-2 h-4 w-4" />
               Try Again
@@ -70,7 +70,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <Button 
               onClick={this.handleGoHome}
               variant="default"
-              className="font-inter font-bold text-xs uppercase tracking-widest px-6 h-11 bg-slate-900 hover:bg-slate-800 transition-all rounded-xl shadow-lg shadow-slate-200"
+              className="font-sans font-bold text-xs uppercase tracking-widest px-6 h-11 bg-slate-900 hover:bg-slate-800 transition-all rounded-xl shadow-lg shadow-slate-200"
             >
               <Home className="mr-2 h-4 w-4" />
               Back to Dashboard
