@@ -16,7 +16,8 @@ import {
   UpdateScheduleOptionSnapshotSchema,
   IdSchema,
   BulkDeleteScheduleSchema,
-  SwapScheduleEntriesSchema
+  SwapScheduleEntriesSchema,
+  MergeScheduleCategoriesSchema
 } from "@/lib/validations";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_PROJECT } from "@/lib/revalidation-tags";
@@ -144,6 +145,13 @@ export const addScheduleEntryWithProductAction = createAction(
     const product = await LibraryService.getProductById(tx, input.product_catalog_id);
     if (!product) throw new ActionError("Product not found in Catalog", "NOT_FOUND");
 
+    if (product.catalog_status !== "APPROVED") {
+      throw new ActionError(
+        "Cannot use non-approved items in schedule. Status: " + product.catalog_status,
+        "INVALID_CATALOG_STATE"
+      );
+    }
+
     // Create entry with category from product (in same transaction)
     const { entry } = await ScheduleService.addEntryToSchedule(
       tx,
@@ -180,10 +188,16 @@ export const addScheduleOptionAction = createAction(
     if (input.mode === "catalog" && input.catalogItemId) {
       const catalogItem = await tx.productCatalog.findUnique({
         where: { id: input.catalogItemId },
-        select: { catalog_category: true, catalog_type: true },
+        select: { catalog_category: true, catalog_type: true, catalog_status: true },
       });
       if (!catalogItem) {
         throw new ActionError("Product not found in catalog", "NOT_FOUND");
+      }
+      if (catalogItem.catalog_status !== "APPROVED") {
+        throw new ActionError(
+          "Cannot use non-approved items in schedule. Status: " + catalogItem.catalog_status,
+          "INVALID_CATALOG_STATE"
+        );
       }
       if (catalogItem.catalog_type !== entry.section) {
         throw new ActionError(
@@ -427,7 +441,22 @@ export const getScheduleSuggestionsAction = createAction(
 
 export const swapScheduleEntriesAction = createAction(
   async ({ input, ctx, tx }) => {
-    await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
+    const [entryA, entryB] = await Promise.all([
+      tx.projectScheduleEntry.findUnique({ where: { id: input.idA } }),
+      tx.projectScheduleEntry.findUnique({ where: { id: input.idB } })
+    ]);
+
+    if (!entryA || !entryB) {
+      throw new ActionError("One or both entries not found", "NOT_FOUND");
+    }
+
+    // Verify ownership and project context
+    if (entryA.project_id !== input.projectId) {
+      throw new ActionError("Unauthorized: Entry belongs to a different project", "UNAUTHORIZED");
+    }
+
+    await getProjectMembershipOrThrow(tx, entryA.project_id, ctx.userId, ctx.role);
+    
     RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
 
@@ -438,3 +467,25 @@ export const swapScheduleEntriesAction = createAction(
   },
   { schema: SwapScheduleEntriesSchema }
 );
+
+export const mergeScheduleCategoriesAction = createAction(
+  async ({ input, ctx, tx }) => {
+    await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
+    RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
+    assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_EDIT);
+
+    const result = await ScheduleService.mergeCategories(
+      tx,
+      input.projectId,
+      input.section,
+      input.sourceCategory,
+      input.targetCategory,
+      ctx.userId
+    );
+
+    invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
+    return result;
+  },
+  { schema: MergeScheduleCategoriesSchema }
+);
+

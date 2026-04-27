@@ -3,7 +3,7 @@
 import React from "react";
 import { ProductType } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
-import { Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, ChevronLeft, ChevronRight, Package, Plus, MoreHorizontal } from "lucide-react";
+import { Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, ChevronLeft, ChevronRight, Package, Plus, MoreHorizontal, CheckCircle2 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { VisualAsset } from "@/components/ui/visual-asset";
@@ -271,6 +271,34 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
                 </div>
               ) : null}
 
+              {/* Approve Button */}
+              {activeOption && !activeOption.is_final && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const toastId = toast.loading(`Approving ${activeOption.option_label}...`);
+                    try {
+                      const { approveScheduleOptionAction } = await import("@/extensions/schedule/actions/schedule-actions");
+                      unwrapActionResult(await approveScheduleOptionAction({ 
+                        optionId: activeOption.id,
+                        entryId: entry.id
+                      }));
+                      toast.success(`Option ${activeOption.option_label} approved!`, { id: toastId });
+                    } catch (err: any) {
+                      toast.error(err.message || "Failed to approve", { id: toastId });
+                    }
+                  }}
+                  title="Approve this option"
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100",
+                    UI_ENGINE_RADIUS_ACTION
+                  )}
+                >
+                  <CheckCircle2 size={10} strokeWidth={3} />
+                  <span className="text-[9px] font-black uppercase tracking-widest">Approve</span>
+                </button>
+              )}
+
               {/* Add Alternative Trigger */}
               <button
                 onClick={(e) => {
@@ -365,7 +393,10 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
         <div className="flex items-center justify-end gap-2">
           {/* Sample Request - Persistent visibility if product linked */}
           {activeOption && (() => {
-            const latestRequest = activeOption?.product_catalog?.product_requests?.[0];
+            // Merge: option-level requests (for custom products) OR catalog-level requests (for library products)
+            const latestRequest = 
+              activeOption?.product_requests?.[0] ||
+              activeOption?.product_catalog?.product_requests?.[0];
             const hasActiveRequest = latestRequest && latestRequest.status !== "CANCELLED";
             
             return (
@@ -398,11 +429,11 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
                       ? "bg-rose-50 text-rose-500"
                       : "bg-amber-50 text-amber-600"
                   )}>
-                    {latestRequest.status === "RECEIVED" ? "✓ Diterima" 
-                     : latestRequest.status === "ORDERED" ? "Dipesan"
-                     : latestRequest.status === "SHIPPED" ? "Dikirim"
+                    {latestRequest.status === "RECEIVED" ? "Received" 
+                     : latestRequest.status === "ORDERED" ? "Ordered"
+                     : latestRequest.status === "SHIPPED" ? "Shipped"
                      : latestRequest.status === "UNAVAILABLE" ? "N/A"
-                     : "Diminta"}
+                     : "Requested"}
                   </span>
                 )}
               </div>

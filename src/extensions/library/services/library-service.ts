@@ -386,7 +386,7 @@ export class LibraryService {
    * @returns Resolved vendor id.
    */
   private static async resolveVendor(brand: string, userId: string, tx: PrismaTransaction) {
-    const normalized = brand.trim();
+    const normalized = brand.trim().toUpperCase();
     if (!normalized) throw new ActionError("Brand name is required", "VENDOR_REQUIRED");
 
     // We use findFirst instead of upsert here because Prisma's unique 'where' 
@@ -1210,6 +1210,8 @@ export class LibraryService {
             catalog_image_url: snapshot.catalog_image_url || null,
             catalog_reference_url: snapshot.catalog_reference_url || null,
             catalog_price: snapshot.catalog_price || null,
+            catalog_tags: snapshot.specs?.catalog_structured_tags || [],
+            catalog_metadata: snapshot.specs?.catalog_metadata ? (snapshot.specs.catalog_metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
             catalog_status: "APPROVED",
           }
         });

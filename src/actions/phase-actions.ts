@@ -26,6 +26,7 @@ import { REVALIDATE_ACTIVITY, REVALIDATE_PROJECT, REVALIDATE_TODAY } from "@/lib
 import {
   PhaseIdSchema,
   RejectPhaseSchema,
+  ReopenPhaseSchema,
   CreateCDItemSchema,
   UpdateCDItemSchema,
   UpdateCDStatusSchema,
@@ -98,12 +99,12 @@ export const rejectPhase = createAction(async ({ input, ctx, tx }) => {
 
 export const reopenPhase = createAction(async ({ input, ctx, tx }) => {
   await getOwnedPhaseOrThrow(tx, input.phaseId, ctx.userId, ctx.role);
-  const result = await phaseService.executeReopenPhase(tx, { phaseId: input.phaseId, userId: ctx.userId });
+  const result = await phaseService.executeReopenPhase(tx, { phaseId: input.phaseId, intent: input.intent, userId: ctx.userId });
 
   invalidateCache({ scope: REVALIDATE_PROJECT, id: result.phase.project_id });
   invalidateCache({ scope: REVALIDATE_ACTIVITY });
   return result.phase;
-}, { schema: PhaseIdSchema });
+}, { schema: ReopenPhaseSchema });
 
 export const completeSupervisionPhase = createAction(async ({ input, ctx, tx }) => {
   await getOwnedPhaseOrThrow(tx, input.phaseId, ctx.userId, ctx.role);
@@ -139,6 +140,7 @@ export const updateCDItem = createAction(async ({ input, ctx, tx }) => {
     itemId: input.itemId,
     groupCode: input.data.group_code,
     drawingName: input.data.drawing_name,
+    assignedToId: input.data.assigned_to_id,
     userId: ctx.userId,
   });
 

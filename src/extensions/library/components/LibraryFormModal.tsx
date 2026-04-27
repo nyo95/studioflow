@@ -118,7 +118,7 @@ export function LibraryFormModal({
     contacts: [{ contact_person: "", contact_role: "Sales" }],
   });
 
-  // Section for grouped category picker (ARCHITECTURAL or FFE)
+  // Section for grouped category picker (Material or Fixture)
   const [productSection, setProductSection] = React.useState<ProductType>(ProductType.material);
 
   // Product Form State
@@ -142,7 +142,7 @@ export function LibraryFormModal({
     catalog_folder_url: "",
     catalog_price: null,
     catalog_metadata: undefined,
-    catalog_status: "APPROVED" as LibraryItemStatus,
+    catalog_status: "PENDING" as LibraryItemStatus,
     physical_samples: [{ catalog_rack_number: "", catalog_box_number: "", catalog_notes: "" }]
   });
 
@@ -221,7 +221,7 @@ export function LibraryFormModal({
           catalog_finishing: "",
           catalog_price: null,
           catalog_metadata: undefined,
-          catalog_status: "APPROVED",
+          catalog_status: "PENDING",
           physical_samples: [{ catalog_rack_number: "", catalog_box_number: "", catalog_notes: "" }]
         });
         setProductSection(ProductType.material);
@@ -381,6 +381,12 @@ export function LibraryFormModal({
                   >
                     {isEditMode ? <><Save className="h-3 w-3 mr-2" /> Editing</> : <><Edit3 className="h-3 w-3 mr-2" /> Modify</>}
                   </Button>
+                )}
+                {!isAdmin && isEditMode && type === "PRODUCT" && (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-600 rounded-full border border-amber-100">
+                    <Info className="h-3 w-3" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">Review Required</span>
+                  </div>
                 )}
               </div>
               <Button 
@@ -645,7 +651,11 @@ export function LibraryFormModal({
                             <div className="space-y-2">
                                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Library Approval Status</Label>
                                {isEditMode ? (
-                                 <Select value={productData.catalog_status} onValueChange={v => setProductData({...productData, catalog_status: v as LibraryItemStatus})}>
+                                 <Select 
+                                   value={productData.catalog_status} 
+                                   onValueChange={v => setProductData({...productData, catalog_status: v as LibraryItemStatus})}
+                                   disabled={!isAdmin}
+                                 >
                                    <SelectTrigger className={cn("h-12 border-transparent text-xs font-bold", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
                                      <SelectValue />
                                    </SelectTrigger>

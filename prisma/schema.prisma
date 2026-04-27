@@ -302,6 +302,7 @@ model CDList {
   drawing_name   String
   status_enum    CDItemStatus @default(PENDING)
   assigned_to_id String?
+  created_at     DateTime     @default(now())
   assigned_to    User?        @relation(fields: [assigned_to_id], references: [id])
   phase          Phase        @relation(fields: [phase_id], references: [id], onDelete: Cascade)
 }

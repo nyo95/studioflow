@@ -57,7 +57,7 @@ export function GradualInputForm({
   onSearch,
   initialStepOverride
 }: GradualInputFormProps & { initialStepOverride?: Step }) {
-  // Logic: If section is already clearly defined (material/fixture/ffe/architectural), skip the TYPE step.
+  // Logic: If section is already clearly defined (material/fixture), skip the TYPE step.
   const isFixtureSection = ["fixture", "fixtures", "ffe"].includes(section.toLowerCase());
   const isMaterialSection = ["material", "materials", "architectural"].includes(section.toLowerCase());
   

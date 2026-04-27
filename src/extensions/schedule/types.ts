@@ -28,6 +28,10 @@ export type GradualFormProducts = Pick<ProductCatalog, "id" | "catalog_sku" | "c
 
 
 export type ProjectScheduleOptionWithProduct = ProjectScheduleOption & {
+  product_requests?: {
+    status: string;
+    project_id: string;
+  }[];
   product_catalog?: (ProductCatalog & {
     product_requests?: {
       status: string;

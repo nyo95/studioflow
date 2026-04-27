@@ -13,8 +13,28 @@ import {
   UpsertTimelineTemplateSchema,
   CreateChecklistTemplateSchema,
   DeleteByIdSchema,
-  DeleteScheduleCategorySchema
+  DeleteScheduleCategorySchema,
+  MergeGlobalCategoriesSchema
 } from "@/lib/validations";
+
+export const mergeGlobalCategoriesAction = createAction(
+  async ({ input, ctx, tx }) => {
+    assertAdmin(ctx.role);
+
+    const result = await settingsService.executeMergeGlobalCategories(tx, {
+      section: input.section,
+      sourceCategory: input.sourceCategory,
+      targetCategory: input.targetCategory,
+      userId: ctx.userId,
+    });
+
+    invalidateCache({ scope: REVALIDATE_SETTINGS });
+    invalidateCache({ scope: REVALIDATE_HOME });
+
+    return result;
+  },
+  { schema: MergeGlobalCategoriesSchema }
+);
 
 export const setAutoNamingEnabled = createAction(
   async ({ input, ctx, tx }) => {

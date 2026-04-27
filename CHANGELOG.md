@@ -1,5 +1,42 @@
 # StudioFlow Development Log (Changelog)
 
+## [v2.5.1] — 2026-04-27 (Phase 3 Completion - Security & Hardening)
+
+### Security & Hardening
+- **RBAC Hardening (Catalog)**: Restricted library `ProductCatalog` management to `ADMIN` role only. `STAFF` is now restricted to creating `PENDING` items via `LibraryFormModal` and cannot directly update/delete `APPROVED` global entries.
+- **Schedule Domain Validation**: Refactored `ScheduleService.swapEntries` and `swapScheduleEntriesAction` with strict domain validation, blocking cross-project and cross-category swaps at the service level.
+- **Vendor Management**: Restricted `Vendor` deletion and merging to `ADMIN` only.
+- **Promotion Integrity**: Fixed data loss in the library promotion workflow by correctly mapping `catalog_tags` and `catalog_metadata` from project snapshots during approval.
+- **Promotion Deduplication**: Verified robust SKU+Brand deduplication logic in `reviewPromotionRequest` to prevent redundant catalog entries.
+
+### Fixed
+- **Audit Consistency**: Ensured all library and schedule mutations (swaps, merges, promotions) call centralized service methods with mandatory audit logging.
+
+### Status
+- **Phase 3 Completion**: All 13 stabilization tasks from `implementation_plan_v2.md` are now COMPLETE.
+- **Type Safety**: ✅ 100% compliance (`npx tsc --noEmit` exit code 0).
+
+## [v2.5.0] — 2026-04-27 (Audit-Driven Implementation Phase 3)
+
+### Documentation
+- **Comprehensive Audit-Driven Implementation Plan**: Created `docs/implementation_plan_v2.md` (v2.1) consolidating audit findings into 13 actionable junior-agent tasks.
+- **MASTER_SSOT.md Section 12**: Added "Implementation Status & Critical Audit Fixes" documenting audit context, finding-to-task mapping, roadmap, and execution rules.
+- **Audit Reference**: Complete 3-stage audit (`audit.md`) identified 25 findings (7 critical, 18 high/medium) spanning:
+  - Architecture & schema alignment (7 findings)
+  - Backend workflow integrity (16 findings)  
+  - UX operational friction (25 findings total across 3 stages)
+
+### Status
+- **Build**: ✅ Passing (v2.4.0+)
+- **Type Safety**: ✅ 100% compliance (`npx tsc --noEmit` exit code 0)
+- **Blockers**: 13 tasks queued for Phase 3 execution by Junior Agent
+- **Target Completion**: All critical blocker fixes by Phase 3 completion
+
+### Deferred to Phase 4
+- UX/IA consolidation (#16-25): Modal simplification, design system authority, search ergonomics, library IA restructuring
+
+---
+
 ## [v2.4.0] — 2026-04-27 (versi 1.9.0 Beta)
 
 ### Production Validation
@@ -7,6 +44,18 @@
 - **Production Build Passed**: Executed Next.js optimized production build (`npm run build`) without any static generation or hydration errors.
 - **Linting & Code Quality**: Resolved residual ESLint warnings (`prefer-const`, synchronous state in effect) to ensure production-grade cleanliness.
 - **Full Application Readiness**: Architecture (View-First, Zero Hardcode) is verified, backend snapshot logic is hardened, and UI inconsistency has been fully patched. The application is now ready for daily usage in the firm.
+
+## [v2.4.3.3] — 2026-04-27 (versi 1.9.3.3)
+
+### Fixed
+- **Library Catalog**: Fixed "Remove Item" action not functioning due to missing prop drilling in `LibraryTabs`. Added confirmation dialog for safer deletion.
+- **Approval Workflow**: Added an explicit 'Approve' button (CheckCircle icon) directly in Table and Visual rows to fix user confusion between saving snapshots and formal approval.
+- **Sample Status Accuracy**: Fixed data fetching logic to include `product_requests` linked directly to schedule options, ensuring status indicators work for custom/manual items.
+
+### UI Changes
+- **Studio Controls**: Refactored sidebar navigation into horizontal tabs with manual arrow controls (`ChevronLeft`/`ChevronRight`) for optimized screen real estate.
+- **Selection Contrast**: Refined `VisualRow` selection styling from high-contrast dark slate (`bg-slate-900`) to a softer indigo palette (`bg-indigo-50/50`) for better visual comfort.
+- **Terminology**: Translated sample status badges from Indonesian ("Diterima", "Dipesan") to English ("Received", "Ordered", etc.) for consistency.
 
 ## [v2.4.3.1] — 2026-04-27 (versi 1.9.3.1)
 

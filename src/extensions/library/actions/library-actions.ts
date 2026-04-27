@@ -4,6 +4,7 @@ import { createAction } from "@/lib/action-wrapper";
 import { LibraryService } from "../services/library-service";
 import { ProductCatalog } from "@/generated/prisma";
 import { assertAdmin, assertAdminOrStaff } from "@/core/rbac/permissions";
+import { ActionError } from "@/lib/error-types";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_CUSTOM } from "@/lib/revalidation-tags";
 import { 
@@ -119,7 +120,7 @@ export const updateVendorAction = createAction<{ id: string; data: Partial<Libra
 
 export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
+    assertAdmin(ctx.role);
 
     const result = await LibraryService.deleteVendor(input.id, ctx.userId, tx);
     // LibraryService.deleteVendor() handles audit logging
@@ -130,7 +131,7 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
 
 export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, { success: boolean }>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
+    assertAdmin(ctx.role);
 
     await LibraryService.mergeVendors(tx, input.sourceVendorId, input.targetVendorId, ctx.userId);
 
@@ -196,7 +197,7 @@ export const createProductAction = createAction<ProductCatalogInput, ProductCata
 
 export const updateProductAction = createAction<{ id: string; data: Partial<ProductCatalogInput> }, ProductCatalogWithRelations>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
+    assertAdmin(ctx.role);
     const validatedData: Partial<ProductCatalogInput> = {
       ...input.data,
       catalog_status: input.data.catalog_status ? LibraryItemStatusSchema.parse(input.data.catalog_status) : undefined,
@@ -211,7 +212,7 @@ export const updateProductAction = createAction<{ id: string; data: Partial<Prod
 
 export const deleteProductAction = createAction<{ id: string }, ProductCatalog>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
+    assertAdmin(ctx.role);
 
     const result = await LibraryService.deleteProduct(input.id, ctx.userId, tx);
     invalidateCache({ scope: REVALIDATE_LIBRARY });
@@ -291,7 +292,7 @@ export const updateProductRequestStatusAction = createAction<{ id: string; statu
       where: { id: input.id },
       select: { project_id: true }
     });
-    if (!request) throw new Error("Product request not found");
+    if (!request) throw new ActionError("Product request not found", "NOT_FOUND");
     
     await getProjectMembershipOrThrow(tx, request.project_id, ctx.userId, ctx.role);
     RBAC.assert(tx, "plugin.library.manage", ctx.role);

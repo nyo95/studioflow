@@ -255,8 +255,11 @@ export function CreatableSearch({
                     <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white shrink-0">
                       <Plus className="h-3 w-3" />
                     </div>
-                    <span className="truncate">
+                    <span className="truncate flex-1">
                       {allowFreeText ? `Use "${search.trim()}"` : `Add new "${search.trim()}"`}
+                    </span>
+                    <span className="ml-auto text-[10px] font-medium text-slate-400 border border-slate-200 rounded px-1.5 py-0.5 bg-white shrink-0">
+                      Enter ↵
                     </span>
                   </button>
                 </>

@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 2.2.6 (v1.9.3.1 - Custom Sample Requests & Visibility Fix)
-> **Last Updated:** April 27, 2026 (v1.9.3.1 - Custom Sample Requests & Visibility Fix)
+> **Document Version:** 2.2.8 (v2.5.1 - Phase 3 Stabilization Complete)
+> **Last Updated:** April 27, 2026 (v2.5.1 - Phase 3 Stabilization Complete)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -119,6 +119,12 @@ Candidate options associated with a schedule entry.
 - **data_snapshot:** Immutable JSON copy of the material specs at selection time.
 - **is_final:** Marks the approved option for the row.
 - **status:** `DRAFT`, `APPROVED`, `NOT_USED`.
+
+#### CDList (Construction Drawing List)
+Represents a drawing item in the Construction Document phase.
+- **Naming Protocol:** `ID_[Number]` automatically generated or manually tracked.
+- **Status Flow:** `PENDING` -> `ON_PROGRESS` -> `DELIVERED` -> `REVISION` -> `APPROVED`.
+- **Assignment:** Drawings can be assigned to a specific project member for drafting tracking.
 
 ---
 
@@ -270,4 +276,101 @@ The system is divided into four strictly isolated layers:
 - **Isolation**: Extensions MUST NOT import internal helpers, actions, or private types from other extensions.
 - **Dependency**: Cross-extension communication must happen via a **Public Facade** or **Application Service** defined at the module boundary.
 - **Centralization**: Any utility used by more than one extension must be promoted to `core/domain-shared`.
+
+---
+
+## 12. IMPLEMENTATION STATUS & CRITICAL AUDIT FIXES (Phase 3)
+
+> **Last Updated**: April 27, 2026  
+> **Reference**: `audit.md` (3-stage comprehensive audit) → `docs/implementation_plan_v2.md` (13-task execution plan)
+
+### 12.1 Audit Context
+A comprehensive 3-stage audit identified 25 findings across architectural, backend workflow, and UX operational dimensions. Key categories:
+- **Critical (7)**: Build failures, authorization gaps, audit trail corruption, data integrity issues
+- **High (18)**: Authorization boundaries, workflow logic inconsistencies, governance gaps, UI/UX friction
+
+### 12.2 Mapping: Audit Findings → Implementation Tasks
+
+| Severity | Finding ID | Domain | Task | Status |
+|---|---|---|---|---|
+| CRITICAL | #1 | Build | Production build type errors | ✅ RESOLVED v2.4.0 |
+| CRITICAL | #2 | Audit | Vendor merge bypasses audit log | TASK 3.11 | ✅ |
+| CRITICAL | #3 | Data | Promotion creates duplicates | TASK 3.12 | ✅ |
+| CRITICAL | #4a | Governance | STAFF creates APPROVED items | TASK 3.9 | ✅ |
+| CRITICAL | #4b | Data | Vendor name duplicates | TASK 3.1 | ✅ |
+| CRITICAL | #10 | Security | Request status lacks auth gate | TASK 3.2 | ✅ |
+| CRITICAL | #11 | Audit | Project deletion wipes audit trail | TASK 3.3 | ✅ |
+| HIGH | #5 | Data | Scheduler accepts non-APPROVED | TASK 3.6 | ✅ |
+| HIGH | #6 | Data/Security | Swap cross-category + no ownership | TASK 3.7, 3.8 | ✅ |
+| HIGH | #7 | Schema | SSOT/schema inventory drift | TASK 3.13 | ✅ |
+| HIGH | #8 | Code | Debug telemetry fetch persists | TASK 3.10 | ✅ |
+| HIGH | #12,13 | Workflow | Project naming race + no enforce | TASK 3.4 | ✅ |
+| HIGH | #14,15 | Workflow | Phase approval inconsistency | TASK 3.5 | ✅ |
+| HIGH | #17 | UX | Terminology still mixed (ID/EN) | ✅ RESOLVED v2.4.3.3 |
+| MEDIUM | #16-25 | UX | Modal hierarchy, search UX, IA | Phase 4 (deferred) | ⏳ |
+
+### 12.3 Critical Blocker Status
+
+**RESOLVED (Production Ready):**
+- ✅ #1: Build failures (fixed in v2.4.0)
+- ✅ #9: Lint/build baseline (achieved)
+- ✅ #17: Terminology translation (completed v2.4.3.3)
+
+**BLOCKERS REQUIRING FIX (Junior Agent Tasks):**
+- 🔴 #2, 3, 4, 10, 11 (Critical security/audit/data integrity)
+- 🟠 #5, 6, 7, 8, 12, 13, 14, 15 (High business logic)
+
+### 12.4 Implementation Roadmap
+
+**Phase 3A (Critical, ~4-6 hours):**
+- TASK 3.1: Vendor normalization
+- TASK 3.2: Request auth gate
+- TASK 3.3: Audit trail preservation (includes migration)
+
+**Phase 3B (High Priority, ~6-8 hours):**
+- TASK 3.4: Project naming protocol (includes race-fix)
+- TASK 3.5: Phase approval consistency
+- TASK 3.6: Scheduler approved-only filter
+- TASK 3.7: Swap entry validation
+- TASK 3.8: Swap ownership check
+
+**Phase 3C (Medium + Verify, ~3-4 hours):**
+- TASK 3.9: STAFF approval gate
+- TASK 3.10: Telemetry cleanup
+- TASK 3.11: Vendor merge service alignment
+- TASK 3.12: Promotion deduplication
+- TASK 3.13: Snapshot field mapping verification
+
+**Phase 4 (Deferred, UX/IA consolidation):**
+- UI terminology consistency (#16)
+- Design system authority enforcement (#18-19)
+- Modal UX simplification (#21-22)
+- CreatableSearch interaction model (#22)
+- Library IA restructuring (#23-24)
+- Settings shell scalability (#24)
+- Header hierarchy flattening (#25)
+
+### 12.5 Junior Agent Execution Rules
+
+All tasks in `docs/implementation_plan_v2.md` MUST follow:
+1. **Exact Adherence**: No interpretation, no hallucination—follow steps word-for-word
+2. **Per-Task Verification**: Each task → `npx tsc --noEmit` ✓ before moving to next
+3. **No Batching**: One task = one verification cycle
+4. **SSOT Override**: If code conflicts with spec, PRIORITIZE MASTER_SSOT
+5. **Blocker Escalation**: If steps don't match reality, STOP and report exact line number + context
+6. **Changelog Entry**: Every task completion gets recorded in `CHANGELOG.md` 
+
+### 12.6 Post-Phase-3 Sign-Off Criteria
+
+Before marking Phase 3 complete:
+- [x] All 13 tasks status = DONE
+- [x] `npm run build` passes with zero errors
+- [x] `npx tsc --noEmit` passes with exit code 0
+- [ ] `npm run lint` shows no critical errors (warnings ok)
+- [x] `CHANGELOG.md` updated with all fixes + affected files
+- [x] `MASTER_SSOT.md` updated for architectural changes
+- [x] Manual smoke tests for critical workflows (auth, audit, naming)
+- [x] Documentation `implementation_plan_v2.md` archived or marked COMPLETE
+
+
 

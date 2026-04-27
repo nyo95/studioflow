@@ -15,10 +15,16 @@ import {
   activatePhase,
   bypassPhaseToCompleted
 } from "@/actions/phase-actions";
-import { Loader2, CheckCircle2, XCircle, Unlock, Send, Play, FastForward } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Unlock, Send, Play, FastForward, ChevronDown } from "lucide-react";
 import { Role } from "@/generated/prisma";
 import { unwrapActionResult } from "@/lib/result";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface PhaseActionsProps {
   phaseId: string;
@@ -64,16 +70,41 @@ export function PhaseActions({
     if (canMutate) {
       return (
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleAction("Reopen", async () => unwrapActionResult(await reopenPhase({ phaseId })))}
-            disabled={loading !== null}
-            className="border-zinc-200 text-slate-500 hover:text-slate-900 hover:bg-zinc-50 transition-all font-sans"
-          >
-            {loading === "Reopen" ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <Unlock className="w-3.5 h-3.5 mr-2" />}
-            Reopen Phase
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading !== null}
+                className="border-zinc-200 text-slate-500 hover:text-slate-900 hover:bg-zinc-50 transition-all font-sans"
+              >
+                {loading === "Reopen (Internal)" || loading === "Reopen (Client)" ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                ) : (
+                  <Unlock className="w-3.5 h-3.5 mr-2" />
+                )}
+                Reopen Phase <ChevronDown className="w-3 h-3 ml-2 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 font-sans">
+              <DropdownMenuItem 
+                onClick={() => handleAction("Reopen (Internal)", async () => unwrapActionResult(await reopenPhase({ phaseId, intent: "INTERNAL" })))}
+                disabled={loading !== null}
+                className="cursor-pointer flex flex-col items-start gap-1 p-3"
+              >
+                <div className="font-medium text-sm">Internal Revisit</div>
+                <div className="text-xs text-slate-500">Fixes small issues (e.g., Version 1.0 → 1.1)</div>
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleAction("Reopen (Client)", async () => unwrapActionResult(await reopenPhase({ phaseId, intent: "CLIENT" })))}
+                disabled={loading !== null}
+                className="cursor-pointer flex flex-col items-start gap-1 p-3 border-t border-slate-100"
+              >
+                <div className="font-medium text-sm">Client Revision</div>
+                <div className="text-xs text-slate-500">Major changes requested (e.g., Version 1.x → 2.0)</div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       );
     }
@@ -88,28 +119,54 @@ export function PhaseActions({
     <div className="flex flex-wrap items-center gap-3">
       {status === "PENDING" && canMutate && isReadyToStart && (
         <>
-          <Button
-            onClick={() => handleAction(
-              hasHistory ? "Reopen" : "Activate", 
-              async () => unwrapActionResult(
-                hasHistory 
-                  ? await reopenPhase({ phaseId }) 
-                  : await activatePhase({ phaseId })
-              )
-            )}
-            disabled={loading !== null}
-            className={cn(
-              "text-white font-sans font-medium px-5 transition-all",
-              hasHistory ? "bg-slate-900 hover:bg-slate-800 shadow-md" : "bg-amber-600 hover:bg-amber-700"
-            )}
-          >
-            {loading === "Activate" || loading === "Reopen" ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              hasHistory ? <Unlock className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />
-            )}
-            {hasHistory ? "Reopen Phase" : "Start Phase"}
-          </Button>
+          {hasHistory ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  disabled={loading !== null}
+                  className="bg-slate-900 hover:bg-slate-800 text-white shadow-md font-sans font-medium px-5 transition-all"
+                >
+                  {loading === "Reopen (Internal)" || loading === "Reopen (Client)" ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Unlock className="w-4 h-4 mr-2" />
+                  )}
+                  Reopen Phase <ChevronDown className="w-4 h-4 ml-2 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 font-sans">
+                <DropdownMenuItem 
+                  onClick={() => handleAction("Reopen (Internal)", async () => unwrapActionResult(await reopenPhase({ phaseId, intent: "INTERNAL" })))}
+                  disabled={loading !== null}
+                  className="cursor-pointer flex flex-col items-start gap-1 p-3"
+                >
+                  <div className="font-medium text-sm">Internal Revisit</div>
+                  <div className="text-xs text-slate-500">Minor fixes before final presentation (v1.0 → v1.1)</div>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleAction("Reopen (Client)", async () => unwrapActionResult(await reopenPhase({ phaseId, intent: "CLIENT" })))}
+                  disabled={loading !== null}
+                  className="cursor-pointer flex flex-col items-start gap-1 p-3 border-t border-slate-100"
+                >
+                  <div className="font-medium text-sm">Client Revision</div>
+                  <div className="text-xs text-slate-500">Major changes requested by client (v1.x → v2.0)</div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              onClick={() => handleAction("Activate", async () => unwrapActionResult(await activatePhase({ phaseId })))}
+              disabled={loading !== null}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-sans font-medium px-5 transition-all"
+            >
+              {loading === "Activate" ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
+              Start Phase
+            </Button>
+          )}
           {!hasHistory && (
             <Button
               variant="outline"

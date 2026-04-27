@@ -7,6 +7,36 @@ import { AUDIT_ACTIONS } from "@/core/platform/audit";
 import { PhasePolicy } from "@/lib/domain/phase-policy";
 
 /**
+ * Asserts that there are no pending tasks blocking phase approval.
+ * Checks for:
+ * 1. Open activities in the active revision.
+ * 2. Deferred activities (revision_id = null) tied to this phase.
+ * 3. Unchecked checklist items for this phase.
+ */
+async function assertNoPendingTasks(tx: PrismaTransaction, phaseId: string) {
+  const activeRevision = await getActiveRevision(tx, phaseId, { includeActivities: true });
+  
+  const hasOpenActivities = activeRevision?.activities.some(
+    (activity: Activity) => activity.status === ActivityStatus.OPEN
+  );
+  
+  const deferredTasksCount = await tx.activity.count({
+    where: { phase_id: phaseId, revision_id: null, status: ActivityStatus.OPEN }
+  });
+
+  const uncheckedChecklistsCount = await tx.projectChecklist.count({
+    where: { phase_id: phaseId, is_checked: false }
+  });
+
+  if (hasOpenActivities || deferredTasksCount > 0 || uncheckedChecklistsCount > 0) {
+    throw new ActionError(
+      "Cannot proceed: There are incomplete tasks or checklists. Please resolve them first.",
+      "APPROVAL_BLOCKED"
+    );
+  }
+}
+
+/**
  * Functional Service Layer for Phase operations.
  * Pure business logic should reside here, detached from the Action/Web context.
  */
@@ -483,13 +513,7 @@ export const phaseService = {
       throw new ActionError(ERR.INVALID_PHASE_STATE, "INVALID_STATE");
     }
 
-    const activeRevision = await getActiveRevision(tx, phaseId, { includeActivities: true });
-    const hasOpenActivities = activeRevision?.activities.some(
-      (activity: Activity) => activity.status === ActivityStatus.OPEN
-    );
-    if (hasOpenActivities) {
-      throw new ActionError(ERR.UNRESOLVED_ACTIVITIES_EXIST, "OPEN_ACTIVITIES");
-    }
+    await assertNoPendingTasks(tx, phaseId);
 
     const nextStatus = PhaseStatus.APPROVED_INTERNAL;
 
@@ -520,6 +544,8 @@ export const phaseService = {
       throw new ActionError(ERR.INVALID_PHASE_STATE, "INVALID_STATE");
     }
 
+    await assertNoPendingTasks(tx, phaseId);
+
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
       data: { status_enum: PhaseStatus.ON_REVIEW_CLIENT },
@@ -544,13 +570,7 @@ export const phaseService = {
       throw new ActionError(ERR.INVALID_PHASE_STATE, "INVALID_STATE");
     }
 
-    const activeRevision = await getActiveRevision(tx, phaseId, { includeActivities: true });
-    const hasOpenActivities = activeRevision?.activities.some(
-      (activity: Activity) => activity.status === ActivityStatus.OPEN
-    );
-    if (hasOpenActivities) {
-      throw new ActionError(ERR.UNRESOLVED_ACTIVITIES_EXIST, "OPEN_ACTIVITIES");
-    }
+    await assertNoPendingTasks(tx, phaseId);
 
     const project = await tx.project.findUniqueOrThrow({
       where: { id: phase.project_id },
@@ -562,6 +582,7 @@ export const phaseService = {
       data: { status_enum: PhaseStatus.READY_FOR_NEXT, is_locked: true },
     });
 
+    const activeRevision = await getActiveRevision(tx, phaseId);
     if (activeRevision) {
       await tx.revision.update({
         where: { id: activeRevision.id },
@@ -597,8 +618,8 @@ export const phaseService = {
     return updatedPhase;
   },
 
-  async executeReopenPhase(tx: PrismaTransaction, params: { phaseId: string; userId: string }) {
-    const { phaseId, userId } = params;
+  async executeReopenPhase(tx: PrismaTransaction, params: { phaseId: string; intent?: "INTERNAL" | "CLIENT"; userId: string }) {
+    const { phaseId, intent = "CLIENT", userId } = params;
 
     const phase = await tx.phase.findUnique({ where: { id: phaseId } });
     if (!phase) throw new ActionError("Phase not found", "NOT_FOUND");
@@ -623,8 +644,8 @@ export const phaseService = {
       revision = await tx.revision.create({
         data: {
           phase_id: phaseId,
-          major: activeRevision.major + 1,
-          minor: 0,
+          major: intent === "CLIENT" ? activeRevision.major + 1 : activeRevision.major,
+          minor: intent === "CLIENT" ? 0 : activeRevision.minor + 1,
           status_enum: RevisionStatus.ACTIVE,
         },
       });
@@ -634,11 +655,14 @@ export const phaseService = {
         orderBy: [{ major: "desc" }, { minor: "desc" }],
       });
 
+      const currentMajor = latestRevision?.major ?? 0;
+      const currentMinor = latestRevision?.minor ?? 0;
+
       revision = await tx.revision.create({
         data: {
           phase_id: phaseId,
-          major: (latestRevision?.major ?? 0) + 1,
-          minor: 0,
+          major: intent === "CLIENT" ? currentMajor + 1 : currentMajor,
+          minor: intent === "CLIENT" ? 0 : currentMinor + 1,
           status_enum: RevisionStatus.ACTIVE,
         },
       });
@@ -736,7 +760,7 @@ export const phaseService = {
 
   async executeUpdateCDItem(
     tx: PrismaTransaction,
-    params: { itemId: string; groupCode: string; drawingName: string; userId: string }
+    params: { itemId: string; groupCode: string; drawingName: string; assignedToId?: string | null; userId: string }
   ) {
     const normalizedName = params.drawingName.trim();
     if (!normalizedName) throw new ActionError("INVALID_INPUT", "DRAWING_NAME_REQUIRED");
@@ -746,6 +770,7 @@ export const phaseService = {
       data: {
         group_code: normalizeDrawingCode(params.groupCode),
         drawing_name: normalizedName,
+        assigned_to_id: params.assignedToId,
       },
       include: {
         phase: { select: { project_id: true } }
@@ -992,6 +1017,8 @@ export const phaseService = {
     const { phase } = activity.revision;
     const versionStr = `v${activity.revision.major}.${activity.revision.minor}`;
 
+    // Deferred tasks remain scoped to the phase but are unassigned from this revision.
+    // They must be resolved before phase approval.
     const updated = await tx.activity.update({
       where: { id: activityId },
       data: {

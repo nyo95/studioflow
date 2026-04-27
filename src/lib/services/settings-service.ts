@@ -250,4 +250,62 @@ export const settingsService = {
 
     return Array.from(all).sort((a, b) => a.localeCompare(b));
   },
+
+  async executeMergeGlobalCategories(
+    tx: PrismaTransaction,
+    params: { section: ProductType; sourceCategory: string; targetCategory: string; userId: string }
+  ) {
+    const { section, userId } = params;
+    const src = params.sourceCategory.trim().toUpperCase();
+    const dst = params.targetCategory.trim().toUpperCase();
+
+    if (src === dst) throw new ActionError("VALIDATION_FAILED", "CATEGORIES_MUST_BE_DIFFERENT");
+
+    // 1. Ensure target category exists in global config
+    const targetPrefix = await tx.prefixDictionary.findFirst({
+      where: { section, schedule_category: { equals: dst, mode: "insensitive" } }
+    });
+    if (!targetPrefix) {
+      throw new ActionError("NOT_FOUND", `Target category "${dst}" not found in Global Config.`);
+    }
+
+    // 2. Update all ProjectScheduleEntry globally
+    const entriesUpdated = await tx.projectScheduleEntry.updateMany({
+      where: { section, schedule_category: src },
+      data: { 
+        schedule_category: dst,
+        prefix_id: targetPrefix.id,
+        schedule_prefix: targetPrefix.prefix
+      }
+    });
+
+    // 3. Update all ProductCatalog entries (Library)
+    const libraryUpdated = await tx.productCatalog.updateMany({
+      where: { catalog_type: section, catalog_category: src },
+      data: { catalog_category: dst }
+    });
+
+    // 4. Update PrefixDictionary (if exists) - we delete the source one
+    await tx.prefixDictionary.deleteMany({
+      where: { section, schedule_category: src }
+    });
+
+    // 5. Update ScheduleTemplate (if exists) - we delete the source one
+    await tx.scheduleTemplate.deleteMany({
+      where: { section, schedule_category: src }
+    });
+
+    // 6. Normalize all projects that were affected
+    await ScheduleService.normalizeAllProjectsCodesForCategory(tx, dst, section, userId);
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_MERGE_CATEGORIES, "SYSTEM", `${section}:${src}->${dst}`, userId, {
+      section,
+      source: src,
+      target: dst,
+      entries_affected: entriesUpdated.count,
+      library_affected: libraryUpdated.count
+    });
+
+    return { entries_moved: entriesUpdated.count, library_moved: libraryUpdated.count };
+  },
 };

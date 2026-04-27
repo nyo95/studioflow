@@ -47,6 +47,11 @@ export const RejectPhaseSchema = z.object({
   type: z.enum(["INTERNAL", "CLIENT"]),
 });
 
+export const ReopenPhaseSchema = z.object({
+  phaseId: IdSchema,
+  intent: z.enum(["INTERNAL", "CLIENT"]).optional().default("CLIENT"),
+});
+
 export const CreateCDItemSchema = z.object({
   phaseId: IdSchema,
   data: z.object({
@@ -61,6 +66,7 @@ export const UpdateCDItemSchema = z.object({
   data: z.object({
     group_code: z.string().min(1),
     drawing_name: z.string().min(1),
+    assigned_to_id: IdSchema.nullable().optional(),
   }),
 });
 
@@ -384,3 +390,15 @@ export const UpdateScheduleOptionSnapshotSchema = z.object({
   }),
 });
 
+export const MergeScheduleCategoriesSchema = z.object({
+  projectId: IdSchema,
+  section: z.nativeEnum(ProductType),
+  sourceCategory: z.string().min(1),
+  targetCategory: z.string().min(1),
+});
+
+export const MergeGlobalCategoriesSchema = z.object({
+  section: z.nativeEnum(ProductType),
+  sourceCategory: z.string().min(1),
+  targetCategory: z.string().min(1),
+});

@@ -297,7 +297,7 @@ export class ScheduleService {
    * Fetches the complete schedule sheet payload for a project
    * @param tx Prisma transaction client.
    * @param projectId Project id.
-   * @param section Schedule section (defaults ARCHITECTURAL).
+   * @param section Schedule section (defaults Material).
    * @returns Grouped schedule sheet payload used by UI.
    */
   static async getProjectScheduleSheet(
@@ -329,10 +329,19 @@ export class ScheduleService {
                 include: {
                   product_requests: {
                     where: { project_id: projectId },
-                    select: { status: true, project_id: true }
+                    select: { status: true, project_id: true },
+                    orderBy: { created_at: "desc" },
+                    take: 1,
                   }
                 }
-              } 
+              },
+              // Also fetch requests linked directly to this option (covers custom/manual products)
+              product_requests: {
+                where: { project_id: projectId },
+                select: { status: true, project_id: true, id: true },
+                orderBy: { created_at: "desc" },
+                take: 1,
+              }
             },
           },
           prefix_ref: true,
@@ -387,7 +396,7 @@ export class ScheduleService {
   }
 
   /**
-   * Alias for getProjectScheduleSheet with default ARCHITECTURAL section.
+   * Alias for getProjectScheduleSheet with default Material section.
    * @param tx Prisma transaction client.
    * @param projectId Project id.
    * @param section Optional schedule section.
@@ -871,6 +880,78 @@ export class ScheduleService {
   }
 
   /**
+   * Merges all entries from a source category into a target category within a project.
+   * This is useful for correcting classification errors (e.g., Brand mistakenly used as Category).
+   */
+  static async mergeCategories(
+    tx: PrismaTransaction,
+    projectId: string,
+    section: ProductType,
+    sourceCategory: string,
+    targetCategory: string,
+    userId: string
+  ) {
+    const src = sourceCategory.trim().toUpperCase();
+    const dst = targetCategory.trim().toUpperCase();
+
+    if (src === dst) throw new ActionError("Source and target categories must be different", "VALIDATION_FAILED");
+
+    // 1. Get destination prefix reference
+    const dstPrefix = await tx.prefixDictionary.findFirst({
+      where: { 
+        schedule_category: { equals: dst, mode: "insensitive" },
+        section
+      }
+    });
+
+    if (!dstPrefix) {
+      throw new ActionError(`Target category "${dst}" does not have a registered prefix. Please create it first in Scheduler Config.`, "NOT_FOUND");
+    }
+
+    // 2. Find max sort order in destination to append entries
+    const lastEntry = await tx.projectScheduleEntry.findFirst({
+      where: { project_id: projectId, section, schedule_category: dst },
+      orderBy: { schedule_sort_order: "desc" },
+    });
+    let currentSortOrder = (lastEntry?.schedule_sort_order ?? 0);
+
+    // 3. Find all entries in source category
+    const entries = await tx.projectScheduleEntry.findMany({
+      where: { project_id: projectId, section, schedule_category: src },
+      orderBy: { schedule_sort_order: "asc" }
+    });
+
+    if (entries.length === 0) return { count: 0 };
+
+    // 4. Batch update entries
+    for (const entry of entries) {
+      currentSortOrder++;
+      await tx.projectScheduleEntry.update({
+        where: { id: entry.id },
+        data: {
+          schedule_category: dst,
+          prefix_id: dstPrefix.id,
+          schedule_prefix: dstPrefix.prefix,
+          schedule_sort_order: currentSortOrder,
+        }
+      });
+    }
+
+    // 5. Normalize codes for the target category to fix increments (e.g. ACP-01, ACP-02)
+    await this.normalizeCodes(tx, projectId, section, dst);
+
+    // 6. Audit Log
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_MERGE_CATEGORIES, "ProjectScheduleEntry", "BULK", userId, {
+      project_id: projectId,
+      source_category: src,
+      target_category: dst,
+      entries_moved: entries.length
+    });
+
+    return { count: entries.length };
+  }
+
+  /**
    * Safe normalization of codes using temporary values first.
    * Optimized to minimize DB round-trips during re-indexing.
    * @param tx Prisma transaction client.
@@ -1172,18 +1253,36 @@ export class ScheduleService {
     ]);
 
     if (!entryA || !entryB) {
-      throw new Error("One or both entries not found");
+      throw new ActionError("One or both entries not found", "NOT_FOUND");
     }
 
-    if (entryA.project_id !== projectId || entryB.project_id !== projectId) {
-      throw new Error("Entries do not belong to the specified project");
+    if (entryA.project_id !== entryB.project_id || entryA.project_id !== projectId) {
+      throw new ActionError(
+        "Cannot swap entries: Different projects or mismatch with context",
+        "CROSS_PROJECT_SWAP_BLOCKED"
+      );
     }
-    if (entryA.schedule_category !== entryB.schedule_category) {
-      throw new Error("Cannot swap entries from different categories");
-    }
+
     if (entryA.section !== entryB.section) {
-      throw new Error("Cannot swap entries from different sections");
+      throw new ActionError(
+        "Cannot swap entries: Different product types (Material vs Fixture)",
+        "CROSS_SECTION_SWAP_BLOCKED"
+      );
     }
+
+    if (entryA.schedule_category !== entryB.schedule_category) {
+      throw new ActionError(
+        "Cannot swap entries: Different categories",
+        "CROSS_CATEGORY_SWAP_BLOCKED"
+      );
+    }
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_SWAP_ENTRIES, "ProjectScheduleEntry", entryA.id, userId, {
+      project_id: entryA.project_id,
+      entry_a_id: entryA.id,
+      entry_b_id: entryB.id,
+      action: "SWAP_POSITIONS"
+    });
 
     const sortOrderA = entryA.schedule_sort_order;
     const sortOrderB = entryB.schedule_sort_order;
@@ -1200,12 +1299,6 @@ export class ScheduleService {
     ]);
 
     await this.normalizeCodes(tx, projectId, entryA.section, entryA.schedule_category);
-    
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_REORDER, "Project", projectId, userId, {
-      idA,
-      idB,
-      type: "SWAP"
-    });
   }
 
 

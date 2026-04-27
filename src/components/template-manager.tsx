@@ -9,7 +9,9 @@ import {
   upsertScheduleCategoryConfig,
   deleteScheduleCategoryConfig,
   getAvailableSchedulerCategories,
+  mergeGlobalCategoriesAction
 } from "@/actions/settings-actions";
+import { toast } from "sonner";
 import { useEffect } from "react";
 import {
   Accordion,
@@ -20,7 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Plus, Trash2, Save, CheckCircle2, Pencil } from "lucide-react";
+import { Loader2, Plus, Trash2, Save, CheckCircle2, Pencil, GitMerge } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -98,6 +100,8 @@ export function TemplateManager({
   const [activeSection, setActiveSection] = useState<ProductType>(ProductType.material);
   const [editingCategory, setEditingCategory] = useState<string>("");
   const [editingPrefix, setEditingPrefix] = useState<string>("");
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [targetMergeCategory, setTargetMergeCategory] = useState<string>("");
   const [durations, setDurations] = useState<Record<string, number>>(
     Object.fromEntries(timelineTemplates.map((t) => [t.phase_enum, t.duration_days]))
   );
@@ -189,6 +193,31 @@ export function TemplateManager({
     setEditingCategory(config?.category || "");
     setEditingPrefix(config?.prefix || "");
     setIsModalOpen(true);
+  };
+
+  const handleMergeCategories = async () => {
+    if (!editingCategory || !targetMergeCategory) return;
+    
+    setLoading(`scheduler-merge-${activeSection}`);
+    try {
+      const result = unwrapActionResult(await mergeGlobalCategoriesAction({
+        section: activeSection,
+        sourceCategory: editingCategory,
+        targetCategory: targetMergeCategory
+      }));
+      
+      toast.success(`Successfully merged "${editingCategory}" into "${targetMergeCategory}"`, {
+        description: `Moved ${result.entries_moved} project entries and ${result.library_moved} library items.`
+      });
+      
+      setIsMergeModalOpen(false);
+      setTargetMergeCategory("");
+      router.refresh();
+    } catch (err: any) {
+      toast.error("Failed to merge categories", { description: err.message });
+    } finally {
+      setLoading(null);
+    }
   };
 
   const handleDeleteSchedulerConfig = async (section: ProductType, category: string) => {
@@ -468,7 +497,7 @@ export function TemplateManager({
             <div className="mt-8 grid gap-6 xl:grid-cols-2">
               {schedulerSections.map((section) => {
                 const configs = getSchedulerConfigs(section);
-                const sectionLabel = section === ProductType.material ? "Product" : "FF&E";
+                const sectionLabel = section === ProductType.material ? "Material" : "Fixture";
 
                 return (
                   <div key={section} className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/30">
@@ -526,6 +555,18 @@ export function TemplateManager({
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"
+                                    className="h-8 w-8 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+                                    onClick={() => {
+                                      setActiveSection(section);
+                                      setEditingCategory(config.category);
+                                      setIsMergeModalOpen(true);
+                                    }}
+                                  >
+                                    <GitMerge className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
                                     className="h-8 w-8 text-slate-400 hover:bg-red-50 hover:text-red-500"
                                     onClick={() => handleDeleteSchedulerConfig(section, config.category)}
                                     disabled={loading === deleteKey}
@@ -553,7 +594,7 @@ export function TemplateManager({
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle className="font-serif text-xl">
-                  {modalMode === "add" ? `Add ${activeSection === ProductType.material ? "Product" : "FF&E"} Category` : "Edit Prefix"}
+                  {modalMode === "add" ? `Add ${activeSection === ProductType.material ? "Material" : "Fixture"} Category` : "Edit Prefix"}
                 </DialogTitle>
               </DialogHeader>
               <div className="grid gap-6 py-4">
@@ -603,6 +644,62 @@ export function TemplateManager({
                     <Save className="mr-2 h-4 w-4" />
                   )}
                   Save Changes
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isMergeModalOpen} onOpenChange={setIsMergeModalOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle className="font-serif text-xl flex items-center gap-2">
+                  <GitMerge className="h-5 w-5 text-indigo-500" />
+                  Merge Categories
+                </DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-6 py-4">
+                <div className="rounded-xl bg-amber-50 p-3 border border-amber-100">
+                  <p className="text-[11px] font-medium text-amber-800 leading-relaxed">
+                    <strong>CAUTION:</strong> This will move ALL products and project entries currently in 
+                    <span className="mx-1 font-bold underline">&quot;{editingCategory}&quot;</span> 
+                    to the selected target category. The source category configuration will be deleted.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Category</Label>
+                  <CreatableSearch
+                    options={getSchedulerConfigs(activeSection)
+                      .filter(c => c.category !== editingCategory)
+                      .map((c) => ({ id: c.category, name: c.category }))
+                    }
+                    value={targetMergeCategory}
+                    onSelect={setTargetMergeCategory}
+                    onCreate={setTargetMergeCategory}
+                    placeholder="Select target category..."
+                    className="h-11"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsMergeModalOpen(false)}
+                  className="rounded-full px-6"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleMergeCategories}
+                  className="rounded-full bg-indigo-600 hover:bg-indigo-700 px-8 text-white"
+                  disabled={!targetMergeCategory || loading?.startsWith("scheduler-merge")}
+                >
+                  {loading?.startsWith("scheduler-merge") ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <GitMerge className="mr-2 h-4 w-4" />
+                  )}
+                  Execute Merge
                 </Button>
               </DialogFooter>
             </DialogContent>

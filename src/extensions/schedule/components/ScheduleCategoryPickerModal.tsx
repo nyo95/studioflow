@@ -65,7 +65,7 @@ export function ScheduleCategoryPickerModal({
     }
   }, [isOpen]);
 
-  const sectionLabel = section === ProductType.material ? "architectural" : "FF&E";
+  const sectionLabel = section === ProductType.material ? "material" : "fixture";
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

@@ -91,6 +91,11 @@ export default async function PhaseDetailPage({
     notFound();
   }
 
+  const allUsers = await prisma.user.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, role: true },
+  });
+
   const canManagePhase =
     role === Role.ADMIN ||
     (role === Role.DIC && userId === project.pic_designer_id) ||
@@ -242,15 +247,14 @@ export default async function PhaseDetailPage({
                   {reviewPanel}
                 </TabsContent>
                 <TabsContent value="cd-list" className="mt-0">
-                  <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-                    <CDListTable
-                      phaseId={phase.id}
-                      items={phase.cd_lists}
-                      userId={userId}
-                      userRole={role as Role}
-                      canMutate={canManagePhase}
-                    />
-                  </div>
+                  <CDListTable
+                    phaseId={phase.id}
+                    items={phase.cd_lists}
+                    userId={userId}
+                    userRole={role as Role}
+                    canMutate={canManagePhase}
+                    users={allUsers}
+                  />
                 </TabsContent>
               </Tabs>
             ) : (

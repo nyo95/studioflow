@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Blocks, Palette, Settings2, Users2, ShoppingBag } from "lucide-react";
+import { useState, useRef } from "react";
+import { Blocks, Palette, Settings2, Users2, ShoppingBag, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Role, ProductType } from "@/generated/prisma";
 import { TemplateManager } from "@/components/template-manager";
 import { UserManagement } from "@/components/user-management";
@@ -100,6 +100,18 @@ export function StudioSettingsPanel({
   const [localUISettings, setLocalUISettings] = useState<UISettings>(uiSettings || {});
   const [appTitle, setAppTitle] = useState(appTitleInitial);
   const [isSaving, setIsSaving] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const { scrollLeft, clientWidth } = scrollRef.current;
+      const scrollAmount = clientWidth * 0.5;
+      scrollRef.current.scrollTo({
+        left: direction === 'left' ? scrollLeft - scrollAmount : scrollLeft + scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const handleUISettingChange = (key: string, value: string) => {
     const nextSettings = { ...localUISettings, [key]: value };
@@ -139,46 +151,69 @@ export function StudioSettingsPanel({
 
   return (
     <div className={cn(
-      "grid gap-6 lg:grid-cols-[256px_minmax(0,1fr)] lg:items-start transition-all duration-300",
+      "flex flex-col gap-6 transition-all duration-300",
       activePanel === "product-catalog" ? "max-w-none px-10" : localUISettings.containerMaxWidth || "max-w-7xl",
       "mx-auto w-full"
     )}>
-      <aside className="rounded-3xl border border-slate-200 bg-white p-2 shadow-sm">
-        <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
-          {sections.map((section) => {
-            const Icon = section.icon;
-            const isActive = section.key === activePanel;
+      <div className="relative flex items-center group">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => scroll('left')}
+          className="absolute -left-4 z-10 h-10 w-10 shrink-0 rounded-full border-slate-200 bg-white shadow-xl opacity-0 transition-opacity group-hover:opacity-100 hover:bg-slate-50 focus:opacity-100"
+        >
+          <ChevronLeft className="h-4 w-4 text-slate-600" />
+        </Button>
 
-            return (
-              <Button
-                key={section.key}
-                type="button"
-                variant="ghost"
-                onClick={() => setActivePanel(section.key)}
-                className={cn(
-                  "h-auto w-full justify-start rounded-2xl px-4 py-3 text-left",
-                  isActive
-                    ? "bg-slate-900 text-white hover:bg-slate-900 hover:text-white"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                )}
-              >
-                <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">{section.label}</span>
-                  <span
-                    className={cn(
-                      "block text-[11px]",
-                      isActive ? "text-slate-300" : "text-slate-400"
-                    )}
-                  >
-                    {section.description}
+        <div 
+          ref={scrollRef}
+          className="flex-1 overflow-x-hidden rounded-3xl border border-slate-200 bg-white p-2 shadow-sm"
+        >
+          <nav className="flex gap-2 min-w-full lg:min-w-0">
+            {sections.map((section) => {
+              const Icon = section.icon;
+              const isActive = section.key === activePanel;
+
+              return (
+                <Button
+                  key={section.key}
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setActivePanel(section.key)}
+                  className={cn(
+                    "h-auto flex-1 min-w-[180px] lg:min-w-[200px] justify-start rounded-2xl px-4 py-2.5 text-left transition-all",
+                    isActive
+                      ? "bg-slate-900 text-white hover:bg-slate-900 hover:text-white shadow-md"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                  )}
+                >
+                  <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", isActive ? "text-indigo-400" : "text-slate-400")} />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold tracking-tight">{section.label}</span>
+                    <span
+                      className={cn(
+                        "block text-[10px] leading-tight truncate",
+                        isActive ? "text-slate-300" : "text-slate-400"
+                      )}
+                    >
+                      {section.description}
+                    </span>
                   </span>
-                </span>
-              </Button>
-            );
-          })}
-        </nav>
-      </aside>
+                </Button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => scroll('right')}
+          className="absolute -right-4 z-10 h-10 w-10 shrink-0 rounded-full border-slate-200 bg-white shadow-xl opacity-0 transition-opacity group-hover:opacity-100 hover:bg-slate-50 focus:opacity-100"
+        >
+          <ChevronRight className="h-4 w-4 text-slate-600" />
+        </Button>
+      </div>
 
       <div className="min-w-0">
         {activePanel === "general" ? (

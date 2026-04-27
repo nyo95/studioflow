@@ -149,9 +149,9 @@ export function VisualRow({
         "group relative flex items-center gap-4 p-2 border transition-all duration-300",
         UI_ENGINE_RADIUS_CONTROL,
         isSelected 
-          ? "bg-slate-900 border-slate-900 ring-1 ring-slate-900 shadow-xl z-10 scale-[1.01]" 
+          ? "bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-100 shadow-lg z-10 scale-[1.01]" 
           : "bg-white/80 backdrop-blur-md border-slate-200/60 hover:border-slate-300 shadow-sm hover:shadow-md",
-        isDragging && "opacity-50 scale-105 z-50 shadow-2xl ring-2 ring-slate-900"
+        isDragging && "opacity-50 scale-105 z-50 shadow-2xl ring-2 ring-indigo-200"
       )}
     >
       {/* 1. Code & Drag Handle */}
@@ -161,7 +161,7 @@ export function VisualRow({
           {...listeners}
           className={cn(
             "p-2 transition-colors cursor-grab active:cursor-grabbing",
-            isSelected ? "text-white/40 hover:text-white" : "text-slate-300 hover:text-slate-900 hover:bg-slate-100",
+            isSelected ? "text-indigo-300 hover:text-indigo-600" : "text-slate-300 hover:text-slate-900 hover:bg-slate-100",
             UI_ENGINE_RADIUS_CONTROL
           )}
         >
@@ -171,7 +171,7 @@ export function VisualRow({
           variant="outline" 
           className={cn(
             "font-sans text-[10px] font-black tracking-[0.1em] uppercase px-2.5 py-1 transition-colors",
-            isSelected ? "border-white/20 bg-white/10 text-white" : "border-slate-200 bg-slate-50 text-slate-900 shadow-sm"
+            isSelected ? "border-indigo-200 bg-indigo-100/50 text-indigo-700" : "border-slate-200 bg-slate-50 text-slate-900 shadow-sm"
           )}
         >
           {entry.schedule_code}
@@ -366,7 +366,10 @@ export function VisualRow({
         <div className="flex items-center gap-2">
            {/* Sample Request - Persistent visibility if product linked */}
            {activeOption && (() => {
-             const latestRequest = activeOption?.product_catalog?.product_requests?.[0];
+             // Merge: option-level requests (for custom products) OR catalog-level requests (for library products)
+             const latestRequest = 
+               activeOption?.product_requests?.[0] ||
+               activeOption?.product_catalog?.product_requests?.[0];
              const hasActiveRequest = latestRequest && latestRequest.status !== "CANCELLED";
 
              return (
@@ -399,11 +402,11 @@ export function VisualRow({
                        ? "bg-rose-50 text-rose-500"
                        : "bg-amber-50 text-amber-600"
                    )}>
-                     {latestRequest.status === "RECEIVED" ? "✓ Diterima"
-                      : latestRequest.status === "ORDERED" ? "Dipesan"
-                      : latestRequest.status === "SHIPPED" ? "Dikirim"
+                     {latestRequest.status === "RECEIVED" ? "✓ Received"
+                      : latestRequest.status === "ORDERED" ? "Ordered"
+                      : latestRequest.status === "SHIPPED" ? "Shipped"
                       : latestRequest.status === "UNAVAILABLE" ? "N/A"
-                      : "Diminta"}
+                      : "Requested"}
                    </span>
                  )}
                </div>

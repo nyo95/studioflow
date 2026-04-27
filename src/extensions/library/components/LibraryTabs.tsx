@@ -22,6 +22,8 @@ import { UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE } from "@/ui_engine/tokens
 import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens/typography";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ErrorFallback } from "@/components/shared/error-fallback";
+import { deleteProductAction } from "../actions/library-actions";
+import { unwrapActionResult } from "@/lib/result";
 
 interface LibraryTabsProps {
   vendors: LibraryVendor[];
@@ -129,6 +131,17 @@ export function LibraryTabs({
 
   const isAdmin = userRole === "ADMIN";
   const canManageCatalog = userRole === "ADMIN" || userRole === "STAFF";
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this item?")) return;
+    try {
+      unwrapActionResult(await deleteProductAction({ id }));
+      toast.success("Product deleted successfully");
+      onRefreshAll?.();
+    } catch (err: any) {
+      toast.error("Failed to delete product", { description: err.message });
+    }
+  };
 
   return (
     <Tabs 
@@ -270,6 +283,7 @@ export function LibraryTabs({
                   pageSize={pageSize}
                   onPageChange={onPageChange}
                   onEdit={(data) => openDetail(data)}
+                  onDelete={handleDelete}
                   onAddToSchedule={(product) => {
                      toast.success(`${product.catalog_product_name} ready to be added.`);
                   }}
