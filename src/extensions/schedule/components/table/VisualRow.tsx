@@ -208,15 +208,22 @@ export function VisualRow({
                 .filter(v => v && !isPlaceholder(v) && v.toUpperCase() !== "GENERIC")
                 .join(" - ");
               
-              if (primary) return primary;
-              
-              const secondary = [
-                snapshot?.specs?.catalog_color && !isPlaceholder(snapshot.specs.catalog_color) ? snapshot.specs.catalog_color : null,
-                snapshot?.specs?.catalog_motif && !isPlaceholder(snapshot.specs.catalog_motif) ? snapshot.specs.catalog_motif : null,
-                snapshot?.specs?.catalog_finishing && !isPlaceholder(snapshot.specs.catalog_finishing) ? snapshot.specs.catalog_finishing : null,
-              ].filter(Boolean).join(" - ");
-              
-              return secondary || (snapshot?.catalog_initials_type || "Reserved Slot");
+              const title = primary || (snapshot?.catalog_initials_type || "Reserved Slot");
+              return (
+                <div className="flex items-center gap-2">
+                  <span>{title}</span>
+                  <Badge 
+                    className={cn(
+                      "font-black text-[9px] uppercase tracking-widest px-1.5 py-0.5 border-none",
+                      activeOption?.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" :
+                      activeOption?.status === "NOT_USED" ? "bg-rose-100 text-rose-700" :
+                      "bg-slate-100 text-slate-500"
+                    )}
+                  >
+                    {activeOption?.status || "DRAFT"}
+                  </Badge>
+                </div>
+              );
             })()}
           </h4>
           <div className="flex items-center gap-2 mt-0.5">

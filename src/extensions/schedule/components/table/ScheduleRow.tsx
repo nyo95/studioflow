@@ -220,8 +220,18 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
           </div>
 
           <div className="min-w-0">
-            <div className={cn("font-serif text-sm font-semibold text-slate-900 leading-tight truncate max-w-[240px]")}>
-              {snapshot?.catalog_product_name || "Unspecified Product"}
+            <div className={cn("font-serif text-sm font-semibold text-slate-900 leading-tight flex items-center gap-2")}>
+              <span className="truncate max-w-[240px]">{snapshot?.catalog_product_name || "Unspecified Product"}</span>
+              <Badge 
+                className={cn(
+                  "font-black text-[8px] uppercase tracking-widest px-1.5 py-0.5 border-none",
+                  activeOption?.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" :
+                  activeOption?.status === "NOT_USED" ? "bg-rose-100 text-rose-700" :
+                  "bg-slate-100 text-slate-500"
+                )}
+              >
+                {activeOption?.status || "DRAFT"}
+              </Badge>
             </div>
             <div className={cn("font-sans text-[11px] font-medium uppercase tracking-widest text-slate-400 mt-0.5 truncate max-w-[240px]", UI_ENGINE_TYPE_META)}>
               {snapshot?.catalog_brand ? (
