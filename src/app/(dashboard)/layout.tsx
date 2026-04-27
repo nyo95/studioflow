@@ -105,11 +105,11 @@ export default async function DashboardLayout({
           activityNotifications={recentActivity}
         />
 
-        <div className="flex flex-1 min-h-0 relative">
+        <div className="flex flex-1 pt-16 min-h-0 relative">
           <NavOuter appTitle={appTitle} userRole={user?.role || "STAFF"} />
 
-          <main className={cn("flex-1 overflow-y-auto px-[var(--ui-section-px,1.5rem)] lg:pl-[78px] lg:pr-6", UI_ENGINE_CANVAS_CLASS)}>
-            <div className="w-full">
+          <main className={cn("flex flex-1 flex-col overflow-y-auto lg:pl-[78px] lg:pr-6", UI_ENGINE_CANVAS_CLASS)}>
+            <div className="flex flex-1 flex-col w-full">
               {children}
             </div>
           </main>
@@ -117,7 +117,7 @@ export default async function DashboardLayout({
 
         <footer
           className={cn(
-            "flex flex-shrink-0 items-center justify-center border-t px-[var(--ui-section-px,1.5rem)] py-4",
+            "flex flex-shrink-0 items-center justify-center border-t px-6 py-2.5 lg:pl-[78px] lg:pr-6",
             footerTheme === "dark" 
               ? "border-slate-800 bg-slate-950 text-slate-400" 
               : "border-slate-200 bg-white text-slate-500",

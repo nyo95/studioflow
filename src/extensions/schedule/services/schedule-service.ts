@@ -359,9 +359,11 @@ export class ScheduleService {
       ...Array.from(byCategory.keys()),
     ].filter((category, index, all) => all.indexOf(category) === index);
 
+    // Only show categories that have actual entries for THIS project.
+    // allPossibleCategories (including templates) is still passed to availableCategories
+    // for use in the category picker dropdown — but empty template groups should NOT render.
     const orderedCategories = allPossibleCategories.filter((category) => {
-      const hasEntries = (byCategory.get(category)?.length ?? 0) > 0;
-      return hasEntries || category.trim().toLowerCase() !== "general";
+      return (byCategory.get(category)?.length ?? 0) > 0;
     });
 
     const groups = orderedCategories

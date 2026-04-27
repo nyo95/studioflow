@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 2.2.3 (v1.8 Release - Visual Alignment & Placeholder Standardization)
-> **Last Updated:** April 26, 2026 (v1.8 Release - Visual Alignment & Placeholder Standardization)
+> **Document Version:** 2.2.5 (v1.9.3 - Parallel Phase Activation & Sample Visibility)
+> **Last Updated:** April 27, 2026 (v1.9.3 - Parallel Phase Activation & Sample Visibility)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -41,6 +41,7 @@ The application enforces a "View-First" interaction model for data integrity:
 #### Standard Components (`src/ui_engine/components/`)
 | Component | Description | Design Standards |
 |-----------|-------------|------------------|
+| TopHeader | Persistent global navigation bar. | **Fixed Position** (`fixed top-0`), Height: `h-16` (64px), Padding: `px-6`. Decoupled from design system spacing for layout stability. |
 | ImagePlaceholder | Standard empty state for images. | Stacked "NO IMAGE" text, font-black 8px, tracking-widest, slate-50 bg. |
 
 #### Color Palette
@@ -126,8 +127,8 @@ Candidate options associated with a schedule entry.
 ### 4.1 Phase Lifecycle
 Phases follow a strict sequence (MOODBOARD → LAYOUT → DESIGN_3D → CD → SUPERVISION), but support concurrent activation where permitted.
 - **Activation:** By default, Phase N can only activate if Phase N-1 is `READY_FOR_NEXT` or `COMPLETED`.
-- **Parallel Activation:** Phases explicitly flagged with `allow_parallel: true` (e.g., LAYOUT, DESIGN_3D, CD) bypass the sequential dependency check and can be activated while the previous phase is still `IN_PROGRESS`.
-- **Review:** Internal review → Client review.
+- **Parallel Activation:** Phases explicitly flagged with `allow_parallel: true` (e.g., LAYOUT, DESIGN_3D, CD) bypass the sequential dependency check and can be activated while the previous phase is still `IN_PROGRESS`. This is enforced at the `PhaseService` layer via `PhasePolicy.canActivate`.
+- **Data Integrity:** The `allow_parallel` flag is a mandatory boolean in the Phase model; existing projects must be patched to ensure correct behavioral alignment with this SSOT.
 - **Locking:** Phase is locked automatically upon client approval.
 
 ### 4.2 Global Activity Workflow (Patch 1.1)

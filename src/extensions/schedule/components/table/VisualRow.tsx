@@ -7,7 +7,7 @@ import {
   Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, 
   ChevronLeft, ChevronRight, GripVertical, Plus, Package
 } from "lucide-react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { VisualAsset } from "@/components/ui/visual-asset";
 import { ScheduleSampleRequestModal } from "../ScheduleSampleRequestModal";
 import { toast } from "sonner";
@@ -358,21 +358,50 @@ export function VisualRow({
         {/* Actions Menu */}
         <div className="flex items-center gap-2">
            {/* Sample Request - Persistent visibility if product linked */}
-           {activeOption?.product_catalog_id && (
-             <button
-               onClick={(e) => {
-                 e.stopPropagation();
-                 setSampleModalOpen(true);
-               }}
-               title="Request sample"
-               className={cn(
-                 "h-8 w-8 flex items-center justify-center transition-all bg-slate-50 text-slate-900 hover:bg-slate-100 shadow-sm",
-                 UI_ENGINE_RADIUS_CONTROL
-               )}
-             >
-               <Package size={14} strokeWidth={2.5} />
-             </button>
-           )}
+           {activeOption?.product_catalog_id && (() => {
+             const latestRequest = activeOption?.product_catalog?.product_requests?.[0];
+             const hasActiveRequest = latestRequest && latestRequest.status !== "CANCELLED";
+
+             return (
+               <div className="flex flex-row items-center gap-2">
+                 <button
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     setSampleModalOpen(true);
+                   }}
+                   title="Request sample"
+                   className={cn(
+                     "h-8 w-8 flex items-center justify-center transition-all shadow-sm",
+                     UI_ENGINE_RADIUS_CONTROL,
+                     hasActiveRequest
+                       ? latestRequest.status === "RECEIVED"
+                         ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                         : "bg-amber-50 text-amber-600 hover:bg-amber-100"
+                       : "bg-slate-50 text-slate-900 hover:bg-slate-100"
+                   )}
+                 >
+                   <Package size={14} strokeWidth={2.5} />
+                 </button>
+                 {latestRequest && (
+                   <span className={cn(
+                     "text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 whitespace-nowrap",
+                     UI_ENGINE_RADIUS_CONTROL,
+                     latestRequest.status === "RECEIVED"
+                       ? "bg-emerald-50 text-emerald-600"
+                       : latestRequest.status === "CANCELLED" || latestRequest.status === "UNAVAILABLE"
+                       ? "bg-rose-50 text-rose-500"
+                       : "bg-amber-50 text-amber-600"
+                   )}>
+                     {latestRequest.status === "RECEIVED" ? "✓ Diterima"
+                      : latestRequest.status === "ORDERED" ? "Dipesan"
+                      : latestRequest.status === "SHIPPED" ? "Dikirim"
+                      : latestRequest.status === "UNAVAILABLE" ? "N/A"
+                      : "Diminta"}
+                   </span>
+                 )}
+               </div>
+             );
+           })()}
 
            {/* Destructive/Edit Actions - Hover only */}
            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
@@ -402,7 +431,9 @@ export function VisualRow({
 
       {/* Lightbox & Sample Request Modals */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-          <DialogContent className={cn("p-0 border-none bg-transparent shadow-none max-w-[90vw] w-auto overflow-visible", UI_ENGINE_RADIUS_CARD)}>
+        <DialogContent className={cn("p-0 border-none bg-transparent shadow-none max-w-[90vw] w-auto overflow-visible", UI_ENGINE_RADIUS_CARD)}>
+             <DialogTitle className="sr-only">Image Preview</DialogTitle>
+             <DialogDescription className="sr-only">Large preview of the product image.</DialogDescription>
              <div className="relative">
                 <div className={cn("max-h-[85vh] shadow-2xl border-4 border-white/20 overflow-hidden", UI_ENGINE_RADIUS_CARD)} style={{ borderRadius: "2rem" }}>
                   <VisualAsset 

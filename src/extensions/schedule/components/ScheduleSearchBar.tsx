@@ -190,7 +190,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className={cn("text-sm font-semibold text-slate-900 truncate group-hover:text-slate-950", UI_ENGINE_TYPE_TITLE)}>
-                            {m.catalog_product_name}
+                            {m.catalog_sku ? `${m.catalog_sku} — ${m.catalog_product_name || ""}` : m.catalog_product_name}
                           </div>
                           <div className={cn("text-[11px] text-slate-500 truncate", UI_ENGINE_TYPE_META)}>
                             {m.catalog_brand || m.vendor?.brand_name || "Unknown Brand"} • {m.catalog_category}

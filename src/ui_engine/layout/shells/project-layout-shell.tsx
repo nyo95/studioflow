@@ -4,7 +4,6 @@ import * as React from "react";
 import { PanelLeft, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavInner } from "@/components/nav-inner";
-import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 
 type PhaseItem = {
   id: string;
@@ -65,7 +64,7 @@ export function ProjectLayoutShell({
       <aside
         className={cn("hidden lg:flex lg:flex-col")}
         style={{
-          width: isCollapsedDesktop ? "78px" : DESIGN_SYSTEM_CONFIG.rails.innerWidth,
+          width: isCollapsedDesktop ? "78px" : "256px",
         }}
       >
         <NavInner

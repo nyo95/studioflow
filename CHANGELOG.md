@@ -8,6 +8,26 @@
 - **Linting & Code Quality**: Resolved residual ESLint warnings (`prefer-const`, synchronous state in effect) to ensure production-grade cleanliness.
 - **Full Application Readiness**: Architecture (View-First, Zero Hardcode) is verified, backend snapshot logic is hardened, and UI inconsistency has been fully patched. The application is now ready for daily usage in the firm.
 
+## [v2.4.3] — 2026-04-27 (versi 1.9.3)
+
+### Fixed
+- **Parallel Phase Activation**: Resolved a data-level inconsistency where `allow_parallel` flags were missing in existing project phases. Enforced SSOT §4.1 via `PhasePolicy.canActivate` to allow concurrent activation of LAYOUT, DESIGN_3D, and CD phases.
+
+### UI Changes
+- **Sample Request Visibility (Refinement)**:
+    - **ScheduleRow (Table View)**: Refactored the sample request status layout from vertical (`flex-col`) to horizontal (`flex-row`).
+    - **VisualRow (Visual/Board View)**: Implemented status-aware indicators for the sample request button, providing visual feedback (colors and labels) based on the current request state (Requested, Ordered, Shipped, Received, Unavailable).
+    - **Typography Standard**: Increased status label font size from `8px` to `10px` for better legibility.
+
+## [v2.4.2] — 2026-04-27 (versi 1.9.2 Beta)
+
+### UI Changes
+- **TopHeader Layout Fix**:
+    - Changed `TopHeader` to `fixed` position at the top of the viewport.
+    - Standardized header padding to `px-6`, removing the redundant `78px` offset to align the logo more proportionally with the sidebar.
+    - Decoupled header margins from the global design system spacing variables to ensure a stable, fixed layout.
+    - Adjusted `DashboardLayout` container with `pt-16` to prevent content overlap with the new fixed header.
+
 ## [v2.4.1] — 2026-04-27 (versi 1.9.1 Beta)
 
 ### Fixed

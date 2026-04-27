@@ -352,7 +352,10 @@ export function GradualInputForm({
                       <div>
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Identity</span>
                         <h4 className="font-serif text-xl font-bold">
-                          {selectedId ? selectedProduct?.catalog_sku : (customData.catalog_color || "New Item")}
+                          {selectedId 
+                            ? `${selectedProduct?.catalog_sku || ""}${selectedProduct?.catalog_product_name ? ` — ${selectedProduct.catalog_product_name}` : ""}`
+                            : (customData.catalog_color || "New Item")
+                          }
                         </h4>
                         <p className="text-xs text-slate-400">{selectedId ? selectedProduct?.catalog_brand : customData.catalog_brand}</p>
                       </div>

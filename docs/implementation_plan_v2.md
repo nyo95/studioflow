@@ -1,520 +1,188 @@
-# StudioFlow — Final Implementation Plan v2.1
-**Dibuat**: 2026-04-27 | **Status**: Ready for Junior Dev Execution  
-**Schema Status**: ✅ `ProjectProductRequest` sudah punya `schedule_entry_id` + `schedule_option_id` — **NO MIGRATION NEEDED**
+# Implementation Plan v2 — Sample Request Visibility
+**Dokumen ini dibuat oleh Main Lead. DILARANG interpretasi bebas. Ikuti instruksi tepat kata per kata.**
 
 ---
 
-## ⚠️ GUARDRAIL DIRECTIVES (WAJIB BACA)
+## Status Pekerjaan Sebelumnya (Sudah Selesai — JANGAN Diulang)
 
-1. **DILARANG** `window.location.reload()` → gunakan callback `onRefreshAll()` atau `router.refresh()`
-2. **DILARANG** hardcode CSS (`rounded-xl`, `p-5`) → wajib pakai token `UI_ENGINE_*` dari `@/ui_engine`
-3. **WAJIB** baca file target dulu sebelum edit
-4. **WAJIB** `npm run dev` setelah setiap task, pastikan tidak ada TypeScript error
-5. **WAJIB** catat perubahan material di `CHANGELOG.md`
-6. Urutan eksekusi: **BUG-03 → BUG-05 → BUG-01 → BUG-02 → BUG-07 → BUG-04 → BUG-08 → BUG-06**
+Pekerjaan yang sudah diselesaikan oleh Main Lead dan TIDAK perlu disentuh lagi:
 
----
-
-## BATCH 1 — Critical Bugs
-
-### BUG-01 · Library Page Tidak Auto-Refresh
-
-**Root Cause**: `library/page.tsx` adalah Client Component dengan state lokal. `router.refresh()` di `LibraryTabs.handleSuccess` hanya me-refresh Server Component tree, tidak me-re-trigger `useEffect` yang sudah selesai.
-
-**Files**: `src/app/(dashboard)/extensions/library/page.tsx` · `src/extensions/library/components/LibraryTabs.tsx`
-
-#### Step 1.1 — Tambah prop `onRefreshAll` ke LibraryTabs
-
-Di `LibraryTabs.tsx`, interface `LibraryTabsProps` (sekitar L26), tambahkan:
-```typescript
-onRefreshAll?: () => void;
-```
-Di function signature (L67), tambahkan `onRefreshAll,`
-
-#### Step 1.2 — Ganti `handleSuccess` dan `retryTab` di LibraryTabs
-
-```typescript
-// GANTI (L108-112):
-const retryTab = () => { onRefreshAll?.(); };
-const handleSuccess = () => { onRefreshAll?.(); };
-```
-
-#### Step 1.3 — Buat `refreshAll` di library/page.tsx
-
-Tambahkan setelah `fetchProducts` useCallback (sekitar L149):
-```typescript
-const refreshAll = React.useCallback(async () => {
-  fetchProducts(); // Re-fetch products
-  try {
-    const [requestsRes, promoRes] = await Promise.all([
-      getAllProductRequestsAction(undefined),
-      getPromotionRequestsAction(undefined),
-    ]);
-    if (requestsRes.success) setRequests(requestsRes.data);
-    if (promoRes.success) {
-      setPromotionRequests(normalizePromotionRequests(
-        promoRes.data as unknown as PromotionRequestSummary[]
-      ));
-    }
-  } catch { toast.error("Failed to refresh library data"); }
-}, [fetchProducts, normalizePromotionRequests]);
-```
-
-#### Step 1.4 — Pass ke LibraryTabs di library/page.tsx
-
-Di JSX `<LibraryTabs ... />` tambahkan: `onRefreshAll={refreshAll}`
-
-**✅ AC**: Add product → langsung muncul. Queue approve → status langsung berubah. Tidak perlu reload halaman.
+| File | Perubahan Yang Sudah Ada |
+| :--- | :--- |
+| `src/components/nav-outer.tsx` | Rail sidebar sudah fixed: `top-16 bottom-9 w-[78px]` |
+| `src/app/(dashboard)/layout.tsx` | Footer sudah: `px-6 py-2.5 lg:pl-[78px] lg:pr-6` |
+| `src/components/top-header.tsx` | Header sudah: `lg:pl-[78px] lg:pr-6` |
+| `src/ui_engine/layout/shells/project-layout-shell.tsx` | Inner sidebar sudah hardcode `width: "256px"` |
+| `src/extensions/schedule/components/ScheduleSearchBar.tsx` | Format hasil pencarian sudah `[SKU] — [Nama]` |
+| `src/extensions/schedule/components/GradualInputForm.tsx` | Step Review sudah `[SKU] — [Nama]` |
+| `src/extensions/schedule/components/table/VisualRow.tsx` | `DialogTitle` dan `DialogDescription` sudah ditambahkan untuk aksesibilitas |
 
 ---
 
-### BUG-02 · Terminologi "Material Library" → "Product Library"
+## Tugas Yang Harus Dikerjakan
 
-**File**: `src/app/(dashboard)/extensions/library/page.tsx` L165
+### TASK 1 — Refaktorisasi `ScheduleRow.tsx` (Table View)
 
+**File:** `src/extensions/schedule/components/table/ScheduleRow.tsx`
+**Lokasi persis:** Baris 353–420 (seksi `{/* Actions */}`)
+
+**Masalah saat ini:** Badge status muncul di BAWAH tombol (layout vertikal `flex-col`) dengan font `text-[8px]` yang terlalu kecil dan tidak mudah dibaca.
+
+**Yang harus dilakukan:**
+
+1. **Ganti layout dari `flex-col` menjadi `flex-row items-center gap-2`**.
+2. **Ganti `text-[8px]`** pada `<span>` status menjadi **`text-[10px]`**.
+3. **Jangan ubah logika** `latestRequest`, `hasActiveRequest`, warna, atau teks status — sudah benar. Hanya perbaiki layout-nya saja.
+
+**Target sebelum:**
 ```tsx
-// SEBELUM:
-title="Material Library"
-description="Manage products, vendors, and inventory samples."
-
-// SESUDAH:
-title="Product Library"
-description="Manage materials, fixtures, vendors, and inventory samples."
-```
-
-Lalu grep seluruh `src/` untuk string "Material Library" dan ganti jika ditemukan di file lain.
-
-**✅ AC**: Header halaman menampilkan "Product Library". Tidak ada sisa teks "Material Library" di src/.
-
----
-
-### BUG-03 · Security Gap — Add Alternative Cross-Category
-
-**Root Cause**: `addScheduleOptionAction` tidak validasi bahwa `catalogItemId` cocok kategori/section dengan entry target. User bisa inject produk dari kategori lain.
-
-**File**: `src/extensions/schedule/actions/schedule-actions.ts`
-
-#### Step 3.1 — Tambah validasi di `addScheduleOptionAction` (L192)
-
-Setelah fetch `entry` (L194-197), tambahkan SEBELUM memanggil `ScheduleService.addOptionToEntry`:
-
-```typescript
-// Tambahkan blok ini:
-if (input.mode === "catalog" && input.catalogItemId) {
-  const catalogItem = await tx.productCatalog.findUnique({
-    where: { id: input.catalogItemId },
-    select: { catalog_category: true, catalog_type: true },
-  });
-  if (!catalogItem) {
-    throw new ActionError("Product not found in catalog", "NOT_FOUND");
-  }
-  if (catalogItem.catalog_type !== entry.section) {
-    throw new ActionError(
-      `Type mismatch: entry is "${entry.section}" but product is "${catalogItem.catalog_type}"`,
-      "VALIDATION_FAILED"
-    );
-  }
-  const entryCategory = entry.schedule_category.trim().toUpperCase();
-  const itemCategory = catalogItem.catalog_category.trim().toUpperCase();
-  if (entryCategory !== itemCategory) {
-    throw new ActionError(
-      `Category mismatch: entry is "${entry.schedule_category}" but product is in "${catalogItem.catalog_category}"`,
-      "VALIDATION_FAILED"
-    );
-  }
-}
-```
-
-> **Catatan**: Field di schema adalah `catalog_type` (bukan `product_type`). Pastikan di-select dengan nama yang benar.
-
-**✅ AC**: Add alternative dengan produk beda kategori → error toast. Produk kategori sama → berhasil.
-
----
-
-### BUG-05 · `swapEntries` Missing Validation + normalizeCodes
-
-**File**: `src/extensions/schedule/services/schedule-service.ts` (sekitar L1142)
-
-Temukan method `swapEntries`. Tambahkan validasi di awal method, setelah fetch kedua entry:
-
-```typescript
-// Tambahkan setelah const [entryA, entryB] = ...
-if (entryA.project_id !== projectId || entryB.project_id !== projectId) {
-  throw new Error("Entries do not belong to the specified project");
-}
-if (entryA.schedule_category !== entryB.schedule_category) {
-  throw new Error("Cannot swap entries from different categories");
-}
-if (entryA.section !== entryB.section) {
-  throw new Error("Cannot swap entries from different sections");
-}
-```
-
-Tambahkan di AKHIR method (sebelum `return`):
-```typescript
-await this.normalizeCodes(tx, projectId, entryA.section, entryA.schedule_category);
-```
-
-**✅ AC**: Swap cross-category/cross-project → error. Swap valid → codes ter-normalisasi.
-
----
-
-## BATCH 2 — Feature & UX
-
-### BUG-04 · Sample Request Button — Visibility Fix
-
-**Root Cause**: Tombol Package di `ScheduleRow.tsx` tersembunyi di dalam `opacity-0 group-hover:opacity-100` — tidak terlihat oleh user.
-
-**File**: `src/extensions/schedule/components/table/ScheduleRow.tsx` (L360-388)
-
-Pindahkan tombol sample request KELUAR dari div hover group:
-
-```tsx
-{/* Actions */}
-<td className="px-5 py-2 text-right">
-  <div className="flex items-center justify-end gap-1">
-
-    {/* ✅ Sample button: SELALU VISIBLE */}
-    <button
-      onClick={(e) => { e.stopPropagation(); setSampleModalOpen(true); }}
-      title="Request sample"
-      className={cn(
-        "p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 transition-colors",
-        UI_ENGINE_RADIUS_CONTROL
-      )}
-    >
-      <Package size={13} />
-    </button>
-
-    {/* Edit & Delete: hover-only */}
-    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-      <button onClick={() => onEdit?.(entry)} title="Edit specification"
-        className={cn("p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors", UI_ENGINE_RADIUS_CONTROL)}>
-        <Edit3 size={13} />
-      </button>
-      <button onClick={handleDelete} title="Delete"
-        className={cn("p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors", UI_ENGINE_RADIUS_CONTROL)}>
-        <Trash2 size={13} />
-      </button>
-    </div>
-  </div>
-</td>
-```
-
-Lakukan hal yang sama di `src/extensions/schedule/components/table/VisualRow.tsx` (L405 area).
-
-**✅ AC**: Tombol Package terlihat di setiap row tanpa hover. Klik → modal terbuka. Submit → request masuk ke Library → Requests tab.
-
----
-
-### BUG-07 · `reviewPromotionRequest` Return Type Mismatch
-
-**File**: `src/extensions/library/services/library-service.ts` (sekitar L1200-1260)
-
-Temukan blok di `reviewPromotionRequest` yang melakukan `if (existingDup) { return existingDup; }`.
-
-**Ganti logika ini**:
-```typescript
-// SEBELUM (SALAH):
-if (existingDup) {
-  return existingDup; // Wrong: returns ProductCatalog
-}
-const newCatalog = await tx.productCatalog.create({ ... });
-
-// SESUDAH (BENAR):
-const catalogToLink = existingDup ?? await tx.productCatalog.create({ ... });
-// Lanjutkan update promotionRequest:
-return tx.promotionRequest.update({
-  where: { id },
-  data: {
-    status: "APPROVED",
-    // ... link ke catalogToLink.id
-  }
-});
-```
-
-**✅ AC**: Promote produk dengan SKU duplikat → tidak error, request menjadi APPROVED. Return type selalu PromotionRequest.
-
----
-
-### BUG-08 · Color Selector sebagai Alternatif Upload Image
-
-**Business Logic Analysis**: ✅ VALID  
-Strategi `color:#RRGGBB` URI prefix adalah pendekatan yang tepat karena:
-- Zero schema change (field `catalog_image_url` tetap `String?`)
-- Zod schema di `schedule-snapshot.ts` mengexpect string untuk URL → kompatibel
-- Snapshot-First architecture tidak terpengaruh — color string tersimpan di `data_snapshot` seperti URL biasa
-
-**Files**:
-1. `src/components/ui/visual-asset.tsx` ← **BUAT BARU**
-2. `src/components/ui/optimized-uploader.tsx` ← **EDIT**
-3. `src/extensions/schedule/components/table/ScheduleRow.tsx` ← **EDIT** (thumbnail)
-4. `src/extensions/schedule/components/table/VisualRow.tsx` ← **EDIT** (thumbnail)
-5. `src/extensions/schedule/components/ScheduleSpecEditorModal.tsx` ← **EDIT** (hero)
-
-#### Step 8.1 — Buat `src/components/ui/visual-asset.tsx`
-
-```tsx
-"use client";
-
-import React from "react";
-import { cn } from "@/lib/utils";
-import { Package } from "lucide-react";
-
-interface VisualAssetProps {
-  src?: string | null;
-  alt?: string;
-  className?: string;
-  fallbackClassName?: string;
-}
-
-/**
- * VisualAsset — Renders either a real <img> or a solid color block.
- * If src starts with "color:", strips prefix and renders a colored div.
- * Otherwise renders a standard <img>.
- */
-export function VisualAsset({ src, alt, className, fallbackClassName }: VisualAssetProps) {
-  if (!src) {
-    return (
-      <div className={cn("flex items-center justify-center bg-slate-50 text-slate-200", fallbackClassName, className)}>
-        <Package className="h-5 w-5" />
-      </div>
-    );
-  }
-
-  if (src.startsWith("color:")) {
-    const hex = src.replace("color:", "").trim();
-    return (
-      <div
-        className={cn("w-full h-full", className)}
-        style={{ backgroundColor: hex }}
-        title={alt || hex}
-        aria-label={alt || `Color: ${hex}`}
-      />
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt || ""}
-      className={cn("w-full h-full object-cover", className)}
-    />
-  );
-}
-
-/** Utility: check if a value is a color: URI */
-export function isColorUri(value?: string | null): boolean {
-  return !!value?.startsWith("color:");
-}
-
-/** Utility: extract hex from color: URI */
-export function extractColorHex(value: string): string {
-  return value.replace("color:", "").trim();
-}
-```
-
-#### Step 8.2 — Edit `OptimizedUploader` untuk tambah Color Picker mode
-
-Di `src/components/ui/optimized-uploader.tsx`, tambahkan state dan UI untuk toggle antara "Upload" dan "Color":
-
-**Tambahkan state** setelah state yang ada (sekitar L29):
-```typescript
-const [mode, setMode] = React.useState<"upload" | "color">("upload");
-const [colorHex, setColorHex] = React.useState("#64748b");
-```
-
-**Tambahkan prop baru** ke interface `OptimizedUploaderProps`:
-```typescript
-onColorSelect?: (colorUri: string) => void;
-```
-
-**Preset colors** (array konstanta, letakkan di atas component):
-```typescript
-const PRESET_COLORS = [
-  "#1e293b", "#334155", "#64748b", "#94a3b8", "#cbd5e1", "#f8fafc",
-  "#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#0284c7", "#7c3aed",
-  "#be185d", "#0f766e", "#a16207", "#854d0e",
-];
-```
-
-**Tambahkan di area JSX** — saat `!value`, tampilkan toggle mode dan color picker:
-
-Setelah `<label>` upload (sekitar L128), tambahkan section mode toggle dan color picker di bawah empty state. Structurnya:
-```tsx
-{/* Mode Toggle */}
-<div className="absolute top-3 right-3 flex gap-1 z-10">
-  <button
-    type="button"
-    onClick={(e) => { e.preventDefault(); setMode("upload"); }}
-    className={cn("px-2 py-1 text-[9px] font-black uppercase tracking-widest transition-colors", UI_ENGINE_RADIUS_CONTROL,
-      mode === "upload" ? "bg-slate-900 text-white" : "bg-white text-slate-400 hover:text-slate-900"
-    )}
-  >
-    Image
+<div className="flex flex-col items-center gap-1">
+  <button ... >
+    <Package ... />
   </button>
-  <button
-    type="button"
-    onClick={(e) => { e.preventDefault(); setMode("color"); }}
-    className={cn("px-2 py-1 text-[9px] font-black uppercase tracking-widest transition-colors", UI_ENGINE_RADIUS_CONTROL,
-      mode === "color" ? "bg-slate-900 text-white" : "bg-white text-slate-400 hover:text-slate-900"
-    )}
-  >
-    Color
-  </button>
+  {latestRequest && (
+    <span className={cn(
+      "text-[8px] font-black uppercase ...",   // <-- TERLALU KECIL
+      ...
+    )}>
+      ...
+    </span>
+  )}
 </div>
+```
 
-{mode === "color" && (
-  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 gap-4 bg-white">
-    {/* Color preview */}
-    <div className="w-20 h-20 rounded-full border-4 border-white shadow-lg" style={{ backgroundColor: colorHex }} />
-    {/* Preset grid */}
-    <div className="grid grid-cols-8 gap-1.5">
-      {PRESET_COLORS.map((c) => (
-        <button
-          key={c}
-          type="button"
-          onClick={() => setColorHex(c)}
-          className={cn("h-6 w-6 rounded-full border-2 transition-transform hover:scale-110",
-            colorHex === c ? "border-slate-900 scale-110" : "border-transparent"
-          )}
-          style={{ backgroundColor: c }}
-        />
-      ))}
-    </div>
-    {/* Hex input */}
-    <input
-      type="text"
-      value={colorHex}
-      onChange={(e) => setColorHex(e.target.value)}
-      className={cn("w-32 h-9 text-center text-xs font-mono font-bold border border-slate-200 bg-slate-50", UI_ENGINE_RADIUS_CONTROL)}
-      placeholder="#000000"
-    />
-    {/* Apply button */}
-    <button
-      type="button"
-      onClick={() => onColorSelect?.(`color:${colorHex}`)}
-      className={cn("h-10 px-6 bg-slate-950 text-white font-black text-[10px] uppercase tracking-widest", UI_ENGINE_RADIUS_CONTROL)}
-    >
-      Apply Color
-    </button>
-  </div>
+**Target sesudah:**
+```tsx
+<div className="flex flex-row items-center gap-2">
+  <button ... >
+    <Package ... />
+  </button>
+  {latestRequest && (
+    <span className={cn(
+      "text-[10px] font-black uppercase ...",  // <-- DIPERBESAR
+      ...
+    )}>
+      ...
+    </span>
+  )}
+</div>
+```
+
+> **CATATAN:** Jangan mengubah baris lain di dalam file ini. Hanya dua perubahan: `flex-col` → `flex-row`, `text-[8px]` → `text-[10px]`.
+
+---
+
+### TASK 2 — Tambahkan Status Indicator ke `VisualRow.tsx` (Visual/Board View)
+
+**File:** `src/extensions/schedule/components/table/VisualRow.tsx`
+**Lokasi persis:** Baris 358–375 (seksi `{/* Actions Menu */}` → bagian Sample Request)
+
+**Masalah saat ini:** Tombol Package di Visual View **tidak memiliki status awareness sama sekali** — tampilannya selalu sama, tidak peduli apakah sample sudah diminta atau diterima.
+
+**Kode yang ada saat ini (baris 361–375):**
+```tsx
+{activeOption?.product_catalog_id && (
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      setSampleModalOpen(true);
+    }}
+    title="Request sample"
+    className={cn(
+      "h-8 w-8 flex items-center justify-center transition-all bg-slate-50 text-slate-900 hover:bg-slate-100 shadow-sm",
+      UI_ENGINE_RADIUS_CONTROL
+    )}
+  >
+    <Package size={14} strokeWidth={2.5} />
+  </button>
 )}
 ```
 
-Jika `value` adalah `color:` URI, render colored div (bukan `<img>`):
+**Yang harus dilakukan — ganti seluruh block di atas dengan kode berikut:**
+
 ```tsx
-// Ganti blok value rendering (L106-126):
-{value ? (
-  <>
-    {value.startsWith("color:") ? (
-      <div className="w-full h-full" style={{ backgroundColor: value.replace("color:", "") }} />
-    ) : (
-      <img src={value} alt="Preview" className="w-full h-full object-cover ..." />
-    )}
-    {/* Glassmorphism overlay tetap sama */}
-  </>
-) : ( ... )}
+{activeOption?.product_catalog_id && (() => {
+  const latestRequest = activeOption?.product_catalog?.product_requests?.[0];
+  const hasActiveRequest = latestRequest && latestRequest.status !== "CANCELLED";
+
+  return (
+    <div className="flex flex-row items-center gap-2">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setSampleModalOpen(true);
+        }}
+        title="Request sample"
+        className={cn(
+          "h-8 w-8 flex items-center justify-center transition-all shadow-sm",
+          UI_ENGINE_RADIUS_CONTROL,
+          hasActiveRequest
+            ? latestRequest.status === "RECEIVED"
+              ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+              : "bg-amber-50 text-amber-600 hover:bg-amber-100"
+            : "bg-slate-50 text-slate-900 hover:bg-slate-100"
+        )}
+      >
+        <Package size={14} strokeWidth={2.5} />
+      </button>
+      {latestRequest && (
+        <span className={cn(
+          "text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 whitespace-nowrap",
+          UI_ENGINE_RADIUS_CONTROL,
+          latestRequest.status === "RECEIVED"
+            ? "bg-emerald-50 text-emerald-600"
+            : latestRequest.status === "CANCELLED" || latestRequest.status === "UNAVAILABLE"
+            ? "bg-rose-50 text-rose-500"
+            : "bg-amber-50 text-amber-600"
+        )}>
+          {latestRequest.status === "RECEIVED" ? "✓ Diterima"
+           : latestRequest.status === "ORDERED" ? "Dipesan"
+           : latestRequest.status === "SHIPPED" ? "Dikirim"
+           : latestRequest.status === "UNAVAILABLE" ? "N/A"
+           : "Diminta"}
+        </span>
+      )}
+    </div>
+  );
+})()}
 ```
 
-#### Step 8.3 — Gunakan `VisualAsset` di ScheduleRow thumbnail
-
-Di `ScheduleRow.tsx`, ganti `<img>` di thumbnail (L208-213):
-```tsx
-// SEBELUM:
-<img src={snapshot.catalog_image_url} alt={...} className="w-full h-full object-cover ..." />
-
-// SESUDAH:
-import { VisualAsset } from "@/components/ui/visual-asset";
-<VisualAsset src={snapshot?.catalog_image_url} alt={snapshot?.catalog_product_name || ""} className="transition-transform duration-300 group-hover/img:scale-110" />
-```
-
-Lakukan hal sama di `VisualRow.tsx` untuk thumbnail-nya.
-
-#### Step 8.4 — Gunakan `VisualAsset` di ScheduleSpecEditorModal hero image (view mode)
-
-Di `ScheduleSpecEditorModal.tsx`, di blok view mode hero image (sekitar L246-269), ganti `<img>`:
-```tsx
-import { VisualAsset } from "@/components/ui/visual-asset";
-
-// Ganti <img src={form.catalog_image_url} ...> dengan:
-<VisualAsset
-  src={form.catalog_image_url}
-  alt={form.catalog_product_name}
-  className="w-full h-full transition-transform duration-1000 group-hover:scale-110"
-/>
-```
-
-#### Step 8.5 — Wire `onColorSelect` di ScheduleSpecEditorModal edit mode
-
-Di `ScheduleSpecEditorModal.tsx`, di `<OptimizedUploader>` (L226-238), tambahkan prop:
-```tsx
-<OptimizedUploader
-  value={form.catalog_image_url}
-  onUpload={async (file) => { ... }} // existing
-  onClear={() => setForm(prev => ({ ...prev, catalog_image_url: "" }))}
-  onColorSelect={(colorUri) => setForm(prev => ({ ...prev, catalog_image_url: colorUri }))}
-  aspect={1}
-  className="w-full h-full"
-/>
-```
-
-**✅ AC**:
-- [ ] Di ScheduleSpecEditorModal edit mode, ada toggle "Image" / "Color" di uploader
-- [ ] Pilih color → preview berubah jadi warna solid
-- [ ] Save snapshot → `catalog_image_url` tersimpan sebagai `color:#RRGGBB`
-- [ ] Di ScheduleRow/VisualRow, thumbnail menampilkan warna solid (bukan broken image)
-- [ ] Di view mode modal, hero area menampilkan warna solid
+> **CATATAN:** Import yang dibutuhkan sudah ada (`Package`, `cn`, `UI_ENGINE_RADIUS_CONTROL`). Tidak perlu menambah import baru.
 
 ---
 
-### BUG-06 · Double Audit Logging (Low Priority)
+## Spesifikasi Visual (Token Referensi — Strict, Jangan Ubah)
 
-**File**: `src/extensions/schedule/actions/schedule-actions.ts`
-
-**VERIFIKASI DULU** sebelum hapus: buka `schedule-service.ts` dan pastikan method berikut memang sudah ada `insertAuditLog` di dalamnya:
-- `addOptionToEntry` → cek L625-630 (sudah ada ✅)
-- `approveOption` → cek sekitar L710
-- `updateOptionSnapshot` → cek sekitar L740
-- `deleteEntry` → cek L763-768 (sudah ada ✅)
-
-Jika service SUDAH memanggil audit, hapus `insertAuditLog` di action layer untuk method yang sama. Jika service BELUM ada, jangan hapus dari action.
-
-**✅ AC**: Setiap mutasi schedule menghasilkan tepat 1 audit log entry.
+| Kondisi | Background Tombol | Warna Icon | Warna Label | Label Text |
+| :--- | :--- | :--- | :--- | :--- |
+| Tidak ada request | `bg-slate-50` | `text-slate-900` | (tidak ada) | — |
+| Request aktif (ORDERED/SHIPPED/PENDING) | `bg-amber-50` | `text-amber-600` | `text-amber-600` | `"Diminta"` / `"Dipesan"` / `"Dikirim"` |
+| Sample diterima (RECEIVED) | `bg-emerald-50` | `text-emerald-600` | `text-emerald-600` | `"✓ Diterima"` |
+| Cancelled / Unavailable | `bg-slate-50` (tombol tidak aktif) | (default) | `text-rose-500` | `"N/A"` |
 
 ---
 
-## FINAL CHECKLIST
+## Verifikasi Wajib Setelah Eksekusi
 
+Jalankan perintah ini terlebih dahulu:
+```bash
+npx tsc --noEmit
 ```
-□ BUG-03 (Security Gap)         → addScheduleOptionAction validation
-□ BUG-05 (Swap Validation)      → swapEntries guard + normalizeCodes
-□ BUG-01 (Auto Refresh)         → refreshAll callback chain
-□ BUG-02 (Terminology)          → "Material Library" → "Product Library"
-□ BUG-07 (Return Type)          → reviewPromotionRequest fix
-□ BUG-04 (Sample Visibility)    → Package button always visible
-□ BUG-08 (Color Selector)       → VisualAsset + OptimizedUploader mode
-□ BUG-06 (Double Audit)         → Remove duplicate insertAuditLog
-```
+Pastikan **exit code 0** (tidak ada error TypeScript).
 
-**Before PR**:
-- [ ] `npm run build` → 0 TypeScript errors
-- [ ] `npm run dev` → test semua flow manual
-- [ ] `CHANGELOG.md` updated
-- [ ] Tidak ada `window.location.reload()` baru
-- [ ] Tidak ada hardcoded CSS baru
+Kemudian verifikasi secara visual:
+
+1. **Test Case 1 (No Request):** Buka Project Schedule → lihat item yang punya `product_catalog_id` tapi belum pernah di-request → Tombol Package harus **abu-abu standar** (`bg-slate-50`), tidak ada label.
+2. **Test Case 2 (Requested):** Klik tombol Package pada item yang sudah di-request → Modal terbuka. Setelah menutup modal, **refresh halaman** → Tombol harus **amber** dan ada label (misal "Diminta").
+3. **Test Case 3 (Received):** Admin ubah status request ke RECEIVED di Library → Buka kembali Project Schedule → Tombol harus **emerald** dan label "✓ Diterima".
+4. **Consistency Check:** Pastikan **Table View** dan **Visual View (Board)** menunjukkan status yang identik untuk item yang sama.
 
 ---
 
-## File Reference Map
+## Catatan Keras (Anti-Halusinasi)
 
-| Bug | File Utama | Jenis Perubahan |
-|-----|-----------|----------------|
-| BUG-01 | `library/page.tsx`, `LibraryTabs.tsx` | Add callback prop + refreshAll fn |
-| BUG-02 | `library/page.tsx` | Text change |
-| BUG-03 | `schedule-actions.ts` | Add validation block |
-| BUG-04 | `ScheduleRow.tsx`, `VisualRow.tsx` | Move button out of hover group |
-| BUG-05 | `schedule-service.ts` | Add guard + normalizeCodes |
-| BUG-06 | `schedule-actions.ts` | Remove duplicate audit calls |
-| BUG-07 | `library-service.ts` | Fix early return logic |
-| BUG-08 | `visual-asset.tsx` (NEW), `optimized-uploader.tsx`, `ScheduleRow.tsx`, `VisualRow.tsx`, `ScheduleSpecEditorModal.tsx` | New component + dual-mode uploader |
+- **DILARANG** membuat komponen baru.
+- **DILARANG** menambahkan import icon baru dari `lucide-react`. Gunakan `Package` yang sudah ada.
+- **DILARANG** mengubah logika data atau action (submit request, delete, dll).
+- **DILARANG** mengubah warna atau nilai token dari tabel di atas.
+- Jika menemukan kode yang **tidak sesuai** dengan lokasi baris yang disebutkan, **BERHENTI dan hubungi Main Lead**. Jangan menebak-nebak.

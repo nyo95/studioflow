@@ -204,14 +204,14 @@ export function TopHeader({
   return (
     <header 
       className={cn(
-        "z-20 flex h-16 flex-shrink-0 items-center border-b transition-colors duration-300",
+        "fixed top-0 left-0 right-0 z-50 flex h-16 flex-shrink-0 items-center border-b transition-colors duration-300",
         isDark 
           ? "border-slate-800 bg-slate-950" 
           : "border-slate-200 bg-white"
       )}
     >
-      <div className="w-full px-[var(--ui-section-px,1.5rem)] lg:px-[78px]">
-        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between">
+      <div className="w-full px-6 lg:pl-[78px] lg:pr-6">
+        <div className="flex w-full items-center justify-between">
         <div className="flex min-w-0 items-center gap-4">
           <Button
             type="button"

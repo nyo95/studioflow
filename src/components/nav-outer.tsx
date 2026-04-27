@@ -112,8 +112,7 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
   return (
     <TooltipProvider delayDuration={0}>
       <aside 
-        className="fixed left-0 top-[var(--ui-header-height,4rem)] bottom-[var(--ui-footer-height,3.5rem)] z-30 hidden border-r border-slate-200 bg-white/96 py-4 text-slate-500 backdrop-blur lg:block"
-        style={{ width: "var(--ui-sidebar-rail-width,78px)" }}
+        className="fixed left-0 top-16 bottom-9 z-30 hidden w-[78px] border-r border-slate-200 bg-white/96 py-4 text-slate-500 backdrop-blur lg:block"
       >
         {renderNavList(false)}
       </aside>
@@ -128,10 +127,9 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white px-4 py-5 shadow-xl transition-transform duration-200 lg:hidden",
+          "fixed inset-y-0 left-0 z-50 flex w-[min(272px,calc(100vw-1.5rem))] flex-col border-r border-slate-200 bg-white px-4 py-5 shadow-xl transition-transform duration-200 lg:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
-        style={{ width: "min(var(--ui-sidebar-width,272px), calc(100vw - 1.5rem))" }}
         aria-hidden={!isOpen}
       >
         <div className="mb-5 border-b border-slate-200 pb-4">
