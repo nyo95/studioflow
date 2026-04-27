@@ -354,7 +354,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
       <td className="px-5 py-2 text-right">
         <div className="flex items-center justify-end gap-2">
           {/* Sample Request - Persistent visibility if product linked */}
-          {activeOption?.product_catalog_id && (() => {
+          {activeOption && (() => {
             const latestRequest = activeOption?.product_catalog?.product_requests?.[0];
             const hasActiveRequest = latestRequest && latestRequest.status !== "CANCELLED";
             

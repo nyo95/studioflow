@@ -8,6 +8,11 @@
 - **Linting & Code Quality**: Resolved residual ESLint warnings (`prefer-const`, synchronous state in effect) to ensure production-grade cleanliness.
 - **Full Application Readiness**: Architecture (View-First, Zero Hardcode) is verified, backend snapshot logic is hardened, and UI inconsistency has been fully patched. The application is now ready for daily usage in the firm.
 
+## [v2.4.3.1] — 2026-04-27 (versi 1.9.3.1)
+
+### Fixed
+- **Sample Request Accessibility**: Fixed a UI bug where the "Request Sample" button was hidden for items not yet promoted to the Global Library. Users can now request samples for "Custom" project items directly from the Table and Visual views.
+
 ## [v2.4.3] — 2026-04-27 (versi 1.9.3)
 
 ### Fixed

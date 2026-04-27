@@ -358,7 +358,7 @@ export function VisualRow({
         {/* Actions Menu */}
         <div className="flex items-center gap-2">
            {/* Sample Request - Persistent visibility if product linked */}
-           {activeOption?.product_catalog_id && (() => {
+           {activeOption && (() => {
              const latestRequest = activeOption?.product_catalog?.product_requests?.[0];
              const hasActiveRequest = latestRequest && latestRequest.status !== "CANCELLED";
 
