@@ -90,6 +90,15 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
     actions: 8,
   }); // Total: 100%
 
+  // Memoize progress calculation to avoid expensive array sorting/copying on every render
+  const projectProgressMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getProjectProgress>>();
+    for (const project of initialProjects) {
+      map.set(project.id, getProjectProgress(project.phases));
+    }
+    return map;
+  }, [initialProjects]);
+
   const filteredProjects = useMemo(() => {
     return initialProjects.filter((project) => {
       const normalizedSearch = search.trim().toLowerCase();
@@ -274,7 +283,7 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
               </TableCardRow>
             ) : (
               sortedData.map((project) => {
-                const progress = getProjectProgress(project.phases);
+                const progress = projectProgressMap.get(project.id)!;
                 const isUrgent = project.priority === "URGENT";
                 
                 return (
