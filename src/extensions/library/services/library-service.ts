@@ -71,8 +71,8 @@ export class LibraryService {
     context: "SNAPSHOT" | "CATALOG"
   ) {
     if (type === "material") {
-      if (data.qty !== undefined || data.location !== undefined) {
-        throw new ActionError("Materials are forbidden from having quantity or location data.", "TYPE_RULE_VIOLATION");
+      if (data.qty !== undefined) {
+        throw new ActionError("Materials are forbidden from having quantity data.", "TYPE_RULE_VIOLATION");
       }
     } else if (type === "fixture") {
       if (context === "SNAPSHOT") {
@@ -686,165 +686,6 @@ export class LibraryService {
   }
 
   /**
-   * Syncs a schedule item to the library, ensuring no duplicates.
-   * Based on Brand + Name match.
-   */
-  static async ensureProductInLibrary(tx: PrismaTransaction, userId: string, data: {
-    catalog_sku?: string | null;
-    catalog_product_name: string;
-    catalog_brand: string;
-    catalog_category: string;
-    catalog_image_url?: string | null;
-    catalog_price?: number | null;
-    catalog_image_original_url?: string | null;
-    catalog_color?: string | null;
-    catalog_finishing?: string | null;
-    catalog_motif?: string | null;
-    catalog_reference_url?: string | null;
-    catalog_dimension?: string | null;
-    catalog_type?: ProductType;
-  }) {
-    if (!data.catalog_brand?.trim()) {
-      throw new ActionError("Brand is required for library sync", "BRAND_REQUIRED");
-    }
-
-    const brand = data.catalog_brand.trim();
-    
-    // Identity Resolution Hierarchy
-    const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
-    const isPlaceholder = (val?: string | null) => !val || placeholders.includes(val.trim().toUpperCase());
-
-    const rawSku = data.catalog_sku?.trim();
-    const rawName = data.catalog_product_name?.trim();
-
-    let effectiveId: string;
-    if (!isPlaceholder(rawSku)) {
-      effectiveId = rawSku!;
-    } else if (!isPlaceholder(rawName)) {
-      effectiveId = rawName!;
-    } else {
-      throw new ActionError("Sync failed: No valid primary identity (SKU or Name) provided.", "IDENTITY_REQUIRED");
-    }
-
-    // Skip system-reserved brands from being created as vendors
-    if (brand === "PENDING" || brand === "RESERVED" || brand === "[RESERVED]") {
-      return null;
-    }
-
-    // 1. Resolve Vendor
-    const vendorId = await this.resolveVendor(brand, userId, tx);
-
-    // 2. Resolve Product (Deduplication)
-    try {
-      const existingProduct = await tx.productCatalog.findFirst({
-        where: {
-          vendor_id: vendorId,
-          catalog_sku: { equals: effectiveId, mode: "insensitive" },
-          deleted_at: null
-        }
-      });
-
-      if (existingProduct) {
-        if (existingProduct.catalog_status === "APPROVED") {
-          return existingProduct;
-        }
-
-        const existingStatus = existingProduct.catalog_status;
-        const updated = await tx.productCatalog.update({
-          where: { id: existingProduct.id },
-          data: {
-            catalog_category: data.catalog_category,
-            catalog_image_url: data.catalog_image_url || existingProduct.catalog_image_url,
-            catalog_price: data.catalog_price ?? existingProduct.catalog_price,
-            catalog_image_original_url: data.catalog_image_original_url || existingProduct.catalog_image_original_url,
-            catalog_color: data.catalog_color || existingProduct.catalog_color,
-            catalog_finishing: data.catalog_finishing || existingProduct.catalog_finishing,
-            catalog_motif: data.catalog_motif || existingProduct.catalog_motif,
-            catalog_product_name: !isPlaceholder(rawName) ? rawName : existingProduct.catalog_product_name,
-            catalog_status: existingProduct.catalog_status === "REJECTED" ? "PENDING" : existingProduct.catalog_status
-          }
-        });
-
-        await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_UPDATE, "ProductCatalog", updated.id, userId, {
-          catalog_sku: effectiveId,
-          catalog_product_name: updated.catalog_product_name,
-          catalog_brand: brand,
-          source: "PROJECT_SYNC_UPDATE",
-          previous_status: existingStatus
-        });
-
-        return updated;
-      }
-
-      // Create new product
-      const created = await tx.productCatalog.create({
-        data: {
-          vendor_id: vendorId,
-          catalog_category: data.catalog_category,
-          catalog_sku: effectiveId,
-          // NEVER persist placeholder in primary field; use null if name is invalid
-          catalog_product_name: !isPlaceholder(rawName) ? rawName : null,
-          catalog_image_url: data.catalog_image_url,
-          catalog_price: data.catalog_price,
-          catalog_image_original_url: data.catalog_image_original_url,
-          catalog_color: data.catalog_color || "UNSPECIFIED",
-          catalog_finishing: data.catalog_finishing,
-          catalog_motif: data.catalog_motif,
-          catalog_status: "PENDING"
-        }
-      });
-
-      await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_CREATE, "ProductCatalog", created.id, userId, {
-        catalog_sku: effectiveId,
-        catalog_product_name: created.catalog_product_name,
-        catalog_brand: brand,
-        source: "PROJECT_SYNC_CREATE"
-      });
-
-      return created;
-    } catch (error: unknown) {
-      if (error instanceof Error && error.message.includes("Unique constraint")) {
-        const foundProduct = await tx.productCatalog.findFirst({
-          where: {
-            vendor_id: vendorId,
-            catalog_sku: { equals: effectiveId, mode: "insensitive" },
-            deleted_at: null
-          }
-        });
-        
-        if (foundProduct) {
-          if (foundProduct.catalog_status === "APPROVED") return foundProduct;
-          const fallbackStatus = foundProduct.catalog_status;
-          const updated = await tx.productCatalog.update({
-            where: { id: foundProduct.id },
-            data: {
-              catalog_category: data.catalog_category,
-              catalog_image_url: data.catalog_image_url || foundProduct.catalog_image_url,
-              catalog_price: data.catalog_price ?? foundProduct.catalog_price,
-              catalog_image_original_url: data.catalog_image_original_url || foundProduct.catalog_image_original_url,
-              catalog_color: data.catalog_color || foundProduct.catalog_color,
-              catalog_finishing: data.catalog_finishing || foundProduct.catalog_finishing,
-              catalog_motif: data.catalog_motif || foundProduct.catalog_motif,
-              catalog_product_name: !isPlaceholder(rawName) ? rawName : foundProduct.catalog_product_name
-            }
-          });
-
-          await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_UPDATE, "ProductCatalog", updated.id, userId, {
-            catalog_sku: effectiveId,
-            catalog_product_name: updated.catalog_product_name,
-            catalog_brand: brand,
-            source: "PROJECT_SYNC_UPDATE",
-            previous_status: fallbackStatus
-          });
-
-          return updated;
-        }
-      }
-      throw error;
-    }
-  }
-
-  /**
    * Performs a soft-delete on one product catalog item.
    * COMPLIANCE: Adheres to SSOT §7.1 Soft Delete Policy. Force soft-delete is allowed per policy.
    * @param id Product id.
@@ -1237,6 +1078,8 @@ export class LibraryService {
         where: { id: requestId },
         data: {
           status: "APPROVED",
+          reviewed_by_id: userId,
+          reviewed_at: new Date(),
           notes: notes ? this.normalizeOptional(notes) : undefined,
         }
       });

@@ -73,6 +73,7 @@ export function ScheduleSearchBar({ projectId, section, onSuccess }: ScheduleSea
       const { items } = unwrapActionResult(await LibraryFacade.searchProducts({ 
         search: q, 
         pageSize: 10,
+        status: "APPROVED",
       }));
       setProducts(items);
     } catch (err) {

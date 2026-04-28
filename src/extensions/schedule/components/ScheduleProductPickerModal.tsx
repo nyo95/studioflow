@@ -41,7 +41,6 @@ import { cn } from "@/lib/utils";
 import { GradualInputForm } from "./GradualInputForm";
 import type {
   ProductCatalogWithRelations,
-  LibraryVendor,
 } from "@/extensions/library/facade";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
@@ -89,7 +88,6 @@ export function ScheduleProductPickerModal({
   const { projectId, category, section, onSuccess } = useProjectScheduleContext();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [products, setProducts] = React.useState<ProductCatalogWithRelations[]>([]);
-  const [vendors, setVendors] = React.useState<LibraryVendor[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [selectedProductId, setSelectedProductId] = React.useState<string | null>(null);
@@ -98,22 +96,13 @@ export function ScheduleProductPickerModal({
   const [createCatalogName, setCreateCatalogName] = React.useState<string | null>(null);
   const [createBrand, setCreateBrand] = React.useState("");
   const [createReferenceUrl, setCreateReferenceUrl] = React.useState("");
-
-  const fetchVendors = React.useCallback(async () => {
-    try {
-      const res = unwrapActionResult<LibraryVendor[]>(await LibraryFacade.getVendors(undefined));
-      setVendors(res);
-    } catch (e) {
-      console.error("Failed to fetch vendors", e);
-    }
-  }, []);
-
   const fetchProducts = React.useCallback(async () => {
     setIsSearching(true);
     try {
       const res = unwrapActionResult<{ items: ProductCatalogWithRelations[]; total: number }>(await LibraryFacade.searchProducts({ 
         search: searchQuery,
-        type: section
+        type: section,
+        status: "APPROVED"
       }));
       setProducts(res.items);
     } catch (error) {
@@ -125,10 +114,9 @@ export function ScheduleProductPickerModal({
 
   React.useEffect(() => {
     if (isOpen) {
-      fetchVendors();
       fetchProducts();
     }
-  }, [isOpen, fetchProducts, fetchVendors]);
+  }, [isOpen, fetchProducts]);
 
   // Load catalog options
   React.useEffect(() => {
@@ -141,6 +129,7 @@ export function ScheduleProductPickerModal({
             category: searchQuery.trim() ? undefined : (category !== "all" ? category : undefined),
             search: searchQuery.trim() || undefined,
             type: section,
+            status: "APPROVED"
           }),
         ) as { items: ProductCatalogWithRelations[] };
         if (isMounted) setProducts(results.items);
@@ -170,7 +159,7 @@ export function ScheduleProductPickerModal({
           section,
           mode: "manual",
           catalogCreateData: {
-            catalog_sku: createCatalogName,
+            catalog_sku: "", // Clear SKU for manual fallback, will use Generic or derived
             catalog_product_name: createCatalogName,
             catalog_brand: createBrand.trim() || "Custom",
             catalog_reference_url: createReferenceUrl.trim() || null,

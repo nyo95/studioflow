@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 2.2.8 (v2.5.1 - Phase 3 Stabilization Complete)
-> **Last Updated:** April 27, 2026 (v2.5.1 - Phase 3 Stabilization Complete)
+> **Document Version:** 2.3.0 (v2.6.0 - Architectural Stabilization)
+> **Last Updated:** April 28, 2026 (v2.6.0 - Architectural Stabilization)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -148,6 +148,16 @@ Phases follow a strict sequence (MOODBOARD → LAYOUT → DESIGN_3D → CD → S
 
 ### 5.1 Snapshot-First Interaction
 Approving a material option creates a frozen `data_snapshot`.
+
+### 5.2 Search & Selection Rules
+- **Approved Only:** Any search component used for inserting items into a project schedule (e.g., `ScheduleSearchBar`, `ScheduleProductPickerModal`) MUST enforce a filter for `catalog_status === "APPROVED"`.
+- **Type Safety:** Items can only be added to a schedule section if their `catalog_type` matches the section (e.g., `material` products to `material` section).
+- **Category Enforcement:** Catalog items must be inserted into the schedule category that matches their `catalog_category`.
+
+### 5.3 Duplicate Protection Rules
+- **Global Catalog (Mode: "catalog"):** A single project schedule cannot contain the same `product_catalog_id` more than once.
+- **Manual Entries (Mode: "manual"):** Uniqueness is enforced via a case-insensitive composite check of `catalog_sku` and `catalog_brand` within the project scope.
+- **Exemptions:** Mode `"reserve"` (placeholder slots) is exempt from duplicate checks to allow for flexible planning.
 - **Immutable History:** Future edits to the `MaterialCatalog` will NOT update existing project snapshots.
 - **Independence:** Designers can edit snapshot fields (e.g., custom finishing for a specific project) without polluting the global library.
 
@@ -167,6 +177,11 @@ Approving a material option creates a frozen `data_snapshot`.
     - **Update Snapshot:** Requires Stage 1 completeness (Mandatory: `catalog_color`).
     - **Promote to Library:** Requires full Stage 2 completeness (Mandatory: `catalog_sku`, `catalog_product_name`, `catalog_brand`, `catalog_image_url`).
     - **Promotion Readiness Check (v2.2.1):** `isReadyForPromotion` MUST include Stage 1 completeness (`catalog_color` via `isSecondaryComplete`) as a prerequisite — not just Stage 2 fields. Sequence: Stage 1 (color) → Stage 2 (SKU/Name + Brand + Image) → Promotion Eligible.
+    - **Schedule Duplicate Protection (v2.2.9):** Strict uniqueness guard enforced in `ScheduleService`. Prevents duplicate products within a single project schedule. 
+        - `catalog` mode: Unique by `product_catalog_id`.
+        - `manual` mode: Unique by case-insensitive composite check of `catalog_sku` and `catalog_brand`.
+    - **Admin Auto-Approve (v2.2.9):** Promotion requests initiated by an `ADMIN` are automatically approved and promoted to the library immediately.
+    - **Library Search Visibility:** Only `APPROVED` library items are searchable and selectable within the project schedule to ensure production quality.
 - **Ownership Validation:** All mutations (Edit/Delete/Promote) strictly validate that the target belongs to the active project.
 - **Manual Promotion:** Users must explicitly click "Save to Library" (Manual Elevation). Auto-harvesting is disabled for project snapshots to ensure library quality. Project-level custom requests do NOT create library entries.
 

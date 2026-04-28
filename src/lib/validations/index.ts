@@ -225,10 +225,6 @@ const EntrySourceSchema = z.discriminatedUnion("mode", [
     catalogItemId: IdSchema,
   }),
   z.object({
-    mode: z.literal("create_catalog"),
-    catalogCreateData: ScheduleCatalogCreateSchema,
-  }),
-  z.object({
     mode: z.literal("manual"), // New: Manual entry that is auto-approved
     catalogCreateData: ScheduleCatalogCreateSchema,
   }),
@@ -238,10 +234,6 @@ const OptionSourceSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("catalog"),
     catalogItemId: IdSchema,
-  }),
-  z.object({
-    mode: z.literal("create_catalog"),
-    catalogCreateData: ScheduleCatalogCreateSchema,
   }),
   z.object({
     mode: z.literal("manual"), // New: Manual entry that is auto-approved

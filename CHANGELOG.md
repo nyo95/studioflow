@@ -1,5 +1,35 @@
 # StudioFlow Development Log (Changelog)
 
+## [v2.6.0] — 2026-04-28 (Architectural Stabilization Finalized)
+
+### Backend Changes
+- **Guard Robustness**: Improved `checkDuplicateProduct` with type-safe `ScheduleSnapshot` casting and case-insensitive normalization for manual entry checks.
+- **Promotion Audit Trails**: Fixed `reviewPromotionRequest` to correctly capture `reviewed_by_id` and `reviewed_at` when approving requests, ensuring parity with rejection logic.
+- **Action Validation**: Hardened `addScheduleEntryWithProductAction` and `addScheduleOptionAction` with strict `catalog_status === "APPROVED"` assertions.
+
+### UI Changes
+- **Search Ergonomics**: Consolidated `status: "APPROVED"` filter across all schedule-insertion search points.
+- **Payload Cleanup**: Refactored `ScheduleProductPickerModal` to remove unused `fetchVendors` state and established explicit `catalog_sku` vs `catalog_product_name` separation for manual entries.
+- **Dead Code Cleanup**: Purged unused `LibraryVendor` imports and state hooks from scheduler components.
+
+### Documentation
+- **SSOT v2.3.0**: Formalized Section 5.2 (Search & Selection Rules) and 5.3 (Duplicate Protection Rules) in `MASTER_SSOT.md`.
+- **Completion Status**: Successfully executed 100% of the audit-identified stabilization tasks from `implementation_plan_v2.md` and the junior-dev gap analysis.
+
+## [v2.5.2] — 2026-04-28 (Schedule Protection Hardening)
+
+### Security & Hardening
+- **Schedule Duplicate Protection**: Implemented strict duplicate product guards in `ScheduleService` to prevent redundant entries within a project.
+    - Blocks adding the same catalog item (`catalog` mode).
+    - Blocks adding items with identical SKU + Brand combination (`manual` mode).
+- **Architectural Cleanup**: Fully removed the deprecated `create_catalog` mode from validation schemas and action handlers, enforcing a strict distinction between catalog selection and manual drafting.
+- **Admin Auto-Approve**: Implemented automatic approval for `PromotionRequest` when initiated by an `ADMIN`, streamlining library population.
+- **Search Filtering**: Restricted schedule product searches to `APPROVED` items only in `ScheduleSearchBar` and `ScheduleProductPickerModal`.
+- **Dead Code Removal**: Deleted the legacy `ensureProductInLibrary` sync method from `LibraryService`.
+
+### Documentation
+- **SSOT Update**: Updated `MASTER_SSOT.md` to v2.2.9 reflecting the new duplicate protection rules and search restrictions.
+
 ## [v2.5.1] — 2026-04-27 (Phase 3 Completion - Security & Hardening)
 
 ### Security & Hardening

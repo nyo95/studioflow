@@ -83,6 +83,10 @@ export const createPromotionRequestAction = createAction<{
       notes: input.notes
     });
 
+    if (ctx.role === "ADMIN") {
+      await LibraryService.reviewPromotionRequest(tx, result.id, "APPROVED", ctx.userId, "Auto-approved for ADMIN");
+    }
+
     return result;
   }
 );

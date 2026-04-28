@@ -95,7 +95,7 @@ export const addScheduleEntryAction = createAction(
       input.schedule_category,
       input.mode,
       input.mode === "catalog" ? input.catalogItemId : undefined,
-      (input.mode === "create_catalog" || input.mode === "manual") ? input.catalogCreateData : undefined,
+      input.mode === "manual" ? input.catalogCreateData : undefined,
       input.section,
       ctx.userId
     );
@@ -221,7 +221,7 @@ export const addScheduleOptionAction = createAction(
       input.mode,
       entry.schedule_category,
       input.mode === "catalog" ? input.catalogItemId : undefined,
-      (input.mode === "create_catalog" || input.mode === "manual") ? input.catalogCreateData : undefined,
+      input.mode === "manual" ? input.catalogCreateData : undefined,
       ctx.userId
     );
 

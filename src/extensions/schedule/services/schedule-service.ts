@@ -177,7 +177,7 @@ export async function buildScheduleSnapshot(
 async function resolveCatalogItemForMode(
   tx: PrismaTransaction,
   category: string,
-  mode: "catalog" | "create_catalog" | "manual",
+  mode: "catalog" | "manual",
   userId: string,
   catalogItemId?: string | null,
   catalogCreateData?: ScheduleCatalogCreateInput
@@ -191,53 +191,62 @@ async function resolveCatalogItemForMode(
     return null;
   }
 
-  if (mode !== "create_catalog") {
-    return null;
+  return null;
+}
+
+/**
+ * Uniqueness Guard: Prevents duplicate catalog items within a single project schedule.
+ */
+async function checkDuplicateProduct(
+  tx: PrismaTransaction,
+  projectId: string,
+  mode: "catalog" | "manual" | "reserve",
+  catalogId?: string | null,
+  snapshot?: Partial<ScheduleSnapshot>
+) {
+  if (mode === "reserve") return;
+
+  if (mode === "catalog" && catalogId) {
+    const duplicate = await tx.projectScheduleOption.findFirst({
+      where: {
+        entry: { project_id: projectId },
+        product_catalog_id: catalogId,
+      },
+    });
+    if (duplicate) {
+      throw new ActionError("Duplicate product in project schedule.", "DUPLICATE_PRODUCT");
+    }
   }
 
-  const normalizedBrand = catalogCreateData?.catalog_brand?.trim() || "Custom";
-  const normalizedName = catalogCreateData?.catalog_product_name?.trim();
-  
-  // Stage 2 Completeness Gatekeeper
-  const hasImage = !!catalogCreateData?.catalog_image_url?.trim();
-  const hasValidSku = !!catalogCreateData?.catalog_sku && catalogCreateData.catalog_sku !== "Generic";
-  
-  if (!normalizedName || !hasImage || !hasValidSku) {
-    throw new ActionError("Promote to Library requires full Stage 2 completeness (Mandatory: SKU, Product Name, Brand, Image URL)", "VALIDATION_FAILED");
+  if (mode === "manual" && snapshot) {
+    const sku = snapshot.specs?.catalog_sku?.trim();
+    const brand = snapshot.catalog_brand?.trim();
+
+    if (sku && brand) {
+      // For manual, uniqueness is defined by composite of catalog_sku AND catalog_brand (case-insensitive)
+      // Since JSON filters in Prisma might not support CI equals easily, we fetch and check
+      const existingOptions = await tx.projectScheduleOption.findMany({
+        where: { entry: { project_id: projectId } },
+        select: { data_snapshot: true }
+      });
+
+      const isDuplicate = existingOptions.some(opt => {
+        const s = opt.data_snapshot as ScheduleSnapshot | null;
+        if (!s) return false;
+        
+        // Use specs.catalog_sku as primary identifier for manual entries
+        const optSku = s.specs?.catalog_sku?.trim();
+        const optBrand = s.catalog_brand?.trim();
+        
+        return optSku?.toLowerCase() === sku.toLowerCase() &&
+               optBrand?.toLowerCase() === brand.toLowerCase();
+      });
+
+      if (isDuplicate) {
+        throw new ActionError("Duplicate product in project schedule.", "DUPLICATE_PRODUCT");
+      }
+    }
   }
-
-// Use LibraryService for server-side operations
-    const vendor = await LibraryService.createVendor(
-      { brand_name: normalizedBrand, contacts: [] },
-      userId,
-      tx
-    );
-
-    const created = await LibraryService.createProduct(
-    {
-      vendor_id: vendor.id,
-      catalog_category: category,
-      catalog_type: catalogCreateData?.catalog_type || ProductType.material,
-      catalog_sub_category: catalogCreateData?.catalog_sub_category ?? undefined,
-      catalog_sku: catalogCreateData?.catalog_sku || normalizedName,
-      catalog_product_name: normalizedName,
-      catalog_motif: catalogCreateData?.catalog_motif ?? undefined,
-      catalog_color: catalogCreateData?.catalog_color || "Standard",
-      catalog_finishing: catalogCreateData?.catalog_finishing ?? undefined,
-      catalog_dimension_p: catalogCreateData?.catalog_dimension_p ?? undefined,
-      catalog_dimension_l: catalogCreateData?.catalog_dimension_l ?? undefined,
-      catalog_dimension_t: catalogCreateData?.catalog_dimension_t ?? undefined,
-      catalog_dimension_unit: catalogCreateData?.catalog_dimension_unit ?? "cm",
-      catalog_tags: catalogCreateData?.catalog_structured_tags ?? [],
-      catalog_reference_url: catalogCreateData?.catalog_reference_url ?? undefined,
-      catalog_image_url: catalogCreateData?.catalog_image_url ?? undefined,
-      catalog_price: catalogCreateData?.catalog_price ?? null,
-    },
-    userId,
-    tx
-  );
-
-  return created.id;
 }
 
 
@@ -450,7 +459,7 @@ export class ScheduleService {
     tx: PrismaTransaction,
     projectId: string,
     category: string,
-    mode: "catalog" | "create_catalog" | "manual" | "reserve",
+    mode: "catalog" | "manual" | "reserve",
     catalogItemId?: string | null,
     catalogCreateData?: ScheduleCatalogCreateInput & { catalog_type?: ProductType },
     section: ProductType = ProductType.material,
@@ -567,6 +576,8 @@ export class ScheduleService {
       finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "library");
     }
 
+    await checkDuplicateProduct(tx, projectId, mode, resolvedCatalogId, finalSnapshot);
+
     // Validate Snapshot before save
     const validatedSnapshot = ScheduleSnapshotSchema.parse(finalSnapshot);
 
@@ -585,7 +596,7 @@ export class ScheduleService {
     // 6. Normalize codes (Global category-wide uniqueness)
     await this.normalizeCodes(tx, projectId, section, normalizedCategory);
 
-    return { entry, createdCatalogId: mode === "create_catalog" ? resolvedCatalogId : null };
+    return { entry, createdCatalogId: null };
   }
 
   /**
@@ -602,7 +613,7 @@ export class ScheduleService {
   static async addOptionToEntry(
     tx: PrismaTransaction,
     entryId: string,
-    mode: "catalog" | "create_catalog" | "manual" | "reserve",
+    mode: "catalog" | "manual" | "reserve",
     category: string,
     catalogItemId?: string | null,
     catalogCreateData?: ScheduleCatalogCreateInput,
@@ -672,6 +683,12 @@ export class ScheduleService {
       finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "library");
     }
 
+    const entryData = await tx.projectScheduleEntry.findUniqueOrThrow({
+      where: { id: entryId },
+      select: { project_id: true }
+    });
+    await checkDuplicateProduct(tx, entryData.project_id, mode, resolvedCatalogId, finalSnapshot);
+
     // Validate Snapshot before save
     const validatedSnapshot = ScheduleSnapshotSchema.parse(finalSnapshot);
 
@@ -695,7 +712,7 @@ export class ScheduleService {
     }
 
 
-    return { option, createdCatalogId: mode === "create_catalog" ? resolvedCatalogId : null };
+    return { option, createdCatalogId: null };
   }
 
   /**
@@ -798,6 +815,11 @@ export class ScheduleService {
     data: { schedule_qty?: number; schedule_unit?: string | null; schedule_location?: string | null },
     userId?: string
   ) {
+    // Retrieve existing entry to enforce material qty rule
+    const existingEntry = await tx.projectScheduleEntry.findUniqueOrThrow({ where: { id: entryId } });
+    if (existingEntry.section === ProductType.material && data.schedule_qty !== undefined) {
+      throw new ActionError("Materials cannot have schedule_qty updates.", "TYPE_RULE_VIOLATION");
+    }
     const entry = await tx.projectScheduleEntry.update({
       where: { id: entryId },
       data,

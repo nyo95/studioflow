@@ -145,10 +145,10 @@ export const ProductTypeAssertionSchema = z.object({
   schedule_location: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.catalog_type === "material") {
-    if (data.schedule_qty !== undefined || data.schedule_location !== undefined) {
+    if (data.schedule_qty !== undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Materials FORBID qty and location",
+        message: "Materials FORBID qty",
         path: ["schedule_qty"]
       });
     }
