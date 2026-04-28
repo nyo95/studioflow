@@ -39,30 +39,38 @@ export function ProjectLiveProvider({
   const toggleSidebar = useCallback(() => setIsSidebarOpen(v => !v), []);
 
   const syncNow = useCallback(async () => {
-    const response = await fetch(`/api/projects/${projectId}/heartbeat`, {
-      cache: "no-store",
-    });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/heartbeat`, {
+        cache: "no-store",
+      });
 
-    if (!response.ok) {
-      console.warn("FAILED_TO_FETCH_PROJECT_HEARTBEAT - syncNow", response.status);
-      return;
+      if (!response.ok) {
+        console.warn(`[SYNC_NOW_FAILURE] Project ${projectId}: ${response.status}`);
+        return;
+      }
+
+      const nextSnapshot = (await response.json()) as ProjectDiscussionSnapshot;
+      setSnapshot(nextSnapshot);
+    } catch (error: any) {
+      console.warn(`[SYNC_NOW_NETWORK_ERROR] Project ${projectId}:`, error.message || error);
     }
-
-    const nextSnapshot = (await response.json()) as ProjectDiscussionSnapshot;
-    setSnapshot(nextSnapshot);
   }, [projectId]);
 
   useEffect(() => {
+    if (!projectId) return;
+
     let isActive = true;
+    const controller = new AbortController();
 
     const poll = async () => {
       try {
         const response = await fetch(`/api/projects/${projectId}/heartbeat`, {
           cache: "no-store",
+          signal: controller.signal,
         });
 
         if (!response.ok) {
-          console.warn("FAILED_TO_FETCH_PROJECT_HEARTBEAT - poll", response.status);
+          console.warn(`[HEARTBEAT_POLL_FAILURE] Project ${projectId}: ${response.status}`);
           return;
         }
 
@@ -73,8 +81,9 @@ export function ProjectLiveProvider({
             return hasChanged ? nextSnapshot : current;
           });
         }
-      } catch (error) {
-        console.error("Failed to fetch project heartbeat:", error);
+      } catch (error: any) {
+        if (error.name === "AbortError") return;
+        console.warn(`[HEARTBEAT_NETWORK_ERROR] Project ${projectId}:`, error.message || error);
       }
     };
 
@@ -84,6 +93,7 @@ export function ProjectLiveProvider({
 
     return () => {
       isActive = false;
+      controller.abort();
       window.clearInterval(intervalId);
     };
   }, [projectId]);

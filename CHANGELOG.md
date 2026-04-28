@@ -5,6 +5,7 @@
 ### Backend Changes
 - **Guard Robustness**: Improved `checkDuplicateProduct` with type-safe `ScheduleSnapshot` casting and case-insensitive normalization for manual entry checks.
 - **Parallel Phase Activation**: Enforced `allow_parallel: true` for `LAYOUT`, `DESIGN_3D`, and `CD` phases in `project-service.ts` and patched existing database records via SQL.
+- **Heartbeat Hardening**: Implemented `AbortController` and downgraded `console.error` to `console.warn` in `ProjectLiveProvider.tsx` to handle transient network glitches gracefully and prevent dev error overlays.
 - **Promotion Audit Trails**: Fixed `reviewPromotionRequest` to correctly capture `reviewed_by_id` and `reviewed_at` when approving requests, ensuring parity with rejection logic.
 - **Action Validation**: Hardened `addScheduleEntryWithProductAction` and `addScheduleOptionAction` with strict `catalog_status === "APPROVED"` assertions.
 
