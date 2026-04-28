@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 2.3.0 (v2.6.0 - Architectural Stabilization)
-> **Last Updated:** April 28, 2026 (v2.6.0 - Architectural Stabilization)
+> **Document Version:** 2.4.0 (v2.0.2 - 3-Tier Information Hierarchy Formalized)
+> **Last Updated:** April 28, 2026 (v2.0.2 - 3-Tier Information Hierarchy Formalized)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -23,7 +23,7 @@ The application enforces a "View-First" interaction model for data integrity:
 - **Default State:** All forms/modals for existing data MUST open in a Read-Only state by default.
 - **Modify Toggle:** Privileged users are presented with a "Modify" (Edit Symbol) button to explicitly unlock field mutations.
 - **Domain Exception (Project Schedule):** Project Schedule entries are EXEMPTED from View-First protocol—they open directly in Edit Mode by default since data is project-local and does not affect Master Catalog safety.
-- **Visual Hierarchy Priority (Generic Items):** For items where primary identifiers (SKU, Name) are missing or marked as "Generic", the UI must automatically promote technical specifications (Color, Pattern, Finish) to the primary display line to ensure physical recognizability.
+- **Visual Hierarchy Priority (Auto-Fallback):** The UI enforces a strict **3-Tier Product Information Hierarchy**. If **Primary Information** (SKU, Product Name) is missing or empty, the UI MUST automatically promote **Secondary Information** (Color, Pattern, Finish) to the primary display line using the exact same typographic weight and font (`font-serif`, Lora). If both exist, Primary is the main title and Secondary acts as the sub-label. Under no circumstances should missing primary data result in a dangling hyphen (`-`) or blank space.
 - **Safety:** This prevents accidental data changes in the Master Catalog while providing a flexible interface for project-level specification.
 
 ### UI Engine Rules
@@ -160,6 +160,16 @@ Approving a material option creates a frozen `data_snapshot`.
 - **Exemptions:** Mode `"reserve"` (placeholder slots) is exempt from duplicate checks to allow for flexible planning.
 - **Immutable History:** Future edits to the `MaterialCatalog` will NOT update existing project snapshots.
 - **Independence:** Designers can edit snapshot fields (e.g., custom finishing for a specific project) without polluting the global library.
+
+### 5.4 Product Information Hierarchy (3-Tier Protocol)
+To maintain consistency across all CRUD modals (`LibraryFormModal`, `ScheduleSpecEditorModal`) and table renders, product data is strictly grouped into three tiers:
+
+1. **Primary Information**: The core identity (`catalog_sku`, `catalog_product_name`).
+2. **Secondary Information (Initials)**: The physical classification required for rendering and basic drafting (`catalog_color`, `catalog_pattern`, `catalog_finishing`).
+3. **Tertiary Information (Optional)**: Supplementary metadata (`catalog_dimension_*`, and "Smart Tags" stored within the JSON `catalog_metadata` such as external e-commerce links or ad-hoc pricing).
+
+> [!IMPORTANT]
+> **Auto-Fallback Rule (Canonical Law):** If Primary Information is absent or empty, the UI MUST render Secondary Information in its place with identical typographic prominence (`font-serif`, Lora). A blank display line or dangling `-` separator is a rendering violation.
 
 > [!TIP]
 > **Detailed Documentation**: For a deep dive into naming conventions, snapshotting workflows, and technical details of the Schedule extension, refer to [src/extensions/schedule/README.md](file:///d:/Misc/ProjectsHUB/radsaas-2/src/extensions/schedule/README.md).
