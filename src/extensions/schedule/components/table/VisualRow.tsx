@@ -5,7 +5,7 @@ import { ProductType } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
 import { 
   Edit3, Trash2, Image as ImageIcon, MapPin, Check, X, Loader2, ZoomIn, 
-  ChevronLeft, ChevronRight, GripVertical, Plus, Package
+  ChevronLeft, ChevronRight, GripVertical, Plus, Package, CheckCircle2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { VisualAsset } from "@/components/ui/visual-asset";
@@ -17,6 +17,7 @@ import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 import { 
   UI_ENGINE_RADIUS_CONTROL, 
   UI_ENGINE_RADIUS_ACTION,
@@ -59,6 +60,7 @@ export function VisualRow({
   isSelected,
   onClick
 }: VisualRowProps) {
+  const router = useRouter();
   const {
     attributes,
     listeners,
@@ -84,6 +86,10 @@ export function VisualRow({
   const activeOption = entry.options[activeOptionIndex] || entry.options[0];
   const snapshot = activeOption?.data_snapshot as unknown as ScheduleSnapshot | null;
   const hasMultipleOptions = entry.options.length > 1;
+
+  const effectiveTitle = getEffectiveTitle(snapshot);
+  const primaryMissing = isPlaceholder(snapshot?.catalog_product_name) && isPlaceholder(snapshot?.specs?.catalog_sku);
+
 
   const [sampleModalOpen, setSampleModalOpen] = React.useState(false);
   const [editingLocation, setEditingLocation] = React.useState(false);
@@ -121,6 +127,7 @@ export function VisualRow({
         toast.success(`Deleted ${entry.schedule_code}`);
       }
       onDelete?.(entry.id);
+      router.refresh();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to delete");
     }
@@ -134,6 +141,7 @@ export function VisualRow({
     } finally {
       setIsSavingLocation(false);
       setEditingLocation(false);
+      router.refresh();
     }
   };
 
@@ -204,14 +212,9 @@ export function VisualRow({
             isSelected ? "text-slate-900" : "text-slate-900"
           )}>
             {(() => {
-              const primary = [snapshot?.specs?.catalog_sku, snapshot?.catalog_product_name]
-                .filter(v => v && !isPlaceholder(v) && v.toUpperCase() !== "GENERIC")
-                .join(" - ");
-              
-              const title = primary || (snapshot?.catalog_initials_type || "Reserved Slot");
               return (
                 <div className="flex items-center gap-2">
-                  <span>{title}</span>
+                  <span className={cn(primaryMissing && "text-lg font-bold font-serif")}>{effectiveTitle}</span>
                   <Badge 
                     className={cn(
                       "font-black text-[9px] uppercase tracking-widest px-1.5 py-0.5 border-none",
@@ -290,6 +293,36 @@ export function VisualRow({
                     <div className="w-px h-4 bg-slate-200 mx-1" />
                   </>
                 )}
+
+                {/* Approve Button (Only for non-final options) */}
+                {activeOption && !activeOption.is_final && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const toastId = toast.loading(`Approving ${activeOption.option_label}...`);
+                      try {
+                        const { approveScheduleOptionAction } = await import("@/extensions/schedule/actions/schedule-actions");
+                        unwrapActionResult(await approveScheduleOptionAction({ 
+                          optionId: activeOption.id,
+                          entryId: entry.id
+                        }));
+                        toast.success(`Option ${activeOption.option_label} approved!`, { id: toastId });
+                        router.refresh();
+                      } catch (err: any) {
+                        toast.error(err.message || "Failed to approve", { id: toastId });
+                      }
+                    }}
+                    title="Approve this option"
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all group/approve",
+                      UI_ENGINE_RADIUS_ACTION
+                    )}
+                  >
+                    <CheckCircle2 size={12} strokeWidth={3} className="transition-transform group-hover/approve:scale-110" />
+                    <span className="text-[9px] font-black uppercase tracking-widest">Approve</span>
+                  </button>
+                )}
+
                 <button
                   onClick={(e) => { e.stopPropagation(); onAddAlternative?.(); }}
                   className={cn(
@@ -370,7 +403,7 @@ export function VisualRow({
              const latestRequest = 
                activeOption?.product_requests?.[0] ||
                activeOption?.product_catalog?.product_requests?.[0];
-             const hasActiveRequest = latestRequest && latestRequest.status !== "CANCELLED";
+             const hasActiveRequest = latestRequest && latestRequest.status !== "UNAVAILABLE";
 
              return (
                <div className="flex flex-row items-center gap-2">
@@ -398,15 +431,14 @@ export function VisualRow({
                      UI_ENGINE_RADIUS_CONTROL,
                      latestRequest.status === "RECEIVED"
                        ? "bg-emerald-50 text-emerald-600"
-                       : latestRequest.status === "CANCELLED" || latestRequest.status === "UNAVAILABLE"
+                        : latestRequest.status === "UNAVAILABLE"
                        ? "bg-rose-50 text-rose-500"
                        : "bg-amber-50 text-amber-600"
                    )}>
-                     {latestRequest.status === "RECEIVED" ? "✓ Received"
-                      : latestRequest.status === "ORDERED" ? "Ordered"
-                      : latestRequest.status === "SHIPPED" ? "Shipped"
-                      : latestRequest.status === "UNAVAILABLE" ? "N/A"
-                      : "Requested"}
+                      {latestRequest.status === "RECEIVED" ? "✓ Received"
+                       : latestRequest.status === "IN_PROGRESS" ? "In Progress"
+                       : latestRequest.status === "UNAVAILABLE" ? "N/A"
+                       : "Requested"}
                    </span>
                  )}
                </div>
@@ -469,6 +501,7 @@ export function VisualRow({
         scheduleOptionId={activeOption?.id}
         productNameFallback={snapshot?.catalog_product_name || "Reserved Slot"}
         productCatalogId={activeOption?.product_catalog_id || undefined}
+        onSuccess={() => router.refresh()}
       />
     </div>
   );

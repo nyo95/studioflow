@@ -1,10 +1,11 @@
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 
-const PLACEHOLDERS = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
+const PLACEHOLDERS = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]", "GENERIC", "DRAFT"];
 
 export const isPlaceholder = (val?: string | null) => {
   if (!val) return true;
-  return PLACEHOLDERS.includes(val.trim().toUpperCase());
+  const v = val.trim().toUpperCase();
+  return PLACEHOLDERS.includes(v);
 };
 
 /**
@@ -15,11 +16,14 @@ export const isPlaceholder = (val?: string | null) => {
 export function getEffectiveTitle(snapshot: ScheduleSnapshot | null | undefined): string {
   if (!snapshot) return "Reserved Slot";
 
-  const name = snapshot.catalog_product_name;
-  const sku = snapshot.specs?.catalog_sku;
-  const color = snapshot.specs?.catalog_color;
-  const motif = snapshot.specs?.catalog_motif;
-  const finishing = snapshot.specs?.catalog_finishing;
+  // Handle both legacy and namespaced snapshot formats
+  const legacySpecs = (snapshot as any)?.specs || {};
+  
+  const name = snapshot.catalog_product_name || legacySpecs.catalog_product_name;
+  const sku = snapshot.specs?.catalog_sku || legacySpecs.catalog_sku;
+  const color = snapshot.specs?.catalog_color || legacySpecs.catalog_color || (snapshot as any).catalog_color;
+  const motif = snapshot.specs?.catalog_motif || legacySpecs.catalog_motif || (snapshot as any).catalog_motif;
+  const finishing = snapshot.specs?.catalog_finishing || legacySpecs.catalog_finishing || (snapshot as any).catalog_finishing;
 
   // Primary Identity
   const primary = !isPlaceholder(name) ? name : (!isPlaceholder(sku) ? sku : null);

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Check, X, Clock, ChevronRight, Image as ImageIcon } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -68,6 +69,19 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
 
   const pendingRequests = requests.filter(r => r.status === "PENDING");
   const processedRequests = requests.filter(r => r.status !== "PENDING");
+
+  const [showHistory, setShowHistory] = React.useState(false);
+
+  const displayedProcessedRequests = React.useMemo(() => {
+    if (!showHistory) return [];
+    return processedRequests.filter(req => {
+      if (!req.reviewed_at) return true; // Show if no date (fallback)
+      const reviewDate = new Date(req.reviewed_at);
+      const diffTime = Math.abs(Date.now() - reviewDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 7;
+    });
+  }, [processedRequests, showHistory]);
 
   if (requests.length === 0) {
     return (
@@ -179,10 +193,18 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
             <Badge variant="ghost" className="font-sans text-[10px]">
               {processedRequests.length}
             </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowHistory(!showHistory)}
+              className={cn("ml-auto text-[10px] h-7 px-2 uppercase tracking-wider font-bold", UI_ENGINE_RADIUS_CONTROL)}
+            >
+              {showHistory ? "Hide History" : "Show History"}
+            </Button>
           </div>
 
           <div className="space-y-2">
-            {processedRequests.map((req) => (
+            {displayedProcessedRequests.map((req) => (
               <div
                 key={req.id}
                 className={cn(

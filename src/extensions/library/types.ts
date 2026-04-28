@@ -22,7 +22,9 @@ export type ProjectProductRequestWithDetails = Prisma.ProjectProductRequestGetPa
       } 
     },
     requested_by: true,
-    project: true
+    project: true,
+    schedule_entry: true,
+    schedule_option: true
   };
 }>;
 

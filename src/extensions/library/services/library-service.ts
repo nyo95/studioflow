@@ -734,6 +734,8 @@ export class LibraryService {
         },
         requested_by: true,
         project: true,
+        schedule_entry: true,
+        schedule_option: true,
       },
       orderBy: { created_at: "desc" },
     });
@@ -759,6 +761,8 @@ export class LibraryService {
         },
         requested_by: true,
         project: true,
+        schedule_entry: true,
+        schedule_option: true,
       },
       orderBy: { created_at: "desc" },
     });
@@ -802,6 +806,8 @@ export class LibraryService {
         },
         requested_by: true,
         project: true,
+        schedule_entry: true,
+        schedule_option: true,
       },
     });
 
@@ -844,6 +850,8 @@ export class LibraryService {
         },
         requested_by: true,
         project: true,
+        schedule_entry: true,
+        schedule_option: true,
       },
     });
 
@@ -875,6 +883,8 @@ export class LibraryService {
         },
         requested_by: true,
         project: true,
+        schedule_entry: true,
+        schedule_option: true,
       },
     });
 

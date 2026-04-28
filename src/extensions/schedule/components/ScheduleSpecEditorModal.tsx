@@ -20,8 +20,10 @@ import {
   Building2,
   Layers,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Edit3
 } from "lucide-react";
+import { getEffectiveTitle, isPlaceholder } from "../lib/display-utils";
 import { TagInput } from "@/components/ui/tag-input";
 import { cn } from "@/lib/utils";
 import { OptimizedUploader } from "@/components/ui/optimized-uploader";
@@ -157,10 +159,8 @@ export function ScheduleSpecEditorModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialSnapshot]); // Only re-run when opened or if the snapshot actually changes
 
-  const placeholders = ["N/A", "UNKNOWN", "PENDING", "-", "—", "[RESERVED]"];
-  const isPlaceholder = (val?: string | null) => !val || placeholders.includes(val.trim().toUpperCase());
 
-  const hasPrimaryIdentity = !isPlaceholder(form.catalog_sku) || !isPlaceholder(form.catalog_product_name);
+  const hasPrimaryIdentity = !isPlaceholder(form.catalog_sku) && !isPlaceholder(form.catalog_product_name);
   const isBrandComplete = !isPlaceholder(form.catalog_brand);
   
   const isPrimaryComplete = hasPrimaryIdentity && isBrandComplete;
@@ -363,7 +363,19 @@ export function ScheduleSpecEditorModal({
                   Managing snapshot {initialSnapshot.schedule_code ? `for ${initialSnapshot.schedule_code}` : "details"} in this project.
                 </DialogDescription>
               </div>
-<div className="flex items-center gap-3">
+                <div className="flex items-center gap-3">
+                  {!isEditMode && (
+                    <Button
+                      onClick={() => setIsEditMode(true)}
+                      className={cn(
+                        "h-10 px-4 bg-slate-50 text-slate-900 border border-slate-200 hover:bg-slate-900 hover:text-white transition-all gap-2 shadow-sm font-black text-[10px] uppercase tracking-widest",
+                        UI_ENGINE_RADIUS_ACTION
+                      )}
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Modify
+                    </Button>
+                  )}
                   <Button 
                     variant="ghost" 
                     size="icon" 
@@ -372,7 +384,7 @@ export function ScheduleSpecEditorModal({
                   >
                     <X className="h-5 w-5" />
                   </Button>
-              </div>
+                </div>
             </DialogHeader>
 
             <ScrollArea className="flex-1">

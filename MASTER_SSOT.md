@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 2.4.0 (v2.0.2 - 3-Tier Information Hierarchy Formalized)
-> **Last Updated:** April 28, 2026 (v2.0.2 - 3-Tier Information Hierarchy Formalized)
+> **Document Version:** 2.4.3 (v2.0.5 - Actionable Default UI)
+> **Last Updated:** April 28, 2026 (v2.0.5 - Actionable Default UI)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -173,6 +173,25 @@ To maintain consistency across all CRUD modals (`LibraryFormModal`, `ScheduleSpe
 
 > [!TIP]
 > **Detailed Documentation**: For a deep dive into naming conventions, snapshotting workflows, and technical details of the Schedule extension, refer to [src/extensions/schedule/README.md](file:///d:/Misc/ProjectsHUB/radsaas-2/src/extensions/schedule/README.md).
+
+### 5.5 Context-Aware Request Rendering
+To ensure the Procurement/Librarian team has sufficient context for project-specific requests, the `ProjectProductRequest` UI MUST adhere to the following rendering logic:
+
+1. **Schedule Context Binding**: If a request is linked to a `ProjectScheduleEntry`, the **Schedule Code** (e.g., `PT-01`) MUST be displayed as a primary identifier badge.
+2. **3-Tier Identity Fallback**: The request title MUST follow the **3-Tier Hierarchy Protocol**. 
+    - If the product is a "Reserved Slot" or has a placeholder name (e.g., `[RESERVED]`), the UI MUST promote the **Secondary Information** (Color/Motif/Finish) from the snapshot as the primary request label.
+3. **Brand Persistence**: The brand/vendor name MUST be extracted from the snapshot metadata if not explicitly linked to a catalog item, ensuring "Custom Source" is only used as a final fallback.
+4. **Lean Request Workflow (v2.4.2)**: To optimize for small/lean teams, the request status lifecycle is simplified to 4 core states:
+    - **REQUESTED**: Initial submission by designer.
+    - **IN_PROGRESS**: Sample has been ordered or is in transit (merges legacy Ordered/Shipped).
+    - **RECEIVED**: Sample has arrived at the studio (Terminal).
+    - **UNAVAILABLE**: Sample cannot be fulfilled or has been cancelled (Terminal).
+5. **Actionable Default UI (v2.4.3)**: To maintain a clean workspace, the UI for both Promotion Queue and Product Requests MUST follow these visibility rules:
+    - **Default Visibility**: Only "Active" items (PENDING, REQUESTED, IN_PROGRESS) are shown by default.
+    - **Terminal State Auto-Hide**: Items in terminal states (Approved/Rejected, Received/Unavailable) are hidden from the main list automatically.
+    - **History Toggle**: A "Show History" toggle MUST be provided to view completed items.
+    - **7-Day Retention**: The "History" view MUST only display items that reached a terminal state within the last 7 days. Older items are persisted in the database but removed from the UI to prevent clutter.
+6. **Data Fetching**: All request retrieval services (`LibraryService.getAllProductRequests`) MUST include `schedule_entry` and `schedule_option` relations.
 
 ### 5.2 Explicit Promotion Pattern
 - **Local by Default:** New materials added to the scheduler are local to the project.

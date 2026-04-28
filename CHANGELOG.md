@@ -1,5 +1,46 @@
 # StudioFlow Development Log (Changelog)
 
+## [v2.6.3] — 2026-04-28 (Actionable Default UI)
+
+### UI Changes
+- **"Actionable Default" Pattern**: Implemented a cleaner workspace by hiding completed/terminal items by default in both **Promotion Queue** and **Product Requests**.
+- **History Toggle**: Added a "Show History" button to allow on-demand viewing of recently completed tasks.
+- **Auto-Cleanup Logic**: Implemented a 7-day retention rule for the History view. Items older than 7 days are automatically removed from the UI (but preserved in database) to maintain focus on current work.
+- **Queue Transparency**: Fixed a bug where approval metadata (Who & When) was missing in the processed list.
+
+### Documentation
+- **SSOT v2.4.3**: Formalized the "Actionable Default UI" principles in Section 5.5.
+
+## [v2.6.2] — 2026-04-28 (Lean Request Workflow)
+
+### Backend Changes
+- **Prisma Schema Simplification**: Consolidated `ProductRequestStatus` enum from 6 states down to 4 (`REQUESTED`, `IN_PROGRESS`, `RECEIVED`, `UNAVAILABLE`) to optimize for lean team operations.
+- **Database Alignment**: Executed schema push to merge legacy statuses (`ORDERED`/`SHIPPED` → `IN_PROGRESS` and `CANCELLED` → `UNAVAILABLE`).
+
+### UI Changes
+- **Status Unification**: Updated `ProductRequestTable`, `ScheduleRow`, and `VisualRow` to use the new simplified status lifecycle.
+- **Improved Interaction**: Reduced cognitive load in the "Set Status" dropdown by consolidating transitionary states.
+
+### Documentation
+- **SSOT v2.4.2**: Formalized the "Lean Request Workflow" in Section 5.5.
+
+## [v2.6.1] — 2026-04-28 (Context-Aware Request Rendering)
+
+### Backend Changes
+- **Library Service Enhancement**: Updated `getAllProductRequests` and `getProjectProductRequests` to include `schedule_entry` and `schedule_option` relations. This provides the Procurement team with exact project schedule context (Code & Specs) for each request.
+- **Type Safety**: Updated `ProjectProductRequestWithDetails` type definition to reflect the new relational data.
+
+### UI Changes
+- **Product Request Table**: 
+    - **Contextual Binding**: Integrated **Schedule Codes** (e.g., `PT-01`) directly into the "Product Requested" column as high-visibility badges.
+    - **3-Tier Hierarchy Implementation**: Replaced placeholder `[RESERVED]` labels with the **Effective Title** (promoting secondary specs like color/motif) using the canonical `getEffectiveTitle` utility.
+    - **Metadata Enrichment**: Improved brand/vendor rendering by extracting data from snapshots when library links are missing, reducing "Custom Source" fallbacks.
+- **Schedule Logic**: Standardized `ScheduleRow` to pass the effective title as the fallback name during sample request creation.
+- **Board View (ScheduleCard)**: Synchronized title rendering logic with the 3-Tier Hierarchy for visual consistency across views.
+
+### Documentation
+- **SSOT v2.4.1**: Formalized Section 5.5 ("Context-Aware Request Rendering") in `MASTER_SSOT.md`.
+
 ## [v2.6.0] — 2026-04-28 (Architectural Stabilization Finalized)
 
 ### Backend Changes

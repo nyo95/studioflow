@@ -248,7 +248,7 @@ export function ProjectScheduleMain({
         entryId,
         data: { schedule_location: location || null }
       }));
-      fetchSchedule(activeSection);
+      handleRefresh();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to update location");
     }
@@ -263,7 +263,7 @@ export function ProjectScheduleMain({
         toCategory,
         newIndex
       }));
-      fetchSchedule(activeSection);
+      handleRefresh();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to move item");
     }
@@ -299,7 +299,7 @@ export function ProjectScheduleMain({
 
       toast.success(`Deleted ${selectedIds.size} items`, { id: toastId });
       setSelectedIds(new Set());
-      fetchSchedule(activeSection);
+      handleRefresh();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Bulk delete failed");
     } finally {
@@ -467,7 +467,7 @@ export function ProjectScheduleMain({
                     });
                   }
                 }}
-                onDeleteEntry={() => fetchSchedule(activeSection)}
+                onDeleteEntry={handleRefresh}
               />
             ) : (
               <DndContext
@@ -489,7 +489,7 @@ export function ProjectScheduleMain({
                       });
                     }
                   }}
-                  onDeleteEntry={() => fetchSchedule(activeSection)}
+                  onDeleteEntry={handleRefresh}
                   onAddAlternative={(entryId, category) => setPickerModal({
                     isOpen: true,
                     entryId,

@@ -18,6 +18,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ProjectScheduleEntryWithRelations } from "../../types";
+import { getEffectiveTitle, isPlaceholder } from "../../lib/display-utils";
+import { useRouter } from "next/navigation";
 import { 
   UI_ENGINE_RADIUS_CONTROL,
   UI_ENGINE_RADIUS_CARD,
@@ -46,6 +48,7 @@ interface ScheduleRowProps {
 }
 
 export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdateQty, onAddAlternative, section = ProductType.material }: ScheduleRowProps) {
+  const router = useRouter();
   const {
     attributes,
     listeners,
@@ -72,6 +75,9 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
   const activeOption = entry.options[activeOptionIndex] || entry.options[0];
   const snapshot = activeOption?.data_snapshot as unknown as ScheduleSnapshot | null;
   const hasMultipleOptions = entry.options.length > 1;
+
+  const effectiveTitle = getEffectiveTitle(snapshot);
+  const primaryMissing = isPlaceholder(snapshot?.catalog_product_name) && isPlaceholder(snapshot?.specs?.catalog_sku);
 
   const handleNextOption = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -105,6 +111,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
       }
       // Call the parent onDelete to refresh the list
       onDelete?.(entry.id);
+      router.refresh();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to delete");
     }
@@ -129,6 +136,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
     } finally {
       setIsSavingLocation(false);
       setEditingLocation(false);
+      router.refresh();
     }
   };
 
@@ -221,7 +229,9 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
 
           <div className="min-w-0">
             <div className={cn("font-serif text-sm font-semibold text-slate-900 leading-tight flex items-center gap-2")}>
-              <span className="truncate max-w-[240px]">{snapshot?.catalog_product_name || "Unspecified Product"}</span>
+              <span className={cn("truncate max-w-[240px]", primaryMissing && "text-lg font-bold font-serif")}>
+                {effectiveTitle}
+              </span>
               <Badge 
                 className={cn(
                   "font-black text-[8px] uppercase tracking-widest px-1.5 py-0.5 border-none",
@@ -284,6 +294,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
                         entryId: entry.id
                       }));
                       toast.success(`Option ${activeOption.option_label} approved!`, { id: toastId });
+                      router.refresh();
                     } catch (err: any) {
                       toast.error(err.message || "Failed to approve", { id: toastId });
                     }
@@ -397,7 +408,7 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
             const latestRequest = 
               activeOption?.product_requests?.[0] ||
               activeOption?.product_catalog?.product_requests?.[0];
-            const hasActiveRequest = latestRequest && latestRequest.status !== "CANCELLED";
+            const hasActiveRequest = latestRequest && latestRequest.status !== "UNAVAILABLE";
             
             return (
               <div className="flex flex-row items-center gap-2">
@@ -425,13 +436,12 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
                     UI_ENGINE_RADIUS_CONTROL,
                     latestRequest.status === "RECEIVED" 
                       ? "bg-emerald-50 text-emerald-600"
-                      : latestRequest.status === "CANCELLED" || latestRequest.status === "UNAVAILABLE"
+                      : latestRequest.status === "UNAVAILABLE"
                       ? "bg-rose-50 text-rose-500"
                       : "bg-amber-50 text-amber-600"
                   )}>
                     {latestRequest.status === "RECEIVED" ? "Received" 
-                     : latestRequest.status === "ORDERED" ? "Ordered"
-                     : latestRequest.status === "SHIPPED" ? "Shipped"
+                     : latestRequest.status === "IN_PROGRESS" ? "In Progress"
                      : latestRequest.status === "UNAVAILABLE" ? "N/A"
                      : "Requested"}
                   </span>
@@ -487,8 +497,9 @@ export function ScheduleRow({ entry, onEdit, onDelete, onUpdateLocation, onUpdat
         projectId={entry.project_id}
         scheduleEntryId={entry.id}
         scheduleOptionId={activeOption?.id}
-        productNameFallback={snapshot?.catalog_product_name || "Unspecified Product"}
+        productNameFallback={effectiveTitle}
         productCatalogId={activeOption?.product_catalog_id || undefined}
+        onSuccess={() => router.refresh()}
       />
     </tr>
   );

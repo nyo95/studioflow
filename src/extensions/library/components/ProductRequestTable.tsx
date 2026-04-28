@@ -26,15 +26,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProjectProductRequestWithDetails } from "../types";
 import { updateProductRequestStatusAction, deleteProjectProductRequestAction } from "../actions/library-actions";
-import { unwrapActionResult } from "@/lib/result";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { unwrapActionResult } from "@/lib/result";
+import { getEffectiveTitle } from "../../schedule/lib/display-utils";
+import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 import {
   UI_ENGINE_BG_SUBTLE,
   UI_ENGINE_BORDER_SUBTLE,
   UI_ENGINE_RADIUS_ACTION,
   UI_ENGINE_RADIUS_CARD,
   UI_ENGINE_RADIUS_CONTROL,
+  UI_ENGINE_TYPE_META,
 } from "@/ui_engine";
 import { 
   DropdownMenu, 
@@ -53,15 +56,33 @@ interface ProductRequestTableProps {
 
 const STATUS_CONFIG: Record<ProductRequestStatus, { label: string; color: string; icon: LucideIcon }> = {
   REQUESTED: { label: "Requested", color: "bg-slate-50 text-slate-900 border-slate-200", icon: ArrowRightCircle },
-  ORDERED: { label: "Ordered", color: "bg-amber-50 text-amber-700 border-amber-100", icon: History },
-  SHIPPED: { label: "Shipped", color: "bg-purple-50 text-purple-700 border-purple-100", icon: Box },
+  IN_PROGRESS: { label: "In Progress", color: "bg-amber-50 text-amber-700 border-amber-100", icon: History },
   RECEIVED: { label: "Received", color: "bg-emerald-50 text-emerald-700 border-emerald-100", icon: CheckCircle2 },
   UNAVAILABLE: { label: "Unavailable", color: "bg-rose-50 text-rose-700 border-rose-100", icon: AlertCircle },
-  CANCELLED: { label: "Cancelled", color: "bg-slate-50 text-slate-700 border-transparent", icon: AlertCircle },
 };
 
 export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRequestTableProps) {
   const [updatingId, setUpdatingId] = React.useState<string | null>(null);
+  const [showHistory, setShowHistory] = React.useState(false);
+
+  const { activeRequests, displayedHistory } = React.useMemo(() => {
+    const active = requests.filter(r => r.status === "REQUESTED" || r.status === "IN_PROGRESS");
+    const history = requests.filter(r => r.status === "RECEIVED" || r.status === "UNAVAILABLE");
+    
+    const filteredHistory = history.filter(req => {
+      const updateDate = new Date(req.updated_at);
+      const diffTime = Math.abs(Date.now() - updateDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 7;
+    });
+
+    return { 
+      activeRequests: active, 
+      displayedHistory: showHistory ? filteredHistory : [] 
+    };
+  }, [requests, showHistory]);
+
+  const allDisplayed = [...activeRequests, ...displayedHistory];
 
   async function handleStatusUpdate(id: string, newStatus: ProductRequestStatus) {
     setUpdatingId(id);
@@ -90,20 +111,48 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
     }
   }
 
-  if (requests.length === 0) {
+  if (activeRequests.length === 0 && displayedHistory.length === 0) {
     return (
-      <div className="py-24 text-center animate-in fade-in duration-500">
-        <div className={cn("h-16 w-16 flex items-center justify-center mx-auto mb-4", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_ACTION)}>
-          <Box className="h-6 w-6 text-slate-200" />
+      <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in duration-500">
+        <div className={cn("h-16 w-16 flex items-center justify-center mb-6", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
+          <Box className="h-8 w-8 text-slate-200" />
         </div>
-        <h3 className="font-serif text-lg text-slate-900 mb-1">No requests active</h3>
-        <p className="text-sm text-slate-400 font-sans font-medium tracking-tight">Project product requests will appear here for review.</p>
+        <h3 className="font-serif text-lg font-medium text-slate-900 mb-2">No active requests</h3>
+        <p className="text-sm text-slate-400 max-w-xs">
+          Project product requests will appear here for review.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowHistory(!showHistory)}
+          className={cn("mt-6 text-[10px] h-8 px-3 uppercase tracking-wider font-bold", UI_ENGINE_RADIUS_CONTROL)}
+        >
+          {showHistory ? "Hide History" : "Show History"}
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className={cn("border bg-white overflow-hidden shadow-sm", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-3">
+          <h2 className="font-serif text-lg font-medium text-slate-900">Material Requests</h2>
+          <Badge variant="outline" className={cn("font-sans", UI_ENGINE_TYPE_META)}>
+            {activeRequests.length}
+          </Badge>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowHistory(!showHistory)}
+          className={cn("text-[10px] h-8 px-3 uppercase tracking-wider font-bold text-slate-400 hover:text-slate-900", UI_ENGINE_RADIUS_CONTROL)}
+        >
+          {showHistory ? "Hide History" : "Show History"}
+        </Button>
+      </div>
+
+      <div className={cn("border bg-white overflow-hidden shadow-sm", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
       <Table>
         <TableHeader>
           <TableRow className={cn("hover:bg-transparent h-14 border-b", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
@@ -115,7 +164,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
           </TableRow>
         </TableHeader>
         <TableBody>
-          {requests.map((req) => {
+          {allDisplayed.map((req) => {
             const config = STATUS_CONFIG[req.status] || STATUS_CONFIG.REQUESTED;
             const StatusIcon = config.icon;
             const mat = req.product_catalog;
@@ -145,12 +194,25 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                       )}
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-serif font-medium text-slate-900 text-xs">
-                        {mat?.catalog_sku || req.custom_product_name || "Custom Product"}
-                        {!mat && <Badge className="ml-2 bg-amber-50 text-amber-600 border-none text-[8px] h-4 px-1">Manual</Badge>}
-                      </span>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        {req.schedule_entry && (
+                          <Badge variant="outline" className="h-4 px-1 text-[8px] font-black bg-slate-900 text-white border-none uppercase tracking-tighter">
+                            {req.schedule_entry.schedule_prefix}-{req.schedule_entry.schedule_increment}
+                          </Badge>
+                        )}
+                        <span className="font-serif font-medium text-slate-900 text-xs">
+                          {mat ? (
+                            mat.catalog_sku || mat.catalog_product_name
+                          ) : req.schedule_option?.data_snapshot ? (
+                            getEffectiveTitle(req.schedule_option.data_snapshot as unknown as ScheduleSnapshot)
+                          ) : (
+                            req.custom_product_name || "Custom Product"
+                          )}
+                          {!mat && <Badge className="ml-1.5 bg-amber-50 text-amber-600 border-none text-[8px] h-4 px-1">Manual</Badge>}
+                        </span>
+                      </div>
                       <span className="text-[10px] text-slate-400 font-sans uppercase tracking-widest font-bold">
-                        {mat?.catalog_brand || mat?.vendor?.brand_name || "Custom Source"}
+                        {mat?.catalog_brand || mat?.vendor?.brand_name || (req.schedule_option?.data_snapshot as any)?.catalog_brand || "Custom Source"}
                       </span>
                     </div>
                   </div>
@@ -239,6 +301,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }

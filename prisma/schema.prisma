@@ -483,11 +483,9 @@ enum LibraryItemStatus {
 
 enum ProductRequestStatus {
   REQUESTED
-  ORDERED
-  SHIPPED
+  IN_PROGRESS
   RECEIVED
   UNAVAILABLE
-  CANCELLED
 }
 
 enum ScheduleOptionStatus {

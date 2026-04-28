@@ -13,6 +13,7 @@ import { deleteScheduleEntryAction, deleteScheduleOptionAction } from "@/extensi
 import type { ProjectScheduleEntry, ProjectScheduleOption } from "@/generated/prisma";
 import type { ProjectScheduleEntryWithRelations } from "../../types";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
+import { getEffectiveTitle } from "../../lib/display-utils";
 
 interface ScheduleCardProps {
   entry: ProjectScheduleEntryWithRelations;
@@ -114,9 +115,7 @@ export function ScheduleCard({ entry, onEdit, onDelete }: ScheduleCardProps) {
                 </div>
               </div>
               <h4 className="font-serif text-sm font-semibold text-slate-900 leading-tight truncate">
-                {(snapshot?.catalog_product_name && snapshot.catalog_product_name !== "[RESERVED]") 
-                  ? snapshot.catalog_product_name 
-                  : (snapshot?.catalog_initials_type || "Reserved Slot")}
+                {getEffectiveTitle(snapshot)}
               </h4>
               <p className="font-sans text-[11px] text-slate-500 truncate mt-0.5">
                 {snapshot?.catalog_brand || "No Brand"}
