@@ -95,6 +95,8 @@ export const projectService = {
 
     const phases: Array<{ id: string; name_enum: PhaseName }> = [];
     for (const p of PHASE_ORDER) {
+      const isParallel = ["LAYOUT", "DESIGN_3D", "CD"].includes(p.name);
+      
       const phase = await tx.phase.create({
         data: {
           project_id: project.id,
@@ -102,6 +104,7 @@ export const projectService = {
           status_enum: p.index === 1 ? PhaseStatus.IN_PROGRESS : PhaseStatus.PENDING,
           order_index: p.index,
           is_locked: false,
+          allow_parallel: isParallel,
         },
       });
       phases.push({ id: phase.id, name_enum: phase.name_enum });
