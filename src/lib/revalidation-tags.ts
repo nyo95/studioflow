@@ -4,12 +4,14 @@ export const REVALIDATE_ACTIVITY = "activity";
 export const REVALIDATE_SETTINGS = "settings";
 export const REVALIDATE_TODAY = "today";
 export const REVALIDATE_PROJECT = "project";
+export const REVALIDATE_PROJECTS = "projects";
 export const REVALIDATE_LIBRARY = "library";
 export const REVALIDATE_CUSTOM = "custom";
 
 export const REVALIDATION_PATHS = {
   [REVALIDATE_HOME]: [{ path: "/" }],
   [REVALIDATE_HOME_LAYOUT]: [{ path: "/", type: "layout" as const }],
+  [REVALIDATE_PROJECTS]: [{ path: "/projects" }],
   [REVALIDATE_ACTIVITY]: [{ path: "/activity" }],
   [REVALIDATE_LIBRARY]: [
     { path: "/extensions/library" },

@@ -313,7 +313,7 @@ export class LibraryService {
       vendorId?: string; 
       search?: string; 
       hasPhysicalOnly?: boolean; 
-      status?: LibraryItemStatus;
+      status?: LibraryItemStatus | LibraryItemStatus[];
       type?: ProductType;
       page?: number;
       pageSize?: number;

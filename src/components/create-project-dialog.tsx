@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Building, Folder, Calendar } from "lucide-react";
 import { bootstrapProject } from "@/actions/project-actions";
+import { unwrapActionResult } from "@/lib/result";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { format } from "date-fns";
 
@@ -86,14 +87,14 @@ export function CreateProjectDialog({
     }
 
     try {
-      await bootstrapProject({
+      unwrapActionResult(await bootstrapProject({
         name: name.trim(),
         pic_designer_id,
         pic_drafter_id,
         client_name: client_name || undefined,
         opening_date: opening_date ? new Date(opening_date) : undefined,
         core_project_type: "RETAIL", // default
-      });
+      }));
       setOpen(false);
       router.refresh(); // Refresh the page to see the new project
     } catch (err: unknown) {

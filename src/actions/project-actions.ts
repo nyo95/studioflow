@@ -4,7 +4,7 @@ import { createAction } from "@/lib/action-wrapper";
 import { projectService } from "@/lib/services/project-service";
 import { assertAdmin, getProjectMetadataAccessOrThrow, getProjectSyncChecklistAccessOrThrow } from "@/core/rbac/permissions";
 import { invalidateCache } from "@/lib/revalidation";
-import { REVALIDATE_ACTIVITY, REVALIDATE_HOME, REVALIDATE_PROJECT } from "@/lib/revalidation-tags";
+import { REVALIDATE_ACTIVITY, REVALIDATE_HOME, REVALIDATE_PROJECT, REVALIDATE_PROJECTS } from "@/lib/revalidation-tags";
 import { 
   BootstrapProjectSchema, 
   UpdateProjectMetadataSchema, 
@@ -22,6 +22,7 @@ export const bootstrapProject = createAction(
     });
 
     invalidateCache({ scope: REVALIDATE_HOME });
+    invalidateCache({ scope: REVALIDATE_PROJECTS });
     invalidateCache({ scope: REVALIDATE_PROJECT, id: result.id });
 
     return result;
@@ -40,6 +41,7 @@ export const updateProjectMetadata = createAction(
     });
 
     invalidateCache({ scope: REVALIDATE_HOME });
+    invalidateCache({ scope: REVALIDATE_PROJECTS });
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
     invalidateCache({ scope: REVALIDATE_ACTIVITY });
 
@@ -59,6 +61,7 @@ export const updateProjectPriority = createAction(
     });
 
     invalidateCache({ scope: REVALIDATE_HOME });
+    invalidateCache({ scope: REVALIDATE_PROJECTS });
 
     return result;
   },
@@ -91,6 +94,7 @@ export const deleteProject = createAction(
     });
 
     invalidateCache({ scope: REVALIDATE_HOME });
+    invalidateCache({ scope: REVALIDATE_PROJECTS });
 
     return result;
   },
@@ -107,6 +111,7 @@ export const completeProject = createAction(
     });
 
     invalidateCache({ scope: REVALIDATE_HOME });
+    invalidateCache({ scope: REVALIDATE_PROJECTS });
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
 
     return result;

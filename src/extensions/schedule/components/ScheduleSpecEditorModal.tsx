@@ -120,7 +120,7 @@ export function ScheduleSpecEditorModal({
     catalog_color: initialSnapshot.specs?.catalog_color || "",
     catalog_finishing: initialSnapshot.specs?.catalog_finishing || "",
     catalog_dimensions: initialSnapshot.specs?.catalog_dimensions || "",
-    catalog_structured_tags: initialSnapshot.specs?.catalog_structured_tags || []
+    catalog_structured_tags: initialSnapshot.specs?.catalog_structured_tags || [],
   });
 
   React.useEffect(() => {
@@ -364,18 +364,20 @@ export function ScheduleSpecEditorModal({
                 </DialogDescription>
               </div>
                 <div className="flex items-center gap-3">
-                  {!isEditMode && (
-                    <Button
-                      onClick={() => setIsEditMode(true)}
-                      className={cn(
-                        "h-10 px-4 bg-slate-50 text-slate-900 border border-slate-200 hover:bg-slate-900 hover:text-white transition-all gap-2 shadow-sm font-black text-[10px] uppercase tracking-widest",
-                        UI_ENGINE_RADIUS_ACTION
-                      )}
-                    >
-                      <Edit3 className="h-3.5 w-3.5" />
-                      Modify
-                    </Button>
-                  )}
+                  <Button
+                    variant={isEditMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className={cn(
+                      "h-8 px-4 text-[10px] font-black uppercase tracking-widest transition-all",
+                      isEditMode 
+                        ? "bg-slate-900 text-white border-transparent" 
+                        : "bg-white text-slate-900 border-slate-200 hover:border-slate-900",
+                      UI_ENGINE_RADIUS_ACTION
+                    )}
+                  >
+                    {isEditMode ? <><Save className="h-3 w-3 mr-2" /> Editing</> : <><Edit3 className="h-3 w-3 mr-2" /> Modify</>}
+                  </Button>
                   <Button 
                     variant="ghost" 
                     size="icon" 
@@ -574,21 +576,21 @@ export function ScheduleSpecEditorModal({
                                <span className="text-sm font-medium text-slate-600">{form.catalog_motif || "—"}</span>
                              </div>
                            </div>
-                           <div className="space-y-1">
-                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Finishing</span>
-                             <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
-                               <Sparkles className="h-4 w-4 text-slate-400" />
-                               <span className="text-sm font-medium text-slate-600">{form.catalog_finishing || "—"}</span>
-                             </div>
-                           </div>
-                        </div>
-                        <div className="space-y-1">
-                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Dimensions</span>
-                             <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
-                               <Ruler className="h-4 w-4 text-slate-400" />
-                               <span className="text-sm font-medium text-slate-600">{form.catalog_dimensions || "Standard Dimensions"}</span>
-                             </div>
-                        </div>
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Finishing</span>
+                              <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                                <Sparkles className="h-4 w-4 text-slate-400" />
+                                <span className="text-sm font-medium text-slate-600">{form.catalog_finishing || "—"}</span>
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block ml-1">Dimensions</span>
+                              <div className={cn("p-5 border flex items-center gap-3", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                                <Ruler className="h-4 w-4 text-slate-400" />
+                                <span className="text-sm font-medium text-slate-600">{form.catalog_dimensions || "Standard Dimensions"}</span>
+                              </div>
+                            </div>
+                         </div>
                       </div>
 
                       {/* Tags & Context */}
@@ -608,7 +610,6 @@ export function ScheduleSpecEditorModal({
                         </div>
                       )}
                     </div>
-                  </div>
                 )}
               </div>
             </ScrollArea>

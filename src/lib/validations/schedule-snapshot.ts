@@ -36,25 +36,22 @@ export const ScheduleSnapshotSchema = z.object({
   schedule_code: z.string().nullable().optional(),
   snapshot_captured_at: z.string().datetime().or(z.string()), 
 }).superRefine((data, ctx) => {
-  const hasSku = !!data.specs.catalog_sku?.trim() && 
-                 data.specs.catalog_sku !== "Generic" && 
-                 data.specs.catalog_sku !== "DRAFT" && 
-                 data.specs.catalog_sku !== "N/A";
+  const sku = data.specs.catalog_sku?.trim();
+  const name = data.catalog_product_name?.trim();
+  const brand = data.catalog_brand?.trim();
   
-  const hasName = !!data.catalog_product_name?.trim() && 
-                  data.catalog_product_name !== "Manual Item" && 
-                  data.catalog_product_name !== "New Item" && 
-                  data.catalog_product_name !== "[RESERVED]";
-  
-  const hasIdentity = hasSku || hasName;
+  const hasPrimary = (sku && !["Generic", "DRAFT", "N/A"].includes(sku)) || 
+                     (name && !["Manual Item", "New Item", "[RESERVED]"].includes(name)) ||
+                     (brand && !["Custom", "Generic", "PENDING"].includes(brand));
+
   const hasSecondary = !!data.specs.catalog_color?.trim() || 
                        !!data.specs.catalog_motif?.trim() || 
                        !!data.specs.catalog_finishing?.trim();
 
-  if (!hasIdentity && !hasSecondary) {
+  if (!hasPrimary && !hasSecondary) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "At least (SKU or Name) or (Color/Motif/Finishing) must be provided.",
+      message: "At least one Primary (Name/SKU/Brand) or Secondary (Color/Motif/Finishing) data point must be provided for draft entries.",
       path: ["catalog_product_name"],
     });
   }

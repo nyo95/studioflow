@@ -17,7 +17,8 @@ import {
   Layers, 
   Fingerprint, 
   Plus, 
-  Loader2 
+  Loader2,
+  Terminal
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -50,10 +51,9 @@ interface QuickDraftDialogProps {
   projectId: string;
   section: ProductType;
   initialValue: string;
+  preParsedData?: Record<string, string>;
   onSuccess?: () => void;
 }
-
-type Classification = "color" | "motif" | "finishing";
 
 export function QuickDraftDialog({ 
   isOpen, 
@@ -61,19 +61,25 @@ export function QuickDraftDialog({
   projectId, 
   section, 
   initialValue,
+  preParsedData,
   onSuccess
 }: QuickDraftDialogProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   // Form State
-  const [productName, setProductName] = React.useState(initialValue);
+  const [productName, setProductName] = React.useState("");
+  const [sku, setSku] = React.useState("");
   const [color, setColor] = React.useState("");
   const [pattern, setPattern] = React.useState("");
   const [finishing, setFinishing] = React.useState("");
   const [category, setCategory] = React.useState("");
   const [brand, setBrand] = React.useState("");
   const [imageUrl, setImageUrl] = React.useState<string | null>(null);
+  
+  // Tertiary
+  const [dimension, setDimension] = React.useState("");
+  const [link, setLink] = React.useState("");
 
   // Suggestions
   const [categories, setCategories] = React.useState<string[]>([]);
@@ -83,17 +89,29 @@ export function QuickDraftDialog({
     if (isOpen) {
       loadData();
       
-      const v = initialValue.toLowerCase();
-      const isPattern = /(kayu|wood|jati|oak|pine|maple|walnut|marble|marmer|stone|batu|terrazzo|concrete|beton|pattern|motif)/.test(v);
-      const isFinishing = /(matte|glossy|doff|polished|honed|satin|brushed|texture|finishing)/.test(v);
-      const isColor = /(hitam|putih|merah|kuning|hijau|biru|coklat|grey|abu|black|white|red|yellow|green|blue|brown|gold|silver|bronze)/.test(v);
+      if (preParsedData) {
+        setProductName(preParsedData.name || "");
+        setSku(preParsedData.sku || "");
+        setBrand(preParsedData.brand || "");
+        setColor(preParsedData.color || "");
+        setPattern(preParsedData.motif || "");
+        setFinishing(preParsedData.finishing || "");
+        setDimension(preParsedData.dim || "");
+        setLink(preParsedData.link || "");
+        setImageUrl(preParsedData.img || null);
+      } else {
+        const v = initialValue.toLowerCase();
+        const isPattern = /(kayu|wood|jati|oak|pine|maple|walnut|marble|marmer|stone|batu|terrazzo|concrete|beton|pattern|motif)/.test(v);
+        const isFinishing = /(matte|glossy|doff|polished|honed|satin|brushed|texture|finishing)/.test(v);
+        const isColor = /(hitam|putih|merah|kuning|hijau|biru|coklat|grey|abu|black|white|red|yellow|green|blue|brown|gold|silver|bronze)/.test(v);
 
-      setColor(isColor ? initialValue : "");
-      setPattern(isPattern ? initialValue : "");
-      setFinishing(isFinishing ? initialValue : "");
-      setProductName((!isColor && !isPattern && !isFinishing) ? initialValue : "");
+        setColor(isColor ? initialValue : "");
+        setPattern(isPattern ? initialValue : "");
+        setFinishing(isFinishing ? initialValue : "");
+        setProductName((!isColor && !isPattern && !isFinishing) ? initialValue : "");
+      }
     }
-  }, [isOpen, initialValue]);
+  }, [isOpen, initialValue, preParsedData]);
 
   const loadData = async () => {
     try {
@@ -117,11 +135,12 @@ export function QuickDraftDialog({
       toast.error("Please select a category");
       return;
     }
-    if (!brand) {
-      // Optional now, so no toast needed, but we keep the comment
-    }
-    if (!color.trim()) {
-      toast.error("Color is required (Stage 1). Type 'TBD' if unknown.");
+    
+    const hasPrimary = productName.trim() || sku.trim() || brand.trim();
+    const hasSecondary = color.trim() || pattern.trim() || finishing.trim();
+
+    if (!hasPrimary && !hasSecondary) {
+      toast.error("At least one Primary (Name/SKU/Brand) or Secondary (Color/Motif/Finishing) data is required.");
       return;
     }
 
@@ -139,23 +158,19 @@ export function QuickDraftDialog({
       }
 
       // 2. Update with Stage 1 metadata
-      const updateData: {
-        catalog_product_name?: string;
-        catalog_brand?: string;
-        catalog_image_url?: string;
-        specs: {
-          catalog_color?: string;
-          catalog_motif?: string;
-          catalog_finishing?: string;
-        };
-      } = {
+      const updateData: any = {
         catalog_product_name: productName.trim() || undefined,
+        catalog_sku: sku.trim() || undefined,
         catalog_brand: brand.trim() || undefined,
         catalog_image_url: imageUrl || undefined,
+        catalog_reference_url: link.trim() || undefined,
         specs: {
+          catalog_sku: sku.trim() || undefined,
           catalog_color: color.trim() || undefined,
           catalog_motif: pattern.trim() || undefined,
-          catalog_finishing: finishing.trim() || undefined
+          catalog_finishing: finishing.trim() || undefined,
+          catalog_dimensions: dimension.trim() || undefined,
+          catalog_reference_url: link.trim() || undefined,
         }
       };
 
@@ -177,90 +192,53 @@ export function QuickDraftDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("sm:max-w-[480px] p-0 overflow-hidden gap-0", UI_ENGINE_RADIUS_CARD)}>
+      <DialogContent className={cn("sm:max-w-[540px] p-0 overflow-hidden gap-0", UI_ENGINE_RADIUS_CARD)}>
         <DialogHeader className="p-6 bg-slate-50 border-b border-slate-200">
-          <DialogTitle className={cn(UI_ENGINE_TYPE_TITLE, "text-xl")}>Quick Draft Entry</DialogTitle>
+          <DialogTitle className={cn(UI_ENGINE_TYPE_TITLE, "text-xl flex items-center gap-2")}>
+            <Terminal className="h-5 w-5 text-blue-600" />
+            Quick Draft Entry
+          </DialogTitle>
           <DialogDescription className={UI_ENGINE_TYPE_BODY}>
-            Create a local project entry following Stage 1 (Draft) standards.
+            Create a local project entry using slash commands or manual input.
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[min(80vh,600px)]">
-          <div className="p-6 space-y-6">
-            {/* Specifications Inputs */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Product Name</Label>
-                <input
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  placeholder="e.g. Roman Floor Tile"
-                  className={cn(
-                    "w-full h-11 px-4 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
-                    UI_ENGINE_RADIUS_CONTROL
-                  )}
-                />
+        <ScrollArea className="max-h-[min(80vh,700px)]">
+          <div className="p-6 space-y-8">
+            {/* Primary Tier */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-1">
+                <span className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Primary Tier</span>
+                <div className="h-px flex-1 bg-slate-100" />
               </div>
-
-              <div className="space-y-2">
-                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Color (Required)</Label>
-                <input
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  placeholder="e.g. Hitam Dove"
-                  className={cn(
-                    "w-full h-11 px-4 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
-                    UI_ENGINE_RADIUS_CONTROL
-                  )}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Product Name</Label>
+                  <input
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
+                    placeholder="e.g. Roman Floor Tile"
+                    className={cn(
+                      "w-full h-10 px-3 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
+                      UI_ENGINE_RADIUS_CONTROL
+                    )}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>SKU</Label>
+                  <input
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                    placeholder="e.g. RM-101"
+                    className={cn(
+                      "w-full h-10 px-3 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
+                      UI_ENGINE_RADIUS_CONTROL
+                    )}
+                  />
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Pattern / Motif</Label>
-                <input
-                  value={pattern}
-                  onChange={(e) => setPattern(e.target.value)}
-                  placeholder="e.g. Kayu Jati"
-                  className={cn(
-                    "w-full h-11 px-4 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
-                    UI_ENGINE_RADIUS_CONTROL
-                  )}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Finishing</Label>
-                <input
-                  value={finishing}
-                  onChange={(e) => setFinishing(e.target.value)}
-                  placeholder="e.g. Matte, Glossy"
-                  className={cn(
-                    "w-full h-11 px-4 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
-                    UI_ENGINE_RADIUS_CONTROL
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {/* Category Selection */}
-              <div className="space-y-2">
-                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Schedule Category</Label>
-                <CreatableSearch
-                  value={category}
-                  onSearchChange={(val) => {}}
-                  onSelect={(id, name) => setCategory(name)}
-                  onCreate={(name) => setCategory(name)}
-                  allowFreeText={true}
-                  options={categories.map(c => ({ id: c, name: c }))}
-                  placeholder="PAINT, TILE..."
-                  className="h-11"
-                />
-              </div>
-
-              {/* Brand Selection */}
-              <div className="space-y-2">
-                <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Brand / Vendor (Optional)</Label>
+              <div className="space-y-1.5">
+                <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Brand / Vendor</Label>
                 <CreatableSearch
                   value={brand}
                   onSearchChange={(val) => {}}
@@ -269,18 +247,111 @@ export function QuickDraftDialog({
                   allowFreeText={true}
                   options={brands}
                   placeholder="Select or type brand..."
-                  className="h-11"
+                  className="h-10"
+                />
+              </div>
+            </div>
+
+            {/* Secondary Tier */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-1">
+                <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">Secondary Tier</span>
+                <div className="h-px flex-1 bg-slate-100" />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Color</Label>
+                  <input
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    placeholder="e.g. White"
+                    className={cn(
+                      "w-full h-10 px-3 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
+                      UI_ENGINE_RADIUS_CONTROL
+                    )}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Motif</Label>
+                  <input
+                    value={pattern}
+                    onChange={(e) => setPattern(e.target.value)}
+                    placeholder="e.g. Marble"
+                    className={cn(
+                      "w-full h-10 px-3 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
+                      UI_ENGINE_RADIUS_CONTROL
+                    )}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Finishing</Label>
+                  <input
+                    value={finishing}
+                    onChange={(e) => setFinishing(e.target.value)}
+                    placeholder="e.g. Matte"
+                    className={cn(
+                      "w-full h-10 px-3 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
+                      UI_ENGINE_RADIUS_CONTROL
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Tertiary Tier & Category */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tertiary & Identity</span>
+                <div className="h-px flex-1 bg-slate-100" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Schedule Category</Label>
+                  <CreatableSearch
+                    value={category}
+                    onSearchChange={(val) => {}}
+                    onSelect={(id, name) => setCategory(name)}
+                    onCreate={(name) => setCategory(name)}
+                    allowFreeText={true}
+                    options={categories.map(c => ({ id: c, name: c }))}
+                    placeholder="e.g. TILE"
+                    className="h-10 border-blue-100 bg-blue-50/30"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Dimensions</Label>
+                  <input
+                    value={dimension}
+                    onChange={(e) => setDimension(e.target.value)}
+                    placeholder="e.g. 60x60 cm"
+                    className={cn(
+                      "w-full h-10 px-3 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
+                      UI_ENGINE_RADIUS_CONTROL
+                    )}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Reference Link</Label>
+                <input
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                  placeholder="https://..."
+                  className={cn(
+                    "w-full h-10 px-3 text-sm font-medium bg-white border border-slate-200 outline-none transition-all focus:border-slate-900 focus:ring-1 focus:ring-slate-900",
+                    UI_ENGINE_RADIUS_CONTROL
+                  )}
                 />
               </div>
             </div>
 
             {/* Image Upload */}
             <div className="space-y-2">
-              <Label className={cn("text-[10px] font-bold uppercase tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Visual Image (Optional)</Label>
+              <Label className={cn("text-[9px] font-bold uppercase text-slate-400")}>Visual Image (Optional)</Label>
               <UniversalImageUploader
                 initialImageUrl={imageUrl}
                 onUploadComplete={(urls) => setImageUrl(urls.cover)}
-                className="h-32"
+                className="h-28"
               />
             </div>
           </div>

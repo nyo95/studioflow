@@ -140,7 +140,6 @@ export function LibraryFormModal({
     catalog_image_original_url: "",
     catalog_reference_url: "",
     catalog_folder_url: "",
-    catalog_price: null,
     catalog_metadata: undefined,
     catalog_status: "PENDING" as LibraryItemStatus,
     physical_samples: [{ catalog_rack_number: "", catalog_box_number: "", catalog_notes: "" }]
@@ -189,7 +188,6 @@ export function LibraryFormModal({
             catalog_image_original_url: productInitial.catalog_image_original_url || "",
             catalog_reference_url: productInitial.catalog_reference_url || "",
             catalog_folder_url: productInitial.catalog_folder_url || "",
-            catalog_price: productInitial.catalog_price || null,
             catalog_metadata: (productInitial.catalog_metadata as Record<string, unknown> | null) || undefined,
             catalog_status: productInitial.catalog_status || "APPROVED",
             physical_samples: [{ 
@@ -219,7 +217,6 @@ export function LibraryFormModal({
           catalog_dimension_unit: "cm",
           catalog_color: "",
           catalog_finishing: "",
-          catalog_price: null,
           catalog_metadata: undefined,
           catalog_status: isAdmin ? "APPROVED" : "PENDING",
           physical_samples: [{ catalog_rack_number: "", catalog_box_number: "", catalog_notes: "" }]
@@ -567,6 +564,7 @@ export function LibraryFormModal({
                               </div>
                             )}
                          </div>
+
                          <div className={cn("grid grid-cols-4 gap-4 col-span-2 p-6 border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                             <div className="space-y-1.5">
                               <Label className="text-[9px] font-black uppercase text-slate-400 text-center block">P</Label>

@@ -456,8 +456,8 @@ export function CDListTable({
                           </SelectTrigger>
                           <SelectContent side="top">
                             <SelectItem value="PENDING">PENDING</SelectItem>
-                            <SelectItem value="ON_PROGRESS">ON PROGRESS</SelectItem>
-                            <SelectItem value="DELIVERED">DELIVERED</SelectItem>
+                            <SelectItem value="IN_PROGRESS">IN_PROGRESS</SelectItem>
+                            <SelectItem value="COMPLETED">COMPLETED</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCardCell>

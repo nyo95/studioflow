@@ -473,7 +473,7 @@ enum ActivityMode {
 enum CDItemStatus {
   PENDING
   IN_PROGRESS
-  FINISHED
+  COMPLETED
 }
 
 enum LibraryItemStatus {

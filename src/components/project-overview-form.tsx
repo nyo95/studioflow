@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { updateProjectMetadata } from "@/actions/project-actions";
+import { unwrapActionResult } from "@/lib/result";
 import { CreatableSearch } from "@/components/ui/creatable-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Edit2, User, MapPin, Calendar, Building2, Lock, CheckCircle2 } from "lucide-react";
+import { Edit3, User, MapPin, Calendar, Building2, Lock, CheckCircle2, X, Save } from "lucide-react";
 import { Heading, SectionCard } from "@/ui_engine";
 import { formatPhaseName, type ProgressState } from "@/lib/project-progress";
 import { Badge } from "@/components/ui/badge";
@@ -88,6 +89,7 @@ export function ProjectOverviewForm({
 }: ProjectOverviewFormProps) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const [isEditMode, setIsEditMode] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const isAdmin = role === "ADMIN";
@@ -108,6 +110,7 @@ export function ProjectOverviewForm({
     if (!open) {
       setClientSearch(project.client?.name ?? "");
       setSelectedClientId(project.client?.id ?? "none");
+      setIsEditMode(false); // Reset to view mode when dialog closes
     }
   }, [open, project.client?.id, project.client?.name]);
 
@@ -147,7 +150,7 @@ export function ProjectOverviewForm({
     }
 
     try {
-      await updateProjectMetadata({
+      unwrapActionResult(await updateProjectMetadata({
         projectId: project.id,
         name: projectName || undefined,
         clientId: selectedClientId === "none" ? null : selectedClientId || undefined,
@@ -156,7 +159,7 @@ export function ProjectOverviewForm({
         opening_date: openingDateValue ? new Date(openingDateValue) : undefined,
         pic_designer_id: picDesignerId,
         pic_drafter_id: picDrafterId,
-      });
+      }));
       setOpen(false);
       router.refresh();
     } catch (err: unknown) {
@@ -178,19 +181,44 @@ export function ProjectOverviewForm({
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 rounded-lg border-slate-200 text-xs font-semibold shadow-none hover:bg-slate-50">
-                <Edit2 className="mr-2 h-3.5 w-3.5" />
-                Edit Information
+                <Edit3 className="mr-2 h-3.5 w-3.5" />
+                Modify Information
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <form onSubmit={handleSubmit}>
-                <DialogHeader>
-                  <DialogTitle asChild>
-                    <Heading level={3}>Edit Project Metadata</Heading>
-                  </DialogTitle>
-                  <DialogDescription>
-                    Update project details and assigned PICs.
-                  </DialogDescription>
+                <DialogHeader className="flex flex-row items-center justify-between border-b border-slate-100 pb-4">
+                  <div className="space-y-1">
+                    <DialogTitle asChild>
+                      <Heading level={3}>Project Metadata</Heading>
+                    </DialogTitle>
+                    <DialogDescription className="text-xs">
+                      {isEditMode ? "Update project details and assigned PICs." : "Viewing current project identification and assignment."}
+                    </DialogDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!isEditMode && canEdit && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditMode(true)}
+                        className="h-8 rounded-lg border-slate-200 text-[10px] font-black uppercase tracking-widest hover:border-slate-900"
+                      >
+                        <Edit3 className="mr-2 h-3 w-3" />
+                        Modify
+                      </Button>
+                    )}
+                    <Button 
+                      type="button"
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => setOpen(false)}
+                      className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-900"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </DialogHeader>
 
                 <TooltipProvider delayDuration={0}>
@@ -204,124 +232,174 @@ export function ProjectOverviewForm({
                     <MetadataField
                       id="name"
                       label="Project Name"
-                      disabled={!canEditProjectName}
+                      disabled={!canEditProjectName || !isEditMode}
                     >
-                      <Input
-                        id="name"
-                        name="name"
-                        defaultValue={project.name}
-                        disabled={!canEditProjectName}
-                        className="border-slate-200"
-                      />
+                      {isEditMode ? (
+                        <Input
+                          id="name"
+                          name="name"
+                          defaultValue={project.name}
+                          disabled={!canEditProjectName}
+                          className="border-slate-200"
+                        />
+                      ) : (
+                        <div className="rounded-lg bg-slate-50 p-3 text-sm font-bold text-slate-900 border border-slate-100">
+                          {project.name}
+                        </div>
+                      )}
                     </MetadataField>
 
                     <MetadataField
                       id="client_id"
                       label="Client Name"
-                      disabled={!canEditClient}
+                      disabled={!canEditClient || !isEditMode}
                     >
-                      <CreatableSearch
-                        options={[
-                          { id: "none", name: "No Client" },
-                          ...clients.map(c => ({ id: c.id, name: c.name }))
-                        ]}
-                        value={selectedClientId}
-                        onSelect={(id: string, name: string) => {
-                          setSelectedClientId(id);
-                          setClientSearch(name);
-                        }}
-                        onCreate={(name: string) => {
-                          setSelectedClientId(""); // Marker for "New Client"
-                          setClientSearch(name);
-                        }}
-                        placeholder="Search or type a new client..."
-                        disabled={!canEditClient}
-                      />
+                      {isEditMode ? (
+                        <CreatableSearch
+                          options={[
+                            { id: "none", name: "No Client" },
+                            ...clients.map(c => ({ id: c.id, name: c.name }))
+                          ]}
+                          value={selectedClientId}
+                          onSelect={(id: string, name: string) => {
+                            setSelectedClientId(id);
+                            setClientSearch(name);
+                          }}
+                          onCreate={(name: string) => {
+                            setSelectedClientId(""); // Marker for "New Client"
+                            setClientSearch(name);
+                          }}
+                          placeholder="Search or type a new client..."
+                          disabled={!canEditClient}
+                        />
+                      ) : (
+                        <div className="rounded-lg bg-slate-50 p-3 text-sm font-bold text-slate-900 border border-slate-100">
+                          {project.client?.name ?? "No Client"}
+                        </div>
+                      )}
                     </MetadataField>
 
                     <div className="grid grid-cols-2 gap-6">
-                      <MetadataField id="area" label="Area (sqm)" disabled={!canEditArea}>
-                        <div className="relative">
-                          <Input
-                            id="area"
-                            name="area"
-                            type="number"
-                            defaultValue={project.area || ""}
-                            disabled={!canEditArea}
-                            className="border-slate-200 pr-12"
-                          />
-                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
-                            sqm
-                          </span>
-                        </div>
+                      <MetadataField id="area" label="Area (sqm)" disabled={!canEditArea || !isEditMode}>
+                        {isEditMode ? (
+                          <div className="relative">
+                            <Input
+                              id="area"
+                              name="area"
+                              type="number"
+                              defaultValue={project.area || ""}
+                              disabled={!canEditArea}
+                              className="border-slate-200 pr-12"
+                            />
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
+                              sqm
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg bg-slate-50 p-3 text-sm font-bold text-slate-900 border border-slate-100">
+                            {project.area ? `${project.area} sqm` : "-"}
+                          </div>
+                        )}
                       </MetadataField>
 
-                      <MetadataField id="opening_date" label="Target Opening" disabled={!canEditOpening}>
-                        <div className="relative">
-                          <Input
-                            id="opening_date"
-                            name="opening_date"
-                            type="date"
-                            defaultValue={project.opening_date_input_value}
-                            disabled={!canEditOpening}
-                            className="border-slate-200"
-                          />
-                        </div>
+                      <MetadataField id="opening_date" label="Target Opening" disabled={!canEditOpening || !isEditMode}>
+                        {isEditMode ? (
+                          <div className="relative">
+                            <Input
+                              id="opening_date"
+                              name="opening_date"
+                              type="date"
+                              defaultValue={project.opening_date_input_value}
+                              disabled={!canEditOpening}
+                              className="border-slate-200"
+                            />
+                          </div>
+                        ) : (
+                          <div className="rounded-lg bg-slate-50 p-3 text-sm font-bold text-slate-900 border border-slate-100">
+                            {project.opening_date_display || "-"}
+                          </div>
+                        )}
                       </MetadataField>
                     </div>
 
                     <div className="grid grid-cols-2 gap-6">
-                      <MetadataField id="pic_designer_id" label="DIC (Designer)" disabled={!canEditDic}>
-                        <select
-                          id="pic_designer_id"
-                          name="pic_designer_id"
-                          defaultValue={project.pic_designer_id}
-                          disabled={!canEditDic}
-                          className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
-                        >
-                          {designers.map((user) => (
-                            <option key={user.id} value={user.id}>
-                              {user.name}
-                            </option>
-                          ))}
-                        </select>
+                      <MetadataField id="pic_designer_id" label="DIC (Designer)" disabled={!canEditDic || !isEditMode}>
+                        {isEditMode ? (
+                          <select
+                            id="pic_designer_id"
+                            name="pic_designer_id"
+                            defaultValue={project.pic_designer_id}
+                            disabled={!canEditDic}
+                            className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
+                          >
+                            {designers.map((user) => (
+                              <option key={user.id} value={user.id}>
+                                {user.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="rounded-lg bg-slate-50 p-3 text-sm font-bold text-slate-900 border border-slate-100">
+                            {project.designer_name}
+                          </div>
+                        )}
                       </MetadataField>
 
-                      <MetadataField id="pic_drafter_id" label="DRIC (Drafter)" disabled={!canEditDric}>
-                        <select
-                          id="pic_drafter_id"
-                          name="pic_drafter_id"
-                          defaultValue={project.pic_drafter_id}
-                          disabled={!canEditDric}
-                          className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
-                        >
-                          {drafters.map((user) => (
-                            <option key={user.id} value={user.id}>
-                              {user.name}
-                            </option>
-                          ))}
-                        </select>
+                      <MetadataField id="pic_drafter_id" label="DRIC (Drafter)" disabled={!canEditDric || !isEditMode}>
+                        {isEditMode ? (
+                          <select
+                            id="pic_drafter_id"
+                            name="pic_drafter_id"
+                            defaultValue={project.pic_drafter_id}
+                            disabled={!canEditDric}
+                            className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-50"
+                          >
+                            {drafters.map((user) => (
+                              <option key={user.id} value={user.id}>
+                                {user.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="rounded-lg bg-slate-50 p-3 text-sm font-bold text-slate-900 border border-slate-100">
+                            {project.drafter_name}
+                          </div>
+                        )}
                       </MetadataField>
                     </div>
                   </div>
                 </TooltipProvider>
 
-                <DialogFooter className="gap-2 sm:gap-0">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setOpen(false)}
-                    className="rounded-lg px-6"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="rounded-lg bg-slate-900 px-8 font-semibold text-white hover:bg-slate-800"
-                  >
-                    {loading ? "Saving..." : "Save Changes"}
-                  </Button>
+                <DialogFooter className="gap-2 sm:gap-0 pt-6 border-t border-slate-100">
+                  {isEditMode ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setIsEditMode(false)}
+                        className="rounded-lg px-6 text-xs font-bold uppercase tracking-widest text-slate-400"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        className="rounded-lg bg-slate-900 px-8 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-slate-800"
+                      >
+                        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        {loading ? "Saving..." : "Save Changes"}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setOpen(false)}
+                      className="rounded-lg px-6 text-xs font-bold uppercase tracking-widest text-slate-400"
+                    >
+                      Close Details
+                    </Button>
+                  )}
                 </DialogFooter>
               </form>
             </DialogContent>

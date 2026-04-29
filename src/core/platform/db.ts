@@ -31,9 +31,15 @@ const globalForPrisma = globalThis as unknown as {
 
 export const prisma = (() => {
   if (process.env.NODE_ENV !== "production") {
-    // If the existing global client is missing the new model, force a new one
-    if (globalForPrisma.prisma && !("temporaryAttachment" in globalForPrisma.prisma)) {
-      console.log("[DB_REFRESH] Forcing fresh PrismaClient for new models...");
+    // If the existing global client is missing new models or critical fields, force a new one
+    const p = globalForPrisma.prisma as any;
+    const isStale = p && (
+      !("temporaryAttachment" in p) || 
+      (p.project && !p.project.fields?.project_code)
+    );
+
+    if (isStale) {
+      console.log("[DB_REFRESH] Forcing fresh PrismaClient due to schema changes...");
       globalForPrisma.prisma = new PrismaClient({ adapter });
     }
   }
@@ -62,7 +68,8 @@ export async function ensureDbSchemaPreflight() {
       "PhysicalSample",
       "ProjectProductRequest",
       "AuditLog",
-      "TemporaryAttachment"
+      "TemporaryAttachment",
+      "Project"
     ];
 
     const tableCheck = await prisma.$queryRaw<{ table_name: string }[]>`
@@ -79,20 +86,22 @@ export async function ensureDbSchemaPreflight() {
       throw new Error(`Critical DB tables missing: ${missingTables.join(", ")}. Please run migrations or db push.`);
     }
 
-    // 2. Check for required columns in AuditLog (MF-08 alignment)
+    // 2. Check for required columns in AuditLog and Project
     const requiredAuditColumns = ["project_id", "phase_id", "reverted_at"];
-    const columnCheck = await prisma.$queryRaw<{ column_name: string }[]>`
-      SELECT column_name 
+    const requiredProjectColumns = ["project_code"];
+
+    const columnCheck = await prisma.$queryRaw<{ table_name: string, column_name: string }[]>`
+      SELECT table_name, column_name 
       FROM information_schema.columns 
-      WHERE table_name = 'AuditLog' 
-      AND column_name IN (${Prisma.join(requiredAuditColumns)})
+      WHERE (table_name = 'AuditLog' AND column_name IN (${Prisma.join(requiredAuditColumns)}))
+      OR (table_name = 'Project' AND column_name IN (${Prisma.join(requiredProjectColumns)}))
     `;
 
-    const foundColumns = columnCheck.map(c => c.column_name);
-    const missingColumns = requiredAuditColumns.filter(c => !foundColumns.includes(c));
+    const auditMissing = requiredAuditColumns.filter(col => !columnCheck.some(c => c.table_name === 'AuditLog' && c.column_name === col));
+    const projectMissing = requiredProjectColumns.filter(col => !columnCheck.some(c => c.table_name === 'Project' && c.column_name === col));
 
-    if (missingColumns.length > 0) {
-      throw new Error(`Critical AuditLog columns missing: ${missingColumns.join(", ")}. Please run migrations.`);
+    if (auditMissing.length > 0 || projectMissing.length > 0) {
+      throw new Error(`Critical columns missing. AuditLog: [${auditMissing.join(", ")}], Project: [${projectMissing.join(", ")}]. Please run migrations.`);
     }
 
   } catch (error) {
@@ -101,4 +110,4 @@ export async function ensureDbSchemaPreflight() {
   }
 }
 
-// Force client refresh version: 1.0.6 (Auto-reload at 2026-04-29T13:08:00)
+// Force client refresh version: 1.0.7 (Refreshed at 2026-04-29T17:03:00)
