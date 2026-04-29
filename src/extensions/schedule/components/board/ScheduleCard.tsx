@@ -85,7 +85,7 @@ export function ScheduleCard({ entry, onEdit, onDelete }: ScheduleCardProps) {
                // eslint-disable-next-line @next/next/no-img-element
                <img 
                  src={snapshot.catalog_image_url} 
-                 alt={snapshot.catalog_product_name} 
+                 alt={getEffectiveTitle(snapshot)} 
                  className="w-full h-full object-cover"
                />
             ) : (
