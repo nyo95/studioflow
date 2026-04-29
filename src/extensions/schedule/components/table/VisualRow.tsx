@@ -83,6 +83,14 @@ export function VisualRow({
     return finalIndex >= 0 ? finalIndex : 0;
   });
 
+  // Keep activeOptionIndex in sync with entry props (e.g. after approval refresh)
+  React.useEffect(() => {
+    const finalIndex = entry.options.findIndex((o) => o.is_final);
+    if (finalIndex >= 0 && finalIndex !== activeOptionIndex) {
+      setActiveOptionIndex(finalIndex);
+    }
+  }, [entry.id, entry.options, activeOptionIndex]);
+
   const activeOption = entry.options[activeOptionIndex] || entry.options[0];
   const snapshot = activeOption?.data_snapshot as unknown as ScheduleSnapshot | null;
   const hasMultipleOptions = entry.options.length > 1;

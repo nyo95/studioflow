@@ -323,7 +323,13 @@ export class LibraryService {
       deleted_at: null
     };
 
-    if (filters?.status) where.catalog_status = filters.status;
+    if (filters?.status) {
+      if (Array.isArray(filters.status)) {
+        where.catalog_status = { in: filters.status };
+      } else {
+        where.catalog_status = filters.status;
+      }
+    }
     if (filters?.category && filters.category !== "all") where.catalog_category = filters.category;
     if (filters?.vendorId) where.vendor_id = filters.vendorId;
     if (filters?.type) where.catalog_type = filters.type;

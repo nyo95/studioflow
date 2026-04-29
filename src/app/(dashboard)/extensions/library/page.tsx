@@ -127,9 +127,9 @@ export default function LibraryPage() {
       // to allow them to manage/approve newly added items without confusion.
       const isAdminOrStaff = role === "ADMIN" || role === "STAFF";
       const statusFilter = activeTab === "queue" 
-        ? "PENDING" 
+        ? "PENDING" as const
         : activeTab === "catalog" 
-          ? "APPROVED" 
+          ? (isAdminOrStaff ? ["APPROVED", "PENDING"] as any : "APPROVED") 
           : undefined;
       
       const res = await getProductsAction({

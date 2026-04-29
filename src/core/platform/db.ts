@@ -101,4 +101,4 @@ export async function ensureDbSchemaPreflight() {
   }
 }
 
-// Force client refresh version: 1.0.5
+// Force client refresh version: 1.0.6 (Auto-reload at 2026-04-29T13:08:00)

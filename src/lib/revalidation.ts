@@ -24,6 +24,7 @@ export function invalidateCache(
   if (options.scope === REVALIDATE_PROJECT) {
     revalidatePath(`/projects/${options.id}`);
     revalidatePath(`/projects/${options.id}/activity`);
+    revalidatePath(`/projects/${options.id}/extensions/product-catalog`);
     return;
   }
 

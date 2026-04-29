@@ -221,13 +221,13 @@ export function LibraryFormModal({
           catalog_finishing: "",
           catalog_price: null,
           catalog_metadata: undefined,
-          catalog_status: "PENDING",
+          catalog_status: isAdmin ? "APPROVED" : "PENDING",
           physical_samples: [{ catalog_rack_number: "", catalog_box_number: "", catalog_notes: "" }]
         });
         setProductSection(ProductType.material);
       }
     }
-  }, [isOpen, initialData, type, vendors]);
+  }, [isOpen, initialData, type, vendors, isAdmin]);
 
   const addContact = () => {
     setVendorData({
