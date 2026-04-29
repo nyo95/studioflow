@@ -220,11 +220,14 @@ async function checkDuplicateProduct(
 
   if (mode === "manual" && snapshot) {
     const sku = snapshot.specs?.catalog_sku?.trim();
+    const color = snapshot.specs?.catalog_color?.trim();
     const brand = snapshot.catalog_brand?.trim();
 
-    if (sku && brand) {
-      // For manual, uniqueness is defined by composite of catalog_sku AND catalog_brand (case-insensitive)
-      // Since JSON filters in Prisma might not support CI equals easily, we fetch and check
+    // Smart Input Guard: Use SKU as primary, fallback to Color if SKU is missing
+    const effectiveSku = sku || color;
+
+    if (effectiveSku && brand) {
+      // For manual, uniqueness is defined by composite of catalog_sku/color AND catalog_brand (case-insensitive)
       const existingOptions = await tx.projectScheduleOption.findMany({
         where: { entry: { project_id: projectId } },
         select: { data_snapshot: true }
@@ -234,16 +237,18 @@ async function checkDuplicateProduct(
         const s = opt.data_snapshot as ScheduleSnapshot | null;
         if (!s) return false;
         
-        // Use specs.catalog_sku as primary identifier for manual entries
         const optSku = s.specs?.catalog_sku?.trim();
+        const optColor = s.specs?.catalog_color?.trim();
         const optBrand = s.catalog_brand?.trim();
         
-        return optSku?.toLowerCase() === sku.toLowerCase() &&
+        const optEffectiveSku = optSku || optColor;
+        
+        return optEffectiveSku?.toLowerCase() === effectiveSku.toLowerCase() &&
                optBrand?.toLowerCase() === brand.toLowerCase();
       });
 
       if (isDuplicate) {
-        throw new ActionError("Duplicate product in project schedule.", "DUPLICATE_PRODUCT");
+        throw new ActionError("Duplicate product (with same SKU/Color & Brand) already exists in this project.", "DUPLICATE_PRODUCT");
       }
     }
   }

@@ -1,5 +1,21 @@
 # StudioFlow Development Log (Changelog)
 
+## [v2.7.0] — 2026-04-29 (Engineering SSOT Alignment Phase 1 & 2)
+
+### Workflow Optimization
+- **Smart Input Guard**: Implemented "Actionable Default" for manual entries. Designers can now add items with only **Color/Finish** if SKU/Name is not yet known.
+- **Enhanced Gradual Form**: Updated `GradualInputForm` to include editable SKU and Product Name fields during manual entry, with validation logic that supports the `(SKU+Name) OR (Color)` rule.
+
+### Data Integrity
+- **Project Code Isolation**: Added a dedicated `project_code` field to the `Project` model to decouple technical identification from display names.
+- **Backfill Migration**: Successfully migrated all legacy projects to the new naming protocol, extracting codes (e.g., `2025-429`) into the dedicated field.
+- **Duplicate Protection Hardening**: Updated `ScheduleService` to use `catalog_color` as a surrogate identity for duplicate checks when SKUs are missing, ensuring draft entries remain unique.
+
+### Backend Changes
+- **Prisma Schema Update**: Finalized `Project.project_code` as a mandatory `@unique` field.
+- **Validation Logic**: Refined `ScheduleSnapshotSchema` (Zod) with `superRefine` to enforce the new Smart Input standards.
+
+
 ## [v2.6.3] — 2026-04-28 (Actionable Default UI)
 
 ### UI Changes

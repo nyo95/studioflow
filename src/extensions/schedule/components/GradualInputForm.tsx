@@ -91,7 +91,7 @@ export function GradualInputForm({
 
   const isMaterial = customData.catalog_type === "material";
   
-  const canProceedFromInitials = !!customData.catalog_color.trim();
+  const canProceedFromInitials = (!!customData.catalog_sku.trim() && !!customData.catalog_product_name.trim()) || !!customData.catalog_color.trim();
   const canProceedFromVendor = !!customData.catalog_brand.trim();
 
   const handleFinalize = async () => {
@@ -101,9 +101,9 @@ export function GradualInputForm({
         selectedId: selectedId ?? "",
         customData: !selectedId ? {
           ...customData,
-          // Fallback SKU/Name to Color if they are empty (Manual/Bespoke flow)
-          catalog_sku: customData.catalog_sku || customData.catalog_color || "DRAFT",
-          catalog_product_name: customData.catalog_product_name || customData.catalog_color || "New Item",
+          // Smart Input Guard: Ensure SKU/Name are at least set to Color if empty
+          catalog_sku: customData.catalog_sku.trim() || customData.catalog_color.trim() || "DRAFT",
+          catalog_product_name: customData.catalog_product_name.trim() || customData.catalog_color.trim() || "New Item",
         } : initialCustomData
       });
     } finally {
@@ -265,13 +265,34 @@ export function GradualInputForm({
                 </div>
 
                 <div className="space-y-2">
-                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color / Initials <span className="text-red-500">*</span></Label>
+                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Product Name</Label>
                    <Input 
-                     value={customData.catalog_color} 
-                     onChange={e => setCustomData(prev => ({...prev, catalog_color: e.target.value}))}
-                     placeholder="e.g. Matte Black (Color) or MB-01"
-                     className={cn("h-12 border-none bg-slate-50 shadow-inner font-bold text-slate-900", UI_ENGINE_RADIUS_ACTION)} 
+                     value={customData.catalog_product_name} 
+                     onChange={e => setCustomData(prev => ({...prev, catalog_product_name: e.target.value}))}
+                     placeholder="e.g. Carrara White"
+                     className={cn("h-12 border-none bg-slate-50 shadow-inner font-medium", UI_ENGINE_RADIUS_ACTION)} 
                    />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">SKU / Code</Label>
+                     <Input 
+                       value={customData.catalog_sku} 
+                       onChange={e => setCustomData(prev => ({...prev, catalog_sku: e.target.value}))}
+                       placeholder="e.g. CR-01"
+                       className={cn("h-12 border-none bg-slate-50 shadow-inner font-bold text-slate-900", UI_ENGINE_RADIUS_ACTION)} 
+                     />
+                  </div>
+                  <div className="space-y-2">
+                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color / Finish <span className="text-red-500">*</span></Label>
+                     <Input 
+                       value={customData.catalog_color} 
+                       onChange={e => setCustomData(prev => ({...prev, catalog_color: e.target.value}))}
+                       placeholder="e.g. Matte Black"
+                       className={cn("h-12 border-none bg-slate-50 shadow-inner font-bold text-slate-900", UI_ENGINE_RADIUS_ACTION)} 
+                     />
+                  </div>
                 </div>
              </div>
              <div className="flex items-center justify-between pt-4">

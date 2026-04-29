@@ -53,6 +53,14 @@ export const projectNamingPolicy = {
   },
   
   /**
+   * Extracts the [YYYY]-[NNN] code from a formatted project name.
+   */
+  extractProjectCode(name: string): string {
+    const match = name.match(/^(\d{4}-\d{3})/);
+    return match ? match[0] : "PENDING";
+  },
+
+  /**
    * Regex for UI/frontend validation consistency.
    */
   FORMAT_REGEX: NAMING_REGEX
