@@ -33,6 +33,7 @@ model Client {
 
 model Project {
   id                String                   @id @default(uuid())
+  project_code      String                   @unique
   name              String                   @unique
   pic_designer_id   String
   pic_drafter_id    String

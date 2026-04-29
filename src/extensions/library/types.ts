@@ -107,7 +107,9 @@ export const LibraryItemStatusSchema = z.nativeEnum(LibraryItemStatus);
  */
 const ProductCatalogBaseSchema = z.object({
   catalog_category: z.string().min(1, "Category is required"),
-  catalog_color: z.string().min(1, "Color is required"),
+  catalog_color: z.string().optional(),
+  catalog_finishing: z.string().optional(),
+  catalog_motif: z.string().optional(),
   catalog_sku: z.string().optional(),
   catalog_product_name: z.string().optional(),
   catalog_image_url: z.string().optional(), // Snapshot level optional
@@ -117,9 +119,15 @@ const ProductCatalogBaseSchema = z.object({
 });
 
 export const ProductCatalogValidationSchema = ProductCatalogBaseSchema.refine(
-  data => data.catalog_sku || data.catalog_product_name, 
+  data => {
+    const hasSku = !!data.catalog_sku?.trim() && data.catalog_sku !== "N/A" && data.catalog_sku !== "DRAFT";
+    const hasName = !!data.catalog_product_name?.trim() && data.catalog_product_name !== "New Item";
+    const hasIdentity = hasSku || hasName;
+    const hasSecondary = !!data.catalog_color?.trim() || !!data.catalog_motif?.trim() || !!data.catalog_finishing?.trim();
+    return hasIdentity || hasSecondary;
+  },
   {
-    message: "At least SKU or Product Name must exist",
+    message: "At least (SKU or Name) or (Color/Motif/Finishing) must be provided.",
     path: ["catalog_sku"]
   }
 );
@@ -130,10 +138,11 @@ export const ProductCatalogValidationSchema = ProductCatalogBaseSchema.refine(
 export const CatalogApprovalValidationSchema = ProductCatalogBaseSchema.extend({
   catalog_image_url: z.string().min(1, "Original Image is REQUIRED for catalog"),
   vendor_id: z.string().min(1, "Brand is REQUIRED for catalog"),
+  catalog_color: z.string().min(1, "Color is REQUIRED for catalog"),
 }).refine(
-  data => data.catalog_sku || data.catalog_product_name,
+  data => data.catalog_sku?.trim() || data.catalog_product_name?.trim(),
   {
-    message: "At least SKU or Product Name must exist",
+    message: "At least SKU or Product Name must exist for formal catalog entry",
     path: ["catalog_sku"]
   }
 );

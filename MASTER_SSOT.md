@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 2.4.3 (v2.0.5 - Actionable Default UI)
-> **Last Updated:** April 28, 2026 (v2.0.5 - Actionable Default UI)
+> **Document Version:** 2.7.0 (v2.7.0 - Engineering SSOT Alignment)
+> **Last Updated:** April 29, 2026 (v2.7.0 - Engineering SSOT Alignment)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---

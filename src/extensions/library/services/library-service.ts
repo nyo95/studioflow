@@ -63,26 +63,6 @@ export class LibraryService {
   }
 
   /**
-   * CRITICAL RUNTIME ASSERTION: Validates model integrity based on ProductType
-   */
-  static async assertTypeRules(
-    type: ProductType, 
-    data: { qty?: number; location?: string },
-    context: "SNAPSHOT" | "CATALOG"
-  ) {
-    if (type === "material") {
-      if (data.qty !== undefined) {
-        throw new ActionError("Materials are forbidden from having quantity data.", "TYPE_RULE_VIOLATION");
-      }
-    } else if (type === "fixture") {
-      if (context === "SNAPSHOT") {
-        if (!data.qty || data.qty <= 0) throw new ActionError("Fixtures in projects REQUIRE a quantity > 0.", "TYPE_RULE_VIOLATION");
-        if (!data.location?.trim()) throw new ActionError("Fixtures in projects REQUIRE a location.", "TYPE_RULE_VIOLATION");
-      }
-    }
-  }
-
-  /**
    * CRITICAL RUNTIME ASSERTION: Validates product identity and catalog readiness
    */
   static async assertValidProduct(data: ProductCatalogInput, context: "SNAPSHOT" | "CATALOG") {
@@ -107,6 +87,26 @@ export class LibraryService {
 
     if (skuInvalid && nameInvalid) {
       throw new ActionError("Product requires at least one valid identity (SKU or Name). Placeholders in both are FORBIDDEN.", "PLACEHOLDER_VIOLATION");
+    }
+  }
+
+  /**
+   * CRITICAL RUNTIME ASSERTION: Validates model integrity based on ProductType
+   */
+  static async assertCatalogTypeRules(
+    type: ProductType, 
+    data: { qty?: number; location?: string },
+    isProjectContext: boolean
+  ) {
+    if (type === "material") {
+      if (data.qty !== undefined) {
+        throw new ActionError("Materials are forbidden from having quantity data.", "TYPE_RULE_VIOLATION");
+      }
+    } else if (type === "fixture") {
+      if (isProjectContext) {
+        if (!data.qty || data.qty <= 0) throw new ActionError("Fixtures in projects REQUIRE a quantity > 0.", "TYPE_RULE_VIOLATION");
+        if (!data.location?.trim()) throw new ActionError("Fixtures in projects REQUIRE a location.", "TYPE_RULE_VIOLATION");
+      }
     }
   }
 
@@ -472,8 +472,11 @@ export class LibraryService {
   static async createProduct(data: ProductCatalogInput, userId: string, tx: PrismaTransaction): Promise<ProductCatalogWithRelations> {
     const resolvedVendorId = data.vendor_id || await this.resolveVendor(data.vendor_name || data.catalog_brand || "", userId, tx);
     
-    await this.assertValidProduct(data, "SNAPSHOT");
-    await this.assertTypeRules(data.catalog_type || ProductType.material, {}, "SNAPSHOT");
+    const isApproved = (data.catalog_status || "APPROVED") === "APPROVED";
+    
+    // Use CATALOG context for APPROVED Library entries, SNAPSHOT for PENDING drafts
+    await this.assertValidProduct({ ...data, vendor_id: resolvedVendorId || undefined }, isApproved ? "CATALOG" : "SNAPSHOT");
+    await this.assertCatalogTypeRules(data.catalog_type || ProductType.material, {}, false);
 
     if (!resolvedVendorId) throw new ActionError("Brand is REQUIRED for catalog entry.", "BRAND_REQUIRED");
 

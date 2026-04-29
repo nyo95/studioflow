@@ -53,6 +53,7 @@ export const projectService = {
 
         project = await tx.project.create({
           data: {
+            project_code: projectNamingPolicy.extractProjectCode(formattedName),
             name: formattedName,
             pic_designer_id,
             pic_drafter_id,
@@ -240,6 +241,7 @@ export const projectService = {
     const updateData = userRole === "ADMIN"
       ? {
           name: normalizedName || project.name,
+          project_code: normalizedName ? projectNamingPolicy.extractProjectCode(normalizedName) : undefined,
           clientId: resolvedClientId,
           area: sanitizedArea,
           opening_date: sanitizedOpeningDate,
