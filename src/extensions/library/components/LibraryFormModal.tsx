@@ -252,9 +252,11 @@ export function LibraryFormModal({
   const isFormValid = type === "VENDOR" 
     ? !!vendorData.brand_name?.trim() 
     : (!!productData.vendor_id || !!productData.vendor_name?.trim()) && 
-      !!productData.catalog_sku?.trim() && 
       !!productData.catalog_category?.trim() &&
-      !!productData.catalog_color?.trim();
+      (
+        (!!productData.catalog_sku?.trim() || !!productData.catalog_product_name?.trim()) ||
+        (!!productData.catalog_color?.trim() || !!productData.catalog_motif?.trim() || !!productData.catalog_finishing?.trim())
+      );
 
   async function handleSubmit() {
     if (type === "PRODUCT" && !productData.catalog_color?.trim()) {
@@ -296,7 +298,15 @@ export function LibraryFormModal({
       onSuccess?.();
       onOpenChange(false);
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+      console.error("Library submission error:", error);
+      if (error instanceof Error) {
+        toast.error(error.message, {
+           description: "Verify that all required fields are filled and valid.",
+           duration: 5000
+        });
+      } else {
+        toast.error("An unexpected error occurred while saving the product.");
+      }
     } finally {
       setIsSubmitting(false);
     }

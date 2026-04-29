@@ -36,17 +36,25 @@ export const ScheduleSnapshotSchema = z.object({
   schedule_code: z.string().nullable().optional(),
   snapshot_captured_at: z.string().datetime().or(z.string()), 
 }).superRefine((data, ctx) => {
-  const hasSku = !!data.specs.catalog_sku?.trim() && data.specs.catalog_sku !== "Generic";
-  const hasName = !!data.catalog_product_name?.trim() && data.catalog_product_name !== "Manual Item";
+  const hasSku = !!data.specs.catalog_sku?.trim() && 
+                 data.specs.catalog_sku !== "Generic" && 
+                 data.specs.catalog_sku !== "DRAFT" && 
+                 data.specs.catalog_sku !== "N/A";
   
+  const hasName = !!data.catalog_product_name?.trim() && 
+                  data.catalog_product_name !== "Manual Item" && 
+                  data.catalog_product_name !== "New Item" && 
+                  data.catalog_product_name !== "[RESERVED]";
+  
+  const hasIdentity = hasSku || hasName;
   const hasSecondary = !!data.specs.catalog_color?.trim() || 
                        !!data.specs.catalog_motif?.trim() || 
                        !!data.specs.catalog_finishing?.trim();
 
-  if (!(hasSku && hasName) && !hasSecondary) {
+  if (!hasIdentity && !hasSecondary) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "At least (SKU + Name) or (Color/Motif/Finishing) must be provided.",
+      message: "At least (SKU or Name) or (Color/Motif/Finishing) must be provided.",
       path: ["catalog_product_name"],
     });
   }
