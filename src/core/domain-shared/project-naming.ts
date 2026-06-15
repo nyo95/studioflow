@@ -1,16 +1,16 @@
 import { ActionError } from "@/lib/error-types";
 import { PrismaTransaction } from "@/types/common";
 
-const NAMING_REGEX = /^\d{4}-\d{3} .+/;
+const NAMING_REGEX = /^\d{4}-\d+ .+/;
 
 export const projectNamingPolicy = {
   /**
-   * Validates if a manually provided name follows the [YYYY]-[NNN] [Name] format.
+   * Validates if a manually provided name follows the [YYYY]-[Nomor] [Name] format.
    */
   validateManualFormat(name: string) {
     if (!NAMING_REGEX.test(name)) {
       throw new ActionError(
-        "Project name must use the format: [YYYY]-[NNN] [Name].",
+        "Project name must use the format: [YYYY]-[Nomor] [Name].",
         "INVALID_FORMAT"
       );
     }
@@ -42,7 +42,7 @@ export const projectNamingPolicy = {
 
     let nextNumber = 1;
     if (lastProject) {
-      const match = lastProject.name.match(new RegExp(`^${currentYear}-(\\d{3})`));
+      const match = lastProject.name.match(new RegExp(`^${currentYear}-(\\d+)`));
       if (match) {
         nextNumber = parseInt(match[1], 10) + 1;
       }
@@ -53,10 +53,10 @@ export const projectNamingPolicy = {
   },
   
   /**
-   * Extracts the [YYYY]-[NNN] code from a formatted project name.
+   * Extracts the [YYYY]-[Nomor] code from a formatted project name.
    */
   extractProjectCode(name: string): string {
-    const match = name.match(/^(\d{4}-\d{3})/);
+    const match = name.match(/^(\d{4}-\d+)/);
     return match ? match[0] : "PENDING";
   },
 

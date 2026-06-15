@@ -98,6 +98,8 @@ export default async function ProjectOverviewPage({
   }
 
   const globalChecklists = project.checklists.filter((item) => item.phase_id === null);
+  const deferredActivities = project.activities.filter((act) => act.phase_id !== null);
+  const projectTodoActivities = project.activities.filter((act) => act.phase_id === null);
 
   const users = await prisma.user.findMany({
     select: {
@@ -179,7 +181,8 @@ export default async function ProjectOverviewPage({
             canEdit={canEdit}
             currentProgress={getProjectProgress(project.phases)}
             phases={project.phases}
-            deferredActivities={project.activities as React.ComponentProps<typeof ProjectOverviewForm>["deferredActivities"]}
+            deferredActivities={deferredActivities as React.ComponentProps<typeof ProjectOverviewForm>["deferredActivities"]}
+            projectTodoActivities={projectTodoActivities as React.ComponentProps<typeof ProjectOverviewForm>["projectTodoActivities"]}
           />
         </div>
 

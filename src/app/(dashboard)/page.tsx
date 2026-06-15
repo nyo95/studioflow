@@ -2,7 +2,7 @@ import { prisma } from "@/core/platform/db";
 import { Prisma, Role, PhaseStatus } from "@/generated/prisma";
 import { TodayQuickAddModal } from "@/components/today-quick-add-modal";
 import { TodayView } from "@/components/today-view";
-import { DashboardProject } from "@/types/dashboard";
+import { DashboardProject, DashboardPhase } from "@/types/dashboard";
 import {
   DashboardPageShell,
   PageHeader,
@@ -52,6 +52,10 @@ export default async function HomePage() {
           },
         },
       },
+      activities: {
+        where: { phase_id: null, revision_id: null, mode: { in: ["TODO", "FEEDBACK"] } },
+        orderBy: { id: "asc" },
+      },
     },
     orderBy: [
       { priority: "asc" },
@@ -61,7 +65,7 @@ export default async function HomePage() {
 
   // Filter projects/phases with 0 tasks and transform
   const projectsWithTasks: DashboardProject[] = projects.map((project) => {
-    const phasesWithTasks = project.phases.map((phase) => {
+    const phasesWithTasks: DashboardPhase[] = project.phases.map((phase) => {
       const activeRevision = phase.revisions[0];
       const tasks = activeRevision?.activities || [];
       return {
@@ -81,6 +85,26 @@ export default async function HomePage() {
       };
     }).filter(p => p.tasks.length > 0 || p.revisionId);
 
+    const projectTodoTasks = project.activities || [];
+    if (projectTodoTasks.length > 0) {
+      phasesWithTasks.push({
+        id: `general-${project.id}`,
+        name: "General Tasks",
+        status: "IN_PROGRESS" as PhaseStatus,
+        isProjectLevel: true,
+        projectId: project.id,
+        tasks: projectTodoTasks.map(t => ({
+          id: t.id,
+          content: t.content,
+          status: t.status,
+          mode: t.mode,
+          projectName: project.name,
+          phaseName: "General Tasks",
+          isUrgent: project.priority === "URGENT"
+        }))
+      });
+    }
+
     return {
       id: project.id,
       name: project.name,
@@ -92,11 +116,18 @@ export default async function HomePage() {
   const modalProjects = projects.map((project) => ({
     projectId: project.id,
     projectName: project.name,
-    phases: project.phases.map((phase) => ({
-      phaseId: phase.id,
-      activeRevisionId: phase.revisions[0]?.id,
-      phaseName: formatPhaseName(phase.name_enum),
-    })),
+    phases: [
+      {
+        phaseId: "general",
+        phaseName: "General Tasks",
+        isProjectLevel: true,
+      },
+      ...project.phases.map((phase) => ({
+        phaseId: phase.id,
+        activeRevisionId: phase.revisions[0]?.id,
+        phaseName: formatPhaseName(phase.name_enum),
+      })),
+    ],
   }));
 
   return (

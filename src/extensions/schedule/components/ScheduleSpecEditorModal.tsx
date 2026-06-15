@@ -610,6 +610,7 @@ export function ScheduleSpecEditorModal({
                         </div>
                       )}
                     </div>
+                  </div>
                 )}
               </div>
             </ScrollArea>

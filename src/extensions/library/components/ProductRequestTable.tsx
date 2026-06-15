@@ -65,13 +65,15 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
   const [updatingId, setUpdatingId] = React.useState<string | null>(null);
   const [showHistory, setShowHistory] = React.useState(false);
 
+  const now = React.useRef(Date.now()).current;
+
   const { activeRequests, displayedHistory } = React.useMemo(() => {
     const active = requests.filter(r => r.status === "REQUESTED" || r.status === "IN_PROGRESS");
     const history = requests.filter(r => r.status === "RECEIVED" || r.status === "UNAVAILABLE");
     
     const filteredHistory = history.filter(req => {
       const updateDate = new Date(req.updated_at);
-      const diffTime = Math.abs(Date.now() - updateDate.getTime());
+      const diffTime = Math.abs(now - updateDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays <= 7;
     });
@@ -80,7 +82,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
       activeRequests: active, 
       displayedHistory: showHistory ? filteredHistory : [] 
     };
-  }, [requests, showHistory]);
+  }, [requests, showHistory, now]);
 
   const allDisplayed = [...activeRequests, ...displayedHistory];
 

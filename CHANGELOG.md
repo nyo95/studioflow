@@ -1,5 +1,40 @@
 # StudioFlow Development Log (Changelog)
 
+## [v2.7.3] — 2026-06-15 (Project-Level Todo List & LAN Exposure Automation)
+
+### Added
+- **Project-Level Tasks Action**: Added a new server action `addProjectActivity` to support creating todo items directly bound to a project without a phase or revision.
+- **Unbound Todo List in Overview**: Integrated an interactive, client-side reactive "Project Tasks" card component directly into the main Project Overview area.
+- **Service Layer Support**: Implemented `executeAddProjectActivity` inside `projectService` with appropriate database creation and audit logging.
+- **Today's View Integration**: Incorporated project-level activities as a virtual "General Tasks" phase inside "Today's View".
+- **Quick Add Modal & Inline Add Support**: Updated `TodayQuickAddModal` and `TodayInlineAdd` to support choosing and inline adding tasks directly to "General Tasks" at the project scope, dynamically executing the appropriate project action.
+- **LAN & IP Sync Automation**: Updated the `sync-ip` Node script to dynamically update `AUTH_URL`, `NEXTAUTH_URL`, and `NEXT_PUBLIC_SITE_URL` in `.env`, and configured `experimental.serverActions.allowedOrigins` in `next.config.ts` to prevent CSRF errors when accessed from other LAN devices.
+
+### UI Changes
+- **Project Tasks Component**: Renders general project todo items using the Lora serif and Inter sans typography guidelines, featuring interactive status toggles, inline double-click editing, and delete actions with optimistic rendering updates.
+- **Clean Layout**: Divided project activities on the overview page so that phase-deferred tasks are shown separately from general project-level tasks.
+
+## [v2.7.2] — 2026-06-15 (Global Hydration & Layout Fixes)
+
+### Fixed
+- **Global Activity Hydration Mismatch**: Resolved Next.js React hydration warnings on `/activity` and `/projects/[id]/activity` pages caused by invalid HTML nesting (`In HTML, <div> cannot be a child of <table>`).
+- **Activity Log Layout Wrap**: Replaced the outer `TableCard` container with a `SectionCard padding="none"` wrapper in both the global Activity Page and Project Activity Page, since the child `ActivityLogTable` renders non-tabular elements (`div`, `article`, timeline, etc.).
+
+### UI Changes
+- **Activity Page Layout Container**: Replaced `TableCard` with `SectionCard padding="none"` for Activity log displays, preserving identical visual cards and borders while correcting invalid table-div DOM nesting.
+
+## [v2.7.1] — 2026-06-15 (Local Development Setup, Naming & Performance Fixes)
+
+### Changed
+- **Flexible Project Naming Format**: Updated the naming protocol regex and validation pattern to allow sequential numbers (Nomor) of any digit length (using `\d+` instead of strictly `\d{3}`), while keeping space as the separator before project name (e.g. `2026-484 Sociolla XMM Bekasi`).
+- **Dynamic Imports Performance Optimization**: Refactored static imports of heavy modals and tabs (such as `ScheduleProductPickerModal`, `ScheduleSpecEditorModal`, `VendorTable`, `PhysicalInventoryTable`, `LibraryFormModal`, `ProductRequestTable`, and `PromotionQueueTable`) into Next.js lazy-loaded dynamic imports (`next/dynamic`), improving page load performance and reducing the initial JS bundle size.
+
+### Fixed
+- **ScheduleSpecEditorModal Syntax**: Fixed a missing closing `</div>` tag in the ternary conditional statement which caused Turbopack compilation failure.
+- **ProjectOverviewForm Import**: Imported missing `Loader2` from `lucide-react` to resolve TypeScript type-checking errors.
+- **Branding Panel Text Alignment**: Synchronized naming descriptions in [studio-settings-panel.tsx](file:///d:/Misc/ProjectsHUB/studioflow/src/components/studio-settings-panel.tsx) to show `[YYYY]-[Nomor] [Name]` with a space instead of a dash.
+- **Impure Rendering Warnings**: Cached `Date.now()` within `React.useRef` inside `PromotionQueueTable` and `ProductRequestTable` filters to resolve React hooks purity rule warnings.
+
 ## [v2.7.0] — 2026-04-29 (Engineering SSOT Alignment Phase 1 & 2)
 
 ### Workflow Optimization

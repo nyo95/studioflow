@@ -4,6 +4,7 @@ import { KeyboardEvent, useEffect, useRef, useState, useTransition } from "react
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
 import { addActivity } from "@/actions/phase-actions";
+import { addProjectActivity } from "@/actions/project-actions";
 import { cn } from "@/lib/utils";
 import { unwrapActionResult } from "@/lib/result";
 import {
@@ -12,7 +13,7 @@ import {
 } from "@/ui_engine";
 
 interface TodayInlineAddProps {
-  phases: Array<{ id: string; name: string; revisionId: string; status: string }>;
+  phases: Array<{ id: string; name: string; revisionId?: string; status: string; isProjectLevel?: boolean; projectId?: string }>;
   mode?: "TODO" | "FEEDBACK";
   className?: string;
   containerClassName?: string;
@@ -58,19 +59,25 @@ export function TodayInlineAdd({
       return;
     }
 
-    if (!selectedPhase?.revisionId) {
-      setError("Cannot add tasks without an active iteration.");
-      return;
-    }
-
     setError(null);
     startTransition(async () => {
       try {
-        unwrapActionResult(await addActivity({ 
-          revisionId: selectedPhase.revisionId, 
-          content: trimmedValue, 
-          mode 
-        }));
+        if (selectedPhase?.isProjectLevel) {
+          unwrapActionResult(await addProjectActivity({ 
+            projectId: selectedPhase.projectId!, 
+            content: trimmedValue, 
+          }));
+        } else {
+          if (!selectedPhase?.revisionId) {
+            setError("Cannot add tasks without an active iteration.");
+            return;
+          }
+          unwrapActionResult(await addActivity({ 
+            revisionId: selectedPhase.revisionId, 
+            content: trimmedValue, 
+            mode 
+          }));
+        }
         setValue("");
         setIsEditing(false);
         router.refresh();

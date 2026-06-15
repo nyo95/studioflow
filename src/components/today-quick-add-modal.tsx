@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { addActivity } from "@/actions/phase-actions";
+import { addProjectActivity } from "@/actions/project-actions";
 import { unwrapActionResult } from "@/lib/result";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ interface ActivePhase {
   phaseId: string;
   activeRevisionId?: string; // Add this
   phaseName: string;
+  isProjectLevel?: boolean;
 }
 
 interface ActiveProject {
@@ -79,11 +81,6 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
       return;
     }
 
-    if (!selectedPhase?.activeRevisionId) {
-      setError("This phase has no active iteration.");
-      return;
-    }
-
     const trimmedTaskName = taskName.trim();
     if (!trimmedTaskName) {
       setError("Task name cannot be empty.");
@@ -93,18 +90,31 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
     setError(null);
     startTransition(async () => {
       try {
-        unwrapActionResult(
-          await addActivity({
-            revisionId: selectedPhase.activeRevisionId!,
-            content: trimmedTaskName,
-            mode: "TODO",
-          })
-        );
+        if (selectedPhase?.isProjectLevel) {
+          unwrapActionResult(
+            await addProjectActivity({
+              projectId: selectedProjectId,
+              content: trimmedTaskName,
+            })
+          );
+        } else {
+          if (!selectedPhase?.activeRevisionId) {
+            setError("This phase has no active iteration.");
+            return;
+          }
+          unwrapActionResult(
+            await addActivity({
+              revisionId: selectedPhase.activeRevisionId!,
+              content: trimmedTaskName,
+              mode: "TODO",
+            })
+          );
+        }
         router.refresh();
         handleClose();
       } catch (err) {
         console.error("Failed to add task:", err);
-        setError("Failed to add task. You may not have permission for this phase.");
+        setError("Failed to add task. You may not have permission.");
       }
     });
   }

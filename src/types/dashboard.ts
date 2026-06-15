@@ -16,6 +16,8 @@ export interface DashboardPhase {
   status: PhaseStatus;
   revisionId?: string;
   tasks: DashboardTask[];
+  isProjectLevel?: boolean;
+  projectId?: string;
 }
 
 export interface DashboardProject {

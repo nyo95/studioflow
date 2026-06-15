@@ -20,7 +20,7 @@ type RenderItem =
       type: "inlineAdd"; 
       id: string; 
       projectId: string; 
-      phase: { id: string; name: string; revisionId: string; status: string };
+      phase: { id: string; name: string; revisionId?: string; status: string; isProjectLevel?: boolean; projectId?: string };
       mode: "TODO" | "FEEDBACK" 
     };
 
@@ -81,7 +81,7 @@ export function TodayView({ projects }: TodayViewProps) {
           });
 
           // Inline Add specifically for THIS phase
-          if (!isDone && phase.revisionId) {
+          if (!isDone && (phase.revisionId || phase.isProjectLevel)) {
             list.push({
               type: "inlineAdd",
               id: `add-phase-${phase.id}`,
@@ -90,7 +90,9 @@ export function TodayView({ projects }: TodayViewProps) {
                   id: phase.id,
                   name: phase.name,
                   revisionId: phase.revisionId,
-                  status: phase.status
+                  status: phase.status,
+                  isProjectLevel: phase.isProjectLevel,
+                  projectId: phase.projectId
               },
               mode: phase.status.startsWith("ON_REVIEW") ? "FEEDBACK" : "TODO"
             });

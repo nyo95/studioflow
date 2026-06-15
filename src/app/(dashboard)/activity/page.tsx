@@ -1,4 +1,4 @@
-import { DashboardPageShell, PageHeader, TableCard } from "@/ui_engine";
+import { DashboardPageShell, PageHeader, SectionCard } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { Role } from "@/generated/prisma";
 import { auditService } from "@/core/platform/audit";
@@ -34,7 +34,7 @@ export default async function ActivityPage({
         description="Ringkasan aktivitas terbaru tim. Gunakan filter bila ingin lihat orang, fase, atau rentang tanggal tertentu."
       />
 
-      <TableCard className="overflow-hidden">
+      <SectionCard padding="none" className="overflow-hidden">
         <ActivityLogTable
           logs={data.logs}
           canUndo={role === Role.ADMIN || role === Role.DIC}
@@ -51,7 +51,7 @@ export default async function ActivityPage({
             dateTo: getSingle(params.to) ?? "",
           }}
         />
-      </TableCard>
+      </SectionCard>
     </DashboardPageShell>
   );
 }

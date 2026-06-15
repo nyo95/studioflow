@@ -3,7 +3,7 @@ import { Role } from "@/generated/prisma";
 import { getSession } from "@/lib/auth";
 import { auditService, type AuditFiltersInput } from "@/core/platform/audit";
 import { ActivityLogTable } from "@/components/activity-log-table";
-import { DashboardPageShell, PageBackLink, PageHeader, TableCard } from "@/ui_engine";
+import { DashboardPageShell, PageBackLink, PageHeader, SectionCard } from "@/ui_engine";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -50,7 +50,7 @@ export default async function ProjectActivityPage({
         description="Riwayat aktivitas khusus proyek ini dalam bahasa yang lebih mudah dibaca, plus filter, ekspor, dan undo."
       />
 
-      <TableCard className="overflow-hidden">
+      <SectionCard padding="none" className="overflow-hidden">
         <ActivityLogTable
           logs={data.logs}
           canUndo={role === Role.ADMIN || role === Role.DIC}
@@ -67,7 +67,7 @@ export default async function ProjectActivityPage({
             dateTo: getSingle(query.to) ?? "",
           }}
         />
-      </TableCard>
+      </SectionCard>
     </DashboardPageShell>
   );
 }

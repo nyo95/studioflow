@@ -3,7 +3,7 @@ import { ActionError } from "@/lib/error-types";
 import { isGlobalChecklistTemplate } from "@/core/rbac/permissions";
 import { insertAuditLog, getSystemConfigTx, upsertClientByName } from "@/actions/_shared";
 import { calculateBackwardTimeline } from "@/lib/date-utils";
-import { PhaseName, ProjectPriority, ProjectStatus, TimelineStatus, PhaseStatus } from "@/generated/prisma";
+import { PhaseName, ProjectPriority, ProjectStatus, TimelineStatus, PhaseStatus, ActivityStatus } from "@/generated/prisma";
 import { AUDIT_ACTIONS } from "@/core/platform/audit";
 import { projectNamingPolicy } from "@/core/domain-shared/project-naming";
 
@@ -233,8 +233,8 @@ export const projectService = {
 
     if (userRole === "ADMIN" && normalizedName) {
       // Validate naming protocol if ADMIN manually changes the name
-      if (!/^\d{4}-\d{3} .+/.test(normalizedName)) {
-        throw new ActionError("ADMIN: Manual project rename MUST follow the protocol: [YYYY]-[NNN] [Name].", "PROTOCOL_VIOLATION");
+      if (!/^\d{4}-\d+ .+/.test(normalizedName)) {
+        throw new ActionError("ADMIN: Manual project rename MUST follow the protocol: [YYYY]-[Nomor] [Name].", "PROTOCOL_VIOLATION");
       }
     }
 
@@ -454,5 +454,35 @@ export const projectService = {
     });
 
     return updated;
+  },
+
+  /**
+   * Adds a project-level activity (todo) not bound to any phase.
+   */
+  async executeAddProjectActivity(
+    tx: PrismaTransaction,
+    params: { projectId: string; content: string; userId: string }
+  ) {
+    const { projectId, content, userId } = params;
+    const normalizedContent = content.trim();
+    if (!normalizedContent) throw new ActionError("INVALID_INPUT", "CONTENT_REQUIRED");
+
+    const newActivity = await tx.activity.create({
+      data: {
+        project_id: projectId,
+        content: normalizedContent,
+        mode: "TODO",
+        status: ActivityStatus.OPEN,
+      },
+    });
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.ADD_ACTIVITY, "Activity", newActivity.id, userId, {
+      project_id: projectId,
+      content: normalizedContent,
+      mode: "TODO",
+      project_level: true,
+    });
+
+    return newActivity;
   },
 };

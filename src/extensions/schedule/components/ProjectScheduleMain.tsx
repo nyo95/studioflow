@@ -18,8 +18,17 @@ import {
 import { ScheduleBoard } from "./board/ScheduleBoard";
 import { VisualTable } from "./table/VisualTable";
 import { ScheduleSearchBar } from "./ScheduleSearchBar";
-import { ScheduleProductPickerModal } from "./ScheduleProductPickerModal";
-import { ScheduleSpecEditorModal } from "./ScheduleSpecEditorModal";
+import dynamic from "next/dynamic";
+
+const ScheduleProductPickerModal = dynamic(
+  () => import("./ScheduleProductPickerModal").then((mod) => mod.ScheduleProductPickerModal),
+  { ssr: false }
+);
+
+const ScheduleSpecEditorModal = dynamic(
+  () => import("./ScheduleSpecEditorModal").then((mod) => mod.ScheduleSpecEditorModal),
+  { ssr: false }
+);
 import type { ProjectScheduleSheetPayload, ScheduleGroupedByCategory, ProjectScheduleEntryWithRelations, ScheduleOptionSnapshot } from "../types";
 import { ProjectScheduleProvider } from "../context/ProjectScheduleContext";
 import { useRouter } from "next/navigation";

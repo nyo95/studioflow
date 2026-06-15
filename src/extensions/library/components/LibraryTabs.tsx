@@ -7,14 +7,36 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Search, Filter, Warehouse, Plus, LayoutGrid, Clock, ClipboardList } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { VendorTable } from "./VendorTable";
-import { PhysicalInventoryTable } from "./PhysicalInventoryTable";
-import { LibraryFormModal } from "./LibraryFormModal";
 import { ProductCatalogWithRelations, LibraryVendor, ProjectProductRequestWithDetails } from "../types";
 import { ProductGrid } from "./catalog/ProductGrid";
-import { ProductRequestTable } from "./ProductRequestTable";
-import { PromotionQueueTable } from "./PromotionQueueTable";
 import { Button } from "@/components/ui/button";
+
+import dynamic from "next/dynamic";
+
+const VendorTable = dynamic(
+  () => import("./VendorTable").then((mod) => mod.VendorTable),
+  { ssr: false }
+);
+
+const PhysicalInventoryTable = dynamic(
+  () => import("./PhysicalInventoryTable").then((mod) => mod.PhysicalInventoryTable),
+  { ssr: false }
+);
+
+const LibraryFormModal = dynamic(
+  () => import("./LibraryFormModal").then((mod) => mod.LibraryFormModal),
+  { ssr: false }
+);
+
+const ProductRequestTable = dynamic(
+  () => import("./ProductRequestTable").then((mod) => mod.ProductRequestTable),
+  { ssr: false }
+);
+
+const PromotionQueueTable = dynamic(
+  () => import("./PromotionQueueTable").then((mod) => mod.PromotionQueueTable),
+  { ssr: false }
+);
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ActionSidebar, ActionSidebarSection, ActionSidebarItem, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";

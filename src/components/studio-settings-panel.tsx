@@ -273,12 +273,12 @@ export function StudioSettingsPanel({
                   </p>
                   <p className="text-sm text-slate-500">
                     {isAutoNamingEnabled
-                      ? "System generates the [YYYY]-[NNN]- prefix automatically."
-                      : "Admins must enter the full title manually using [YYYY]-[NNN]-[Name]."}
+                      ? "System generates the [YYYY]-[Nomor] prefix automatically."
+                      : "Admins must enter the full title manually using [YYYY]-[Nomor] [Name]."}
                   </p>
                 </div>
                 <p className="font-mono text-xs text-slate-500">
-                  Format: [YYYY]-[NNN]-[Name]
+                  Format: [YYYY]-[Nomor] [Name]
                 </p>
               </div>
 

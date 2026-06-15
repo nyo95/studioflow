@@ -72,16 +72,18 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
 
   const [showHistory, setShowHistory] = React.useState(false);
 
+  const now = React.useRef(Date.now()).current;
+
   const displayedProcessedRequests = React.useMemo(() => {
     if (!showHistory) return [];
     return processedRequests.filter(req => {
       if (!req.reviewed_at) return true; // Show if no date (fallback)
       const reviewDate = new Date(req.reviewed_at);
-      const diffTime = Math.abs(Date.now() - reviewDate.getTime());
+      const diffTime = Math.abs(now - reviewDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays <= 7;
     });
-  }, [processedRequests, showHistory]);
+  }, [processedRequests, showHistory, now]);
 
   if (requests.length === 0) {
     return (

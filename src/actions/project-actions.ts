@@ -2,14 +2,15 @@
 
 import { createAction } from "@/lib/action-wrapper";
 import { projectService } from "@/lib/services/project-service";
-import { assertAdmin, getProjectMetadataAccessOrThrow, getProjectSyncChecklistAccessOrThrow } from "@/core/rbac/permissions";
+import { assertAdmin, getProjectMetadataAccessOrThrow, getProjectSyncChecklistAccessOrThrow, getProjectMembershipOrThrow } from "@/core/rbac/permissions";
 import { invalidateCache } from "@/lib/revalidation";
-import { REVALIDATE_ACTIVITY, REVALIDATE_HOME, REVALIDATE_PROJECT, REVALIDATE_PROJECTS } from "@/lib/revalidation-tags";
+import { REVALIDATE_ACTIVITY, REVALIDATE_HOME, REVALIDATE_PROJECT, REVALIDATE_PROJECTS, REVALIDATE_TODAY } from "@/lib/revalidation-tags";
 import { 
   BootstrapProjectSchema, 
   UpdateProjectMetadataSchema, 
   UpdateProjectPrioritySchema, 
-  ProjectIdSchema 
+  ProjectIdSchema,
+  AddProjectActivitySchema
 } from "@/lib/validations";
 
 export const bootstrapProject = createAction(
@@ -117,4 +118,22 @@ export const completeProject = createAction(
     return result;
   },
   { schema: ProjectIdSchema }
+);
+
+export const addProjectActivity = createAction(
+  async ({ input, ctx, tx }) => {
+    await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
+
+    const result = await projectService.executeAddProjectActivity(tx, {
+      projectId: input.projectId,
+      content: input.content,
+      userId: ctx.userId,
+    });
+
+    invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
+    invalidateCache({ scope: REVALIDATE_TODAY });
+
+    return result;
+  },
+  { schema: AddProjectActivitySchema }
 );

@@ -42,6 +42,7 @@ try {
   
   const updatedContent = envContent
     .replace(/(AUTH_URL="http:\/\/)(.*)(:3000")/g, `$1${newIp}$3`)
+    .replace(/(NEXTAUTH_URL="http:\/\/)(.*)(:3000")/g, `$1${newIp}$3`)
     .replace(/(NEXT_PUBLIC_SITE_URL="http:\/\/)(.*)(:3000")/g, `$1${newIp}$3`);
 
   if (envContent === updatedContent) {
@@ -57,10 +58,15 @@ try {
 const nextConfigPath = join(process.cwd(), 'next.config.ts');
 try {
   let configContent = readFileSync(nextConfigPath, 'utf8');
-  const updatedConfig = configContent.replace(
-    /allowedDevOrigins: \[.*\]/,
-    `allowedDevOrigins: ["${newIp}", "localhost:3000"]`
-  );
+  const updatedConfig = configContent
+    .replace(
+      /allowedDevOrigins: \[.*\]/,
+      `allowedDevOrigins: ["${newIp}", "localhost:3000"]`
+    )
+    .replace(
+      /allowedOrigins: \[.*\]/,
+      `allowedOrigins: ["localhost:3000", "${newIp}:3000"]`
+    );
 
   if (configContent === updatedConfig) {
     console.log('✅ next.config.ts is already up to date.');

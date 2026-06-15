@@ -91,6 +91,11 @@ export const AddActivitySchema = z.object({
   mode: z.nativeEnum(ActivityMode),
 });
 
+export const AddProjectActivitySchema = z.object({
+  projectId: IdSchema,
+  content: z.string().min(1),
+});
+
 export const UpdateActivitySchema = z.object({
   activityId: IdSchema,
   content: z.string().min(1),

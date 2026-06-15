@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 2.7.0 (v2.7.0 - Engineering SSOT Alignment)
-> **Last Updated:** April 29, 2026 (v2.7.0 - Engineering SSOT Alignment)
+> **Document Version:** 2.7.3 (v2.7.3 - Project-Level Todo List & LAN Exposure Automation)
+> **Last Updated:** June 15, 2026 (v2.7.3 - Project-Level Todo List & LAN Exposure Automation)
 > **Purpose:** Unified canonical documentation for StudioFlow codebase, including Pillar 1 (Studio Management) and Pillar 2 (Scheduler & Library).
 
 ---
@@ -137,10 +137,11 @@ Phases follow a strict sequence (MOODBOARD → LAYOUT → DESIGN_3D → CD → S
 - **Data Integrity:** The `allow_parallel` flag is a mandatory boolean in the Phase model; existing projects must be patched to ensure correct behavioral alignment with this SSOT.
 - **Locking:** Phase is locked automatically upon client approval.
 
-### 4.2 Global Activity Workflow (Patch 1.1)
-- **Agile Creation:** Tasks can be added to a project at any time, with or without a phase tag.
+### 4.2 Global Activity Workflow (v2.7.3)
+- **Agile Creation:** Tasks (Activities) can be added to a project at any time, with or without a phase/revision tag. Unbound tasks are treated as project-level tasks.
+- **Project Overview Integration:** Unbound project-level tasks are rendered in a dedicated client-side card in the Project Overview.
 - **Contextual Blocker:** Phase submission for review is blocked only by `OPEN` tasks tagged to that specific phase or its active revision.
-- **Today View:** Aggregates all `OPEN` tasks assigned to the user across all active projects.
+- **Today's View Integration:** Aggregates all `OPEN` tasks assigned to the user across all active projects, with unbound project-level tasks presented under a virtual "General Tasks" phase.
 
 ---
 
