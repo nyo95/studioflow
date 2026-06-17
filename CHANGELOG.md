@@ -1,5 +1,61 @@
 # StudioFlow Development Log (Changelog)
 
+## [v3.7.6] — 2026-06-17 (Mobile Responsiveness & Design System Reset)
+
+### Added
+- **UI Engine Reset to Default**: Added a "Reset to Default" action button in the Design System settings panel (under [studio-settings-panel.tsx](file:///d:/Misc/ProjectsHUB/studioflow/src/components/studio-settings-panel.tsx)), allowing admins to instantly revert all custom visual attributes back to standard design tokens.
+- **UI Engine Notice**: Placed an alert box detailing that the UI Engine does not fully function as a template engine yet, noting future development milestones.
+
+### Fixed
+- **Database Schema Sync**: Resolved the database connection issue where the `public.SketchupProject` table was missing by pushing the active `schema.prisma` configuration to the PostgreSQL database.
+- **UI Engine Token Alignment**: Aligned the fallback values in `DEFAULT_UI_SETTINGS` (inside [ui-settings.ts](file:///d:/Misc/ProjectsHUB/studioflow/src/lib/ui-settings.ts)) and the active `SystemConfig` database settings to match the refined design tokens (`radiusCard: 0.5rem`, `radiusControl: 0.375rem`, `sectionPx: 1.25rem`, `sectionPy: 1.25rem`). This prevents custom settings overrides from displaying bloated values.
+
+### UI Changes
+- **Proportional Radius Scaling**: Updated the settings panel inputs so that changing the `Card Radius` automatically scales the control and button radius properties proportionally in live previews and state payloads.
+- **Mobile Friendly Project Schedule**:
+  - Adjusted main body padding from `p-8` to responsive `p-4 md:p-8` in `ProjectScheduleMain` and `page.tsx` backlink wrapper to save screen width on smaller viewports.
+  - Implemented CSS flex wrapping (`flex-wrap`) on `PageHeader` action controls, preventing overflow when view toggles and imports are shown.
+  - Converted the Right Inspector Panel to a fixed overlay drawer (`fixed inset-y-0 right-0 z-50 w-full md:relative md:z-40 md:w-[400px]`) on screens smaller than 768px (mobile/tablet), preventing spreadsheet squishing.
+  - Wrapped `VisualTable` categories in a horizontal scroll container (`overflow-x-auto`) setting a min-width of `950px` on mobile/tablet viewports, ensuring all columns (specification, status, location, alternatives, actions) stay cleanly aligned and swipable.
+- **Mobile Friendly Library Stores & Tables**:
+  - Enabled horizontal scroll triggers (`overflow-x-auto flex-nowrap shrink-0`) on the main `LibraryTabs` headers to prevent label squeezing on mobile.
+  - Wrapped `ProductTable`, `PhysicalInventoryTable`, `ProductRequestTable`, and `VendorTable` containers with `overflow-x-auto` to allow horizontal scrolling on narrower viewports.
+  - Refactored `PromotionQueueTable` pending review card list to stack elements vertically (`flex-col`) on mobile screens and align buttons cleanly.
+
+## [v3.7.5] — 2026-06-17 (WhatsApp-style Hashtag Autocomplete & Locked Phase Protection)
+
+### Added
+- **WhatsApp-style Hashtag Autocomplete**: Implemented a floating hashtag auto-complete dropdown for inline task creation in `TodayInlineAdd`.
+- **Keyboard Navigation for Dropdown**: Supported navigating options using `ArrowUp`/`ArrowDown` (skipping locked phases) and selecting via `Enter`.
+- **Locked Phase Protection**: Enforced strict validation preventing users from adding tasks to locked/inactive phases in both `TodayInlineAdd` and `TodayQuickAddModal`.
+- **Locked Indicators**: Added clear `(Locked)` visual badges in autocomplete dropdowns for locked/completed phases.
+
+### Fixed
+- **JSX Compilation Mismatch**: Fixed an unbalanced JSX closing brace syntax error in `today-inline-add.tsx`.
+- **Comprehensive Project Phase Retrieval**: Adjusted dashboard data query in `page.tsx` to retrieve all project phases (including locked ones) so that they can be resolved for tag matches and autocomplete options.
+
+### UI Changes
+- **Right-Aligned Phase Badge**: Moved the selected phase badge to the right side of the inline task input field (inside the border box) to group it as a clean right-aligned label. Used a subtler `text-slate-400` color to fit premium minimalist aesthetics.
+- **Consolidated Inline Add Inputs**: Consolidated multiple phase-specific inline add inputs into a single `+ Add task...` box per project, located at the bottom of each project checklist section to prevent separated inputs per phase.
+- **Unified Project Checklist & Phase Badges**: Removed separate phase-divided subheaders in Today's View, grouping all tasks of a project into a single, unified checklist. Added right-aligned, muted phase badges (e.g., `Layout`, `General`, `CD`) directly on each task row to indicate its target phase.
+
+## [v3.7.4] — 2026-06-17 (Restrict SketchUp Integration to Admin)
+
+### Security
+- **Server Action Role Guard**: Secured all SketchUp server actions (`generateApiKeyAction`, `revokeApiKeyAction`, `queueMergeAction`, `linkSketchupMaterialAction`, `updateSketchupMaterialAction`, `updateSketchupFFEAction`, `pushStagedDataToScheduleAction`, `pushMaterialAsNewEntryAction`, `pushSketchupToSchedule`) with NextAuth session role validation requiring `ADMIN`.
+- **Actual User ID Logging**: Updated server actions to extract and pass the active `userId` from the session to the audit logger (`insertAuditLog`) instead of using hardcoded mock/system UUIDs.
+- **Page Guards**: Enforced NextAuth role-based protection on the SketchUp integration dashboard (`/projects/[id]/sketchup`) and print export preview (`/projects/[id]/sketchup/export`), returning `notFound()` for unauthorized non-admin roles.
+
+### UI Changes
+- **Conditional Submenu Item**: Modified `NavInner` and layout shell props to accept `userRole`, and wrapped the SketchUp sidebar link to only display when the logged-in user is an `ADMIN`.
+
+## [v3.7.3] — 2026-06-17 (Dynamic Phase Tagging for Todo Tasks)
+
+### Added
+- **Dynamic Phase Tagging**: Users can now append `#<phase_name>` to Todo inputs (e.g., `#Moodboard`, `#Layout`, `#CD`, `#spv`, `#general`) to route the task to a specific project phase or general tasks from any view.
+- **Tag Parser Helper**: Created `src/lib/services/task-tagger.ts` to parse trailing `#` tags and handle phase naming aliases case-insensitively.
+- **Cross-Phase Routing**: Integrated the tag parser into both `projectService.executeAddProjectActivity` and `phaseService.executeAddActivity` with fallback handlers.
+
 ## [v3.7.2] — 2026-06-16 (StudioFlow Visual Redesign & Programa Aesthetics)
 
 ### UI Changes

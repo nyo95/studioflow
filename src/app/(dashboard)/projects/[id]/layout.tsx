@@ -53,11 +53,13 @@ export default async function ProjectLayout({
 
   if (!project) {
     // Handle project not found
+    const session = await getSession();
     return (
       <ProjectLayoutShell
         projectId={projectId}
         projectName="Project Not Found"
         phases={[]}
+        userRole={session.role as string}
       >
         {children}
       </ProjectLayoutShell>
@@ -74,6 +76,7 @@ export default async function ProjectLayout({
         projectId={project.id}
         projectName={project.name}
         phases={navPhaseItems}
+        userRole={session.role as string}
         rightSidebar={
           session.userId && liveCollaborationEnabled ? (
             <ErrorBoundary name="Live Collaboration">

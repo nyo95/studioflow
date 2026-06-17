@@ -9,12 +9,19 @@ import {
 import { SketchupMappingQueue } from "@/extensions/sketchup/components/SketchupMappingQueue";
 import { PushToScheduleButton } from "@/extensions/sketchup/components/PushToScheduleButton";
 
+import { getSession } from "@/lib/auth";
+
 export default async function SketchupIntegrationPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const { role } = await getSession();
+  
+  if (role !== "ADMIN") {
+    notFound();
+  }
 
   const project = await prisma.project.findUnique({
     where: { id },

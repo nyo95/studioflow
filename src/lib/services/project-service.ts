@@ -6,6 +6,7 @@ import { calculateBackwardTimeline } from "@/lib/date-utils";
 import { PhaseName, ProjectPriority, ProjectStatus, TimelineStatus, PhaseStatus, ActivityStatus } from "@/generated/prisma";
 import { AUDIT_ACTIONS } from "@/core/platform/audit";
 import { projectNamingPolicy } from "@/core/domain-shared/project-naming";
+import { parsePhaseTag } from "@/lib/services/task-tagger";
 
 /**
  * Functional Service Layer for Project operations.
@@ -467,10 +468,50 @@ export const projectService = {
     const normalizedContent = content.trim();
     if (!normalizedContent) throw new ActionError("INVALID_INPUT", "CONTENT_REQUIRED");
 
+    const { cleanContent, targetPhaseName } = parsePhaseTag(normalizedContent);
+
+    if (targetPhaseName && targetPhaseName !== "GENERAL") {
+      const phase = await tx.phase.findFirst({
+        where: { project_id: projectId, name_enum: targetPhaseName },
+        include: {
+          revisions: {
+            where: { status_enum: "ACTIVE" },
+            take: 1,
+          },
+        },
+      });
+
+      if (phase && phase.revisions[0]) {
+        const newActivity = await tx.activity.create({
+          data: {
+            revision_id: phase.revisions[0].id,
+            project_id: projectId,
+            content: cleanContent,
+            mode: "TODO",
+            status: ActivityStatus.OPEN,
+            phase_id: phase.id,
+          },
+        });
+
+        await insertAuditLog(tx, AUDIT_ACTIONS.ADD_ACTIVITY, "Activity", newActivity.id, userId, {
+          project_id: projectId,
+          phase_id: phase.id,
+          revision_id: phase.revisions[0].id,
+          content: cleanContent,
+          mode: "TODO",
+        });
+
+        return newActivity;
+      }
+    }
+
+    // Fallback or GENERAL tag or no tag
+    const finalContent = targetPhaseName === "GENERAL" ? cleanContent : normalizedContent;
+
     const newActivity = await tx.activity.create({
       data: {
         project_id: projectId,
-        content: normalizedContent,
+        content: finalContent,
         mode: "TODO",
         status: ActivityStatus.OPEN,
       },
@@ -478,7 +519,7 @@ export const projectService = {
 
     await insertAuditLog(tx, AUDIT_ACTIONS.ADD_ACTIVITY, "Activity", newActivity.id, userId, {
       project_id: projectId,
-      content: normalizedContent,
+      content: finalContent,
       mode: "TODO",
       project_level: true,
     });

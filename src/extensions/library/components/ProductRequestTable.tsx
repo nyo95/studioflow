@@ -154,7 +154,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
         </Button>
       </div>
 
-      <div className={cn("border bg-white overflow-hidden shadow-sm", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
+      <div className={cn("border bg-white overflow-x-auto shadow-sm", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
       <Table>
         <TableHeader>
           <TableRow className={cn("hover:bg-transparent h-14 border-b", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>

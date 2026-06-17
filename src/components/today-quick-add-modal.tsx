@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { addActivity } from "@/actions/phase-actions";
 import { addProjectActivity } from "@/actions/project-actions";
@@ -27,6 +27,7 @@ interface ActivePhase {
   activeRevisionId?: string; // Add this
   phaseName: string;
   isProjectLevel?: boolean;
+  isLocked?: boolean;
 }
 
 interface ActiveProject {
@@ -38,6 +39,24 @@ interface ActiveProject {
 interface TodayQuickAddModalProps {
   projects: ActiveProject[];
 }
+
+const PHASE_ALIASES: Record<string, string> = {
+  moodboard: "moodboard",
+  mood: "moodboard",
+  concept: "moodboard",
+  layout: "layout",
+  design3d: "design 3d",
+  design_3d: "design 3d",
+  design: "design 3d",
+  "3d": "design 3d",
+  cd: "cd",
+  drawing: "cd",
+  supervision: "supervision",
+  spv: "supervision",
+  lapangan: "supervision",
+  general: "general tasks",
+  project: "general tasks"
+};
 
 export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
   const router = useRouter();
@@ -51,6 +70,28 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
   const selectedProject = projects.find((project) => project.projectId === selectedProjectId);
   const availablePhases = selectedProject?.phases ?? [];
   const selectedPhase = availablePhases.find((p) => p.phaseId === selectedPhaseId);
+
+  // Smart Tagging logic
+  useEffect(() => {
+    if (!taskName) return;
+    const match = taskName.match(/(?:^|\s)#(\w+)/);
+    if (match) {
+      const tag = match[1].toLowerCase().replace(/_/g, "");
+      const canonicalName = PHASE_ALIASES[tag] || tag;
+      const foundPhase = availablePhases.find((p) =>
+        p.phaseName.toLowerCase().replace(/ |\_/g, "") === canonicalName.replace(/ |\_/g, "") ||
+        p.phaseName.toLowerCase().replace(/ |\_/g, "").includes(tag)
+      );
+      if (foundPhase && foundPhase.phaseId !== selectedPhaseId) {
+        if (foundPhase.isLocked) {
+          setError(`Phase "${foundPhase.phaseName}" is locked. You cannot add tasks to it.`);
+        } else {
+          setSelectedPhaseId(foundPhase.phaseId);
+          setError(null);
+        }
+      }
+    }
+  }, [taskName, availablePhases, selectedPhaseId]);
 
   function handleProjectChange(value: string) {
     setSelectedProjectId(value);
@@ -81,7 +122,30 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
       return;
     }
 
-    const trimmedTaskName = taskName.trim();
+    if (selectedPhase?.isLocked) {
+      setError(`Phase "${selectedPhase.phaseName}" is locked. You cannot add tasks to it.`);
+      return;
+    }
+
+    let finalTaskName = taskName;
+    const match = taskName.match(/(?:^|\s)#(\w+)/);
+    if (match) {
+      const tag = match[1].toLowerCase().replace(/_/g, "");
+      const canonicalName = PHASE_ALIASES[tag] || tag;
+      const foundPhase = availablePhases.find((p) =>
+        p.phaseName.toLowerCase().replace(/ |\_/g, "") === canonicalName.replace(/ |\_/g, "") ||
+        p.phaseName.toLowerCase().replace(/ |\_/g, "").includes(tag)
+      );
+      if (foundPhase) {
+        if (foundPhase.isLocked) {
+          setError(`Phase "${foundPhase.phaseName}" is locked. You cannot add tasks to it.`);
+          return;
+        }
+        finalTaskName = taskName.replace(/(?:^|\s)#(\w+)/, "").trim();
+      }
+    }
+
+    const trimmedTaskName = finalTaskName.trim();
     if (!trimmedTaskName) {
       setError("Task name cannot be empty.");
       return;
@@ -179,8 +243,8 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
               </SelectTrigger>
               <SelectContent>
                 {availablePhases.map((phase) => (
-                  <SelectItem key={phase.phaseId} value={phase.phaseId}>
-                    {phase.phaseName}
+                  <SelectItem key={phase.phaseId} value={phase.phaseId} disabled={phase.isLocked}>
+                    {phase.phaseName} {phase.isLocked && "(Locked)"}
                   </SelectItem>
                 ))}
               </SelectContent>

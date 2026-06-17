@@ -116,8 +116,8 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                 key={req.id}
                 className={cn("bg-white border shadow-sm overflow-hidden hover:shadow-md transition-shadow", UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD)}
               >
-                <div className="p-6 flex items-start gap-6">
-                  <div className={cn("w-20 h-20 overflow-hidden flex-shrink-0", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
+                <div className="p-4 sm:p-6 flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+                  <div className={cn("w-20 h-20 overflow-hidden flex-shrink-0 mx-auto sm:mx-0", UI_ENGINE_BG_SUBTLE, UI_ENGINE_RADIUS_CARD)}>
                     <VisualAsset
                       src={req.snapshot_data?.catalog_image_url}
                       alt=""
@@ -125,10 +125,10 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                     />
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0 w-full">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                       <div>
-                        <h3 className="font-serif text-lg font-medium text-slate-900 truncate">
+                        <h3 className="font-serif text-base sm:text-lg font-medium text-slate-900 truncate">
                           {req.snapshot_data?.catalog_product_name || "Untitled Product"}
                         </h3>
                         <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
@@ -141,7 +141,7 @@ export function PromotionQueueTable({ requests, userRole, onRefresh }: Promotion
                       </div>
 
                       {isAdmin && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 mt-2 sm:mt-0 justify-end sm:justify-start w-full sm:w-auto shrink-0">
                           <Button
                             variant="outline"
                             size="sm"

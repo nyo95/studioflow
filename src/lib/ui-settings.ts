@@ -2,21 +2,21 @@ import type { UISettings, UISettingsStyle } from "@/types/common";
 
 export type { UISettings } from "@/types/common";
 
-const DEFAULT_UI_SETTINGS: UISettings = {
+export const DEFAULT_UI_SETTINGS: UISettings = {
   canvasBg: "rgb(248 250 252)",
-  radiusCard: "1.5rem",
-  sectionPx: "1.5rem",
-  sectionPy: "1.5rem",
-  rowPaddingY: "1rem",
-  sidebarWidth: "272px",
-  containerMaxWidth: "1280px",
+  radiusCard: "0.5rem",
+  sectionPx: "1.25rem",
+  sectionPy: "1.25rem",
+  rowPaddingY: "0.625rem",
+  sidebarWidth: "256px",
+  containerMaxWidth: "1440px",
   fontSerif: "var(--font-serif-base)",
   fontSans: "var(--font-sans-base)",
   pagePaddingY: "2.5rem",
-  pageMaxWidth: "1280px",
+  pageMaxWidth: "1440px",
   tableDensity: "compact", // default to compact for rows
   modalDensity: "standard", // default modal padding
-  radiusControl: "0.5rem",
+  radiusControl: "0.375rem",
   radiusAction: "0.25rem",
 };
 

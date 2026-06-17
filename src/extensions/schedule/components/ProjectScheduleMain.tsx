@@ -451,13 +451,13 @@ export function ProjectScheduleMain({
   return (
     <div className="flex h-full w-full overflow-hidden relative bg-slate-50">
       <div className="flex-1 flex flex-col h-full overflow-y-auto transition-all duration-300 ease-in-out">
-        <div className="p-8 pb-32 max-w-7xl mx-auto w-full">
+        <div className="p-4 md:p-8 pb-32 max-w-7xl mx-auto w-full">
       <PageHeader
         eyebrow="Schedule"
         title="Project Schedule"
         description="Manage specifications and procurement for this project."
         action={
-          <div className="flex items-center gap-3 relative">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 relative">
             <input
               ref={fileInputRef}
               type="file"
@@ -644,11 +644,11 @@ export function ProjectScheduleMain({
       <div 
         data-workspace-inspector="true"
         className={cn(
-          "border-l border-slate-200 bg-white h-full shadow-2xl z-40 transition-all duration-300 ease-in-out shrink-0 overflow-hidden",
-          inspectedItem ? "w-[400px] opacity-100" : "w-0 border-l-0 opacity-0 pointer-events-none"
+          "fixed inset-y-0 right-0 md:relative border-l border-slate-200 bg-white h-full shadow-2xl z-50 md:z-40 transition-all duration-300 ease-in-out shrink-0 overflow-hidden",
+          inspectedItem ? "w-full md:w-[400px] opacity-100" : "w-0 border-l-0 opacity-0 pointer-events-none"
         )}
       >
-        <div className="w-[400px] h-full">
+        <div className="w-full md:w-[400px] h-full">
           {inspectedItem && (
             <ScheduleWorkspaceInspector
               optionId={inspectedItem.optionId}

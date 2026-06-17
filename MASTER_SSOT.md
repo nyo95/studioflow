@@ -1,7 +1,7 @@
 # StudioFlow (radsaas-2) - Master Single Source of Truth (SSOT)
 
-> **Document Version:** 3.4.0 (Workspace Optimization & Right Inspector Panel)
-> **Last Updated:** June 16, 2026
+> **Document Version:** 3.7.5 (WhatsApp-style Hashtag Autocomplete & Locked Phase Protection)
+> **Last Updated:** June 17, 2026
 > **Purpose:** Canonical documentation of the StudioFlow system codebase, architecture, database schemas, business workflows, and security matrices. This document serves as a roadmap for system audits and developers.
 
 ---
@@ -128,8 +128,10 @@ Tracks system mutations.
 -   `project_id` & `phase_id`: Optional bindings.
 -   `details`: JSON snapshot capturing fields before and after changes.
 -   *Data Retention Policy*: Audit logs are preserved indefinitely. Deleting a project sets project references in logs to `NULL`, maintaining historical trails.
-### 4.2 Global Activity Workflow (v2.7.3)
+### 4.2 Global Activity Workflow (v3.7.5)
 - **Agile Creation:** Tasks (Activities) can be added to a project at any time, with or without a phase/revision tag. Unbound tasks are treated as project-level tasks.
+- **WhatsApp-style Hashtag Autocomplete (v3.7.5):** Todo inputs in Today's View support a WhatsApp-style floating autocomplete dropdown when typing `#`. It filters and lists all project phases (including locked/completed ones, clearly marked with a `(Locked)` badge). Keyboard navigation (`ArrowUp`/`ArrowDown`) automatically skips locked options. Selecting an option via click or `Enter` applies the phase tag, closes the dropdown, and cleans the `#tag` text from the input.
+- **Locked Phase Protection (v3.7.5):** Strict validation is enforced in both `TodayInlineAdd` and `TodayQuickAddModal` to prevent task insertion under locked or inactive phases, throwing a clear error message (e.g., `Phase "CD" is locked. You cannot add tasks to it.`) instead of silent plain-text fallback.
 - **Project Overview Integration:** Unbound project-level tasks are rendered in a dedicated client-side card in the Project Overview.
 - **Contextual Blocker:** Phase submission for review is blocked only by `OPEN` tasks tagged to that specific phase or its active revision.
 - **Today's View Integration:** Aggregates all `OPEN` tasks assigned to the user across all active projects, with unbound project-level tasks presented under a virtual "General Tasks" phase.
@@ -195,6 +197,7 @@ System authorization is governed by role permissions and verified by contextual 
 | **PHASE_MUTATE_CONTENT** | ✅ | ⚠️ (DIC Only) | ⚠️ (CD Phase Only) | ❌ |
 | **PHASE_MANAGE_CD** | ✅ | ✅ | ✅ | ❌ |
 | **PLUGIN_SCHEDULE_ADD** / **EDIT** / **DELETE** | ✅ | ✅ | ✅ | ❌ |
+| **SKETCHUP_INTEGRATION_MANAGE** | ✅ | ❌ | ❌ | ❌ |
 | **LIBRARY_VIEW** | ✅ | ✅ | ✅ | ✅ |
 | **LIBRARY_CREATE_ITEM** / **EDIT** / **DELETE** | ✅ | ❌ | ❌ | ❌ |
 | **LIBRARY_REQUEST_MATERIAL** | ✅ | ✅ | ✅ | ❌ |

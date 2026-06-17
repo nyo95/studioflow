@@ -18,6 +18,7 @@ export interface DashboardPhase {
   tasks: DashboardTask[];
   isProjectLevel?: boolean;
   projectId?: string;
+  isLocked?: boolean;
 }
 
 export interface DashboardProject {

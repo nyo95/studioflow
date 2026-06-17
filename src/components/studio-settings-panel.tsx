@@ -114,7 +114,34 @@ export function StudioSettingsPanel({
   };
 
   const handleUISettingChange = (key: string, value: string) => {
-    const nextSettings = { ...localUISettings, [key]: value };
+    let nextSettings = { ...localUISettings, [key]: value };
+    
+    // Proportional radius scaling
+    if (key === "radiusCard") {
+      let controlRadius = "0.375rem";
+      let actionRadius = "0.25rem";
+      
+      if (value === "1rem") {
+        controlRadius = "0.5rem";
+        actionRadius = "0.25rem";
+      } else if (value === "1.25rem") {
+        controlRadius = "0.75rem";
+        actionRadius = "0.375rem";
+      } else if (value === "1.5rem") {
+        controlRadius = "1rem";
+        actionRadius = "0.5rem";
+      }
+      
+      nextSettings = {
+        ...nextSettings,
+        radiusControl: controlRadius,
+        radiusAction: actionRadius,
+      };
+      
+      document.documentElement.style.setProperty("--ui-radius-control", controlRadius);
+      document.documentElement.style.setProperty("--ui-radius-action", actionRadius);
+    }
+
     setLocalUISettings(nextSettings);
     
     // Apply live preview by updating CSS variables on the fly
@@ -144,6 +171,45 @@ export function StudioSettingsPanel({
       await updateUISettings(localUISettings, appTitle);
     } catch (error) {
       console.error("Failed to save UI settings:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetToDefault = async () => {
+    if (!window.confirm("Are you sure you want to reset all design system settings to default?")) return;
+    setIsSaving(true);
+    try {
+      const { DEFAULT_UI_SETTINGS } = await import("@/lib/ui-settings");
+      setLocalUISettings(DEFAULT_UI_SETTINGS);
+
+      // Apply live preview for defaults
+      const variableMap: Record<string, string> = {
+        canvasBg: "--ui-canvas-bg",
+        radiusCard: "--ui-radius-card",
+        sectionPx: "--ui-section-px",
+        sectionPy: "--ui-section-py",
+        sidebarWidth: "--ui-sidebar-width",
+        containerMaxWidth: "--ui-container-max-width",
+        fontSerif: "--ui-font-serif",
+        rowPaddingY: "--ui-row-padding-y",
+        pagePaddingY: "--ui-page-padding-y",
+        pageMaxWidth: "--ui-page-max-width",
+        tableDensity: "--ui-table-density",
+        modalDensity: "--ui-modal-density",
+        radiusControl: "--ui-radius-control",
+        radiusAction: "--ui-radius-action",
+      };
+
+      for (const [k, v] of Object.entries(DEFAULT_UI_SETTINGS)) {
+        if (variableMap[k] && v) {
+          document.documentElement.style.setProperty(variableMap[k], v);
+        }
+      }
+
+      await updateUISettings(DEFAULT_UI_SETTINGS, appTitle);
+    } catch (error) {
+      console.error("Failed to reset UI settings:", error);
     } finally {
       setIsSaving(false);
     }
@@ -321,6 +387,12 @@ export function StudioSettingsPanel({
               </p>
             </div>
 
+            <div className="mt-4 p-4 bg-amber-50/50 border border-amber-100 rounded-[var(--ui-radius-control)]">
+              <p className="text-xs text-amber-800 font-medium leading-relaxed font-sans">
+                ⚠️ <strong>Note:</strong> Fitur UI Engine ini belum sesuai harapan sepenuhnya sebagai sebuah template engine. Kami akan menyempurnakannya di tahapan pengembangan berikutnya. Sementara waktu, Anda dapat menggunakan tombol <strong>Reset to Default</strong> di bawah untuk mengembalikan pengaturan visual ke nilai awal design system.
+              </p>
+            </div>
+
             <div className="mt-8 space-y-8">
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-4">
@@ -491,13 +563,23 @@ export function StudioSettingsPanel({
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-4 flex flex-wrap items-center gap-4">
                 <Button 
                   onClick={saveDesignSystem}
                   disabled={isSaving}
                   className="rounded-full bg-slate-900 px-8 py-6 text-xs font-bold uppercase tracking-widest text-white transition-all hover:scale-105 active:scale-95"
                 >
                   {isSaving ? "Publishing Changes..." : "Publish Design System"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSaving}
+                  onClick={handleResetToDefault}
+                  className="rounded-full border-slate-200 px-8 py-6 text-xs font-bold uppercase tracking-widest text-slate-600 transition-all hover:scale-105 active:scale-95 hover:bg-slate-50"
+                >
+                  Reset to Default
                 </Button>
               </div>
             </div>

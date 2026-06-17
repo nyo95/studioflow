@@ -37,7 +37,6 @@ export default async function HomePage() {
     where: whereClause,
     include: {
       phases: {
-        where: { status_enum: { in: activePhaseStatuses } },
         orderBy: { order_index: "asc" },
         include: {
           revisions: {
@@ -73,6 +72,7 @@ export default async function HomePage() {
         name: formatPhaseName(phase.name_enum),
         status: phase.status_enum,
         revisionId: activeRevision?.id,
+        isLocked: phase.is_locked,
         tasks: tasks.map(t => ({
           id: t.id,
           content: t.content,
@@ -83,7 +83,7 @@ export default async function HomePage() {
           isUrgent: project.priority === "URGENT"
         }))
       };
-    }).filter(p => p.tasks.length > 0 || p.revisionId);
+    });
 
     const projectTodoTasks = project.activities || [];
     if (projectTodoTasks.length > 0) {
@@ -121,11 +121,13 @@ export default async function HomePage() {
         phaseId: "general",
         phaseName: "General Tasks",
         isProjectLevel: true,
+        isLocked: false,
       },
       ...project.phases.map((phase) => ({
         phaseId: phase.id,
         activeRevisionId: phase.revisions[0]?.id,
         phaseName: formatPhaseName(phase.name_enum),
+        isLocked: phase.is_locked || (!phase.revisions[0]?.id),
       })),
     ],
   }));

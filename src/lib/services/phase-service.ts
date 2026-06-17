@@ -5,6 +5,8 @@ import { ERR } from "@/core/rbac/permissions";
 import { insertAuditLog, getActiveRevision, getActiveRevisionWithActivities, normalizeDrawingCode } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/core/platform/audit";
 import { PhasePolicy } from "@/lib/domain/phase-policy";
+import { projectService } from "./project-service";
+import { parsePhaseTag } from "./task-tagger";
 
 /**
  * Asserts that there are no pending tasks blocking phase approval.
@@ -836,26 +838,74 @@ export const phaseService = {
 
     const revision = await tx.revision.findUnique({
       where: { id: params.revisionId },
-      include: { phase: { select: { id: true, project_id: true } } },
+      include: { phase: { select: { id: true, project_id: true, name_enum: true } } },
     });
 
     if (!revision) throw new ActionError("Revision not found", "NOT_FOUND");
+
+    const { cleanContent, targetPhaseName } = parsePhaseTag(normalizedContent);
+
+    if (targetPhaseName === "GENERAL") {
+      return projectService.executeAddProjectActivity(tx, {
+        projectId: revision.phase.project_id,
+        content: cleanContent,
+        userId: params.userId,
+      });
+    }
+
+    if (targetPhaseName && targetPhaseName !== revision.phase.name_enum) {
+      const targetPhase = await tx.phase.findFirst({
+        where: { project_id: revision.phase.project_id, name_enum: targetPhaseName },
+        include: {
+          revisions: {
+            where: { status_enum: "ACTIVE" },
+            take: 1,
+          },
+        },
+      });
+
+      if (targetPhase && targetPhase.revisions[0]) {
+        const isTodo = params.mode === "TODO";
+        const isActive = targetPhase.revisions[0].status_enum === RevisionStatus.ACTIVE;
+
+        if (!(isTodo && !isActive)) {
+          const newActivity = await tx.activity.create({
+            data: {
+              revision_id: targetPhase.revisions[0].id,
+              project_id: revision.phase.project_id,
+              content: cleanContent,
+              mode: params.mode,
+              status: ActivityStatus.OPEN,
+              phase_id: targetPhase.id,
+            },
+          });
+
+          await insertAuditLog(tx, AUDIT_ACTIONS.ADD_ACTIVITY, "Activity", newActivity.id, params.userId, {
+            project_id: revision.phase.project_id,
+            phase_id: targetPhase.id,
+            revision_id: targetPhase.revisions[0].id,
+            content: cleanContent,
+            mode: params.mode,
+          });
+
+          return newActivity;
+        }
+      }
+    }
     
+    const finalContent = targetPhaseName ? cleanContent : normalizedContent;
     const isTodo = params.mode === "TODO";
     const isActive = revision.status_enum === RevisionStatus.ACTIVE;
 
     if (isTodo && !isActive) {
       throw new ActionError("Tidak bisa menambahkan TODO ke revision yang tidak aktif.", "INVALID_STATE");
     }
-    
-    // For FEEDBACK, we allow it even if status is not ACTIVE (e.g. while in review)
-    // as per Agile Creation SSOT 4.2
 
     const newActivity = await tx.activity.create({
       data: {
         revision_id: params.revisionId,
         project_id: revision.phase.project_id,
-        content: normalizedContent,
+        content: finalContent,
         mode: params.mode,
         status: ActivityStatus.OPEN,
       },
@@ -865,7 +915,7 @@ export const phaseService = {
       project_id: revision.phase.project_id,
       phase_id: revision.phase.id,
       revision_id: params.revisionId,
-      content: normalizedContent,
+      content: finalContent,
       mode: params.mode,
     });
 

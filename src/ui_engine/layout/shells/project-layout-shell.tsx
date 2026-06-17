@@ -19,6 +19,7 @@ type ProjectLayoutShellProps = {
   phases: PhaseItem[];
   children: React.ReactNode;
   rightSidebar?: React.ReactNode;
+  userRole?: string;
 };
 
 const STORAGE_KEY = "ui.projectNav.collapsed";
@@ -29,6 +30,7 @@ export function ProjectLayoutShell({
   phases,
   children,
   rightSidebar,
+  userRole,
 }: ProjectLayoutShellProps) {
   const [isNavOpenMobile, setIsNavOpenMobile] = React.useState(false);
   const [isCollapsedDesktop, setIsCollapsedDesktop] = React.useState(false);
@@ -73,6 +75,7 @@ export function ProjectLayoutShell({
           phases={phases}
           collapsed={isCollapsedDesktop}
           onToggleCollapsed={toggleCollapsedDesktop}
+          userRole={userRole}
         />
       </aside>
 
@@ -120,6 +123,7 @@ export function ProjectLayoutShell({
           phases={phases}
           collapsed={false}
           onNavigate={closeMobile}
+          userRole={userRole}
         />
       </aside>
 

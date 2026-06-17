@@ -16,6 +16,7 @@ interface TodayTaskItemProps {
   isUrgent?: boolean;
   className?: string;
   labelClassName?: string;
+  phaseName?: string;
 }
 
 export function TodayTaskItem({
@@ -26,6 +27,7 @@ export function TodayTaskItem({
   isUrgent,
   className,
   labelClassName,
+  phaseName,
 }: TodayTaskItemProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -85,6 +87,12 @@ export function TodayTaskItem({
         {isUrgent && <span className="mr-1.5 text-red-600 font-bold">•</span>}
         {label}
       </span>
+
+      {phaseName && (
+        <span className="flex-shrink-0 ml-4 bg-slate-100 px-2 py-0.5 rounded text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none">
+          {phaseName.replace(" Tasks", "")}
+        </span>
+      )}
     </div>
   );
 }

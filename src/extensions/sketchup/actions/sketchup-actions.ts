@@ -9,6 +9,7 @@ import { ProductType } from "@/generated/prisma";
 import { insertAuditLog } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/core/platform/audit/types";
 import { ScheduleService } from "@/extensions/schedule/services/schedule-service";
+import { requireSession } from "@/lib/auth";
 
 const FFEMetaSchema = z.object({
   brand: z.string().optional().nullable(),
@@ -20,8 +21,12 @@ const FFEMetaSchema = z.object({
   locations: z.array(z.string()).optional().default([]),
 });
 
-export async function generateApiKeyAction(projectId: string, sketchupModelName: string = "Default Model") {
+export async function generateApiKeyAction(projectId: string, sketchupModelName: string = "Main Design Model") {
   try {
+    const { role } = await requireSession();
+    if (role !== "ADMIN") {
+      return { error: "Unauthorized SketchUp Action. Premium feature only." };
+    }
     const randomString = crypto.randomBytes(16).toString("hex");
     const apiKey = `sf_sk_${randomString}`;
 
@@ -43,6 +48,10 @@ export async function generateApiKeyAction(projectId: string, sketchupModelName:
 
 export async function revokeApiKeyAction(sketchupProjectId: string, projectId: string) {
   try {
+    const { role } = await requireSession();
+    if (role !== "ADMIN") {
+      return { error: "Unauthorized SketchUp Action. Premium feature only." };
+    }
     await prisma.sketchupProject.delete({
       where: { id: sketchupProjectId },
     });
@@ -57,6 +66,10 @@ export async function revokeApiKeyAction(sketchupProjectId: string, projectId: s
 
 export async function queueMergeAction(sketchupProjectId: string, sourceCode: string, targetCode: string, projectId: string) {
   try {
+    const { role } = await requireSession();
+    if (role !== "ADMIN") {
+      return { error: "Unauthorized SketchUp Action. Premium feature only." };
+    }
     await prisma.sketchupMergeAction.create({
       data: {
         sketchup_project_id: sketchupProjectId,
@@ -255,6 +268,10 @@ export async function getProjectScheduleDocument(projectId: string): Promise<Pro
 
 export async function linkSketchupMaterialAction(materialId: string, linkedEntryId: string | null, projectId: string) {
   try {
+    const { role } = await requireSession();
+    if (role !== "ADMIN") {
+      return { error: "Unauthorized SketchUp Action. Premium feature only." };
+    }
     await prisma.sketchupMaterial.update({
       where: { id: materialId },
       data: { linked_entry_id: linkedEntryId },
@@ -273,6 +290,10 @@ export async function updateSketchupMaterialAction(
   projectId: string
 ) {
   try {
+    const { role } = await requireSession();
+    if (role !== "ADMIN") {
+      return { error: "Unauthorized SketchUp Action. Premium feature only." };
+    }
     await prisma.sketchupMaterial.update({
       where: { id: materialId },
       data: {
@@ -295,6 +316,10 @@ export async function updateSketchupFFEAction(
   projectId: string
 ) {
   try {
+    const { role } = await requireSession();
+    if (role !== "ADMIN") {
+      return { error: "Unauthorized SketchUp Action. Premium feature only." };
+    }
     const ffe = await prisma.sketchupFFE.findUnique({
       where: { id: ffeId },
     });
@@ -513,9 +538,14 @@ function buildFFESnapshot(
 
 export async function pushStagedDataToScheduleAction(
   projectId: string,
-  userId: string = "00000000-0000-4000-8000-000000000001"
+  _userId?: string
 ) {
   try {
+    const { role, userId } = await requireSession();
+    if (role !== "ADMIN") {
+      return { error: "Unauthorized SketchUp Action. Premium feature only." };
+    }
+
     const res = await prisma.$transaction(async (tx) => {
       // 1. Fetch SketchUp project
       const sp = await tx.sketchupProject.findFirst({
@@ -742,9 +772,14 @@ export async function pushStagedDataToScheduleAction(
 export async function pushMaterialAsNewEntryAction(
   materialId: string,
   projectId: string,
-  userId: string = "00000000-0000-4000-8000-000000000001"
+  _userId?: string
 ) {
   try {
+    const { role, userId } = await requireSession();
+    if (role !== "ADMIN") {
+      return { error: "Unauthorized SketchUp Action. Premium feature only." };
+    }
+
     const res = await prisma.$transaction(async (tx) => {
       const mat = await tx.sketchupMaterial.findUnique({
         where: { id: materialId },
@@ -863,9 +898,14 @@ export async function pushMaterialAsNewEntryAction(
 
 export async function pushSketchupToSchedule(
   sketchupProjectId: string,
-  userId: string = "00000000-0000-4000-8000-000000000001"
+  _userId?: string
 ) {
   try {
+    const { role, userId } = await requireSession();
+    if (role !== "ADMIN") {
+      return { pushed: 0, updated: 0, errors: ["Unauthorized SketchUp Action. Premium feature only."] };
+    }
+
     // 1. Fetch SketchupProject with materials and ffes
     const sketchupProject = await prisma.sketchupProject.findUnique({
       where: { id: sketchupProjectId },

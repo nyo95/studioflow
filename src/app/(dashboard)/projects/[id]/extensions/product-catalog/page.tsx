@@ -31,7 +31,7 @@ export default async function ProductCatalogPage({ params }: ProductCatalogPageP
 
   return (
     <DashboardPageShell className="h-full max-w-none p-0 overflow-hidden flex flex-col bg-slate-50">
-      <div className="px-8 pt-6 pb-2 shrink-0">
+      <div className="px-4 md:px-8 pt-6 pb-2 shrink-0">
         <PageBackLink className="mb-0" />
       </div>
       <div className="flex-1 min-h-0">

@@ -93,46 +93,48 @@ export function VisualTable({
             </div>
 
             {!isCollapsed && (
-              <div className="space-y-2">
-                {group.entries.length > 0 && (
-                  <div className="grid grid-cols-12 gap-4 px-4 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400/80 select-none items-center">
-                    <div className="col-span-3 flex items-center gap-4">
-                      <div className="w-6 shrink-0" /> {/* Spacer for drag handle */}
-                      <div className="w-12 shrink-0" /> {/* Spacer for thumbnail */}
-                      <span>Code</span>
-                    </div>
-                    <div className="col-span-3">Specification</div>
-                    <div className="col-span-1 text-center">Status</div>
-                    <div className="col-span-2">Location {isFixture && "/ Qty"}</div>
-                    <div className="col-span-2">Alternatives</div>
-                    <div className="col-span-1 text-right pr-2">Actions</div>
-                  </div>
-                )}
-                <SortableContext 
-                  items={group.entries.map(e => e.id)} 
-                  strategy={verticalListSortingStrategy}
-                >
-                  {group.entries.length > 0 ? (
-                    group.entries.map((entry) => (
-                      <VisualRow
-                        key={entry.id}
-                        entry={entry}
-                        section={isFixture ? ProductType.fixture : ProductType.material}
-                        onEdit={onEditEntry}
-                        onDelete={onDeleteEntry}
-                        onUpdateLocation={onUpdateLocation}
-                        onAddAlternative={() => onAddAlternative?.(entry.id, group.schedule_category)}
-                        isSelected={selectedIds.has(entry.id)}
-                        isInspected={entry.id === inspectedEntryId}
-                        onClick={(e) => onRowClick?.(entry.id, e)}
-                      />
-                    ))
-                  ) : (
-                    <div className={cn("py-12 flex flex-col items-center gap-2 bg-white/50 border border-dashed border-slate-200", UI_ENGINE_RADIUS_CONTROL)}>
-                      <span className={cn("text-[10px] uppercase font-bold tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Empty Category</span>
+              <div className="overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-thin">
+                <div className="space-y-2 min-w-[950px] md:min-w-0">
+                  {group.entries.length > 0 && (
+                    <div className="grid grid-cols-12 gap-4 px-4 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400/80 select-none items-center">
+                      <div className="col-span-3 flex items-center gap-4">
+                        <div className="w-6 shrink-0" /> {/* Spacer for drag handle */}
+                        <div className="w-12 shrink-0" /> {/* Spacer for thumbnail */}
+                        <span>Code</span>
+                      </div>
+                      <div className="col-span-3">Specification</div>
+                      <div className="col-span-1 text-center">Status</div>
+                      <div className="col-span-2">Location {isFixture && "/ Qty"}</div>
+                      <div className="col-span-2">Alternatives</div>
+                      <div className="col-span-1 text-right pr-2">Actions</div>
                     </div>
                   )}
-                </SortableContext>
+                  <SortableContext 
+                    items={group.entries.map(e => e.id)} 
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {group.entries.length > 0 ? (
+                      group.entries.map((entry) => (
+                        <VisualRow
+                          key={entry.id}
+                          entry={entry}
+                          section={isFixture ? ProductType.fixture : ProductType.material}
+                          onEdit={onEditEntry}
+                          onDelete={onDeleteEntry}
+                          onUpdateLocation={onUpdateLocation}
+                          onAddAlternative={() => onAddAlternative?.(entry.id, group.schedule_category)}
+                          isSelected={selectedIds.has(entry.id)}
+                          isInspected={entry.id === inspectedEntryId}
+                          onClick={(e) => onRowClick?.(entry.id, e)}
+                        />
+                      ))
+                    ) : (
+                      <div className={cn("py-12 flex flex-col items-center gap-2 bg-white/50 border border-dashed border-slate-200", UI_ENGINE_RADIUS_CONTROL)}>
+                        <span className={cn("text-[10px] uppercase font-bold tracking-widest text-slate-400", UI_ENGINE_TYPE_META)}>Empty Category</span>
+                      </div>
+                    )}
+                  </SortableContext>
+                </div>
               </div>
             )}
           </div>

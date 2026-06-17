@@ -13,7 +13,8 @@ import {
 } from "@/ui_engine";
 
 interface TodayInlineAddProps {
-  phases: Array<{ id: string; name: string; revisionId?: string; status: string; isProjectLevel?: boolean; projectId?: string }>;
+  phases: Array<{ id: string; name: string; revisionId?: string; status: string; isProjectLevel?: boolean; projectId?: string; isLocked?: boolean }>;
+  allProjectPhases?: Array<{ id: string; name: string; revisionId?: string; status: string; isProjectLevel?: boolean; projectId?: string; isLocked?: boolean }>;
   mode?: "TODO" | "FEEDBACK";
   className?: string;
   containerClassName?: string;
@@ -24,8 +25,27 @@ interface TodayInlineAddProps {
   placeholder?: string;
 }
 
+const PHASE_ALIASES: Record<string, string> = {
+  moodboard: "moodboard",
+  mood: "moodboard",
+  concept: "moodboard",
+  layout: "layout",
+  design3d: "design 3d",
+  design_3d: "design 3d",
+  design: "design 3d",
+  "3d": "design 3d",
+  cd: "cd",
+  drawing: "cd",
+  supervision: "supervision",
+  spv: "supervision",
+  lapangan: "supervision",
+  general: "general tasks",
+  project: "general tasks"
+};
+
 export function TodayInlineAdd({
   phases,
+  allProjectPhases,
   mode = "TODO",
   className,
   containerClassName,
@@ -43,13 +63,71 @@ export function TodayInlineAdd({
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const selectedPhase = phases.find(p => p.id === selectedPhaseId) || phases[0];
+  const availablePhases = allProjectPhases && allProjectPhases.length > 0 ? allProjectPhases : phases;
+  const selectedPhase = availablePhases.find(p => p.id === selectedPhaseId) || availablePhases[0];
+
+  const [tagQuery, setTagQuery] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const filteredPhases = availablePhases.filter(p => {
+    if (!tagQuery) return true;
+    const queryLower = tagQuery.toLowerCase().replace(/_/g, "");
+    const phaseNameClean = p.name.toLowerCase().replace(/ |\_/g, "");
+    
+    const canonicalTarget = PHASE_ALIASES[queryLower] || queryLower;
+    if (phaseNameClean.includes(queryLower)) return true;
+    if (phaseNameClean.includes(canonicalTarget.replace(/ |\_/g, ""))) return true;
+
+    return Object.entries(PHASE_ALIASES).some(([alias, target]) => {
+      return target.replace(/ |\_/g, "") === phaseNameClean && alias.includes(queryLower);
+    });
+  });
 
   useEffect(() => {
     if (isEditing) {
       inputRef.current?.focus();
     }
   }, [isEditing]);
+
+  // Watch for hashtag typing for autocomplete
+  useEffect(() => {
+    if (!value) {
+      setTagQuery(null);
+      return;
+    }
+    const match = value.match(/(?:^|\s)#([a-zA-Z0-9_]*)$/);
+    if (match) {
+      const query = match[1];
+      setTagQuery(query);
+      
+      // Filter list based on query using the same alias rules
+      const queryLower = query.toLowerCase().replace(/_/g, "");
+      const tempFiltered = availablePhases.filter(p => {
+        const phaseNameClean = p.name.toLowerCase().replace(/ |\_/g, "");
+        const canonicalTarget = PHASE_ALIASES[queryLower] || queryLower;
+        if (phaseNameClean.includes(queryLower)) return true;
+        if (phaseNameClean.includes(canonicalTarget.replace(/ |\_/g, ""))) return true;
+        return Object.entries(PHASE_ALIASES).some(([alias, target]) => {
+          return target.replace(/ |\_/g, "") === phaseNameClean && alias.includes(queryLower);
+        });
+      });
+      
+      // Auto-focus the first non-locked phase
+      const firstActiveIdx = tempFiltered.findIndex(p => !p.isLocked);
+      setActiveIndex(firstActiveIdx !== -1 ? firstActiveIdx : 0);
+    } else {
+      setTagQuery(null);
+    }
+  }, [value, availablePhases]);
+
+  function selectPhase(phase: any) {
+    if (phase.isLocked) return;
+    setSelectedPhaseId(phase.id);
+    const newValue = value.replace(/(?:^|\s)#[a-zA-Z0-9_]*$/, " ");
+    setValue(newValue);
+    setTagQuery(null);
+    inputRef.current?.focus();
+  }
 
   function handleAdd() {
     const trimmedValue = value.trim();
@@ -59,27 +137,59 @@ export function TodayInlineAdd({
       return;
     }
 
+    // Check if there is an unapplied hashtag matching a locked phase
+    const tagMatch = trimmedValue.match(/(?:^|\s)#([a-zA-Z0-9_]+)$/);
+    let targetPhase = selectedPhase;
+    let finalContent = trimmedValue;
+
+    if (tagMatch) {
+      const tagText = tagMatch[1].toLowerCase().replace(/_/g, "");
+      const canonicalName = PHASE_ALIASES[tagText] || tagText;
+      const foundPhase = availablePhases.find(p => 
+        p.name.toLowerCase().replace(/ |\_/g, "") === canonicalName.replace(/ |\_/g, "") ||
+        p.name.toLowerCase().replace(/ |\_/g, "").includes(tagText)
+      );
+
+      if (foundPhase) {
+        if (foundPhase.isLocked) {
+          setError(`Phase "${foundPhase.name}" is locked. You cannot add tasks to it.`);
+          inputRef.current?.focus();
+          return;
+        }
+        targetPhase = foundPhase;
+        // Clean up tag from content
+        finalContent = trimmedValue.replace(/(?:^|\s)#[a-zA-Z0-9_]+$/, "").trim();
+      }
+    }
+
+    if (!finalContent) {
+      setError("Task name cannot be empty.");
+      inputRef.current?.focus();
+      return;
+    }
+
     setError(null);
     startTransition(async () => {
       try {
-        if (selectedPhase?.isProjectLevel) {
+        if (targetPhase?.isProjectLevel) {
           unwrapActionResult(await addProjectActivity({ 
-            projectId: selectedPhase.projectId!, 
-            content: trimmedValue, 
+            projectId: targetPhase.projectId!, 
+            content: finalContent, 
           }));
         } else {
-          if (!selectedPhase?.revisionId) {
-            setError("Cannot add tasks without an active iteration.");
+          if (!targetPhase?.revisionId) {
+            setError(`Cannot add tasks to "${targetPhase?.name}" without an active iteration.`);
             return;
           }
           unwrapActionResult(await addActivity({ 
-            revisionId: selectedPhase.revisionId, 
-            content: trimmedValue, 
+            revisionId: targetPhase.revisionId, 
+            content: finalContent, 
             mode 
           }));
         }
         setValue("");
         setIsEditing(false);
+        setTagQuery(null);
         router.refresh();
       } catch (err) {
         console.error("Failed to add task:", err);
@@ -89,6 +199,50 @@ export function TodayInlineAdd({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (tagQuery !== null && filteredPhases.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        // Skip locked phases
+        let nextIndex = activeIndex;
+        for (let i = 1; i <= filteredPhases.length; i++) {
+          const idx = (activeIndex + i) % filteredPhases.length;
+          if (!filteredPhases[idx].isLocked) {
+            nextIndex = idx;
+            break;
+          }
+        }
+        setActiveIndex(nextIndex);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        // Skip locked phases
+        let prevIndex = activeIndex;
+        for (let i = 1; i <= filteredPhases.length; i++) {
+          const idx = (activeIndex - i + filteredPhases.length) % filteredPhases.length;
+          if (!filteredPhases[idx].isLocked) {
+            prevIndex = idx;
+            break;
+          }
+        }
+        setActiveIndex(prevIndex);
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const targetPhase = filteredPhases[activeIndex];
+        if (targetPhase && !targetPhase.isLocked) {
+          selectPhase(targetPhase);
+        }
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setTagQuery(null);
+        return;
+      }
+    }
+
     if (event.key === "Enter") {
       handleAdd();
     }
@@ -117,80 +271,100 @@ export function TodayInlineAdd({
           )}
         >
           <Plus className="h-3.5 w-3.5 shrink-0" />
-          <span>{buttonLabel ?? `+ Add todo...`}</span>
+          <span>{buttonLabel ?? `Add todo...`}</span>
         </button>
       ) : (
-        <div className="flex flex-col gap-3">
-          {/* Phase Selector - only show if multiple choices available */}
-          {phases.length > 1 && (
-            <div className="flex flex-wrap gap-2 animate-in slide-in-from-top-1 duration-200">
-              {phases.map((phase) => (
+        <div className="relative flex flex-col gap-3">
+          <div className="relative flex items-center">
+            <div
+              className={cn(
+                UI_ENGINE_INLINE_ADD_INPUT_CLASS,
+                error ? "border-rose-300" : "border-slate-200 focus-within:border-slate-500",
+                "flex-1 items-center px-3 pl-2",
+                containerClassName,
+                inputWrapperClassName
+              )}
+            >
+              {isPending ? (
+                <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-slate-400" />
+              ) : (
+                <Plus className="h-4 w-4 flex-shrink-0 text-slate-300 mr-2" />
+              )}
+              <input
+                ref={inputRef}
+                type="text"
+                value={value}
+                onBlur={() => {
+                  if (!value.trim() && !isPending) {
+                    setIsEditing(false);
+                  }
+                }}
+                onChange={(event) => {
+                  setValue(event.target.value);
+                  if (error) {
+                    setError(null);
+                  }
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder ?? `Add todo...`}
+                disabled={isPending}
+                className={cn(
+                  "flex-1 bg-transparent font-sans text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none disabled:opacity-50",
+                  inputClassName
+                )}
+              />
+              {selectedPhase && availablePhases.length > 1 && (
+                <div 
+                  className="flex-shrink-0 bg-slate-100 px-2 py-0.5 mx-2 rounded text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer select-none" 
+                  title="Currently selected phase"
+                >
+                  {selectedPhase.name}
+                </div>
+              )}
+              {value.trim() && !isPending ? (
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={handleAdd}
+                  className="flex-shrink-0 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white transition-colors hover:bg-slate-700"
+                >
+                  Add
+                </button>
+              ) : null}
+            </div>
+        </div>
+
+          {/* Autocomplete Dropdown */}
+          {tagQuery !== null && filteredPhases.length > 0 && (
+            <div className="absolute top-full left-0 z-50 mt-1 w-64 rounded-md border border-slate-200 bg-white p-1 shadow-lg animate-in slide-in-from-top-1">
+              {filteredPhases.map((phase, i) => (
                 <button
                   key={phase.id}
                   type="button"
-                  onClick={() => setSelectedPhaseId(phase.id)}
+                  disabled={phase.isLocked}
+                  onClick={() => !phase.isLocked && selectPhase(phase)}
                   className={cn(
-                    "rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition-all",
-                    selectedPhaseId === phase.id
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 bg-white text-slate-400 hover:border-slate-400 hover:text-slate-600"
+                    "flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium rounded-sm transition-colors",
+                    phase.isLocked 
+                      ? "text-slate-300 cursor-not-allowed opacity-60" 
+                      : i === activeIndex 
+                        ? "bg-slate-100 text-slate-900" 
+                        : "text-slate-600 hover:bg-slate-50"
                   )}
                 >
-                  {phase.name}
+                  <span className="flex items-center">
+                    <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400 mr-2">#</span>
+                    {phase.name}
+                  </span>
+                  {phase.isLocked && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded text-slate-400">
+                      Locked
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
           )}
-
-          <div
-            className={cn(
-              UI_ENGINE_INLINE_ADD_INPUT_CLASS,
-              error ? "border-rose-300" : "border-slate-200 focus-within:border-slate-500",
-              containerClassName,
-              inputWrapperClassName
-            )}
-          >
-            {isPending ? (
-              <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-slate-400" />
-            ) : (
-              <Plus className="h-4 w-4 flex-shrink-0 text-slate-300" />
-            )}
-            <input
-              ref={inputRef}
-              type="text"
-              value={value}
-              onBlur={() => {
-                if (!value.trim() && !isPending) {
-                  // Keep open if user was selecting a phase?
-                  // Actually, if value is empty, close it
-                  setIsEditing(false);
-                }
-              }}
-              onChange={(event) => {
-                setValue(event.target.value);
-                if (error) {
-                  setError(null);
-                }
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder ?? `Add todo to ${selectedPhase?.name}...`}
-              disabled={isPending}
-              className={cn(
-                "flex-1 bg-transparent font-sans text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none disabled:opacity-50",
-                inputClassName
-              )}
-            />
-            {value.trim() && !isPending ? (
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={handleAdd}
-                className="flex-shrink-0 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white transition-colors hover:bg-slate-700"
-              >
-                Add
-              </button>
-            ) : null}
-          </div>
         </div>
       )}
       {error ? <p className="mt-1 px-1 text-[11px] text-rose-500">{error}</p> : null}

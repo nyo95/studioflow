@@ -34,6 +34,7 @@ interface NavInnerProps {
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   onNavigate?: () => void;
+  userRole?: string;
 }
 
 const PHASE_ICONS: Record<string, React.ReactNode> = {
@@ -63,6 +64,7 @@ export function NavInner({
   collapsed = false,
   onToggleCollapsed,
   onNavigate,
+  userRole,
 }: NavInnerProps) {
   const pathname = useStablePathname();
   const [isOpenPhases, setIsOpenPhases] = React.useState(true);
@@ -286,25 +288,27 @@ export function NavInner({
                   {collapsed ? null : "Product Schedule"}
                 </Link>
               </li>
-              <li>
-                <Link 
-                  href={projectId ? `/projects/${projectId}/sketchup` : "#"} 
-                  onClick={handleNavigate}
-                  className={cn(
-                    "flex items-center text-sm font-sans transition-colors duration-150",
-                    collapsed 
-                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
-                      : "px-3 py-2 rounded-[var(--ui-radius-control)]",
-                    pathname.includes(`/projects/${projectId}/sketchup`)
-                      ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
-                      : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
-                  )}
-                  title="SketchUp"
-                >
-                  <Box className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
-                  {collapsed ? null : "SketchUp"}
-                </Link>
-              </li>
+              {userRole === "ADMIN" && (
+                <li>
+                  <Link 
+                    href={projectId ? `/projects/${projectId}/sketchup` : "#"} 
+                    onClick={handleNavigate}
+                    className={cn(
+                      "flex items-center text-sm font-sans transition-colors duration-150",
+                      collapsed 
+                        ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
+                        : "px-3 py-2 rounded-[var(--ui-radius-control)]",
+                      pathname.includes(`/projects/${projectId}/sketchup`)
+                        ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
+                        : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
+                    )}
+                    title="SketchUp"
+                  >
+                    <Box className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
+                    {collapsed ? null : "SketchUp"}
+                  </Link>
+                </li>
+              )}
             </ul>
           )}
         </div>

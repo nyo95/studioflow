@@ -21,6 +21,7 @@ type RenderItem =
       id: string; 
       projectId: string; 
       phase: { id: string; name: string; revisionId?: string; status: string; isProjectLevel?: boolean; projectId?: string };
+      allProjectPhases?: Array<{ id: string; name: string; revisionId?: string; status: string; isProjectLevel?: boolean; projectId?: string }>;
       mode: "TODO" | "FEEDBACK" 
     };
 
@@ -63,15 +64,7 @@ export function TodayView({ projects }: TodayViewProps) {
       if (!collapsedProjects.has(project.id)) {
         // Subtle Phase Headers and Tasks
         projectPhases.forEach((phase) => {
-          // Phase Header
-          list.push({
-            type: "phaseHeader",
-            id: `phase-${phase.id}`,
-            projectId: project.id,
-            phaseName: phase.name
-          });
-
-            phase.tasks.forEach((task: DashboardTask) => {
+          phase.tasks.forEach((task: DashboardTask) => {
             list.push({
               type: "task",
               id: `task-${task.id}`,
@@ -79,25 +72,55 @@ export function TodayView({ projects }: TodayViewProps) {
               activity: task
             });
           });
+        });
 
-          // Inline Add specifically for THIS phase
-          if (!isDone && (phase.revisionId || phase.isProjectLevel)) {
+        // Single Inline Add specifically for this project (placed at the end)
+        if (!isDone) {
+          const defaultPhase = project.phases.find(p => (p.revisionId && !p.isLocked) || p.isProjectLevel) || project.phases[0];
+          
+          if (defaultPhase) {
+            const mappedPhases = project.phases.map(p => ({
+              id: p.id,
+              name: p.name,
+              revisionId: p.revisionId,
+              status: p.status,
+              isProjectLevel: p.isProjectLevel,
+              projectId: p.projectId,
+              isLocked: p.isLocked || (!p.revisionId && !p.isProjectLevel)
+            }));
+
+            const hasGeneral = mappedPhases.some(p => p.isProjectLevel);
+            const allProjectPhases = hasGeneral
+              ? mappedPhases
+              : [
+                  {
+                    id: `general-${project.id}`,
+                    name: "General Tasks",
+                    status: "IN_PROGRESS",
+                    isProjectLevel: true,
+                    projectId: project.id,
+                    isLocked: false
+                  },
+                  ...mappedPhases
+                ];
+
             list.push({
               type: "inlineAdd",
-              id: `add-phase-${phase.id}`,
+              id: `add-project-${project.id}`,
               projectId: project.id,
               phase: {
-                  id: phase.id,
-                  name: phase.name,
-                  revisionId: phase.revisionId,
-                  status: phase.status,
-                  isProjectLevel: phase.isProjectLevel,
-                  projectId: phase.projectId
+                  id: defaultPhase.id,
+                  name: defaultPhase.name,
+                  revisionId: defaultPhase.revisionId,
+                  status: defaultPhase.status,
+                  isProjectLevel: defaultPhase.isProjectLevel,
+                  projectId: defaultPhase.projectId
               },
-              mode: phase.status.startsWith("ON_REVIEW") ? "FEEDBACK" : "TODO"
+              allProjectPhases,
+              mode: defaultPhase.status.startsWith("ON_REVIEW") ? "FEEDBACK" : "TODO"
             });
           }
-        });
+        }
       }
     });
 
@@ -148,14 +171,7 @@ export function TodayView({ projects }: TodayViewProps) {
                 </div>
               );
             case "phaseHeader":
-              return (
-                <div key={item.id} className="mt-8 mb-2 pl-8 flex items-center gap-2 first:mt-2 animate-in fade-in duration-500">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    {item.phaseName}
-                  </span>
-                  <div className="h-[1px] flex-1 bg-slate-50" />
-                </div>
-              );
+              return null;
             case "task":
               return (
                 <div key={item.id} className="pl-8">
@@ -165,6 +181,7 @@ export function TodayView({ projects }: TodayViewProps) {
                     isChecked={item.activity.status === "COMPLETED"}
                     mode={item.activity.mode}
                     isUrgent={item.activity.isUrgent}
+                    phaseName={item.activity.phaseName}
                   />
                 </div>
               );
@@ -173,9 +190,10 @@ export function TodayView({ projects }: TodayViewProps) {
                 <div key={item.id} className="pl-8 py-2">
                   <TodayInlineAdd
                     phases={[item.phase]}
+                    allProjectPhases={item.allProjectPhases}
                     mode={item.mode}
-                    buttonLabel={`+ Add ${item.mode === "FEEDBACK" ? "feedback" : "todo"} to ${item.phase.name}...`}
-                    placeholder={`+ Add ${item.mode === "FEEDBACK" ? "feedback" : "todo"} to ${item.phase.name}...`}
+                    buttonLabel="Add task..."
+                    placeholder="Add task..."
                     className="opacity-50 hover:opacity-100 transition-opacity"
                   />
                 </div>
