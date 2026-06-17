@@ -68,7 +68,7 @@ StudioFlow follows a strict **Snapshot-First** architecture to ensure data integ
 ### **UI Components**
 - `ProjectScheduleMain.tsx`: Root spreadsheet view with Dnd-Kit integration.
 - `VisualTable.tsx` & `VisualRow.tsx`: Individual row component handling options and status.
-- `ScheduleSpecEditorModal.tsx`: Direct editor for the `data_snapshot`.
+- `ScheduleWorkspaceInspector.tsx`: Persistent right panel inspector for direct editing of the `data_snapshot`.
 
 ---
 

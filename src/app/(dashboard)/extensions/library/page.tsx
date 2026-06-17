@@ -174,12 +174,6 @@ export default function LibraryPage() {
   return (
     <DashboardPageShell>
       <div>
-        <PageHeader
-          eyebrow="Extensions"
-          title="Product Library"
-          description="Manage products, vendors, and inventory samples."
-        />
-
         {isLoading ? (
           <PageSkeleton type="grid" className="p-0 py-0" />
         ) : (

@@ -198,7 +198,7 @@ export function PhysicalInventoryTable({ products, onEdit, userRole }: PhysicalI
                               size="icon"
                               onClick={() => handleMovement(row.sampleId, SampleAction.CHECK_IN)}
                               disabled={!row.sampleId || processingId === row.sampleId}
-                              className={cn("h-8 w-8 text-slate-400 hover:text-teal-600 hover:bg-teal-50", UI_ENGINE_RADIUS_CONTROL)}
+                              className={cn("h-8 w-8 text-slate-400 hover:text-slate-900 hover:bg-slate-100", UI_ENGINE_RADIUS_CONTROL)}
                             >
                                <ArrowDownLeft className="h-4 w-4" />
                             </Button>

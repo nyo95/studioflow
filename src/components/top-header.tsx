@@ -204,10 +204,10 @@ export function TopHeader({
   return (
     <header 
       className={cn(
-        "fixed top-0 left-0 right-0 z-50 flex h-16 flex-shrink-0 items-center border-b transition-colors duration-300",
+        "fixed top-0 left-0 right-0 z-50 flex h-14 flex-shrink-0 items-center border-b transition-colors duration-300",
         isDark 
           ? "border-slate-800 bg-slate-950" 
-          : "border-slate-200 bg-white"
+          : "border-[var(--ui-border-subtle)] bg-[var(--ui-surface-bg)]"
       )}
     >
       <div className="w-full px-6 lg:pl-[78px] lg:pr-6">
@@ -248,7 +248,7 @@ export function TopHeader({
           </Link>
         </div>
 
-        <div ref={searchContainerRef} className="relative mx-4 hidden max-w-xl flex-1 md:block lg:mx-8">
+        <div ref={searchContainerRef} className="relative mx-4 hidden max-w-lg flex-1 md:block lg:mx-8">
           <form onSubmit={handleSearchSubmit} className="relative">
             <Search
               className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
@@ -265,10 +265,10 @@ export function TopHeader({
               onKeyDown={handleSearchKeyDown}
               placeholder="Search projects or clients..."
               className={cn(
-                "h-10 w-full rounded-full border pl-11 pr-4 font-sans text-sm font-light outline-none transition-colors",
+                "h-9 w-full rounded-[var(--ui-radius-control)] border pl-11 pr-4 font-sans text-sm font-light outline-none transition-colors",
                 isDark
                   ? "border-slate-800 bg-slate-900/90 text-slate-100 placeholder:text-slate-500 focus:border-slate-700"
-                  : "border-transparent bg-zinc-100 text-slate-700 placeholder:text-slate-500 focus:border-slate-300"
+                  : "border-[var(--ui-border-subtle)] bg-transparent text-slate-700 placeholder:text-slate-500 focus:border-[var(--ui-border-focus)] focus-visible:ring-1 focus-visible:ring-[var(--ui-border-focus)]"
               )}
               aria-label="Search projects"
             />
@@ -277,10 +277,10 @@ export function TopHeader({
           {isOpen ? (
             <div
               className={cn(
-                "absolute left-0 right-0 top-12 overflow-hidden rounded-3xl border shadow-xl",
+                "absolute left-0 right-0 top-11 overflow-hidden rounded-[var(--ui-radius-card)] border shadow-[var(--ui-shadow-elevated)]",
                 isDark
                   ? "border-slate-800 bg-slate-950"
-                  : "border-slate-200 bg-white"
+                  : "border-[var(--ui-border-subtle)] bg-[var(--ui-surface-bg)]"
               )}
             >
               {filteredProjects.length > 0 ? (
@@ -361,7 +361,7 @@ export function TopHeader({
                 ) : null}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[360px] rounded-[var(--ui-radius-card,1.5rem)] border border-slate-200 p-0 shadow-[var(--ui-surface-shadow)]">
+            <DropdownMenuContent align="end" className="w-[360px] rounded-[var(--ui-radius-card)] border border-[var(--ui-border-subtle)] bg-[var(--ui-surface-bg)] p-0 shadow-[var(--ui-shadow-elevated)] text-[var(--ui-text-primary)]">
               <div className="flex items-center justify-between px-4 py-3">
                 <DropdownMenuLabel className="p-0 font-serif text-base font-semibold text-slate-900">
                   Notifications

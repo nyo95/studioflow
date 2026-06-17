@@ -68,6 +68,7 @@ export function ScheduleCard({ entry, onEdit, onDelete }: ScheduleCardProps) {
     <div
       ref={setNodeRef}
       style={style}
+      data-schedule-row="true"
       className={cn(
         "group relative mb-4 transition-all",
         isDragging && "z-50 opacity-50 scale-105"

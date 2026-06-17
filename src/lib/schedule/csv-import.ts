@@ -167,7 +167,7 @@ export async function importScheduleFromCsv(
         await tx.projectScheduleEntry.update({
           where: { id: existing.id },
           data: {
-            ...(row.schedule_qty !== undefined ? { schedule_qty: row.schedule_qty } : {}),
+            ...(row.schedule_qty !== undefined && section !== ProductType.material ? { schedule_qty: row.schedule_qty } : {}),
             ...(row.schedule_unit !== undefined ? { schedule_unit: row.schedule_unit } : {}),
             ...(row.location !== undefined ? { schedule_location: row.location } : {}),
           },
@@ -212,7 +212,7 @@ export async function importScheduleFromCsv(
         prefix_id: prefixDict.id,
         schedule_sort_order: (lastEntry?.schedule_sort_order ?? 0) + 1,
         index_number: (lastEntry?.index_number ?? 0) + 1,
-        schedule_qty: row.schedule_qty ?? null,
+        schedule_qty: section === ProductType.material ? null : (row.schedule_qty ?? null),
         schedule_unit: row.schedule_unit ?? null,
         schedule_location: row.location ?? null,
       },

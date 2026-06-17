@@ -139,7 +139,7 @@ export function GradualInputForm({
             ))}
          </div>
          <div className="text-right">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 block">Step {currentStepIndex + 1} of {steps.length}</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-300 block">Step {currentStepIndex + 1} of {steps.length}</span>
             <span className="text-xs font-bold text-slate-900">
               {step === "TYPE" ? "Classification" : 
                step === "SELECT" ? "Source Search" : 
@@ -211,7 +211,7 @@ export function GradualInputForm({
                       onClick={() => handleSelect("", "RESERVED")}
                       className={cn("p-6 border-2 border-dashed border-slate-100 hover:border-slate-900 hover:bg-slate-50 transition-all text-left group", UI_ENGINE_RADIUS_CARD, steps[0] === "SELECT" ? "md:col-span-2" : "")}
                     >
-                      <div className="h-10 w-10 rounded-lg bg-slate-50 group-hover:bg-slate-900 text-slate-300 group-hover:text-white flex items-center justify-center mb-4 transition-all">
+                      <div className="h-10 w-10 rounded-[var(--ui-radius-control)] bg-slate-50 group-hover:bg-slate-900 text-slate-300 group-hover:text-white flex items-center justify-center mb-4 transition-all">
                          <Sparkles size={20} />
                       </div>
                       <h5 className="font-serif text-lg font-medium text-slate-900">Reserve Placeholder</h5>
@@ -265,7 +265,7 @@ export function GradualInputForm({
                 </div>
 
                 <div className="space-y-2">
-                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Product Name</Label>
+                   <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Product Name</Label>
                    <Input 
                      value={customData.catalog_product_name} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_product_name: e.target.value}))}
@@ -276,7 +276,7 @@ export function GradualInputForm({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">SKU / Code</Label>
+                     <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">SKU / Code</Label>
                      <Input 
                        value={customData.catalog_sku} 
                        onChange={e => setCustomData(prev => ({...prev, catalog_sku: e.target.value}))}
@@ -285,7 +285,7 @@ export function GradualInputForm({
                      />
                   </div>
                   <div className="space-y-2">
-                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Color / Finish <span className="text-red-500">*</span></Label>
+                     <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Color / Finish <span className="text-red-500">*</span></Label>
                      <Input 
                        value={customData.catalog_color} 
                        onChange={e => setCustomData(prev => ({...prev, catalog_color: e.target.value}))}
@@ -296,13 +296,13 @@ export function GradualInputForm({
                 </div>
              </div>
              <div className="flex items-center justify-between pt-4">
-                <Button variant="ghost" onClick={() => setStep("SELECT")} className="rounded-lg px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
+                <Button variant="ghost" onClick={() => setStep("SELECT")} className="rounded-[var(--ui-radius-control)] px-6 h-12 font-bold text-[10px] uppercase tracking-[0.15em] text-slate-400">
                    Back
                 </Button>
                 <Button 
                    onClick={() => setStep("VENDOR")} 
                    disabled={!canProceedFromInitials}
-                   className="bg-slate-900 text-white rounded-lg px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200"
+                   className="bg-slate-900 text-white rounded-[var(--ui-radius-control)] px-10 h-12 font-bold text-[10px] uppercase tracking-[0.15em] shadow-[var(--ui-shadow-elevated)]"
                 >
                    Next: Brand <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -319,7 +319,7 @@ export function GradualInputForm({
 
              <div className="space-y-6">
                 <div className="space-y-2">
-                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Brand Name <span className="text-red-500">*</span></Label>
+                   <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Brand Name <span className="text-red-500">*</span></Label>
                    <Input 
                      value={customData.catalog_brand} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_brand: e.target.value}))}
@@ -328,7 +328,7 @@ export function GradualInputForm({
                    />
                 </div>
                 <div className="space-y-2">
-                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sub-Category</Label>
+                   <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Sub-Category</Label>
                    <Input 
                      value={customData.catalog_sub_category} 
                      onChange={e => setCustomData(prev => ({...prev, catalog_sub_category: e.target.value}))}
@@ -338,13 +338,13 @@ export function GradualInputForm({
                 </div>
              </div>
              <div className="flex items-center justify-between pt-4">
-                <Button variant="ghost" onClick={() => setStep("INITIALS")} className="rounded-lg px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
+                <Button variant="ghost" onClick={() => setStep("INITIALS")} className="rounded-[var(--ui-radius-control)] px-6 h-12 font-bold text-[10px] uppercase tracking-[0.15em] text-slate-400">
                    Back
                 </Button>
                 <Button 
                    onClick={() => setStep("REVIEW")} 
                    disabled={!canProceedFromVendor}
-                   className="bg-slate-900 text-white rounded-lg px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200"
+                   className="bg-slate-900 text-white rounded-[var(--ui-radius-control)] px-10 h-12 font-bold text-[10px] uppercase tracking-[0.15em] shadow-[var(--ui-shadow-elevated)]"
                 >
                    Review Entry <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -402,13 +402,13 @@ export function GradualInputForm({
              </div>
 
              <div className="flex items-center justify-between pt-4">
-                <Button variant="ghost" onClick={() => setStep(selectedId ? "SELECT" : "VENDOR")} className="rounded-lg px-6 h-12 font-bold text-[10px] uppercase tracking-widest text-slate-400">
+                <Button variant="ghost" onClick={() => setStep(selectedId ? "SELECT" : "VENDOR")} className="rounded-[var(--ui-radius-control)] px-6 h-12 font-bold text-[10px] uppercase tracking-[0.15em] text-slate-400">
                    Adjust Details
                 </Button>
                 <Button 
                    onClick={handleFinalize} 
                    disabled={isSubmitting}
-                   className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-10 h-12 font-bold text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-200"
+                   className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-[var(--ui-radius-control)] px-10 h-12 font-bold text-[10px] uppercase tracking-[0.15em] shadow-[var(--ui-shadow-elevated)]"
                 >
                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Commit to Schedule"}
                 </Button>
@@ -420,7 +420,7 @@ export function GradualInputForm({
       <div className={cn("px-8 py-6 border-t flex items-center justify-between", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE)}>
          <div className="flex items-center gap-2 text-slate-300">
             <Boxes size={14} />
-            <span className="text-[10px] font-black uppercase tracking-widest leading-none">StudioFlow Catalyst Engine</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.15em] leading-none">StudioFlow Catalyst Engine</span>
          </div>
          <Button variant="ghost" onClick={onCancel} className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors">
             Discard Session

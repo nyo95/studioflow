@@ -30,6 +30,7 @@ export const authConfig = {
         nextUrl.pathname.startsWith("/settings") ||
         nextUrl.pathname.startsWith("/today") ||
         nextUrl.pathname.startsWith("/library") ||
+        nextUrl.pathname.startsWith("/activity") ||
         nextUrl.pathname.startsWith("/extensions");
 
       if (isDashboardRoute) {

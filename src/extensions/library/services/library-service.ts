@@ -395,8 +395,7 @@ export class LibraryService {
     const normalized = brand.trim().toUpperCase();
     if (!normalized) throw new ActionError("Brand name is required", "VENDOR_REQUIRED");
 
-    // We use findFirst instead of upsert here because Prisma's unique 'where' 
-    // does not support case-insensitive mode natively without citext.
+    // 1. Try to find case-insensitively (safe read, doesn't poison tx)
     const existing = await tx.vendor.findFirst({
       where: { brand_name: { equals: normalized, mode: "insensitive" } }
     });
@@ -417,28 +416,19 @@ export class LibraryService {
       return existing.id;
     }
 
-    try {
-      // Create new vendor if not found
-      const created = await tx.vendor.create({
-        data: { brand_name: normalized }
-      });
+    // 2. If not found, use upsert to create or update with exact case
+    const vendor = await tx.vendor.upsert({
+      where: { brand_name: normalized },
+      create: { brand_name: normalized },
+      update: { deleted_at: null },
+    });
 
-      await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_VENDOR, "VENDOR", created.id, userId, {
-        brand_name: normalized,
-        source: "RESOLUTION_AUTO_CREATE"
-      });
+    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_VENDOR, "VENDOR", vendor.id, userId, {
+      brand_name: normalized,
+      source: "RESOLUTION_AUTO_CREATE"
+    });
 
-      return created.id;
-    } catch (error: unknown) {
-      // Race condition fallback: if another request created it in between
-      if (error instanceof Error && (error as { code?: string }).code === "P2002") {
-        const fallback = await tx.vendor.findFirst({
-          where: { brand_name: { equals: normalized, mode: "insensitive" } }
-        });
-        return fallback!.id;
-      }
-      throw error;
-    }
+    return vendor.id;
   }
 
   /**
@@ -489,7 +479,7 @@ export class LibraryService {
     const existingDup = await tx.productCatalog.findFirst({
       where: {
         vendor_id: resolvedVendorId,
-        catalog_sku: data.catalog_sku.trim(),
+        catalog_sku: (data.catalog_sku || "").trim(),
         catalog_brand: catalogBrand,
         deleted_at: null
       }
@@ -500,10 +490,10 @@ export class LibraryService {
     const product = await tx.productCatalog.create({
       data: {
         vendor_id: resolvedVendorId,
-        catalog_category: data.catalog_category.trim(),
+        catalog_category: (data.catalog_category || "").trim(),
         catalog_type: data.catalog_type || ProductType.material,
         catalog_sub_category: this.normalizeOptional(data.catalog_sub_category),
-        catalog_sku: data.catalog_sku.trim(),
+        catalog_sku: (data.catalog_sku || "N/A").trim(),
         catalog_brand: catalogBrand,
         catalog_product_name: this.normalizeOptional(data.catalog_product_name), 
         catalog_motif: this.normalizeOptional(data.catalog_motif),
@@ -512,7 +502,7 @@ export class LibraryService {
         catalog_dimension_l: this.normalizeOptional(data.catalog_dimension_l),
         catalog_dimension_t: this.normalizeOptional(data.catalog_dimension_t),
         catalog_dimension_unit: data.catalog_dimension_unit || "cm",
-        catalog_color: data.catalog_color.trim(),
+        catalog_color: (data.catalog_color || "N/A").trim(),
         catalog_finishing: this.normalizeOptional(data.catalog_finishing),
         catalog_image_url: this.normalizeOptional(data.catalog_image_url),
         catalog_image_thumbnail_url: this.normalizeOptional(data.catalog_image_thumbnail_url),
@@ -607,7 +597,7 @@ export class LibraryService {
         ...(data.catalog_dimension_l !== undefined ? { catalog_dimension_l: this.normalizeOptional(data.catalog_dimension_l) } : {}),
         ...(data.catalog_dimension_t !== undefined ? { catalog_dimension_t: this.normalizeOptional(data.catalog_dimension_t) } : {}),
         ...(data.catalog_dimension_unit !== undefined ? { catalog_dimension_unit: data.catalog_dimension_unit } : {}),
-        ...(data.catalog_color !== undefined ? { catalog_color: data.catalog_color.trim() } : {}),
+        ...(data.catalog_color !== undefined ? { catalog_color: (data.catalog_color || "").trim() } : {}),
         ...(data.catalog_finishing !== undefined ? { catalog_finishing: this.normalizeOptional(data.catalog_finishing) } : {}),
         ...(data.catalog_image_url !== undefined ? { catalog_image_url: this.normalizeOptional(data.catalog_image_url) } : {}),
         ...(data.catalog_image_thumbnail_url !== undefined ? { catalog_image_thumbnail_url: this.normalizeOptional(data.catalog_image_thumbnail_url) } : {}),

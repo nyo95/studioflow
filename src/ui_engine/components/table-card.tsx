@@ -56,7 +56,7 @@ export function TableCard({ children, className, header, headerVariant = "light"
 export function TableCardHeader({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <TableHeader>
-      <TableRow className={cn("border-slate-200 bg-slate-50/80 hover:bg-slate-50/80", className)}>
+      <TableRow className={cn("border-[var(--ui-border-subtle)] bg-slate-50/80 hover:bg-slate-50/80", className)}>
         {children}
       </TableRow>
     </TableHeader>
@@ -82,13 +82,8 @@ export function TableCardHead({
   return (
     <TableHead
       className={cn(
-        "px-3 py-4 first:pl-5 last:pr-5 relative group/head",
-        DESIGN_SYSTEM_CONFIG.typography.uiMeta.family,
-        DESIGN_SYSTEM_CONFIG.typography.uiMeta.size,
-        DESIGN_SYSTEM_CONFIG.typography.uiMeta.weight,
-        DESIGN_SYSTEM_CONFIG.typography.uiMeta.tracking,
-        DESIGN_SYSTEM_CONFIG.typography.uiMeta.uppercase ? "uppercase" : "",
-        "text-slate-500",
+        "h-9 px-4 first:pl-5 last:pr-5 relative group/head",
+        "text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--ui-text-tertiary)]",
         alignClass,
         className
       )}
@@ -117,7 +112,7 @@ export function TableCardRow({
 }: React.ComponentProps<typeof TableRow>) {
   return (
     <TableRow
-      className={cn("border-slate-200 hover:bg-slate-50/60", className)}
+      className={cn("border-b border-[var(--ui-border-subtle)] hover:bg-slate-50/50", className)}
       {...props}
     >
       {children}
@@ -140,7 +135,7 @@ export function TableCardCell({
   return (
     <TableCell
       className={cn(
-        "px-3 py-[var(--ui-row-padding-y,1rem)] first:pl-5 last:pr-5", 
+        "px-4 py-2.5 first:pl-5 last:pr-5", 
         alignClass, 
         className
       )}

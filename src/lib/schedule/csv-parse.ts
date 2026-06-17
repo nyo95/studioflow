@@ -134,7 +134,7 @@ function parseGSheetsRow(row: Record<string, string>, section: ProductType): Sch
     contactName: contactInfo.name,
     contactPhone: contactInfo.phone,
     contactEmail: contactInfo.email,
-    schedule_qty: parseNumber(row.qty),
+    schedule_qty: section === ProductType.material ? undefined : parseNumber(row.qty),
     schedule_unit: row.unit || undefined,
     sourcePayload: row,
   };

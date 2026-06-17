@@ -30,11 +30,15 @@ export default async function ProductCatalogPage({ params }: ProductCatalogPageP
   }
 
   return (
-    <DashboardPageShell>
-      <PageBackLink />
-      <ErrorBoundary name="Schedule">
-        <ProjectScheduleMain projectId={projectId} userRole={userRole} />
-      </ErrorBoundary>
+    <DashboardPageShell className="h-full max-w-none p-0 overflow-hidden flex flex-col bg-slate-50">
+      <div className="px-8 pt-6 pb-2 shrink-0">
+        <PageBackLink className="mb-0" />
+      </div>
+      <div className="flex-1 min-h-0">
+        <ErrorBoundary name="Schedule">
+          <ProjectScheduleMain projectId={projectId} userRole={userRole} />
+        </ErrorBoundary>
+      </div>
     </DashboardPageShell>
   );
 }

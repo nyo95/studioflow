@@ -225,6 +225,11 @@ async function checkDuplicateProduct(
 
     // Smart Input Guard: Use SKU as primary, fallback to Color if SKU is missing
     const effectiveSku = sku || color;
+    if (!effectiveSku) {
+      throw new ActionError(
+        "At least one identifier (SKU or Color) is required."
+      );
+    }
 
     if (effectiveSku && brand) {
       // For manual, uniqueness is defined by composite of catalog_sku/color AND catalog_brand (case-insensitive)
@@ -527,6 +532,8 @@ export class ScheduleService {
     });
     const nextSortOrder = (lastEntry?.schedule_sort_order ?? 0) + 1;
 
+    const tempIncrement = -Math.floor(Math.random() * 1_000_000) - 1;
+
     // 3. Create Entry with temporary sequence
     const entry = await tx.projectScheduleEntry.create({
       data: {
@@ -534,9 +541,9 @@ export class ScheduleService {
         schedule_category: normalizedCategory,
         section,
         schedule_sort_order: nextSortOrder,
-        index_number: 9999, // Temp, will be normalized
+        index_number: tempIncrement,
         schedule_prefix: prefixDict.prefix,
-        schedule_increment: 9999, // Temp, will be normalized
+        schedule_increment: tempIncrement,
         prefix_id: prefixDict.id,
       },
     });
@@ -744,14 +751,45 @@ export class ScheduleService {
     });
 
     // If it was final, promote the next available sibling
+    const remainingSiblings = siblings.filter(o => o.id !== optionId).sort((a, b) => a.option_label.localeCompare(b.option_label));
     if (wasFinal) {
-      const remainingSiblings = siblings.filter(o => o.id !== optionId).sort((a, b) => a.option_label.localeCompare(b.option_label));
       if (remainingSiblings.length > 0) {
         const nextPromoted = remainingSiblings[0];
         await tx.projectScheduleOption.update({
           where: { id: nextPromoted.id },
           data: { is_final: true, status: "APPROVED" }
         });
+        
+        const remainingOptions = await tx.projectScheduleOption.findMany({
+          where: { entry_id: option.entry_id },
+          orderBy: { option_label: "asc" },
+        });
+        const promotedIndex = remainingOptions.findIndex(
+          (o) => o.id === nextPromoted.id
+        );
+
+        await tx.projectScheduleEntry.update({
+          where: { id: option.entry_id },
+          data: { 
+            active_index: promotedIndex >= 0 ? promotedIndex : 0 
+          },
+        });
+      }
+    } else {
+      const entry = await tx.projectScheduleEntry.findUnique({ where: { id: option.entry_id } });
+      if (entry) {
+        const finalOptIndex = remainingSiblings.findIndex(o => o.is_final);
+        if (finalOptIndex !== -1) {
+          await tx.projectScheduleEntry.update({
+            where: { id: option.entry_id },
+            data: { active_index: finalOptIndex }
+          });
+        } else if (entry.active_index >= remainingSiblings.length) {
+          await tx.projectScheduleEntry.update({
+            where: { id: option.entry_id },
+            data: { active_index: Math.max(0, remainingSiblings.length - 1) }
+          });
+        }
       }
     }
 

@@ -162,26 +162,49 @@ export default async function PhaseDetailPage({
         <PageBackLink />
 
         <PageHeader
-          eyebrow={project.name}
           title={`${phase.name_enum.replace(/_/g, " ")} ${activeRevision ? `${activeRevision.major}.${activeRevision.minor}` : ""}`}
           description={`${project.client?.name || "No Client Assigned"}`}
+          divider={false}
+          className="mb-6"
           action={
-            <PhaseActions
-              phaseId={phase.id}
-              status={phase.status_enum}
-              isLocked={phase.is_locked}
-              nameEnum={phase.name_enum}
-              userId={userId}
-              userRole={role as Role}
-              canMutate={canManagePhase}
-              isReadyToStart={isReadyToStart}
-              hasHistory={phase.revisions.length > 0}
-              hasOngoingTasks={hasOngoingTasks}
-            />
-          }
-          meta={
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <StatusBadge status={phase.status_enum} />
+              
+              {phase.is_locked && (
+                <div className="inline-flex h-8 items-center rounded-[var(--ui-radius-action)] border border-amber-200 bg-amber-50 px-3 text-[10px] font-bold uppercase tracking-widest text-amber-700 select-none">
+                  LOCKED
+                </div>
+              )}
+
+              {archivedRevisions.length > 0 && (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 items-center justify-center rounded-[var(--ui-radius-action)] border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:bg-zinc-100 hover:text-slate-900 focus-visible:outline-none cursor-pointer"
+                    >
+                      <Clock className="mr-2 h-3.5 w-3.5" strokeWidth={1.5} />
+                      History ({archivedRevisions.length})
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md border-slate-200 bg-white rounded-[var(--ui-radius-card)]">
+                    <DialogHeader>
+                      <DialogTitle className="border-b border-slate-100 pb-4 font-serif text-xl font-bold text-black">Revision History</DialogTitle>
+                    </DialogHeader>
+                    <div className="mt-4 flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-2">
+                      {archivedRevisions.map((revision) => (
+                        <div key={revision.id} className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50/50 p-4 transition-colors hover:bg-zinc-50">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900 font-sans">Revision {revision.major}.{revision.minor}</p>
+                            <p className="mt-1 text-xs text-slate-500 font-sans">{revision.activities.length} Activities, {revision.files.length} Files</p>
+                          </div>
+                          <Badge variant="secondary" className="bg-zinc-200/50 text-zinc-600 hover:bg-zinc-200/50 rounded-[var(--ui-radius-action)]">ARCHIVED</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
               
               {canOverride && activeRevision && activeRevision.activities.length === 0 && (
                 <AdminRevisionOverride 
@@ -192,39 +215,19 @@ export default async function PhaseDetailPage({
                   }}
                 />
               )}
-              {phase.is_locked ? (
-                <div className="inline-flex items-center rounded-sm border border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-700 select-none">
-                  LOCKED
-                </div>
-              ) : null}
-              {archivedRevisions.length > 0 ? (
-                <Dialog>
-                  <DialogTrigger>
-                    <div
-                      className="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:bg-zinc-100 hover:text-slate-900 focus-visible:outline-none cursor-pointer"
-                    >
-                      <Clock className="mr-2 h-3.5 w-3.5" />
-                      Revision History ({archivedRevisions.length})
-                    </div>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md border-zinc-100 bg-white">
-                    <DialogHeader>
-                      <DialogTitle className="border-b border-zinc-100 pb-4 font-serif text-xl font-bold text-black">Revision History</DialogTitle>
-                    </DialogHeader>
-                    <div className="mt-4 flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-2">
-                      {archivedRevisions.map((revision) => (
-                        <div key={revision.id} className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50/50 p-4 transition-colors hover:bg-zinc-50">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900 font-sans">Revision {revision.major}.{revision.minor}</p>
-                            <p className="mt-1 text-xs text-slate-500 font-sans">{revision.activities.length} Activities, {revision.files.length} Files</p>
-                          </div>
-                          <Badge variant="secondary" className="bg-zinc-200/50 text-zinc-600 hover:bg-zinc-200/50">ARCHIVED</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              ) : null}
+              
+              <PhaseActions
+                phaseId={phase.id}
+                status={phase.status_enum}
+                isLocked={phase.is_locked}
+                nameEnum={phase.name_enum}
+                userId={userId}
+                userRole={role as Role}
+                canMutate={canManagePhase}
+                isReadyToStart={isReadyToStart}
+                hasHistory={phase.revisions.length > 0}
+                hasOngoingTasks={hasOngoingTasks}
+              />
             </div>
           }
         />

@@ -3,7 +3,7 @@ import { Role } from "@/generated/prisma";
 import { getSession } from "@/lib/auth";
 import { auditService, type AuditFiltersInput } from "@/core/platform/audit";
 import { ActivityLogTable } from "@/components/activity-log-table";
-import { DashboardPageShell, PageBackLink, PageHeader, SectionCard } from "@/ui_engine";
+import { DashboardPageShell, PageBackLink, PageHeader } from "@/ui_engine";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -50,24 +50,22 @@ export default async function ProjectActivityPage({
         description="Riwayat aktivitas khusus proyek ini dalam bahasa yang lebih mudah dibaca, plus filter, ekspor, dan undo."
       />
 
-      <SectionCard padding="none" className="overflow-hidden">
-        <ActivityLogTable
-          logs={data.logs}
-          canUndo={role === Role.ADMIN || role === Role.DIC}
-          filters={{
-            users: data.filters.users.map((user) => ({ id: user.id, label: user.name })),
-            actions: data.filters.actions.map((action) => ({ id: action, label: action.replace(/_/g, " ") })),
-            phases: data.filters.phases,
-          }}
-          initialFilterState={{
-            userIds: getSingle(query.user) ? [String(getSingle(query.user))] : [],
-            actions: getSingle(query.action) ? [String(getSingle(query.action))] : [],
-            phaseIds: getSingle(query.phase) ? [String(getSingle(query.phase))] : [],
-            dateFrom: getSingle(query.from) ?? "",
-            dateTo: getSingle(query.to) ?? "",
-          }}
-        />
-      </SectionCard>
+      <ActivityLogTable
+        logs={data.logs}
+        canUndo={role === Role.ADMIN || role === Role.DIC}
+        filters={{
+          users: data.filters.users.map((user) => ({ id: user.id, label: user.name })),
+          actions: data.filters.actions.map((action) => ({ id: action, label: action.replace(/_/g, " ") })),
+          phases: data.filters.phases,
+        }}
+        initialFilterState={{
+          userIds: getSingle(query.user) ? [String(getSingle(query.user))] : [],
+          actions: getSingle(query.action) ? [String(getSingle(query.action))] : [],
+          phaseIds: getSingle(query.phase) ? [String(getSingle(query.phase))] : [],
+          dateFrom: getSingle(query.from) ?? "",
+          dateTo: query.to ? String(getSingle(query.to)) : "",
+        }}
+      />
     </DashboardPageShell>
   );
 }

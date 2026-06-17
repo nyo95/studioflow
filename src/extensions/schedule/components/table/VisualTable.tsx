@@ -30,6 +30,7 @@ interface VisualTableProps {
   onAddAlternative?: (entryId: string, category: string) => void;
   selectedIds?: Set<string>;
   onRowClick?: (id: string, event: React.MouseEvent) => void;
+  inspectedEntryId?: string;
 }
 
 export function VisualTable({ 
@@ -40,7 +41,8 @@ export function VisualTable({
   onUpdateLocation, 
   onAddAlternative,
   selectedIds = new Set(),
-  onRowClick
+  onRowClick,
+  inspectedEntryId
 }: VisualTableProps) {
   const isFixture = section === ProductType.fixture;
   const [collapsedCategories, setCollapsedCategories] = React.useState<Set<string>>(new Set());
@@ -91,7 +93,21 @@ export function VisualTable({
             </div>
 
             {!isCollapsed && (
-              <div className="space-y-3">
+              <div className="space-y-2">
+                {group.entries.length > 0 && (
+                  <div className="grid grid-cols-12 gap-4 px-4 py-1 text-[9px] font-black uppercase tracking-widest text-slate-400/80 select-none items-center">
+                    <div className="col-span-3 flex items-center gap-4">
+                      <div className="w-6 shrink-0" /> {/* Spacer for drag handle */}
+                      <div className="w-12 shrink-0" /> {/* Spacer for thumbnail */}
+                      <span>Code</span>
+                    </div>
+                    <div className="col-span-3">Specification</div>
+                    <div className="col-span-1 text-center">Status</div>
+                    <div className="col-span-2">Location {isFixture && "/ Qty"}</div>
+                    <div className="col-span-2">Alternatives</div>
+                    <div className="col-span-1 text-right pr-2">Actions</div>
+                  </div>
+                )}
                 <SortableContext 
                   items={group.entries.map(e => e.id)} 
                   strategy={verticalListSortingStrategy}
@@ -107,6 +123,7 @@ export function VisualTable({
                         onUpdateLocation={onUpdateLocation}
                         onAddAlternative={() => onAddAlternative?.(entry.id, group.schedule_category)}
                         isSelected={selectedIds.has(entry.id)}
+                        isInspected={entry.id === inspectedEntryId}
                         onClick={(e) => onRowClick?.(entry.id, e)}
                       />
                     ))

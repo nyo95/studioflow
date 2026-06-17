@@ -25,10 +25,7 @@ const ScheduleProductPickerModal = dynamic(
   { ssr: false }
 );
 
-const ScheduleSpecEditorModal = dynamic(
-  () => import("./ScheduleSpecEditorModal").then((mod) => mod.ScheduleSpecEditorModal),
-  { ssr: false }
-);
+import { ScheduleWorkspaceInspector } from "./ScheduleWorkspaceInspector";
 import type { ProjectScheduleSheetPayload, ScheduleGroupedByCategory, ProjectScheduleEntryWithRelations, ScheduleOptionSnapshot } from "../types";
 import { ProjectScheduleProvider } from "../context/ProjectScheduleContext";
 import { useRouter } from "next/navigation";
@@ -82,11 +79,50 @@ export function ProjectScheduleMain({
     isOpen: false 
   });
 
-  const [editorModal, setEditorModal] = React.useState<{ 
-    isOpen: boolean; 
+  const [inspectedItem, setInspectedItem] = React.useState<{ 
+    entryId: string;
     optionId: string; 
-    initialSnapshot: import("../types").ScheduleOptionSnapshot;
+    initialSnapshot: ScheduleOptionSnapshot;
   } | null>(null);
+
+  const [activeInspectorTab, setActiveInspectorTab] = React.useState<string>("identity");
+
+  const allEntries = React.useMemo(() => sheet ? sheet.groups.flatMap(g => g.entries) : [], [sheet]);
+  const currentIdx = inspectedItem ? allEntries.findIndex(e => e.id === inspectedItem.entryId) : -1;
+  const hasNext = currentIdx >= 0 && currentIdx < allEntries.length - 1;
+  const hasPrev = currentIdx > 0;
+
+  const handleNavigateNext = React.useCallback(() => {
+    if (hasNext) {
+      const nextEntry = allEntries[currentIdx + 1];
+      const finalOption = nextEntry.options.find((o) => o.is_final) || nextEntry.options[0];
+      if (finalOption) {
+        setInspectedItem({
+          entryId: nextEntry.id,
+          optionId: finalOption.id,
+          initialSnapshot: finalOption.data_snapshot as unknown as ScheduleOptionSnapshot
+        });
+        setSelectedIds(new Set([nextEntry.id]));
+        setSelectionAnchorId(nextEntry.id);
+      }
+    }
+  }, [hasNext, allEntries, currentIdx]);
+
+  const handleNavigatePrev = React.useCallback(() => {
+    if (hasPrev) {
+      const prevEntry = allEntries[currentIdx - 1];
+      const finalOption = prevEntry.options.find((o) => o.is_final) || prevEntry.options[0];
+      if (finalOption) {
+        setInspectedItem({
+          entryId: prevEntry.id,
+          optionId: finalOption.id,
+          initialSnapshot: finalOption.data_snapshot as unknown as ScheduleOptionSnapshot
+        });
+        setSelectedIds(new Set([prevEntry.id]));
+        setSelectionAnchorId(prevEntry.id);
+      }
+    }
+  }, [hasPrev, allEntries, currentIdx]);
 
   const fetchSchedule = React.useCallback(async (section: ProductType) => {
     setLoading(true);
@@ -103,32 +139,90 @@ export function ProjectScheduleMain({
     }
   }, [projectId]);
 
-  // Click away to deselect & ESC key
+  // Click away to deselect and close inspector, ignoring inspector/modal/row/action clicks
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        const isOutside = !containerRef.current.contains(e.target as Node);
-        const isModal = (e.target as HTMLElement).closest('[role="dialog"]');
-        const isAction = (e.target as HTMLElement).closest('[data-selection-ignore="true"]');
-        
-        if (isOutside && !isModal && !isAction) {
+      const target = e.target as HTMLElement;
+      
+      const isInspector = target.closest('[data-workspace-inspector="true"]');
+      const isModal = target.closest('[role="dialog"]');
+      const isAction = target.closest('[data-selection-ignore="true"]');
+      const isRow = target.closest('[data-schedule-row="true"]');
+      
+      if (!isInspector && !isModal && !isAction && !isRow) {
+        setSelectedIds(new Set());
+        setSelectionAnchorId(null);
+        setInspectedItem(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Stable refs for keyboard navigation to avoid excessive re-binding
+  const navRefs = React.useRef({
+    inspectedItem,
+    handleNavigateNext,
+    handleNavigatePrev,
+  });
+
+  React.useEffect(() => {
+    navRefs.current = {
+      inspectedItem,
+      handleNavigateNext,
+      handleNavigatePrev,
+    };
+  }, [inspectedItem, handleNavigateNext, handleNavigatePrev]);
+
+  // Keyboard navigation & Escape handling
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInputActive = 
+        target?.tagName === "INPUT" || 
+        target?.tagName === "TEXTAREA" || 
+        target?.getAttribute("contenteditable") === "true";
+
+      if (isInputActive) {
+        if (e.key === "Escape") {
+          target?.blur();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      const { 
+        inspectedItem: currentInspectedItem, 
+        handleNavigateNext: navNext, 
+        handleNavigatePrev: navPrev 
+      } = navRefs.current;
+
+      if (currentInspectedItem) {
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          navPrev();
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          navNext();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          setInspectedItem(null);
+          setSelectedIds(new Set());
+          setSelectionAnchorId(null);
+        }
+      } else {
+        if (e.key === "Escape") {
           setSelectedIds(new Set());
           setSelectionAnchorId(null);
         }
       }
     };
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelectedIds(new Set());
-        setSelectionAnchorId(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
@@ -149,6 +243,7 @@ export function ProjectScheduleMain({
       if (start === -1 || end === -1) {
         setSelectedIds(new Set([id]));
         setSelectionAnchorId(id);
+        setInspectedItem(null);
         return;
       }
 
@@ -156,6 +251,7 @@ export function ProjectScheduleMain({
       const next = new Set(isCtrl ? selectedIds : []);
       range.forEach(rid => next.add(rid));
       setSelectedIds(next);
+      setInspectedItem(null);
     } else if (isCtrl) {
       const next = new Set(selectedIds);
       if (next.has(id)) {
@@ -168,9 +264,11 @@ export function ProjectScheduleMain({
         setSelectionAnchorId(id);
       }
       setSelectedIds(next);
+      setInspectedItem(null);
     } else {
       setSelectedIds(new Set([id]));
       setSelectionAnchorId(id);
+      setInspectedItem(null);
     }
   };
 
@@ -351,7 +449,9 @@ export function ProjectScheduleMain({
   }
 
   return (
-    <>
+    <div className="flex h-full w-full overflow-hidden relative bg-slate-50">
+      <div className="flex-1 flex flex-col h-full overflow-y-auto transition-all duration-300 ease-in-out">
+        <div className="p-8 pb-32 max-w-7xl mx-auto w-full">
       <PageHeader
         eyebrow="Schedule"
         title="Project Schedule"
@@ -379,7 +479,7 @@ export function ProjectScheduleMain({
               </Button>
             )}
 
-            <div className={cn("flex items-center bg-slate-100 p-1 border border-slate-200 mr-2", UI_ENGINE_RADIUS_CONTROL)}>
+            <div data-selection-ignore="true" className={cn("flex items-center bg-slate-100 p-1 border border-slate-200 mr-2", UI_ENGINE_RADIUS_CONTROL)}>
               <Button
                 variant="ghost"
                 size="sm"
@@ -469,10 +569,12 @@ export function ProjectScheduleMain({
                 onEditEntry={(entry: ProjectScheduleEntryWithRelations) => {
                   const finalOption = entry.options.find((o) => o.is_final) || entry.options[0];
                   if (finalOption) {
-                    setEditorModal({ 
-                      isOpen: true, 
+                    setSelectedIds(new Set([entry.id]));
+                    setSelectionAnchorId(entry.id);
+                    setInspectedItem({ 
+                      entryId: entry.id,
                       optionId: finalOption.id, 
-                      initialSnapshot: finalOption.data_snapshot as unknown as import("../types").ScheduleOptionSnapshot
+                      initialSnapshot: finalOption.data_snapshot as unknown as ScheduleOptionSnapshot
                     });
                   }
                 }}
@@ -491,8 +593,10 @@ export function ProjectScheduleMain({
                   onEditEntry={(entry: ProjectScheduleEntryWithRelations) => {
                     const finalOption = entry.options.find((o) => o.is_final) || entry.options[0];
                     if (finalOption) {
-                      setEditorModal({ 
-                        isOpen: true, 
+                      setSelectedIds(new Set([entry.id]));
+                      setSelectionAnchorId(entry.id);
+                      setInspectedItem({ 
+                        entryId: entry.id,
                         optionId: finalOption.id, 
                         initialSnapshot: finalOption.data_snapshot as unknown as ScheduleOptionSnapshot
                       });
@@ -507,12 +611,15 @@ export function ProjectScheduleMain({
                   })}
                   selectedIds={selectedIds}
                   onRowClick={handleRowClick}
+                  inspectedEntryId={inspectedItem?.entryId}
                 />
               </DndContext>
             )
           )}
         </div>
       </Tabs>
+      </div>
+      </div>
 
       {/* Hoisted Modals */}
       {pickerModal.isOpen && pickerModal.category && pickerModal.section && (
@@ -533,17 +640,34 @@ export function ProjectScheduleMain({
         </ProjectScheduleProvider>
       )}
 
-      {editorModal && (
-        <ScheduleSpecEditorModal
-          optionId={editorModal.optionId}
-          initialSnapshot={editorModal.initialSnapshot}
-          isOpen={editorModal.isOpen}
-          onOpenChange={(open) => setEditorModal(open ? editorModal : null)}
-          onRefresh={handleRefresh}
-          userRole={userRole}
-          projectId={projectId}
-        />
-      )}
-    </>
+      {/* Right Inspector Panel */}
+      <div 
+        data-workspace-inspector="true"
+        className={cn(
+          "border-l border-slate-200 bg-white h-full shadow-2xl z-40 transition-all duration-300 ease-in-out shrink-0 overflow-hidden",
+          inspectedItem ? "w-[400px] opacity-100" : "w-0 border-l-0 opacity-0 pointer-events-none"
+        )}
+      >
+        <div className="w-[400px] h-full">
+          {inspectedItem && (
+            <ScheduleWorkspaceInspector
+              optionId={inspectedItem.optionId}
+              initialSnapshot={inspectedItem.initialSnapshot}
+              onClose={() => setInspectedItem(null)}
+              onRefresh={handleRefresh}
+              userRole={userRole}
+              projectId={projectId}
+              onNavigateNext={handleNavigateNext}
+              onNavigatePrev={handleNavigatePrev}
+              hasNext={hasNext}
+              hasPrev={hasPrev}
+              activeTab={activeInspectorTab}
+              onTabChange={setActiveInspectorTab}
+            />
+          )}
+        </div>
+      </div>
+
+    </div>
   );
 }

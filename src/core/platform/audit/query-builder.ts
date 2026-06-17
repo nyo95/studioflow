@@ -2,13 +2,20 @@ import { Prisma } from "@/generated/prisma";
 import { DEFAULT_DATE_RANGE_DAYS } from "@/lib/constants";
 import { AuditFiltersInput, AuditReferenceRecord } from "./types";
 
+// Parse date with explicit GMT+7 offset
+function toWIBBoundary(dateStr: string, endOfDay: boolean): Date {
+  const time = endOfDay ? "T23:59:59.999" : "T00:00:00.000";
+  // +07:00 offset for WIB
+  return new Date(`${dateStr}${time}+07:00`);
+}
+
 export function getDateBounds(dateFrom?: string | null, dateTo?: string | null) {
   const now = new Date();
   const defaultStart = new Date(now);
   defaultStart.setDate(defaultStart.getDate() - DEFAULT_DATE_RANGE_DAYS);
 
-  const gte = dateFrom ? new Date(`${dateFrom}T00:00:00.000Z`) : defaultStart;
-  const lte = dateTo ? new Date(`${dateTo}T23:59:59.999Z`) : now;
+  const gte = dateFrom ? toWIBBoundary(dateFrom, false) : defaultStart;
+  const lte = dateTo ? toWIBBoundary(dateTo, true) : now;
 
   return { gte, lte };
 }

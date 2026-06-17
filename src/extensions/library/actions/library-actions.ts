@@ -18,7 +18,7 @@ import {
   LibraryItemStatusSchema
 } from "../types";
 import { ProductRequestStatus, LibraryItemStatus, SampleAction, ProductType, SampleMovementLog, PromotionRequest } from "@/generated/prisma";
-import { REVALIDATE_LIBRARY } from "@/lib/revalidation-tags";
+import { REVALIDATE_LIBRARY, REVALIDATE_PROJECT } from "@/lib/revalidation-tags";
 import { RBAC } from "@/core/rbac/rbac";
 import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
 
@@ -87,6 +87,9 @@ export const createPromotionRequestAction = createAction<{
       await LibraryService.reviewPromotionRequest(tx, result.id, "APPROVED", ctx.userId, "Auto-approved for ADMIN");
     }
 
+    invalidateCache({ scope: REVALIDATE_LIBRARY });
+    invalidateCache({ scope: REVALIDATE_PROJECT, id: input.project_id });
+
     return result;
   }
 );
@@ -133,14 +136,13 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
   }
 );
 
-export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, { success: boolean }>(
+export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, void>(
   async ({ input, ctx, tx }) => {
     assertAdmin(ctx.role);
 
     await LibraryService.mergeVendors(tx, input.sourceVendorId, input.targetVendorId, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_LIBRARY });
-    return { success: true };
   }
 );
 
@@ -201,10 +203,16 @@ export const createProductAction = createAction<ProductCatalogInput, ProductCata
 
 export const updateProductAction = createAction<{ id: string; data: Partial<ProductCatalogInput> }, ProductCatalogWithRelations>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    assertAdminOrStaff(ctx.role);
+    
+    // Non-admins (Staff) cannot set/approve products directly. Force status to PENDING if they attempt to set it to APPROVED.
+    const statusToApply = ctx.role === "ADMIN"
+      ? (input.data.catalog_status ? LibraryItemStatusSchema.parse(input.data.catalog_status) : undefined)
+      : (input.data.catalog_status === "APPROVED" ? "PENDING" : input.data.catalog_status ? LibraryItemStatusSchema.parse(input.data.catalog_status) : undefined);
+
     const validatedData: Partial<ProductCatalogInput> = {
       ...input.data,
-      catalog_status: input.data.catalog_status ? LibraryItemStatusSchema.parse(input.data.catalog_status) : undefined,
+      catalog_status: statusToApply,
       catalog_metadata: input.data.catalog_metadata ? ProductMetadataSchema.parse(input.data.catalog_metadata) : undefined,
     };
 

@@ -371,7 +371,6 @@ export const reorderScheduleEntriesAction = createAction(
     await ScheduleService.reorderEntries(tx, input.projectId, input.section, input.schedule_category, input.items, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
-    return { success: true };
   },
   { schema: ReorderScheduleSchema }
 );
@@ -463,7 +462,6 @@ export const swapScheduleEntriesAction = createAction(
     await ScheduleService.swapEntries(tx, input.projectId, input.idA, input.idB, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_PROJECT, id: input.projectId });
-    return { success: true };
   },
   { schema: SwapScheduleEntriesSchema }
 );

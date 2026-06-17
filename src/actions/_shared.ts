@@ -58,27 +58,26 @@ export async function insertAuditLog(
   });
 }
 
-type RevisionWithActivities = Prisma.RevisionGetPayload<{ include: { activities: true } }>;
-type RevisionWithoutActivities = Prisma.RevisionGetPayload<Record<string, never>>;
+export type RevisionWithActivities = Prisma.RevisionGetPayload<{ include: { activities: true } }>;
+export type RevisionWithoutActivities = Prisma.RevisionGetPayload<Record<string, never>>;
 
-export function getActiveRevision(
-  tx: TxClient,
-  phaseId: string,
-  options: { includeActivities: true }
-): Promise<RevisionWithActivities | null>;
-export function getActiveRevision(
-  tx: TxClient,
-  phaseId: string,
-  options?: { includeActivities?: false }
-): Promise<RevisionWithoutActivities | null>;
 export async function getActiveRevision(
   tx: TxClient,
-  phaseId: string,
-  options?: { includeActivities?: boolean }
-) {
+  phaseId: string
+): Promise<RevisionWithoutActivities | null> {
   return tx.revision.findFirst({
     where: { phase_id: phaseId, status_enum: "ACTIVE" },
-    include: options?.includeActivities ? { activities: true } : undefined,
+    orderBy: [{ major: "desc" }, { minor: "desc" }],
+  });
+}
+
+export async function getActiveRevisionWithActivities(
+  tx: TxClient,
+  phaseId: string
+): Promise<RevisionWithActivities | null> {
+  return tx.revision.findFirst({
+    where: { phase_id: phaseId, status_enum: "ACTIVE" },
+    include: { activities: true },
     orderBy: [{ major: "desc" }, { minor: "desc" }],
   });
 }
@@ -151,7 +150,8 @@ export function normalizeDrawingCode(input: string) {
     .trim()
     .toUpperCase()
     .replace(/^ARS[_\-\s]*/i, "")
-    .replace(/^ID[_\-\s]*/i, "");
+    .replace(/^ID[_\-\s]*/i, "")
+    .replace(/^CD[_\-\s]*/i, "");
 
   if (!trimmed || !/^\d+(\.\d+)?$/.test(trimmed)) {
     throwActionError("INVALID_INPUT");
@@ -161,5 +161,5 @@ export function normalizeDrawingCode(input: string) {
 }
 
 export async function findActiveRevisionByPhaseId(tx: TxClient, phaseId: string) {
-  return getActiveRevision(tx, phaseId, { includeActivities: true });
+  return getActiveRevisionWithActivities(tx, phaseId);
 }

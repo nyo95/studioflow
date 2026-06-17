@@ -56,6 +56,7 @@ model Project {
   schedule_entries  ProjectScheduleEntry[]
   timelines         ProjectTimeline[]
   activities        Activity[]
+  sketchup_projects SketchupProject[]
 }
 
 model Phase {
@@ -367,6 +368,7 @@ model ProjectScheduleEntry {
   project           Project                  @relation(fields: [project_id], references: [id], onDelete: Cascade)
   options           ProjectScheduleOption[]
   product_requests  ProjectProductRequest[]
+  sketchup_materials SketchupMaterial[]
 
   @@unique([project_id, section, schedule_prefix, schedule_increment])
   @@index([project_id])
@@ -516,4 +518,72 @@ enum SampleStatus {
   AVAILABLE
   BORROWED
   SENT_TO_CLIENT
+}
+
+model SketchupProject {
+  id                    String                @id @default(uuid())
+  project_id            String
+  sketchup_model_name   String
+  api_key               String                @unique
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+  project               Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  materials             SketchupMaterial[]
+  ffes                  SketchupFFE[]
+  merge_actions         SketchupMergeAction[]
+
+  @@index([project_id])
+}
+
+model SketchupMaterial {
+  id                    String                @id @default(uuid())
+  sketchup_project_id   String
+  code                  String
+  uuid                  String
+  brand                 String?
+  type                  String?
+  finish                String?
+  image_url             String?
+  location_notes        String?
+  area                  Float?
+  face_count            Int?
+  backface_count        Int?
+  layers                Json?
+  parents               Json?
+  linked_entry_id       String?
+  linked_entry          ProjectScheduleEntry? @relation(fields: [linked_entry_id], references: [id], onDelete: SetNull)
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+  sketchup_project      SketchupProject       @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
+
+  @@unique([sketchup_project_id, uuid])
+  @@index([sketchup_project_id])
+}
+
+model SketchupFFE {
+  id                    String                @id @default(uuid())
+  sketchup_project_id   String
+  code                  String
+  instance_count        Int                   @default(1)
+  area                  Float?
+  metadata              Json?
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+  sketchup_project      SketchupProject       @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
+
+  @@unique([sketchup_project_id, code])
+  @@index([sketchup_project_id])
+}
+
+model SketchupMergeAction {
+  id                    String                @id @default(uuid())
+  sketchup_project_id   String
+  source_code           String
+  target_code           String
+  executed_at           DateTime?
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+  sketchup_project      SketchupProject       @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
+
+  @@index([sketchup_project_id])
 }

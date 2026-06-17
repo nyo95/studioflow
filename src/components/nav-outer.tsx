@@ -53,7 +53,7 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
           const itemContent = isDisabled ? (
             <div
               className={cn(
-                "group relative flex items-center rounded-xl border border-transparent text-slate-400",
+                "group relative flex items-center rounded-[var(--ui-radius-control)] border border-transparent text-slate-400",
                 showLabels
                   ? "h-11 gap-3 px-4 opacity-60"
                   : "h-12 w-12 justify-center opacity-45"
@@ -76,11 +76,11 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
               href={item.href}
               onClick={close}
               className={cn(
-                "group flex items-center rounded-xl border transition-all duration-200",
+                "group flex items-center border transition-all duration-200",
                 showLabels ? "h-11 gap-3 px-4" : "h-12 w-12 justify-center",
                 isActive
-                  ? "border-slate-200 bg-slate-100 text-slate-900"
-                  : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                  ? "border-transparent bg-slate-100 text-slate-900 rounded-[var(--ui-radius-control)]"
+                  : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-[var(--ui-radius-control)]"
               )}
             >
               <Icon className="h-5 w-5" />
@@ -112,7 +112,7 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
   return (
     <TooltipProvider delayDuration={0}>
       <aside 
-        className="fixed left-0 top-16 bottom-9 z-30 hidden w-[78px] border-r border-slate-200 bg-white/96 py-4 text-slate-500 backdrop-blur lg:block"
+        className="fixed left-0 top-14 bottom-0 z-30 hidden w-[78px] border-r border-[var(--ui-border-subtle)] bg-white/96 py-4 text-slate-500 backdrop-blur lg:block"
       >
         {renderNavList(false)}
       </aside>
@@ -133,7 +133,7 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
         aria-hidden={!isOpen}
       >
         <div className="mb-5 border-b border-slate-200 pb-4">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
+          <p className="font-sans text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
             Workspace
           </p>
           <p className="mt-1 font-serif text-2xl font-bold text-slate-900">

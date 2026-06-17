@@ -95,9 +95,9 @@ export function NavInner({
         <div className={cn("flex items-start justify-between gap-3", collapsed && "justify-center")}>
           {collapsed ? null : (
             <div className="min-w-0">
-              <Heading level={6} variant="uiMeta">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--ui-text-tertiary)] mb-1 font-sans">
                 Project
-              </Heading>
+              </div>
               <h2
                 className={cn(
                   DESIGN_SYSTEM_CONFIG.typography.h4.family,
@@ -131,9 +131,9 @@ export function NavInner({
         {/* GROUP: GENERAL */}
         <div>
           {collapsed ? null : (
-            <Heading level={6} variant="uiMeta" className="mb-3 px-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--ui-text-tertiary)] px-3 mb-1 font-sans">
               Project
-            </Heading>
+            </div>
           )}
           <ul className="flex flex-col gap-1">
             <li>
@@ -141,11 +141,13 @@ export function NavInner({
                 href={projectId ? `/projects/${projectId}` : "#"}
                 onClick={handleNavigate}
                 className={cn(
-                  "flex items-center text-sm transition-colors duration-150 border-l-2 rounded-r-lg",
-                  collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
+                  "flex items-center text-sm transition-colors duration-150",
+                  collapsed 
+                    ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
+                    : "px-3 py-2 rounded-[var(--ui-radius-control)]",
                   projectId && pathname === `/projects/${projectId}`
-                    ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
-                    : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
+                    ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
+                    : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
                 )}
                 title="Overview"
               >
@@ -166,7 +168,11 @@ export function NavInner({
             )}
             title="Phases"
           >
-            {collapsed ? null : <Heading level={6} variant="uiMeta">PHASES</Heading>}
+            {collapsed ? null : (
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--ui-text-tertiary)] px-3 mb-1 font-sans">
+                PHASES
+              </div>
+            )}
             <ChevronDown
               className={cn(
                 "w-3 h-3 transition-transform duration-200",
@@ -187,11 +193,13 @@ export function NavInner({
                       href={projectId ? `/projects/${projectId}/phases/${phase.id}` : "#"}
                       onClick={handleNavigate}
                       className={cn(
-                        "flex items-center text-sm transition-colors duration-150 border-l-2 rounded-r-lg",
-                        collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
+                        "flex items-center text-sm transition-colors duration-150",
+                        collapsed 
+                          ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
+                          : "px-3 py-2 rounded-[var(--ui-radius-control)]",
                         isActive
-                          ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
-                          : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
+                          ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
+                          : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
                       )}
                       title={formatPhaseLabel(phase.name_enum, phase.label)}
                     >
@@ -224,7 +232,11 @@ export function NavInner({
             )}
             title="Extensions"
           >
-            {collapsed ? null : <Heading level={6} variant="uiMeta">EXTENSIONS</Heading>}
+            {collapsed ? null : (
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--ui-text-tertiary)] px-3 mb-1 font-sans">
+                EXTENSIONS
+              </div>
+            )}
             <ChevronDown
               className={cn(
                 "w-3 h-3 transition-transform duration-200",
@@ -241,11 +253,13 @@ export function NavInner({
                   href={projectId ? `/projects/${projectId}/deliverables` : "#"} 
                   onClick={handleNavigate}
                   className={cn(
-                    "flex items-center text-sm font-sans transition-colors duration-150 border-l-2 rounded-r-lg",
-                    collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
+                    "flex items-center text-sm font-sans transition-colors duration-150",
+                    collapsed 
+                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
+                      : "px-3 py-2 rounded-[var(--ui-radius-control)]",
                     pathname.endsWith("/deliverables")
-                      ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
-                      : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
+                      ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
+                      : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
                   )}
                   title="Deliverables"
                 >
@@ -258,16 +272,37 @@ export function NavInner({
                   href={projectId ? `/projects/${projectId}/extensions/product-catalog` : "#"} 
                   onClick={handleNavigate}
                   className={cn(
-                    "flex items-center text-sm font-sans transition-colors duration-150 border-l-2 rounded-r-lg",
-                    collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
+                    "flex items-center text-sm font-sans transition-colors duration-150",
+                    collapsed 
+                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
+                      : "px-3 py-2 rounded-[var(--ui-radius-control)]",
                     pathname.includes(`/projects/${projectId}/extensions/product-catalog`)
-                      ? "bg-slate-50 text-slate-900 font-semibold border-slate-900"
-                      : "text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 border-transparent"
+                      ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
+                      : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
                   )}
                   title="Product & Fixtures"
                 >
                   <ShoppingBag className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
                   {collapsed ? null : "Product Schedule"}
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  href={projectId ? `/projects/${projectId}/sketchup` : "#"} 
+                  onClick={handleNavigate}
+                  className={cn(
+                    "flex items-center text-sm font-sans transition-colors duration-150",
+                    collapsed 
+                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
+                      : "px-3 py-2 rounded-[var(--ui-radius-control)]",
+                    pathname.includes(`/projects/${projectId}/sketchup`)
+                      ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
+                      : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
+                  )}
+                  title="SketchUp"
+                >
+                  <Box className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
+                  {collapsed ? null : "SketchUp"}
                 </Link>
               </li>
             </ul>

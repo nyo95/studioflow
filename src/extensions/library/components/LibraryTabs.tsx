@@ -39,7 +39,7 @@ const PromotionQueueTable = dynamic(
 );
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { ActionSidebar, ActionSidebarSection, ActionSidebarItem, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION } from "@/ui_engine";
+import { ActionSidebar, ActionSidebarSection, ActionSidebarItem, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_RADIUS_ACTION, PageHeader } from "@/ui_engine";
 import { UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE } from "@/ui_engine/tokens/colors";
 import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens/typography";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
@@ -172,6 +172,72 @@ export function LibraryTabs({
       onValueChange={handleTabChange}
       className="w-full"
     >
+      <PageHeader
+        title="Product Library"
+        description="Manage products, vendors, and inventory samples."
+        action={
+          canManageCatalog && (
+            <Button 
+              onClick={() => {
+                setModalMode("CREATE");
+                setModalType("PRODUCT");
+                setSelectedData(null);
+                setIsFormModalOpen(true);
+              }}
+              className={cn("bg-[var(--ui-action-bg)] hover:bg-[var(--ui-action-hover)] text-white font-black uppercase tracking-widest h-10 px-6", UI_ENGINE_RADIUS_ACTION, UI_ENGINE_TYPE_META)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              <span>Add Product</span>
+            </Button>
+          )
+        }
+        divider={false}
+        className="mb-6"
+      />
+
+      <div className={cn("flex items-center justify-between mb-8 border-b pb-0.5", UI_ENGINE_BORDER_SUBTLE)}>
+         <TabsList className="bg-transparent border-none h-auto p-0 flex gap-8">
+            <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
+              <div className="flex items-center gap-3">
+                <LayoutGrid className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
+                <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Catalog</span>
+              </div>
+            </TabsTrigger>
+            <TabsTrigger value="inventory" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
+              <div className="flex items-center gap-3">
+                <Warehouse className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
+                <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Samples</span>
+              </div>
+            </TabsTrigger>
+            <TabsTrigger value="vendors" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
+              <div className="flex items-center gap-3">
+                <Users className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
+                <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Vendors</span>
+              </div>
+            </TabsTrigger>
+            {canManageCatalog && (
+              <TabsTrigger value="requests" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
+                <div className="flex items-center gap-3">
+                  <ClipboardList className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
+                  <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Requests</span>
+                </div>
+              </TabsTrigger>
+            )}
+            {isAdmin && (
+              <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
+                  <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Queue</span>
+                </div>
+              </TabsTrigger>
+            )}
+         </TabsList>
+         
+         <div className={cn("hidden lg:flex font-black uppercase tracking-[0.2em] text-slate-300", UI_ENGINE_TYPE_META)}>
+            {products.length} Active Items 
+         </div>
+      </div>
+
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* Left Column: Designers/Staff optimized sidebar */}
         <ActionSidebar>
@@ -226,68 +292,9 @@ export function LibraryTabs({
                  </div>
               </ActionSidebarItem>
           </ActionSidebarSection>
-
-          {canManageCatalog && (
-            <Button 
-              onClick={() => {
-                setModalMode("CREATE");
-                setModalType("PRODUCT");
-                setSelectedData(null);
-                setIsFormModalOpen(true);
-              }}
-              className={cn("w-full bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest h-12 px-4 shadow-lg flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]", UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META)}
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Product</span>
-            </Button>
-          )}
         </ActionSidebar>
 
-        {/* Right Column: Premium Storefront Grid */}
         <main className="flex-1 w-full animate-in fade-in slide-in-from-right-4 duration-1500">
-          <div className={cn("flex items-center justify-between mb-10 border-b pb-0.5", UI_ENGINE_BORDER_SUBTLE)}>
-             <TabsList className="bg-transparent border-none h-auto p-0 flex gap-8">
-                <TabsTrigger value="catalog" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
-                  <div className="flex items-center gap-3">
-                    <LayoutGrid className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Catalog</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="inventory" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
-                  <div className="flex items-center gap-3">
-                    <Warehouse className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Samples</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="vendors" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
-                  <div className="flex items-center gap-3">
-                    <Users className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                    <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Vendors</span>
-                  </div>
-                </TabsTrigger>
-                {canManageCatalog && (
-                  <TabsTrigger value="requests" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
-                    <div className="flex items-center gap-3">
-                      <ClipboardList className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                      <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Requests</span>
-                    </div>
-                  </TabsTrigger>
-                )}
-                {isAdmin && (
-                  <TabsTrigger value="queue" className="relative pb-4 rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent shadow-none px-1 transition-all group focus-visible:ring-0 focus-visible:outline-none">
-                    <div className="flex items-center gap-3">
-                      <Clock className="h-4 w-4 text-slate-400 group-data-[state=active]:text-slate-900" />
-                      <span className="font-serif text-base font-medium text-slate-500 group-data-[state=active]:text-slate-900">Queue</span>
-                    </div>
-                  </TabsTrigger>
-                )}
-             </TabsList>
-             
-             <div className={cn("hidden lg:flex font-black uppercase tracking-[0.2em] text-slate-300", UI_ENGINE_TYPE_META)}>
-                {products.length} Active Items 
-             </div>
-          </div>
-
           <TabsContent value="catalog" className="mt-0 focus-visible:outline-none focus-visible:ring-0 min-h-[500px]">
             <ErrorBoundary
               name="Library Catalog"

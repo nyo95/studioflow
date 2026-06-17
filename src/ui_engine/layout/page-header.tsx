@@ -30,14 +30,14 @@ export function PageHeader({
     <header
       className={cn(
         "mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between",
-        divider && "border-b border-slate-200 pb-6",
+        divider && "border-b border-[var(--ui-border-subtle)] pb-6",
         className
       )}
       {...props}
     >
       <div className="min-w-0 flex-1">
         {eyebrow ? (
-          <Heading level={6} variant="uiMeta" className="mb-1">
+          <Heading level={6} variant="uiMeta" className="mb-0.5">
             {eyebrow}
           </Heading>
         ) : null}
@@ -48,8 +48,7 @@ export function PageHeader({
           <p
             className={cn(
               DESIGN_SYSTEM_CONFIG.typography.body.family,
-              DESIGN_SYSTEM_CONFIG.typography.body.size,
-              DESIGN_SYSTEM_CONFIG.typography.body.color,
+              "text-sm text-[var(--ui-text-secondary)]",
               "mt-2 max-w-3xl font-light leading-relaxed",
               descriptionClassName
             )}

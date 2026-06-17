@@ -1,4 +1,4 @@
-import { DashboardPageShell, PageHeader, SectionCard } from "@/ui_engine";
+import { DashboardPageShell, PageHeader } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { Role } from "@/generated/prisma";
 import { auditService } from "@/core/platform/audit";
@@ -34,24 +34,22 @@ export default async function ActivityPage({
         description="Ringkasan aktivitas terbaru tim. Gunakan filter bila ingin lihat orang, fase, atau rentang tanggal tertentu."
       />
 
-      <SectionCard padding="none" className="overflow-hidden">
-        <ActivityLogTable
-          logs={data.logs}
-          canUndo={role === Role.ADMIN || role === Role.DIC}
-          filters={{
-            users: data.filters.users.map((user) => ({ id: user.id, label: user.name })),
-            actions: data.filters.actions.map((action) => ({ id: action, label: action.replace(/_/g, " ") })),
-            phases: data.filters.phases,
-          }}
-          initialFilterState={{
-            userIds: getSingle(params.user) ? [String(getSingle(params.user))] : [],
-            actions: getSingle(params.action) ? [String(getSingle(params.action))] : [],
-            phaseIds: getSingle(params.phase) ? [String(getSingle(params.phase))] : [],
-            dateFrom: getSingle(params.from) ?? "",
-            dateTo: getSingle(params.to) ?? "",
-          }}
-        />
-      </SectionCard>
+      <ActivityLogTable
+        logs={data.logs}
+        canUndo={role === Role.ADMIN || role === Role.DIC}
+        filters={{
+          users: data.filters.users.map((user) => ({ id: user.id, label: user.name })),
+          actions: data.filters.actions.map((action) => ({ id: action, label: action.replace(/_/g, " ") })),
+          phases: data.filters.phases,
+        }}
+        initialFilterState={{
+          userIds: getSingle(params.user) ? [String(getSingle(params.user))] : [],
+          actions: getSingle(params.action) ? [String(getSingle(params.action))] : [],
+          phaseIds: getSingle(params.phase) ? [String(getSingle(params.phase))] : [],
+          dateFrom: getSingle(params.from) ?? "",
+          dateTo: getSingle(params.to) ?? "",
+        }}
+      />
     </DashboardPageShell>
   );
 }

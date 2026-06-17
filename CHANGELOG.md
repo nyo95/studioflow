@@ -1,5 +1,160 @@
 # StudioFlow Development Log (Changelog)
 
+## [v3.7.2] — 2026-06-16 (StudioFlow Visual Redesign & Programa Aesthetics)
+
+### UI Changes
+- **CSS Variable Bridging**: Set tailwind `--radius` to `0.375rem` and bridged Shadcn variables `--border`, `--input`, and `--ring` to point to UI Engine tokens in `src/app/globals.css`.
+- **Refined Design Tokens**: Tightened card radius (`--ui-radius-card: 0.5rem` / 8px), control radius (`--ui-radius-control: 0.375rem` / 6px), action/button radius (`--ui-radius-action: 0.25rem` / 4px), and grid spacing (`--ui-section-px`, `--ui-section-py`, `--ui-section-gap`) to `1.25rem` (20px). Lightened borders (`--ui-border-subtle: #f1f5f9`, `--ui-border-default: #e2e8f0`) and reduced shadows in `src/styles/designTokens.css`.
+- **Header & Sidebar Heights**: Decreased top header height from `h-16` to `h-14` (56px) and search input height to `h-9` in `src/components/top-header.tsx`. Offset content container with `pt-14` in `src/app/(dashboard)/layout.tsx`. Set `nav-outer.tsx` positioning to `top-14 bottom-0` for full height.
+- **Footer Restructuring**: Converted the fixed layout footer into a static inline flow element at the bottom of the main scroll container, enabling the outer sidebar rail to sit borderless at `bottom-0` without overlap.
+- **Tightened Padding**: Reduced dashboard shell paddings to `px-6 py-6` and optimized page header margins/divider colors in `src/ui_engine/layout/shells/dashboard-page-shell.tsx` and `src/ui_engine/layout/page-header.tsx`.
+- **High Table Density**: Slimmed table head height to `h-9`, headers to uppercase metadata, cell paddings to `py-2.5 px-4`, and set row hovers/borders in `src/ui_engine/components/table-card.tsx` and `src/components/ui/table.tsx`.
+- **Inner Sidebar Redesign**: Updated project submenu section headers to `text-[10px]` tracked metadata and redesigned links to use a borderless active state with rounded control radius in `src/components/nav-inner.tsx`.
+
+## [v3.7.1] — 2026-06-16 (Resolve Nested Double Scrollbar UI Bug)
+
+### UI Changes
+- **Double Scrollbar Resolution**: Configured `DashboardPageShell` in [page.tsx](file:///d:/Projects/studioflow/src/app/(dashboard)/projects/[id]/extensions/product-catalog/page.tsx) to use full height constraints (`h-full`), disabled nested overflow, and wrapped `<PageBackLink />` to prevent triggering the outer layout container's scrollbar.
+- **Flex-Based Workspace Inspector**: Converted the Right Inspector Panel in [ProjectScheduleMain.tsx](file:///d:/Projects/studioflow/src/extensions/schedule/components/ProjectScheduleMain.tsx) from a `fixed` viewport overlay to a flexbox sibling. Animated the panel's width (`w-[400px]` vs `w-0`) using CSS transition variables, which dynamically shifts the spreadsheet scrollbar to remain fully visible and interactive on the screen.
+- **Auto-Close on Click-Away**: Integrated an active click-away detection hook in [ProjectScheduleMain.tsx](file:///d:/Projects/studioflow/src/extensions/schedule/components/ProjectScheduleMain.tsx) that automatically closes the right workspace inspector panel and deselects the highlighted item when a click occurs outside the active row, workspace inspector, or modal boundaries.
+  - Added row classification markers (`data-schedule-row="true"`) to [VisualRow.tsx](file:///d:/Projects/studioflow/src/extensions/schedule/components/table/VisualRow.tsx) and [ScheduleCard.tsx](file:///d:/Projects/studioflow/src/extensions/schedule/components/board/ScheduleCard.tsx).
+  - Added interaction anchors (`data-workspace-inspector="true"` and `data-selection-ignore="true"`) to the inspector container and view selectors.
+- **Decoupled Selection and Inspection**: Configured row clicks (single-row clicks, Shift-clicks, and Ctrl/Cmd-clicks) to strictly manage selection and multi-selection (bulk selection) state, rather than opening the workspace inspector automatically. The inspector is now explicitly opened only when the user clicks the "Edit" action button on a selected row or card, which also isolates that row selection.
+
+## [v3.7.0] — 2026-06-16 (Critical Audit Bug Fixes)
+
+### Bug Fixes
+- **FIX 1: Concurrency crash in `addEntryToSchedule`**: Replaced hardcoded `index_number` and `schedule_increment` temporary values (9999) with random negative integers (`-Math.floor(Math.random() * 1_000_000) - 1`) to eliminate P2002 unique constraint collisions during concurrent transaction runs.
+- **FIX 2: Poisoned transaction in `resolveVendor`**: Fixed transaction crashes due to caught P2002 exceptions by performing a case-insensitive read using `findFirst` followed by `upsert` on `brand_name`.
+- **FIX 3: Silent bypass of duplicate check**: Prevented empty manual entries by throwing an explicit `ActionError` when both `catalog_sku` and `catalog_color` are missing in `checkDuplicateProduct`.
+- **FIX 4: Sibling option selection promotion**: Resolved parent `active_index` desync in `smartDeleteOption` by querying remaining sibling options ordered by `option_label: "asc"` and computing the exact index position of the promoted option.
+- **FIX 5: Timezone query bounds**: Resolved GMT+7 query bounds mismatch in audit log search query builder by applying explicit WIB (`+07:00`) boundary parsing for ranges.
+
+### UI Changes
+- **FIX 6: Design System Token Enforcement in `GradualInputForm`**: Replaced hardcoded Tailwind parameters in `GradualInputForm.tsx` with design system tokens:
+  - `rounded-lg` → `rounded-[var(--ui-radius-control)]`
+  - `shadow-xl shadow-slate-200` & `shadow-emerald-200` → `shadow-[var(--ui-shadow-elevated)]`
+  - `text-[10px] uppercase tracking-widest` → `text-[10px] uppercase tracking-[0.15em]` (matching `uiMeta` token from design system config).
+
+## [v3.6.0] — 2026-06-16 (SketchUp Push to Product Schedule Integration)
+
+### API Changes
+- **Push SketchUp Project to Product Schedule**: Added the `pushSketchupToSchedule(sketchupProjectId: string)` server action in [sketchup-actions.ts](file:///d:/Projects/studioflow/src/extensions/sketchup/actions/sketchup-actions.ts). This action retrieves synced SketchUp materials and FF&E components, parses their code prefixes, and upserts them into `ProjectScheduleEntry` and `ProjectScheduleOption` tables.
+  - Implements Case A (Initials) and Case B (Complete) logic.
+  - Resolves `schedule_qty`, `schedule_unit`, and `schedule_location` at the entry level for fixtures (FF&E).
+  - Uses separate transactions for each item to allow partial success, gracefully returning errors and updating paths.
+
+### UI Changes
+- **Push to Schedule Button**: Created [PushToScheduleButton.tsx](file:///d:/Projects/studioflow/src/extensions/sketchup/components/PushToScheduleButton.tsx) with a loading spinner and transition states, displaying success/warning toast notifications from `sonner`.
+- **Integrated Push Control**: Rendered `<PushToScheduleButton>` inside `PageHeader` next to the PDF export button in the SketchUp Integration page [page.tsx](file:///d:/Projects/studioflow/src/app/(dashboard)/projects/[id]/sketchup/page.tsx).
+
+## [v3.5.0] — 2026-06-16 (StudioFlow Visual Redesign & Design Token Enforcement)
+
+### UI Changes
+- **CSS Variable Conflict Resolution**: Fixed [designTokens.css](file:///d:/Projects/studioflow/src/styles/designTokens.css) as the single authority for UI styles. Removed all duplicate `:root` variable overrides (`--ui-canvas-bg`, `--ui-radius-card`, etc.) from [globals.css](file:///d:/Projects/studioflow/src/app/globals.css) so that `--ui-radius-card` resolves to exactly `0.75rem` (12px) everywhere in the application.
+- **Enforced Design Tokens in Core UI Primitives**:
+  - [card.tsx](file:///d:/Projects/studioflow/src/components/ui/card.tsx): Replaced `rounded-xl` with `rounded-[var(--ui-radius-card)]`, applied `border-[var(--ui-border-subtle)]` and `shadow-[var(--ui-shadow-card)]` by default, and set background and text to design system tokens.
+  - [button.tsx](file:///d:/Projects/studioflow/src/components/ui/button.tsx): Replaced `rounded-md` with `rounded-[var(--ui-radius-action)]` on all sizes, and refactored default, outline, and ghost variants to use design system variables (`--ui-action-bg`, `--ui-action-text`, `--ui-action-hover`, `--ui-border-default`, `--ui-text-primary`, `--ui-text-secondary`).
+  - [input.tsx](file:///d:/Projects/studioflow/src/components/ui/input.tsx): Replaced `rounded-md` with `rounded-[var(--ui-radius-control)]`, set border to `--ui-border-subtle`, and focused states to `--ui-border-focus` (removing hardcoded rings/teal rings).
+  - [badge.tsx](file:///d:/Projects/studioflow/src/components/ui/badge.tsx): Replaced `rounded-full` with `rounded-[var(--ui-radius-pill)]`.
+  - [dialog.tsx](file:///d:/Projects/studioflow/src/components/ui/dialog.tsx): Wired overlay, content, header, description, and close buttons to design system tokens.
+  - [label.tsx](file:///d:/Projects/studioflow/src/components/ui/label.tsx): Standardized label text size to `text-xs` and color to `text-[var(--ui-text-secondary)]`.
+- **Standardized Page Shells**:
+  - [page.tsx](file:///d:/Projects/studioflow/src/app/(dashboard)/projects/[id]/sketchup/page.tsx): Standardized page layout to use `DashboardPageShell`, `PageBackLink`, and `PageHeader`, removing hardcoded canvas backgrounds and layout paddings.
+- **Simplified Page Headers**:
+  - [page.tsx](file:///d:/Projects/studioflow/src/app/(dashboard)/extensions/library/page.tsx) and [LibraryTabs.tsx](file:///d:/Projects/studioflow/src/extensions/library/components/LibraryTabs.tsx): Moved `PageHeader` inside the tabs component to consolidate the title ("Product Library"), description, and the "Add Product" button. Positioned `TabsList` immediately below the title block with a clean 24px gap (`mb-8`), and removed the duplicate "Add Product" action button from the filters sidebar.
+  - [page.tsx](file:///d:/Projects/studioflow/src/app/(dashboard)/projects/[id]/phases/[phaseId]/page.tsx): Consolidated phase actions, status indicators, `LOCKED` status badge, "Admin Revision Override" button, and the "Revision History" dialog trigger into the single right-aligned `action` slot of `PageHeader`. Removed the stacked `meta` layout row and the duplicate `eyebrow` text.
+- **Visual Polish Pass**:
+  - Sidebar ([nav-outer.tsx](file:///d:/Projects/studioflow/src/components/nav-outer.tsx)): Adjusted workspaces heading tracking to `tracking-[0.15em]` and links state (hover and active styles to use slate neutrals instead of teal accents).
+  - Top Header ([top-header.tsx](file:///d:/Projects/studioflow/src/components/top-header.tsx)): Styled background, borders, search input, and notification dropdown to match the clean design tokens.
+  - Tables ([table.tsx](file:///d:/Projects/studioflow/src/components/ui/table.tsx)): Styled the `TableHeader` to render a subtle background (`bg-slate-50/75`) and borders (`border-[var(--ui-border-subtle)]`). Table heads now default to `h-10 px-4 text-[10px] uppercase font-bold tracking-[0.12em] text-slate-400`. Table cells now default to `py-3 px-4`. Table rows transition with `hover:bg-slate-50/60` and use tokenized bottom borders.
+  - Interactive States: Replaced the interactive teal hover states (`hover:text-teal-600 hover:bg-teal-50`) in [PhysicalInventoryTable.tsx](file:///d:/Projects/studioflow/src/extensions/library/components/PhysicalInventoryTable.tsx) with slate values (`hover:text-slate-900 hover:bg-slate-100`).
+
+## [v3.4.0] — 2026-06-16 (Workspace Optimization & Right Inspector Panel)
+
+### UI Changes
+- **Right Inspector Panel**: Replaced the modal-based spec editor (`ScheduleSpecEditorModal.tsx`) with a persistent `ScheduleWorkspaceInspector` panel. Implemented in a split-pane layout (`pr-[400px]` dynamically added to main content) that remains open, sticky, and scrolls independently (`ScrollArea`) as the user interacts with different table rows.
+- **High-Utility Visual Density**: Redesigned `VisualRow.tsx` into a high-density horizontal flow (`Thumbnail -> Code -> Effective Title -> Brand -> Status`). Replaced `w-20` thumbnails with compact `w-14` thumbnails and nested option switchers into compact inline capsules.
+- **Progressive Disclosure**: Removed secondary specification details (Color, Motif, Finish, Dimensions) from the list row view to reduce cognitive load; these details are now progressively disclosed in the Right Inspector.
+- **Inspected Accent Highlight**: Styled the currently active inspected row with a distinct left-accent indigo border (`border-l-4 border-l-indigo-600 bg-indigo-50/40 pl-1`) and subtle background highlight, which updates reactively as the user navigates.
+- **Library Readiness Checklist**: Integrated a compact checklist showing Stage 1 (Project Snapshot) and Stage 2 (Catalog Ready) validation requirements inside the inspector, along with the "Promote to Master Catalog" action trigger.
+- **Persistent Inspector Tab State**: Wired the active inspector tab state (`activeInspectorTab`) to the parent workspace container `ProjectScheduleMain.tsx`. The active tab selection ("Identity", "Specs", or "Curation") now persists seamlessly when traversing between previous and next items, eliminating context loss.
+- **Keyboard Row Navigation**: Added global keydown event listeners in `ProjectScheduleMain.tsx` when the inspector is active. Users can press `ArrowUp` to inspect and select the previous schedule entry, `ArrowDown` to inspect and select the next entry, and `Escape` to close the inspector panel. Added validation safeguards to ignore navigation keys while editing inputs, textareas, or contenteditable elements.
+- **Wave 1 Visual Refinements**:
+  - *Borderless List Rows*: Removed 4-sided borders and card containers from `VisualRow.tsx`, replacing them with a clean `border-b border-slate-100/70` bottom-divider line.
+  - *Muted Status Dots*: Replaced high-contrast status pills with small glowing indicator dots (`w-1.5 h-1.5` with shadow glow) and uppercase labels to reduce visual noise while keeping scannability.
+  - *Hover & Selection-Aware Actions*: Actions are hidden by default and appear on hover, when selected (`isSelected`), or when inspected (`isInspected`) to protect keyboard-nav discoverability.
+  - *Lora Typography Polish*: Formatted specification titles to `text-[13px] font-semibold tracking-wide font-serif` and increased vertical padding to improve scanning rhythm.
+  - *Borderless Code Badge*: Changed `schedule_code` representation to a borderless, light grey background span pill.
+
+### Architectural & Cleanup Changes
+- **Continuous Context & Navigation**: Implemented Next/Previous traversal methods within the Right Inspector that directly navigate the parent schedule list. Enabled auto-inspection on standard single-row click events.
+- **Code Pruning**: Safely deleted the unused `ScheduleSpecEditorModal.tsx` file and resolved its references.
+- **Type Safety**: Verified type safety across the newly introduced state and navigation properties with a clean TypeScript compiler run.
+
+## [v3.3.0] — 2026-06-15 (SketchUp to Product Schedule Push Integration)
+
+### API Changes
+- **Push Actions Implementation**: Implemented `pushStagedDataToScheduleAction` and `pushMaterialAsNewEntryAction` in `sketchup-actions.ts` with complete audit logging and revalidation paths. Features robust Zod schema snapshot validation and split Case A (Initials / placeholder) vs Case B (Primary details) option mapping logic. Handles FF&E quantity synchronization natively by updating the parent entry's `schedule_qty` to match the synced SketchUp instance count.
+
+### UI Changes
+- **Mapping Queue Controls**: Updated `SketchupMappingQueue.tsx` to add "Push Staged Data to Schedule" global actions in the tab headers, and inline "Push as New Entry" button controls for unlinked materials. Styled buttons in compliance with the Design System (emerald green accent colors, action radius variables, and loading transitions).
+
+## [v3.2.0] — 2026-06-15 (SketchUp Integration: Printable PDF Schedules)
+
+### Database Changes
+- **String Coupling Risk Resolution**: Added `linked_entry_id` (foreign key to `ProjectScheduleEntry`, nullable, onDelete: SetNull) to the `SketchupMaterial` model, and added the `sketchup_materials` back-relation on `ProjectScheduleEntry` to support manual linking.
+
+### API Changes
+- **Protected Manual Metadata**: Modified `/api/sketchup/sync/route.ts` to restrict the SketchUp material upsert update block to only technical fields (`code`, `uuid`, `area`, `face_count`, `backface_count`, `layers`, `parents`). Web-owned fields (`brand`, `type`, `finish`, `image_url`, `location_notes`, `linked_entry_id`) are protected from being overwritten by plugin sync payloads.
+- **Schedule Document Data Layer Action**: Added type definitions `MaterialScheduleRow`, `FFEScheduleRow`, and `ProjectScheduleDocument`, and implemented the `getProjectScheduleDocument(project_id)` server action in `sketchup-actions.ts`. The action uses efficient single-query resolution mapping for both Materials and FF&E, prioritizing active project schedule option snapshots, with fallback to technical model properties.
+
+### UI Changes
+- **Sidebar Integration**: Added "SketchUp" link under the EXTENSIONS group in the project sidebar component `nav-inner.tsx` using the existing `Box` icon and correct active routing states.
+- **SketchUp Mapping Queue UI**: Implemented `SketchupMappingQueue.tsx` client component for managing synchronized model integration. Provides interactive tabs for Materials and FF&E, including manual linking dropdown triggers for `SketchupMaterial` mappings and inline editable fallback fields (brand, type, location_notes, product_name) styled to comply with visual design system guidelines.
+- **Dynamic Routing Params Fix**: Updated `src/app/(dashboard)/projects/[id]/sketchup/page.tsx` to unwrap the dynamic route `params` Promise cleanly according to Next.js 15+ specifications, integrating the new mapping queue layout and export triggers.
+- **Printable PDF Export Page**: Implemented `/projects/[id]/sketchup/export/page.tsx` and the `PrintButton.tsx` helper client component to generate printable HTML tables. Implemented media-query overrides (`@media print`) to hide navigation shell components and display clean tables with strict column width percentages (Material Schedule: Code 8%, Material Type 15%, Brand 12%, Type/SKU 25%, Image 15%, Location 25%; FF&E Schedule: Code 8%, Category 15%, Product Name 27%, Qty 8%, Brand 17%, Location 25%) and italicized Initials fallback styling.
+
+### SketchUp Plugin Changes
+- **Auto-populate Project ID**: Updated `api_client.rb` to automatically populate the `project_id` field in the local `config.json` configuration file upon a successful sync response containing the resolved `projectId`.
+
+
+
+
+
+## [v3.1.0] — 2026-06-14 (Product Library & Schedule Stabilization)
+
+### Bug Fixes
+- **Deduplication Crash Prevention**: Added check and fallback logic when checking for duplicate SKUs, categories, and colors in `createProduct` and `updateProduct` of `LibraryService` to avoid crashes on blank/optional fields.
+- **Cache Invalidation for Promotions**: Added missing project and library cache invalidation in `createPromotionRequestAction` to ensure ADMIN promotions are immediately visible without page reloads.
+- **Staff Edit Permission Alignment**: Modified `updateProductAction` in `library-actions.ts` to allow `assertAdminOrStaff` role checks, ensuring staff can edit their own pending drafts. Added checks preventing non-admins from manually setting statuses to `APPROVED`.
+- **CSV Import Quantity Restriction**: Modified `parseGSheetsProductCsv` and `importScheduleFromCsv` to strictly filter out and ignore quantity columns when parsing and importing CSV files for materials, aligning with the "no quantity data for materials" rule.
+- **Smart Option Deletion Index Correction**: Improved `smartDeleteOption` in `schedule-service.ts` to sync the schedule entry's `active_index` to point directly to the sibling option marked `is_final` upon deleting a non-final option, preventing layout/desync bugs in spreadsheet rows.
+
+## [v3.0.0] — 2026-06-14 (Reverse-Engineered SSOT Consolidation)
+
+### Bug Fixes
+- **Critical Auth Bypass**: Added `/activity` and `/activity-center` to `isDashboardRoute` in `src/auth.config.ts`, protecting the global activity logs from unauthenticated users.
+- **CD Drawing Code Validation**: Updated `normalizeDrawingCode` in `src/actions/_shared.ts` to allow "CD" prefix in Construction Drawing phase inputs.
+- **Timezone Offset Bounds**: Updated timezone boundary calculation in `src/core/platform/audit/query-builder.ts` by removing forced UTC UTC markers (`Z`) to respect server/local date filters.
+- **Option Deletion Index Desync**: Modified `smartDeleteOption` in `src/extensions/schedule/services/schedule-service.ts` to update `active_index` of the parent `ProjectScheduleEntry` when option deletion occurs.
+- **Project Overview Icon Compilation**: Imported missing `Loader2` icon from `lucide-react` in `src/components/project-overview-form.tsx`.
+
+### Code Pruning & Refactoring
+- **Split Revision Utility**: Resolved overly complex TS overloads on `getActiveRevision` in `src/actions/_shared.ts` by splitting it into two explicit, simplified functions: `getActiveRevision` and `getActiveRevisionWithActivities`.
+- **Server Action Redundant Return Cleanups**: Removed manual `{ success: true }` returned from action wrappers (like `reorderScheduleEntriesAction`, `swapScheduleEntriesAction`, `restoreBackupAction`, `deleteBackupAction`, and `mergeVendorsAction`) to avoid double-wrapping.
+
+### UI Changes
+- **Activity Layout Flatting**: Removed nested `<TableCard>` wrapper around `<ActivityLogTable>` in both global activity page (`src/app/(dashboard)/activity/page.tsx`) and project activity page (`src/app/(dashboard)/projects/[id]/activity/page.tsx`). This resolves a semantic layout bug (rendering table-like structures wrapping invalid div/article children) and flattens DOM nesting complexity, resolving visual border clutter.
+- **SketchUp Integration Dashboard**: Added `src/app/(dashboard)/projects/[id]/sketchup/page.tsx` for generating API keys, viewing synced materials/FF&E, and managing pending merge actions.
+
+### Integrations
+- **SketchUp Plugin API**: Implemented dedicated endpoints (`/api/sketchup/sync` and `/api/sketchup/merge/confirm`) for real-time bidirectional syncing of materials and FF&E components directly from SketchUp models via API keys. Supported by new Prisma schema extensions (`SketchupProject`, `SketchupMaterial`, `SketchupFFE`, `SketchupMergeAction`).
+
+### Documentation & Audit
+- **Master SSOT Rewrite**: Rewrote `MASTER_SSOT.md` to serve as a complete, reverse-engineered Single Source of Truth based on direct codebase analysis, ensuring exact specs for junior developers.
+- **Issue Audit Log**: Documented 7 active defects and vulnerabilities (including the `/activity` public authentication bypass, option deletion `active_index` desync, and timezone-offset bugs) along with detailed mitigations.
+- **Visual Compliance Log**: Identified styling violations under the "Zero Hardcode Policy" in `GradualInputForm.tsx`.
 ## [v2.7.3] — 2026-06-15 (Project-Level Todo List & LAN Exposure Automation)
 
 ### Added

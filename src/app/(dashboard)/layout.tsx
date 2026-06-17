@@ -105,29 +105,21 @@ export default async function DashboardLayout({
           activityNotifications={recentActivity}
         />
 
-        <div className="flex flex-1 pt-16 min-h-0 relative">
+        <div className="flex flex-1 pt-14 min-h-0 relative">
           <NavOuter appTitle={appTitle} userRole={user?.role || "STAFF"} />
 
           <main className={cn("flex flex-1 flex-col overflow-y-auto lg:pl-[78px] lg:pr-6", UI_ENGINE_CANVAS_CLASS)}>
             <div className="flex flex-1 flex-col w-full">
               {children}
             </div>
+            
+            <footer className="mt-auto flex justify-center py-4 border-t border-[var(--ui-border-subtle)] text-slate-400">
+              <p className="select-none font-sans text-[10px] font-medium uppercase tracking-[0.2em]">
+                {appTitle} by BK (c)2026
+              </p>
+            </footer>
           </main>
         </div>
-
-        <footer
-          className={cn(
-            "flex flex-shrink-0 items-center justify-center border-t px-6 py-2.5 lg:pl-[78px] lg:pr-6",
-            footerTheme === "dark" 
-              ? "border-slate-800 bg-slate-950 text-slate-400" 
-              : "border-slate-200 bg-white text-slate-500",
-            footerTheme === "light" && UI_ENGINE_CANVAS_CLASS
-          )}
-        >
-          <p className="select-none font-sans text-[10px] font-medium uppercase tracking-[0.2em]">
-            {appTitle} by BK (c)2026
-          </p>
-        </footer>
       </div>
     </SidebarProvider>
   );

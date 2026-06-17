@@ -2,7 +2,7 @@ import { Activity, ActivityStatus, PhaseStatus, RevisionStatus, CDItemStatus, Pr
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { ERR } from "@/core/rbac/permissions";
-import { insertAuditLog, getActiveRevision, normalizeDrawingCode } from "@/actions/_shared";
+import { insertAuditLog, getActiveRevision, getActiveRevisionWithActivities, normalizeDrawingCode } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/core/platform/audit";
 import { PhasePolicy } from "@/lib/domain/phase-policy";
 
@@ -14,7 +14,7 @@ import { PhasePolicy } from "@/lib/domain/phase-policy";
  * 3. Unchecked checklist items for this phase.
  */
 async function assertNoPendingTasks(tx: PrismaTransaction, phaseId: string) {
-  const activeRevision = await getActiveRevision(tx, phaseId, { includeActivities: true });
+  const activeRevision = await getActiveRevisionWithActivities(tx, phaseId);
   
   const hasOpenActivities = activeRevision?.activities.some(
     (activity: Activity) => activity.status === ActivityStatus.OPEN
@@ -194,7 +194,7 @@ export const phaseService = {
       throw new ActionError(ERR.INVALID_PHASE_STATE, "INVALID_STATE");
     }
 
-    const activeRevision = await getActiveRevision(tx, phaseId, { includeActivities: true });
+    const activeRevision = await getActiveRevisionWithActivities(tx, phaseId);
     if (!activeRevision) {
       throw new ActionError(
         "Phase must be activated first. No active revision found.",
@@ -250,7 +250,7 @@ export const phaseService = {
     }
     if (type === "CLIENT" && phase.status_enum !== PhaseStatus.ON_REVIEW_CLIENT) throw new ActionError(ERR.INVALID_PHASE_STATE, "INVALID_STATE");
 
-    const activeRevision = await getActiveRevision(tx, phaseId, { includeActivities: true });
+    const activeRevision = await getActiveRevisionWithActivities(tx, phaseId);
     if (!activeRevision) throw new ActionError(ERR.INVALID_PHASE_STATE, "NO_ACTIVE_REVISION");
 
     // Close current revision
@@ -632,7 +632,7 @@ export const phaseService = {
       data: { is_locked: false, status_enum: PhaseStatus.IN_PROGRESS },
     });
 
-    const activeRevision = await getActiveRevision(tx, phaseId, { includeActivities: true });
+    const activeRevision = await getActiveRevisionWithActivities(tx, phaseId);
     let revision;
 
     if (activeRevision) {

@@ -28,7 +28,6 @@ export const restoreBackupAction = createAction(
     assertAdmin(ctx.role);
     await DatabaseService.restoreBackup((input as { fileName: string }).fileName);
     invalidateCache({ scope: REVALIDATE_SETTINGS });
-    return { success: true };
   }
 );
 
@@ -51,6 +50,5 @@ export const deleteBackupAction = createAction(
     assertAdmin(ctx.role);
     await DatabaseService.deleteBackup((input as { fileName: string }).fileName);
     invalidateCache({ scope: REVALIDATE_SETTINGS });
-    return { success: true };
   }
 );

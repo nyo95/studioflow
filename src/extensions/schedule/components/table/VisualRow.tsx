@@ -47,6 +47,7 @@ interface VisualRowProps {
   onAddAlternative?: () => void;
   section?: ProductType;
   isSelected?: boolean;
+  isInspected?: boolean;
   onClick?: (event: React.MouseEvent) => void;
 }
 
@@ -58,6 +59,7 @@ export function VisualRow({
   onAddAlternative, 
   section = ProductType.material,
   isSelected,
+  isInspected,
   onClick
 }: VisualRowProps) {
   const router = useRouter();
@@ -161,321 +163,289 @@ export function VisualRow({
       ref={setNodeRef} 
       style={style} 
       onClick={onClick}
+      data-schedule-row="true"
       className={cn(
-        "group relative flex items-center gap-4 p-2 border transition-all duration-300",
-        UI_ENGINE_RADIUS_CONTROL,
-        isSelected 
-          ? "bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-100 shadow-lg z-10 scale-[1.01]" 
-          : "bg-white/80 backdrop-blur-md border-slate-200/60 hover:border-slate-300 shadow-sm hover:shadow-md",
-        isDragging && "opacity-50 scale-105 z-50 shadow-2xl ring-2 ring-indigo-200"
+        "group relative grid grid-cols-12 gap-4 p-2.5 items-center transition-all duration-150 border-b border-slate-100/70",
+        isSelected || isInspected
+          ? "bg-indigo-50/30 border-l-4 border-l-indigo-500 pl-1 z-10" 
+          : "bg-transparent hover:bg-slate-50/50 border-l-4 border-l-transparent",
+        isDragging && "opacity-50 scale-102 z-50 shadow-lg ring-1 ring-indigo-100 bg-white"
       )}
     >
-      {/* 1. Code & Drag Handle */}
-      <div className="flex items-center gap-3 w-32 flex-shrink-0">
+      {/* 1. Left Block: Drag, Thumbnail, Code (col-span-3) */}
+      <div className="col-span-3 flex items-center gap-4 min-w-0">
+        {/* Drag Handle */}
         <div 
           {...attributes} 
           {...listeners}
           className={cn(
-            "p-2 transition-colors cursor-grab active:cursor-grabbing",
-            isSelected ? "text-indigo-300 hover:text-indigo-600" : "text-slate-300 hover:text-slate-900 hover:bg-slate-100",
+            "p-1 transition-colors cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-900 hover:bg-slate-100 shrink-0",
             UI_ENGINE_RADIUS_CONTROL
           )}
         >
-          <GripVertical size={18} />
+          <GripVertical size={16} />
         </div>
-        <Badge 
-          variant="outline" 
-          className={cn(
-            "font-sans text-[10px] font-black tracking-[0.1em] uppercase px-2.5 py-1 transition-colors",
-            isSelected ? "border-indigo-200 bg-indigo-100/50 text-indigo-700" : "border-slate-200 bg-slate-50 text-slate-900 shadow-sm"
-          )}
-        >
-          {entry.schedule_code}
-        </Badge>
-      </div>
 
-      {/* 2. Product Visual & Main Specs */}
-      <div className="flex-1 flex items-center gap-4 min-w-0">
+        {/* Thumbnail (w-12 h-12) */}
         <div 
-          className={cn("w-20 h-20 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in", UI_ENGINE_RADIUS_IMAGE)}
+          className={cn("w-12 h-12 bg-white border border-slate-200 overflow-hidden group/img relative cursor-zoom-in shrink-0", UI_ENGINE_RADIUS_IMAGE)}
           onClick={(e) => { e.stopPropagation(); if (snapshot?.catalog_image_url) setLightboxOpen(true); }}
         >
           <VisualAsset 
             src={snapshot?.catalog_image_url} 
             alt={snapshot?.catalog_product_name || ""} 
-            iconSize={28}
+            iconSize={18}
             className="transition-transform duration-700 group-hover/img:scale-110"
           />
           <div className="absolute inset-0 bg-slate-900/0 group-hover/img:bg-slate-900/20 transition-all flex items-center justify-center">
-            <ZoomIn className="text-white opacity-0 group-hover/img:opacity-100 scale-90 group-hover/img:scale-100 transition-all duration-300 w-6 h-6" />
+            <ZoomIn className="text-white opacity-0 group-hover/img:opacity-100 scale-90 group-hover/img:scale-100 transition-all duration-300 w-3 h-3" />
           </div>
           {activeOption?.is_final && (
-            <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-emerald-500 shadow-lg ring-4 ring-white" />
+            <div className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-lg ring-1 ring-white" />
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <h4 className={cn(
-            "text-base font-semibold truncate transition-colors leading-tight font-serif",
-            isSelected ? "text-slate-900" : "text-slate-900"
-          )}>
-            {(() => {
-              return (
-                <div className="flex items-center gap-2">
-                  <span className={cn(primaryMissing && "text-lg font-bold font-serif")}>{effectiveTitle}</span>
-                  <Badge 
-                    className={cn(
-                      "font-black text-[9px] uppercase tracking-widest px-1.5 py-0.5 border-none",
-                      activeOption?.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" :
-                      activeOption?.status === "NOT_USED" ? "bg-rose-100 text-rose-700" :
-                      "bg-slate-100 text-slate-500"
-                    )}
-                  >
-                    {activeOption?.status || "DRAFT"}
-                  </Badge>
-                </div>
-              );
-            })()}
-          </h4>
-          <div className="flex items-center gap-2 mt-0.5">
-             <span className={cn("text-[11px] font-medium uppercase tracking-widest", isSelected ? "text-slate-500" : "text-slate-400", UI_ENGINE_TYPE_META)}>
-                {(() => {
-                  const primaryExists = [snapshot?.specs?.catalog_sku, snapshot?.catalog_product_name]
-                    .some(v => v && !isPlaceholder(v) && v.toUpperCase() !== "GENERIC");
-
-                  const secondary = [
-                    snapshot?.specs?.catalog_color && !isPlaceholder(snapshot.specs.catalog_color) ? `Color: ${snapshot.specs.catalog_color}` : null,
-                    snapshot?.specs?.catalog_motif && !isPlaceholder(snapshot.specs.catalog_motif) ? `Pattern: ${snapshot.specs.catalog_motif}` : null,
-                    snapshot?.specs?.catalog_finishing && !isPlaceholder(snapshot.specs.catalog_finishing) ? `Finish: ${snapshot.specs.catalog_finishing}` : null,
-                  ].filter(Boolean).join(" - ");
-
-                  if (primaryExists) return secondary || (snapshot?.catalog_brand || "No Specs");
-                  return snapshot?.catalog_brand || "";
-                })()}
-             </span>
-             {(!snapshot?.specs?.catalog_color && !snapshot?.specs?.catalog_motif && !snapshot?.specs?.catalog_finishing) && (
-               <>
-                 <div className={cn("h-1 w-1 rounded-full", isSelected ? "bg-slate-300" : "bg-slate-200")} />
-                 <span className={cn("text-[10px] font-medium uppercase tracking-widest opacity-60", isSelected ? "text-slate-900" : "text-slate-400", UI_ENGINE_TYPE_META)}>
-                   {entry.schedule_category}
-                 </span>
-               </>
-             )}
-          </div>
-          
-          <div className="mt-4 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-             <div className={cn(
-               "inline-flex items-center gap-1 p-1 bg-slate-50/50 border border-slate-200/60 shadow-sm backdrop-blur-sm",
-               UI_ENGINE_RADIUS_CONTROL
-             )}>
-                {entry.options.length > 1 && (
-                  <>
-                    <button
-                      onClick={handlePrevOption}
-                      disabled={activeOptionIndex === 0}
-                      className={cn(
-                        "p-1.5 transition-all disabled:opacity-20",
-                        activeOptionIndex > 0 ? "text-slate-900 hover:bg-white hover:shadow-sm" : "text-slate-300",
-                        UI_ENGINE_RADIUS_ACTION
-                      )}
-                    >
-                      <ChevronLeft size={14} />
-                    </button>
-                    <div className="px-2 flex flex-col items-center min-w-[45px]">
-                       <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-400 leading-none mb-0.5">Option</span>
-                       <span className="font-sans text-[11px] font-bold text-slate-900 tabular-nums leading-none">
-                         {activeOptionIndex + 1} <span className="text-slate-300 font-medium mx-0.5">/</span> {entry.options.length}
-                       </span>
-                    </div>
-                    <button
-                      onClick={handleNextOption}
-                      disabled={activeOptionIndex === entry.options.length - 1}
-                      className={cn(
-                        "p-1.5 transition-all disabled:opacity-20",
-                        activeOptionIndex < entry.options.length - 1 ? "text-slate-900 hover:bg-white hover:shadow-sm" : "text-slate-300",
-                        UI_ENGINE_RADIUS_ACTION
-                      )}
-                    >
-                      <ChevronRight size={14} />
-                    </button>
-                    <div className="w-px h-4 bg-slate-200 mx-1" />
-                  </>
-                )}
-
-                {/* Approve Button (Only for non-final options) */}
-                {activeOption && !activeOption.is_final && (
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const toastId = toast.loading(`Approving ${activeOption.option_label}...`);
-                      try {
-                        const { approveScheduleOptionAction } = await import("@/extensions/schedule/actions/schedule-actions");
-                        unwrapActionResult(await approveScheduleOptionAction({ 
-                          optionId: activeOption.id,
-                          entryId: entry.id
-                        }));
-                        toast.success(`Option ${activeOption.option_label} approved!`, { id: toastId });
-                        router.refresh();
-                      } catch (err: any) {
-                        toast.error(err.message || "Failed to approve", { id: toastId });
-                      }
-                    }}
-                    title="Approve this option"
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all group/approve",
-                      UI_ENGINE_RADIUS_ACTION
-                    )}
-                  >
-                    <CheckCircle2 size={12} strokeWidth={3} className="transition-transform group-hover/approve:scale-110" />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Approve</span>
-                  </button>
-                )}
-
-                <button
-                  onClick={(e) => { e.stopPropagation(); onAddAlternative?.(); }}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:text-slate-900 transition-all group/add",
-                    UI_ENGINE_RADIUS_ACTION,
-                    "hover:bg-white hover:shadow-sm"
-                  )}
-                >
-                  <Plus size={14} className="transition-transform group-hover/add:rotate-90" />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Add Alternative</span>
-                </button>
-             </div>
-          </div>
-        </div>
+        {/* Code Badge */}
+        <span 
+          className={cn(
+            "font-sans text-[10px] font-black tracking-[0.1em] uppercase px-2 py-0.5 w-20 shrink-0 text-center justify-center rounded-[var(--ui-radius-control)] transition-colors",
+            isSelected || isInspected ? "bg-indigo-100/50 text-indigo-700" : "bg-slate-100 text-slate-700"
+          )}
+        >
+          {entry.schedule_code}
+        </span>
       </div>
 
-      {/* 3. Metadata & Actions (Location, Qty, Menu) */}
-      <div className="flex items-center gap-6 pl-4 border-l border-slate-100 transition-colors">
-        {/* Location */}
-        <div className="w-40">
+      {/* 2. Specification / Brand (col-span-3) */}
+      <div className="col-span-3 flex flex-col min-w-0 pr-2 py-0.5">
+        <h4 className="text-[13px] font-semibold truncate leading-normal tracking-wide font-serif text-slate-900">
+          {effectiveTitle}
+        </h4>
+        <span className="text-[10px] font-medium uppercase tracking-widest text-slate-400 mt-0.5 truncate font-sans">
+          {snapshot?.catalog_brand || "No Brand"}
+        </span>
+      </div>
+
+      {/* 3. Status Badge (col-span-1) */}
+      <div className="col-span-1 flex items-center justify-center gap-1.5 shrink-0">
+        <div 
+          className={cn(
+            "w-1.5 h-1.5 rounded-full shrink-0",
+            activeOption?.status === "APPROVED" ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.3)]" :
+            activeOption?.status === "NOT_USED" ? "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.3)]" :
+            "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.3)]"
+          )}
+        />
+        <span 
+          className={cn(
+            "font-black text-[9px] uppercase tracking-widest leading-none whitespace-nowrap font-sans",
+            activeOption?.status === "APPROVED" ? "text-emerald-700" :
+            activeOption?.status === "NOT_USED" ? "text-rose-600" :
+            "text-amber-700"
+          )}
+        >
+          {activeOption?.status || "DRAFT"}
+        </span>
+      </div>
+
+      {/* 4. Location & Qty (col-span-2) */}
+      <div className="col-span-2 flex items-center gap-4 min-w-0">
+        {/* Location - Clean text with map icon, no background box */}
+        <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
           {editingLocation ? (
-            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-1">
               <input
                 ref={locationInputRef}
                 value={locationValue}
                 onChange={(e) => setLocationValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSaveLocation()}
-                className={cn("h-9 text-xs font-bold text-slate-900 bg-white border border-slate-200 px-3 outline-none focus:ring-2 focus:ring-slate-900 transition-all w-full", UI_ENGINE_RADIUS_CONTROL)}
+                className={cn("h-8 text-xs font-bold text-slate-900 bg-white border border-slate-200 px-2 outline-none focus:ring-1 focus:ring-slate-900 transition-all w-full", UI_ENGINE_RADIUS_CONTROL)}
                 placeholder="Loc..."
                 autoFocus
               />
-              <button onClick={handleSaveLocation} className={cn("p-2 bg-slate-900 text-white shadow-lg flex items-center justify-center transition-all hover:scale-105", UI_ENGINE_RADIUS_CONTROL)}>
+              <button onClick={handleSaveLocation} className={cn("p-1.5 bg-slate-900 text-white shadow-md flex items-center justify-center transition-all hover:scale-105 shrink-0", UI_ENGINE_RADIUS_CONTROL)}>
                 {isSavingLocation ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
               </button>
             </div>
           ) : (
             <button
-              onClick={(e) => { e.stopPropagation(); setEditingLocation(true); }}
-              className={cn("flex items-start gap-2.5 group/loc p-1.5 transition-all text-left", UI_ENGINE_RADIUS_CONTROL)}
+              onClick={() => setEditingLocation(true)}
+              className="flex items-center gap-1.5 group/loc p-0.5 transition-all text-left w-full hover:bg-slate-50 rounded"
             >
-              <div className={cn(
-                "mt-0.5 p-1.5 transition-all",
-                isSelected ? "bg-white/10 text-white" : "bg-slate-50 text-slate-300 group-hover/loc:bg-slate-900 group-hover/loc:text-white",
-                UI_ENGINE_RADIUS_CONTROL
-              )}>
-                <MapPin size={12} />
-              </div>
-              <div className="flex flex-col">
-                <span className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", isSelected ? "text-white/40" : "text-slate-300", UI_ENGINE_TYPE_META)}>Location</span>
-                <span className={cn("text-xs font-bold truncate max-w-[120px]", isSelected ? "text-white" : "text-slate-900", UI_ENGINE_TYPE_BODY)}>
-                  {entry.schedule_location || <span className="opacity-30 italic font-medium">Global</span>}
-                </span>
-              </div>
+              <MapPin size={11} className="text-slate-400 group-hover/loc:text-slate-900 transition-colors shrink-0" />
+              <span className="text-[11px] font-medium truncate text-slate-700">
+                {entry.schedule_location || <span className="opacity-30 italic font-normal text-slate-400">Global</span>}
+              </span>
             </button>
           )}
         </div>
 
-        {/* Qty */}
+        {/* Qty - Simple number, no background card */}
         {isFixture && (
-          <div className="w-24 flex flex-col items-center">
-            <span className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", isSelected ? "text-white/40" : "text-slate-300", UI_ENGINE_TYPE_META)}>Qty</span>
-            <div className="flex items-baseline gap-1">
-              <span className={cn("text-xl font-black tracking-tighter", isSelected ? "text-white" : "text-slate-900", UI_ENGINE_TYPE_TITLE)}>
-                {entry.schedule_qty ?? 0}
-              </span>
-              <span className={cn("text-[9px] font-bold uppercase tracking-widest opacity-60", isSelected ? "text-white" : "text-slate-400", UI_ENGINE_TYPE_META)}>
-                {entry.schedule_unit || "unit"}
-              </span>
-            </div>
+          <div className="flex items-baseline gap-0.5 shrink-0 leading-none">
+            <span className="text-sm font-bold tracking-tighter text-slate-900">
+              {entry.schedule_qty ?? 0}
+            </span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+              {entry.schedule_unit || "u"}
+            </span>
           </div>
         )}
+      </div>
 
-        {/* Actions Menu */}
-        <div className="flex items-center gap-2">
-           {/* Sample Request - Persistent visibility if product linked */}
-           {activeOption && (() => {
-             // Merge: option-level requests (for custom products) OR catalog-level requests (for library products)
-             const latestRequest = 
-               activeOption?.product_requests?.[0] ||
-               activeOption?.product_catalog?.product_requests?.[0];
-             const hasActiveRequest = latestRequest && latestRequest.status !== "UNAVAILABLE";
-
-             return (
-               <div className="flex flex-row items-center gap-2">
-                 <button
-                   onClick={(e) => {
-                     e.stopPropagation();
-                     setSampleModalOpen(true);
-                   }}
-                   title="Request sample"
-                   className={cn(
-                     "h-8 w-8 flex items-center justify-center transition-all shadow-sm",
-                     UI_ENGINE_RADIUS_CONTROL,
-                     hasActiveRequest
-                       ? latestRequest.status === "RECEIVED"
-                         ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                         : "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                       : "bg-slate-50 text-slate-900 hover:bg-slate-100"
-                   )}
-                 >
-                   <Package size={14} strokeWidth={2.5} />
-                 </button>
-                 {latestRequest && (
-                   <span className={cn(
-                     "text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 whitespace-nowrap",
-                     UI_ENGINE_RADIUS_CONTROL,
-                     latestRequest.status === "RECEIVED"
-                       ? "bg-emerald-50 text-emerald-600"
-                        : latestRequest.status === "UNAVAILABLE"
-                       ? "bg-rose-50 text-rose-500"
-                       : "bg-amber-50 text-amber-600"
-                   )}>
-                      {latestRequest.status === "RECEIVED" ? "✓ Received"
-                       : latestRequest.status === "IN_PROGRESS" ? "In Progress"
-                       : latestRequest.status === "UNAVAILABLE" ? "N/A"
-                       : "Requested"}
-                   </span>
-                 )}
-               </div>
-             );
-           })()}
-
-           {/* Destructive/Edit Actions - Hover only */}
-           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+      {/* 5. Alternatives / Option Switcher (col-span-2) */}
+      <div className="col-span-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className={cn(
+          "inline-flex items-center gap-1 p-0.5 bg-slate-50 border border-slate-200/60 shadow-xs",
+          UI_ENGINE_RADIUS_CONTROL
+        )}>
+          {entry.options.length > 1 && (
+            <>
               <button
-                onClick={(e) => { e.stopPropagation(); onEdit?.(entry); }}
+                onClick={handlePrevOption}
+                disabled={activeOptionIndex === 0}
                 className={cn(
-                  "h-8 w-8 flex items-center justify-center transition-all",
-                  isSelected ? "bg-white/10 hover:bg-white text-white hover:text-slate-900" : "hover:bg-slate-100 text-slate-400 hover:text-slate-600",
-                  UI_ENGINE_RADIUS_CONTROL
+                  "p-1 transition-all disabled:opacity-20",
+                  activeOptionIndex > 0 ? "text-slate-900 hover:bg-white hover:shadow-xs" : "text-slate-300",
+                  UI_ENGINE_RADIUS_ACTION
                 )}
               >
-                <Edit3 size={14} />
+                <ChevronLeft size={12} />
               </button>
+              <div className="px-1 flex flex-col items-center min-w-[28px]">
+                 <span className="font-sans text-[10px] font-bold text-slate-900 tabular-nums leading-none">
+                   {activeOptionIndex + 1}/{entry.options.length}
+                 </span>
+              </div>
               <button
-                onClick={handleDelete}
+                onClick={handleNextOption}
+                disabled={activeOptionIndex === entry.options.length - 1}
                 className={cn(
-                  "h-8 w-8 flex items-center justify-center transition-all",
-                  isSelected ? "bg-white/10 hover:bg-red-500 text-white" : "hover:bg-red-50 text-slate-400 hover:text-red-500",
-                  UI_ENGINE_RADIUS_CONTROL
+                  "p-1 transition-all disabled:opacity-20",
+                  activeOptionIndex < entry.options.length - 1 ? "text-slate-900 hover:bg-white hover:shadow-xs" : "text-slate-300",
+                  UI_ENGINE_RADIUS_ACTION
                 )}
               >
-                <Trash2 size={14} />
+                <ChevronRight size={12} />
               </button>
-           </div>
+              <div className="w-px h-3 bg-slate-200 mx-0.5" />
+            </>
+          )}
+
+          {/* Approve Button (Only for non-final options) */}
+          {activeOption && !activeOption.is_final && (
+            <button
+              onClick={async () => {
+                const toastId = toast.loading(`Approving ${activeOption.option_label}...`);
+                try {
+                  const { approveScheduleOptionAction } = await import("@/extensions/schedule/actions/schedule-actions");
+                  unwrapActionResult(await approveScheduleOptionAction({ 
+                    optionId: activeOption.id,
+                    entryId: entry.id
+                  }));
+                  toast.success(`Option ${activeOption.option_label} approved!`, { id: toastId });
+                  router.refresh();
+                } catch (err: any) {
+                  toast.error(err.message || "Failed to approve", { id: toastId });
+                }
+              }}
+              title="Approve this option"
+              className={cn(
+                "flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all group/approve",
+                UI_ENGINE_RADIUS_ACTION
+              )}
+            >
+              <CheckCircle2 size={10} strokeWidth={3} className="transition-transform group-hover/approve:scale-110" />
+              <span className="text-[8px] font-black uppercase tracking-widest">Approve</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => onAddAlternative?.()}
+            className={cn(
+              "flex items-center gap-1 px-1.5 py-0.5 text-slate-500 hover:text-slate-900 transition-all group/add",
+              UI_ENGINE_RADIUS_ACTION,
+              "hover:bg-white hover:shadow-xs"
+            )}
+          >
+            <Plus size={12} className="transition-transform group-hover/add:rotate-90" />
+            <span className="text-[8px] font-black uppercase tracking-widest">Add Alt</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 6. Actions (col-span-1) */}
+      <div className="col-span-1 flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {activeOption && (() => {
+          const latestRequest = 
+            activeOption?.product_requests?.[0] ||
+            activeOption?.product_catalog?.product_requests?.[0];
+          const hasActiveRequest = latestRequest && latestRequest.status !== "UNAVAILABLE";
+
+          return (
+            <div className="flex flex-row items-center gap-1 shrink-0">
+              <button
+                onClick={() => setSampleModalOpen(true)}
+                title="Request sample"
+                className={cn(
+                  "h-7 w-7 flex items-center justify-center transition-all shadow-xs",
+                  UI_ENGINE_RADIUS_CONTROL,
+                  hasActiveRequest
+                    ? latestRequest.status === "RECEIVED"
+                      ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                      : "bg-amber-50 text-amber-600 hover:bg-amber-100"
+                    : "bg-slate-50 text-slate-900 hover:bg-slate-100"
+                )}
+              >
+                <Package size={12} strokeWidth={2.5} />
+              </button>
+              {latestRequest && (
+                <span className={cn(
+                  "text-[8px] font-black uppercase tracking-widest px-1 py-0.5 whitespace-nowrap",
+                  UI_ENGINE_RADIUS_CONTROL,
+                  latestRequest.status === "RECEIVED"
+                    ? "bg-emerald-50 text-emerald-600"
+                    : latestRequest.status === "UNAVAILABLE"
+                    ? "bg-rose-50 text-rose-500"
+                    : "bg-amber-50 text-amber-600"
+                )}>
+                  {latestRequest.status === "RECEIVED" ? "✓"
+                   : latestRequest.status === "IN_PROGRESS" ? "P"
+                   : latestRequest.status === "UNAVAILABLE" ? "N/A"
+                   : "R"}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Edit/Delete Buttons (Visible on hover, selected, or inspected) */}
+        <div 
+          className={cn(
+            "flex items-center gap-0.5 transition-all duration-150 shrink-0",
+            isSelected || isInspected
+              ? "opacity-100 translate-x-0" 
+              : "opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0"
+          )}
+        >
+           <button
+             onClick={() => onEdit?.(entry)}
+             className={cn(
+               "h-7 w-7 flex items-center justify-center transition-all duration-100 hover:bg-slate-100 text-slate-400 hover:text-slate-600",
+               UI_ENGINE_RADIUS_CONTROL
+             )}
+           >
+             <Edit3 size={12} />
+           </button>
+           <button
+             onClick={handleDelete}
+             className={cn(
+               "h-7 w-7 flex items-center justify-center transition-all duration-100 hover:bg-red-50 text-slate-400 hover:text-red-500",
+               UI_ENGINE_RADIUS_CONTROL
+             )}
+           >
+             <Trash2 size={12} />
+           </button>
         </div>
       </div>
 
