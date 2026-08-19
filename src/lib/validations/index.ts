@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { ProjectPriority, PhaseStatus, CDItemStatus, ActivityMode, ProductType } from "@/generated/prisma";
+import {
+  CHECKLIST_LABEL_MAX_LENGTH,
+  CHECKLIST_PRIORITY_MIN,
+  CHECKLIST_PRIORITY_NONE,
+} from "@/lib/constants";
 
 // --- Common ---
 export const IdSchema = z.string().uuid("Invalid ID format");
@@ -80,9 +85,88 @@ export const ToggleChecklistSchema = z.object({
   isChecked: z.boolean(),
 });
 
-export const AddChecklistItemSchema = z.object({
-  phaseId: IdSchema,
-  label: z.string().min(1),
+// ---------------------------------------------------------------------------
+// Tasks (roadmap §C)
+// ---------------------------------------------------------------------------
+
+const ChecklistPrioritySchema = z
+  .number()
+  .int()
+  .min(CHECKLIST_PRIORITY_MIN)
+  .max(CHECKLIST_PRIORITY_NONE);
+
+const ChecklistLabelTextSchema = z.string().trim().min(1).max(CHECKLIST_LABEL_MAX_LENGTH);
+
+/**
+ * Only subtasks can be created from the app.
+ *
+ * `parentId` is required, and that is the point: a root checklist item is a
+ * requirement, and requirements are defined once in Studio settings and
+ * generated into every project. There is no shape of this input that creates
+ * one — the schema refuses it before the service is even reached.
+ *
+ * `phaseId` is gone too. A subtask inherits its parent's phase; accepting one
+ * here would let a caller file a subtask against a phase its parent is not in.
+ */
+export const CreateSubtaskSchema = z.object({
+  projectId: IdSchema,
+  parentId: IdSchema,
+  label: ChecklistLabelTextSchema,
+  priority: ChecklistPrioritySchema.optional(),
+  dueAt: z.coerce.date().nullable().optional(),
+  assignedToId: IdSchema.nullable().optional(),
+});
+
+/**
+ * `.nullable()` and `.optional()` mean different things here and both are load
+ * bearing: omitted = leave alone, explicit null = clear. Collapsing them would
+ * make it impossible to remove a due date or an assignee once set.
+ */
+
+export const UpdateTaskSchema = z.object({
+  taskId: IdSchema,
+  label: ChecklistLabelTextSchema.optional(),
+  priority: ChecklistPrioritySchema.optional(),
+  dueAt: z.coerce.date().nullable().optional(),
+  assignedToId: IdSchema.nullable().optional(),
+});
+
+export const TaskIdSchema = z.object({
+  taskId: IdSchema,
+});
+
+export const ReorderTasksSchema = z.object({
+  taskIds: z.array(IdSchema).min(1),
+});
+
+export const AttachTaskLabelSchema = z.object({
+  taskId: IdSchema,
+  name: ChecklistLabelTextSchema,
+  color: z.string().trim().min(1).max(32).optional(),
+});
+
+export const DetachTaskLabelSchema = z.object({
+  taskId: IdSchema,
+  labelId: IdSchema,
+});
+
+/** C-SISA-5: persisted filters are structured predicates, never a text DSL. */
+export const ChecklistFilterQuerySchema = z
+  .object({
+    status: z.enum(["OPEN", "COMPLETED"]),
+    priority: z.literal("P1").nullable(),
+    assignee: z.literal("ME").nullable(),
+    due: z.enum(["TODAY_OR_EARLIER", "OVERDUE"]).nullable(),
+  })
+  .strict();
+
+export const SaveChecklistFilterViewSchema = z.object({
+  name: z.string().trim().min(1, "Filter name is required").max(80),
+  query: ChecklistFilterQuerySchema,
+});
+
+export const DeleteChecklistFilterViewSchema = z.object({
+  filterId: IdSchema,
 });
 
 export const AddActivitySchema = z.object({
@@ -99,6 +183,12 @@ export const AddProjectActivitySchema = z.object({
 export const UpdateActivitySchema = z.object({
   activityId: IdSchema,
   content: z.string().min(1),
+});
+
+/** `null` clears the date; omitting the key is not allowed, so "clear" is always expressible. */
+export const SetActivityDueDateSchema = z.object({
+  activityId: IdSchema,
+  dueAt: z.coerce.date().nullable(),
 });
 
 export const ToggleActivityStatusSchema = z.object({
@@ -121,6 +211,22 @@ export const AddDeliverableSchema = z.object({
     file_url: z.string().optional(),
     link_url: z.string().optional(),
     is_external: z.boolean(),
+  }).superRefine((value, ctx) => {
+    if (value.is_external && !value.link_url?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["link_url"],
+        message: "Link URL is required for external deliverables",
+      });
+    }
+
+    if (!value.is_external && !value.file_url?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["file_url"],
+        message: "File URL is required for uploaded deliverables",
+      });
+    }
   }),
 });
 
@@ -191,6 +297,14 @@ export const DeleteScheduleCategorySchema = z.object({
   schedule_category: z.string().min(1),
 });
 
+// R1 (PLAN-AUDIT-ROADMAP-2026Q3.md §2.1): toggle whether a global schedule
+// category is auto-materialized as a "reserve" entry on new/existing projects.
+export const SetScheduleTemplateDefaultEntrySchema = z.object({
+  section: z.nativeEnum(ProductType),
+  schedule_category: z.string().min(1),
+  is_default_entry: z.boolean(),
+});
+
 // --- Scheduler Pillar 2 ---
 
 const ScheduleCatalogCreateSchema = z.object({
@@ -219,6 +333,7 @@ const ScheduleCatalogCreateSchema = z.object({
     .nullable()
     .transform((v) => (v && v.length > 0 ? v : null)),
   catalog_price: z.number().nullable().optional(),
+  catalog_notes: z.string().trim().optional().nullable(),
 }).transform((data) => ({
   ...data,
   catalog_product_name: data.catalog_product_name || "Unspecified",
@@ -367,6 +482,7 @@ export const UpdateScheduleOptionSnapshotSchema = z.object({
       .nullable()
       .transform((v) => (v && v.length > 0 ? v : null)),
     catalog_price: z.number().nullable().optional(),
+    catalog_notes: z.string().trim().optional().nullable(),
     catalog_sub_category: z.string().trim().optional().nullable(),
     catalog_contact_name: z.string().trim().optional().nullable(),
     catalog_contact_phone: z.string().trim().optional().nullable(),

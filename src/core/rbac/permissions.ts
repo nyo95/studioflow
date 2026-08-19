@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { ActionError, throwActionError } from "@/lib/error-types";
 export { throwActionError };
 import type { PrismaTransaction } from "@/types/common";
-import { evaluateAccess, PERMISSION } from "@/core/rbac/rbac";
+import { evaluateAccess, isAdminLevel, PERMISSION } from "@/core/rbac/rbac";
 import { PhasePolicy } from "@/lib/domain/phase-policy";
 
 // Re-export constants for consistent error handling
@@ -26,12 +26,15 @@ export async function getActorSession() {
   return requireSession();
 }
 
+// NOTE: "admin" here means admin-LEVEL (ADMIN or DEVELOPER). SketchUp plugin
+// gates intentionally do NOT use these helpers — they hard-check
+// role === "DEVELOPER" (DEVELOPER-only; ADMIN is excluded from that surface).
 export function assertAdmin(role: Role) {
-  if (role !== "ADMIN") throwActionError(ERR.UNAUTHORIZED_ACTION);
+  if (!isAdminLevel(role)) throwActionError(ERR.UNAUTHORIZED_ACTION);
 }
 
 export function assertAdminOrStaff(role: Role) {
-  if (role !== "ADMIN" && role !== "STAFF") throwActionError(ERR.UNAUTHORIZED_ACTION);
+  if (!isAdminLevel(role) && role !== "STAFF") throwActionError(ERR.UNAUTHORIZED_ACTION);
 }
 
 /**
@@ -272,7 +275,7 @@ export async function getProjectMembershipOrThrow(tx: TxClient, projectId: strin
     },
   });
 
-  if (role === "ADMIN") return project;
+  if (isAdminLevel(role)) return project;
   if (project.pic_designer_id !== userId && project.pic_drafter_id !== userId) {
     throwActionError(ERR.UNAUTHORIZED_ACTION);
   }
@@ -281,7 +284,7 @@ export async function getProjectMembershipOrThrow(tx: TxClient, projectId: strin
 }
 
 export function assertSelfOrAdmin(actorUserId: string, targetUserId: string, role: Role) {
-  if (role !== "ADMIN" && actorUserId !== targetUserId) {
+  if (!isAdminLevel(role) && actorUserId !== targetUserId) {
     throwActionError(ERR.UNAUTHORIZED_ACTION);
   }
 }

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Role } from "@/generated/prisma";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/core/platform/db";
 import { setAutoNamingEnabled, updateUISettings } from "@/actions/settings-actions";
@@ -17,11 +17,12 @@ export default async function StudioSettingsPage() {
     redirect("/login");
   }
 
-  if (role !== Role.ADMIN) {
+  if (!isAdminLevel(role)) {
     redirect("/settings/profile");
   }
 
   const allUsers = await prisma.user.findMany({
+    where: { deleted_at: null },
     select: {
       id: true,
       name: true,

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, Eye, EyeOff, RefreshCcw, User } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/ui_engine";
 import { cn } from "@/lib/utils";
 import { ActivityFilters, type ActivityFilterOption, type ActivityFilterState } from "@/components/activity-filters";
 import { ActivityTimeline } from "@/components/activity-timeline";
@@ -221,7 +221,7 @@ export function ActivityLogTable({
                     <div className="flex flex-wrap items-center gap-2">
                       <details>
                         <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
-                          {detailsText ? "Lihat detail teknis" : "Tidak ada detail tambahan"}
+                          {detailsText ? "Show technical detail" : "No extra detail"}
                         </summary>
                         {detailsText ? (
                           <pre className="mt-2 max-w-[560px] whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-[11px] text-slate-600">

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/ui_engine";
 import { cn } from "@/lib/utils";
 
 interface ClientBrandingProps {

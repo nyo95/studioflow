@@ -1,9 +1,10 @@
 import { PhaseName } from "@/generated/prisma";
 
-export type ProgressState = 
+export type ProgressState =
   | { type: 'IN_PROGRESS'; phases: { name: PhaseName; major: number; minor: number; status_enum: string }[] }
   | { type: 'READY_FOR'; nextPhaseName: PhaseName }
-  | { type: 'PROJECT_DONE' };
+  | { type: 'PROJECT_DONE' }
+  | { type: 'NO_PHASES' };
 
 interface PhaseData {
   name_enum: PhaseName;
@@ -13,8 +14,16 @@ interface PhaseData {
 }
 
 export function getProjectProgress(phases: PhaseData[]): ProgressState {
+  // A project with zero phases has no `sortedPhases[0]` for any of the
+  // fallbacks below to read — without this guard a single phase-less project
+  // throws and breaks the whole dashboard list. See
+  // PLAN-AUDIT-ROADMAP-2026Q3.md §1.2 A4.
+  if (phases.length === 0) {
+    return { type: 'NO_PHASES' };
+  }
+
   const sortedPhases = [...phases].sort((a, b) => a.order_index - b.order_index);
-  
+
   // 1. Prioritize explicitly active phases (IN_PROGRESS, ON_REVIEW, etc.)
   // If one or more phases are in an active state, we only show those.
   const inProgressStatuses = ['IN_PROGRESS', 'ON_REVIEW_INTERNAL', 'ON_REVIEW_CLIENT', 'APPROVED_INTERNAL'];
@@ -65,15 +74,24 @@ export function getProjectProgress(phases: PhaseData[]): ProgressState {
   }
 
   // 4. Project Done check
-  const allDone = sortedPhases.every(p => 
+  const allDone = sortedPhases.every(p =>
     p.status_enum === 'COMPLETED' || p.status_enum === 'READY_FOR_NEXT'
   );
   if (allDone) {
     return { type: 'PROJECT_DONE' };
   }
 
-  // Fallback
-  return { type: 'READY_FOR', nextPhaseName: sortedPhases[0].name_enum };
+  // Defensive fallback: every PhaseStatus value is handled by one of the
+  // branches above, so this should be unreachable today — but if the enum
+  // ever grows a status none of the branches recognize, fall back to the
+  // actual first non-done phase found in step 3 (not blindly sortedPhases[0],
+  // which could report "ready for" the wrong phase — see A4). If even that
+  // search came up empty, sortedPhases is non-empty per the guard above, so
+  // reporting the first phase is still a safe last resort.
+  return {
+    type: 'READY_FOR',
+    nextPhaseName: (firstNonDoneIndex !== -1 ? sortedPhases[firstNonDoneIndex] : sortedPhases[0]).name_enum,
+  };
 }
 
 export function formatPhaseName(name: PhaseName): string {

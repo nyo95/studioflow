@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { CheckCircle2, CircleDashed } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/ui_engine";
 
 interface Activity {
   id: string;

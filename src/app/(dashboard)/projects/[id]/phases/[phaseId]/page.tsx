@@ -1,22 +1,38 @@
 import { prisma } from "@/core/platform/db";
 import { notFound } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/ui_engine";
 import { Clock } from "lucide-react";
 import { PhaseActions } from "@/components/phase-actions";
 import { ActivityManager } from "@/components/activity-manager";
 import { CDListTable } from "@/components/cd-list-table";
 import { PhaseChecklist } from "@/components/phase-checklist";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DashboardPageShell, PageBackLink, PageHeader, PhaseLiveProvider, Heading, SectionCard, StatusBadge, ActionSidebar, ActionSidebarSection } from "@/ui_engine";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/ui_engine";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui_engine";
+import {
+  DashboardPageShell,
+  PageBackLink,
+  PageHeader,
+  PhaseLiveProvider,
+  Heading,
+  ActionSidebar,
+  ActionSidebarSection,
+  PhaseReadingLine,
+  PhaseProgressBar,
+  PhaseLockNotice,
+  PhaseRunningAheadBadge,
+} from "@/ui_engine";
+import { readPhase, readPhaseProgress, formatPhaseLabel } from "@/lib/domain/phase-presenter";
+import { explainPhaseLock } from "@/lib/domain/phase-lock";
 import { getSession } from "@/lib/auth";
 import { PhaseName, Role } from "@/generated/prisma";
 
 import { getPhaseHeartbeatSnapshot } from "@/lib/phase-heartbeat";
+import { CHECKLIST_TASK_ORDER_BY, CHECKLIST_TASK_SELECT } from "@/lib/services/checklist-task";
+import { PROJECT_MEMBER_FETCH_LIMIT } from "@/lib/constants";
 import { HydrationGuard } from "@/ui_engine/components/HydrationGuard";
 import { AdminRevisionOverride } from "@/components/admin-revision-override";
 import { cn } from "@/lib/utils";
-import { evaluateAccess, PERMISSION } from "@/core/rbac/rbac";
+import { evaluateAccess, isAdminLevel, PERMISSION } from "@/core/rbac/rbac";
 
 export const generateStaticParams = async () => {
   return [];
@@ -48,7 +64,11 @@ export default async function PhaseDetailPage({
       phases: {
         select: {
           order_index: true,
-          status_enum: true
+          status_enum: true,
+          // name_enum + status_changed_at feed explainPhaseLock, which names the
+          // blocking phase and reports how long it has been where it is.
+          name_enum: true,
+          status_changed_at: true
         },
         orderBy: { order_index: "asc" }
       }
@@ -75,8 +95,12 @@ export default async function PhaseDetailPage({
           { minor: "desc" },
         ],
       },
+      // Ordering comes from checklist-task.ts so this and the heartbeat poll
+      // agree. Previously `{ id: "asc" }` over a UUID — no order at all, and
+      // the list visibly reshuffled the moment the first poll landed.
       checklists: {
-        orderBy: { id: "asc" },
+        select: CHECKLIST_TASK_SELECT,
+        orderBy: CHECKLIST_TASK_ORDER_BY,
       },
       cd_lists: {
         orderBy: { group_code: "asc" },
@@ -96,28 +120,53 @@ export default async function PhaseDetailPage({
     select: { id: true, name: true, role: true },
   });
 
+  // Deferred tasks (revision_id = null) still belong to this phase and still
+  // block approval in phase-service.assertNoPendingTasks. They must be counted
+  // here too, or the progress fraction would read 12/12 on a phase that cannot
+  // actually be submitted.
+  const deferredActivities = await prisma.activity.findMany({
+    where: { phase_id: phaseId, revision_id: null },
+    select: { status: true },
+  });
+
   const canManagePhase =
-    role === Role.ADMIN ||
+    isAdminLevel(role) ||
     (role === Role.DIC && userId === project.pic_designer_id) ||
     (phase.name_enum === "CD" && role === Role.DRIC && userId === project.pic_drafter_id);
   
   const canMutateContent =
-    role === Role.ADMIN ||
+    isAdminLevel(role) ||
     (phase.name_enum === "CD"
       ? (userId === project.pic_drafter_id || userId === project.pic_designer_id)
       : role === Role.DIC && userId === project.pic_designer_id);
 
   const canOverride =
-    role === Role.ADMIN || (role === Role.DIC && userId === project.pic_designer_id);
+    isAdminLevel(role) || (role === Role.DIC && userId === project.pic_designer_id);
   
   const initialSnapshot = await getPhaseHeartbeatSnapshot(phaseId);
   const session = await getSession();
   const currentUserName = session.user?.name || "User";
 
+  // Assignee roster and the label vocabulary for the task list. Both are small
+  // and shared across the whole app, so they are fetched flat rather than
+  // scoped — a label invented on one project is immediately offered on the next.
+  const [projectMembers, checklistLabels] = await Promise.all([
+    prisma.user.findMany({
+      where: { deleted_at: null },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: PROJECT_MEMBER_FETCH_LIMIT,
+    }),
+    prisma.checklistLabel.findMany({
+      select: { id: true, name: true, color: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
   // Calculate if this phase is ready to start (Project is ACTIVE)
   const isReadyToStart = project.status_progress === "ACTIVE";
   const canMutateChecklist =
-    role === Role.ADMIN ||
+    isAdminLevel(role) ||
     (phase.name_enum === "CD"
       ? userId === project.pic_drafter_id
       : userId === project.pic_designer_id);
@@ -125,6 +174,23 @@ export default async function PhaseDetailPage({
   const activeRevision = phase.revisions.find((revision) => revision.status_enum === "ACTIVE") || phase.revisions[0];
   const archivedRevisions = phase.revisions.filter((revision) => revision.id !== activeRevision?.id);
   const hasOngoingTasks = activeRevision?.activities?.some((a) => a.status === "OPEN") ?? false;
+
+  // One clock for the whole render. Reading it per component would let two
+  // durations on the same page disagree by a few milliseconds across a day
+  // boundary and report different day counts.
+  const now = new Date();
+
+  const phaseReading = readPhase(phase, now);
+  // Root tasks only, matching the approval gate in `assertNoPendingTasks`.
+  // Counting subtasks here would make the bar and the gate disagree — the bar
+  // could read 90% while approval is still blocked, or the reverse.
+  const phaseProgress = readPhaseProgress({
+    checklists: phase.checklists.filter((item) => item.parent_id === null),
+    activities: [...(activeRevision?.activities ?? []), ...deferredActivities],
+  });
+
+  const previousPhase = project.phases.find((p) => p.order_index === phase.order_index - 1) ?? null;
+  const lockExplanation = explainPhaseLock(phase, previousPhase, now);
 
   const reviewPanel = (
     <section className="space-y-8">
@@ -162,20 +228,31 @@ export default async function PhaseDetailPage({
         <PageBackLink />
 
         <PageHeader
-          title={`${phase.name_enum.replace(/_/g, " ")} ${activeRevision ? `${activeRevision.major}.${activeRevision.minor}` : ""}`}
+          title={formatPhaseLabel(phase.name_enum)}
           description={`${project.client?.name || "No Client Assigned"}`}
           divider={false}
           className="mb-6"
+          /* Replaces the raw `<StatusBadge status={phase.status_enum} />` and the
+             bare "LOCKED" chip that used to sit in the action row. Both stated
+             machine state without answering the two questions people actually
+             have — whose court the phase is in, and for how long. The lock is
+             now explained in full by PhaseLockNotice below rather than asserted
+             here in three uppercase letters. */
+          meta={
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <PhaseReadingLine
+                reading={phaseReading}
+                progress={phaseProgress}
+                /* "v6.0", matching the Rev column in the project page matrix.
+                   Two notations for one number is the same class of confusion
+                   this pass exists to remove. */
+                revisionLabel={activeRevision ? `v${activeRevision.major}.${activeRevision.minor}` : null}
+              />
+              {lockExplanation.isRunningAhead ? <PhaseRunningAheadBadge /> : null}
+            </div>
+          }
           action={
             <div className="flex flex-wrap items-center gap-3">
-              <StatusBadge status={phase.status_enum} />
-              
-              {phase.is_locked && (
-                <div className="inline-flex h-8 items-center rounded-[var(--ui-radius-action)] border border-amber-200 bg-amber-50 px-3 text-[10px] font-bold uppercase tracking-widest text-amber-700 select-none">
-                  LOCKED
-                </div>
-              )}
-
               {archivedRevisions.length > 0 && (
                 <Dialog>
                   <DialogTrigger asChild>
@@ -232,10 +309,16 @@ export default async function PhaseDetailPage({
           }
         />
 
+        {/* Sits ABOVE the content, never in place of it. A locked phase stays
+            fully readable — most people opening one only want to look. */}
+        {lockExplanation.isBlocked ? (
+          <PhaseLockNotice explanation={lockExplanation} className="mb-8" />
+        ) : null}
+
         <div className="grid grid-cols-1 gap-10 xl:grid-cols-12">
           <div className="space-y-8 xl:col-span-8">
 
-            
+
             {phase.name_enum === "CD" ? (
               <Tabs defaultValue="review" className="w-full">
                 <TabsList className="grid h-auto w-full grid-cols-2 border border-slate-200 bg-slate-50 p-1 mb-8">
@@ -267,11 +350,19 @@ export default async function PhaseDetailPage({
 
           <ActionSidebar className="xl:col-span-4">
             <ActionSidebarSection title="Phase Requirements" subtitle="Checklist items">
+              {/* Same numbers as the header line, drawn. Counts checklist items
+                  and open tasks together because approval is gated on both. */}
+              <PhaseProgressBar progress={phaseProgress} className="mb-4" />
               <HydrationGuard>
                 <PhaseChecklist
+                  projectId={projectId}
                   isLocked={phase.is_locked}
                   canEdit={canMutateChecklist}
                   phaseStatus={phase.status_enum}
+                  currentUserId={userId}
+                  members={projectMembers}
+                  knownLabels={checklistLabels}
+                  settingsHref={isAdminLevel(role) ? "/settings/studio" : null}
                 />
               </HydrationGuard>
             </ActionSidebarSection>

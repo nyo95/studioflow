@@ -10,8 +10,12 @@ export const ScheduleSnapshotSchema = z.object({
   catalog_sub_category: z.string().nullable().optional(), 
   catalog_product_name: z.string().nullable().optional(), 
   catalog_brand: z.string(), 
+  /** Relational supplier identity for explicit promotion back to Master Data. */
+  catalog_vendor_id: z.string().nullable().optional(),
+  catalog_vendor_name: z.string().nullable().optional(),
   catalog_initials_type: z.string().nullable().optional(),
   catalog_price: z.number().nullable(), 
+  catalog_notes: z.string().nullable().optional(),
   catalog_image_url: z.string().nullable(), 
   catalog_reference_url: z.string().nullable(), 
   catalog_contact_name: z.string().nullable().optional(), 
@@ -39,16 +43,30 @@ export const ScheduleSnapshotSchema = z.object({
   const sku = data.specs.catalog_sku?.trim();
   const name = data.catalog_product_name?.trim();
   const brand = data.catalog_brand?.trim();
-  
-  const hasPrimary = (sku && !["Generic", "DRAFT", "N/A"].includes(sku)) || 
+
+  // A reserved slot is an intentional, system-allocated placeholder (created by
+  // the "reserve" schedule mode and by "Add item" before it writes the real
+  // draft snapshot). Its whole purpose is to hold a code before any content is
+  // filled in, so it is exempt from the "must have a data point" rule below.
+  const isReservedPlaceholder = name === "[RESERVED]";
+
+  // Items synced from the SketchUp plugin are real materials/fixtures in the
+  // model, identified by their code (schedule_code) — they are legitimately
+  // sparse until a designer fills in brand/color/etc. They must NOT be forced
+  // to carry echoed placeholder data just to pass this rule (that echo was the
+  // source of "COLOR: CT-3" / SKU "PL-1" / duplicated titles), so they are
+  // exempt: the code is their identity.
+  const isSyncedDraft = data.snapshot_source_origin === "sketchup_plugin";
+
+  const hasPrimary = (sku && !["Generic", "DRAFT", "N/A"].includes(sku)) ||
                      (name && !["Manual Item", "New Item", "[RESERVED]"].includes(name)) ||
                      (brand && !["Custom", "Generic", "PENDING"].includes(brand));
 
-  const hasSecondary = !!data.specs.catalog_color?.trim() || 
-                       !!data.specs.catalog_motif?.trim() || 
+  const hasSecondary = !!data.specs.catalog_color?.trim() ||
+                       !!data.specs.catalog_motif?.trim() ||
                        !!data.specs.catalog_finishing?.trim();
 
-  if (!hasPrimary && !hasSecondary) {
+  if (!isReservedPlaceholder && !isSyncedDraft && !hasPrimary && !hasSecondary) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "At least one Primary (Name/SKU/Brand) or Secondary (Color/Motif/Finishing) data point must be provided for draft entries.",

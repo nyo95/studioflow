@@ -15,7 +15,52 @@ const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+/**
+ * ⚠️ DISABLED 30 Jul 2026 — this seed is stale and DESTRUCTIVE to real accounts.
+ *
+ * Why it is fenced off rather than deleted:
+ *
+ *   The admin block below upserts berkah.rad@gmail.com — the OWNER'S REAL
+ *   ACCOUNT — with `update: { password: hash("admin123") }`. Every run therefore
+ *   RESETS the owner's password back to a value committed in this repository.
+ *   It also pins a hardcoded uuid and the display name "Admin Rad".
+ *
+ *   `prisma.config.ts` registers this file as the `seed` hook, so
+ *   `prisma migrate reset` and `prisma db seed` would trigger that reset
+ *   silently, with no prompt naming the account.
+ *
+ *   The file is kept because it still documents the original test fixtures
+ *   (users + phases) from early development. It is not rebuilt: the owner
+ *   confirmed re-seeding is no longer needed.
+ *
+ * To run it deliberately anyway:
+ *   SEED_I_UNDERSTAND_THIS_RESETS_PASSWORDS=true node scripts/seed.js
+ *
+ * Before removing this guard, delete the `update: { password: ... }` clauses.
+ * Re-seeding should never be able to overwrite a live credential.
+ */
+function assertSeedingIsIntentional() {
+  if (process.env.SEED_I_UNDERSTAND_THIS_RESETS_PASSWORDS === "true") {
+    console.warn(
+      "⚠️  Seeding with password resets ENABLED. berkah.rad@gmail.com will be " +
+        "reset to the seeded password."
+    );
+    return;
+  }
+  console.error(
+    "\n✗ Seeding is disabled.\n\n" +
+      "  This script resets the password of berkah.rad@gmail.com (a real ADMIN\n" +
+      "  account) to a value committed in this repo. See the comment above\n" +
+      "  main() in scripts/seed.js.\n\n" +
+      "  If you really mean it:\n" +
+      "    SEED_I_UNDERSTAND_THIS_RESETS_PASSWORDS=true node scripts/seed.js\n"
+  );
+  process.exit(1);
+}
+
 async function main() {
+  assertSeedingIsIntentional();
+
   console.log("Starting database seeding...");
 
   // 1. Create Admin
@@ -29,7 +74,7 @@ async function main() {
       email: adminEmail,
       name: "Admin Rad",
       password: adminPassword,
-      role: "ADMIN",
+      role: "DEVELOPER",
     },
   });
   console.log(`✅ Created/Ensured Admin user: ${admin.email} (Password: admin123)`);

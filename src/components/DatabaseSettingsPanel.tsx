@@ -13,9 +13,9 @@ import {
   Calendar,
   HardDrive
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/ui_engine";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/ui_engine";
+import { Badge } from "@/ui_engine";
 import { toast } from "sonner";
 import { 
   createBackupAction, 
@@ -34,7 +34,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@/ui_engine";
 
 interface Backup {
   name: string;

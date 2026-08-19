@@ -21,6 +21,17 @@ export function hasPermission(role: Role, permission: PERMISSION): boolean {
 }
 
 /**
+ * ADMIN-equivalent check for everything EXCEPT the SketchUp plugin surface.
+ * Both ADMIN (the studio boss) and DEVELOPER (the technical superuser) have
+ * full admin-level access to the web app. The SketchUp API/plugin gates
+ * deliberately keep hard `role === "DEVELOPER"` checks and must NOT use this
+ * helper — that surface is DEVELOPER-only, and ADMIN is excluded from it.
+ */
+export function isAdminLevel(role: Role): boolean {
+  return role === "ADMIN" || role === "DEVELOPER";
+}
+
+/**
  * Advanced evaluation including business logic and ownership.
  */
 export function evaluateAccess(
@@ -28,8 +39,8 @@ export function evaluateAccess(
   permission: PERMISSION,
   context: AccessContext
 ): boolean {
-  // 1. Admin always has access
-  if (role === "ADMIN") return true;
+  // 1. Admin-level roles (ADMIN, DEVELOPER) always have access
+  if (isAdminLevel(role)) return true;
 
   // 2. Base Permission Check
   if (!hasPermission(role, permission)) return false;
@@ -108,7 +119,7 @@ export function assertProjectMembership(
   picDesignerId: string,
   picDrafterId: string
 ) {
-  if (role === "ADMIN") return;
+  if (isAdminLevel(role)) return;
   if (!isProjectMember(userId, picDesignerId, picDrafterId)) {
     throw new ActionError("Unauthorized: Not a project member", "UNAUTHORIZED");
   }

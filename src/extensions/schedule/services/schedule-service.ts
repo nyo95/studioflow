@@ -1,4 +1,4 @@
-import { Prisma, ProjectScheduleEntry, ProjectScheduleOption, ProductType } from "@/generated/prisma";
+import { ProjectScheduleEntry, ProjectScheduleOption, ProductType } from "@/generated/prisma";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { insertAuditLog } from "@/actions/_shared";
@@ -7,6 +7,8 @@ import { AUDIT_ACTIONS } from "@/core/platform/audit/types";
 
 import { LibraryService } from "@/extensions/library/services/library-service";
 import { ScheduleSnapshotSchema, type ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
+import { createScheduleOption, updateScheduleOptionSnapshot } from "./schedule-option-writer";
+export { deriveScheduleSpecFields } from "./schedule-spec-fields";
 
 export type SourceOrigin = "library" | "manual" | "gsheets_import" | "sketchup_plugin";
 
@@ -26,6 +28,7 @@ export interface ScheduleManualDataInput {
   catalog_image_url?: string | null;
   catalog_reference_url?: string | null;
   catalog_price?: number | null;
+  catalog_notes?: string | null;
   catalog_contact_name?: string | null;
   catalog_contact_phone?: string | null;
   catalog_contact_email?: string | null;
@@ -52,6 +55,7 @@ export interface ScheduleCatalogCreateInput {
   catalog_image_url?: string | null;
   catalog_reference_url?: string | null;
   catalog_price?: number | null;
+  catalog_notes?: string | null;
   catalog_dimension?: string | null;
   catalog_type?: ProductType;
 }
@@ -76,19 +80,29 @@ export async function buildScheduleSnapshot(
   sourceOrigin?: SourceOrigin,
 ): Promise<ScheduleSnapshot> {
   if (catalogId) {
-    const item = await tx.productCatalog.findUnique({
-      where: { id: catalogId },
-      include: { 
-        vendor: {
-          include: { contacts: true }
-        },
-        physical_samples: true
-      },
-    });
+    // Master Data terputus dari StudioFlow (M5, 2026-08-10): Schedule no
+    // longer joins master_data.Sku/Brand directly. LibraryService.getProductById
+    // already loads the v2 Sku (brand/media/prices/categories) and derives the
+    // legacy `catalog_*` display fields this function was written against, so
+    // reuse that instead of re-deriving them here — this is a one-time read at
+    // selection time to freeze into the snapshot, not an ongoing join.
+    const item = await LibraryService.getProductById(tx, catalogId);
 
     if (!item) throw new ActionError("Catalog item not found", "ITEM_NOT_FOUND");
 
-    const defaultContact = item.vendor.contacts[0];
+    const defaultContact = item.brand?.scoped_contacts?.[0];
+    const requestedCategory = manualData?.schedule_category?.trim();
+    const scheduleCategory =
+      item.catalog_tags.find(
+        (tag) => tag.toLocaleUpperCase("id-ID") === requestedCategory?.toLocaleUpperCase("id-ID")
+      ) ??
+      item.catalog_tags[0];
+    if (!scheduleCategory) {
+      throw new ActionError(
+        "Material has no category tag and cannot be scheduled.",
+        "CATEGORY_REQUIRED"
+      );
+    }
 
     return {
       snapshot_source_kind: "catalog",
@@ -96,22 +110,28 @@ export async function buildScheduleSnapshot(
       snapshot_source_external_id: null,
       product_catalog_id: item.id,
       catalog_type: item.catalog_type,
-      schedule_category: item.catalog_category,
-      catalog_sub_category: item.catalog_sub_category,
-      catalog_product_name: item.catalog_product_name || item.catalog_sku,
-      catalog_brand: item.catalog_brand || item.vendor?.brand_name || "Custom",
+      // The snapshot keeps writing flat strings — it is frozen JSON that every
+      // existing project already reads. They are now resolved from the Category,
+      // Product and Brand rows rather than copied from text columns.
+      schedule_category: scheduleCategory,
+      catalog_sub_category: null,
+      catalog_product_name: item.catalog_product_name,
+      catalog_brand: item.catalog_brand,
+      catalog_vendor_id: item.brand_id,
+      catalog_vendor_name: item.brand?.name ?? null,
       catalog_initials_type: calculateInitialsType({
         catalog_motif: item.catalog_motif,
         catalog_color: item.catalog_color,
         catalog_finishing: item.catalog_finishing
       }),
       catalog_price: item.catalog_price ?? null,
+      catalog_notes: null,
       catalog_image_url: item.catalog_image_url,
       catalog_reference_url: item.catalog_reference_url,
-      catalog_contact_name: defaultContact?.contact_person ?? null,
-      catalog_contact_phone: defaultContact?.phone_number ?? null,
+      catalog_contact_name: defaultContact?.person_name ?? null,
+      catalog_contact_phone: defaultContact?.phone ?? null,
       catalog_contact_email: defaultContact?.email ?? null,
-      catalog_has_sample: item.physical_samples?.length ? true : false,
+      catalog_has_sample: item.samples?.length ? true : false,
       specs: {
         catalog_sku: item.catalog_sku,
         catalog_motif: item.catalog_motif,
@@ -148,6 +168,7 @@ export async function buildScheduleSnapshot(
       catalog_finishing: manualData?.specs?.catalog_finishing
     }),
     catalog_price: manualData?.catalog_price ?? null,
+    catalog_notes: manualData?.catalog_notes ?? null,
     catalog_image_url: manualData?.catalog_image_url || null,
     catalog_reference_url: manualData?.catalog_reference_url || null,
     catalog_contact_name: manualData?.catalog_contact_name ?? null,
@@ -173,6 +194,10 @@ export async function buildScheduleSnapshot(
   };
 }
 
+
+// deriveScheduleSpecFields is defined in ./schedule-spec-fields and re-exported
+// at the top of this file. The implementation was moved there to ensure it
+// is the single source of truth used exclusively via schedule-option-writer.
 
 async function resolveCatalogItemForMode(
   tx: PrismaTransaction,
@@ -210,7 +235,7 @@ async function checkDuplicateProduct(
     const duplicate = await tx.projectScheduleOption.findFirst({
       where: {
         entry: { project_id: projectId },
-        product_catalog_id: catalogId,
+        sku_id: catalogId,
       },
     });
     if (duplicate) {
@@ -313,6 +338,110 @@ export class ScheduleService {
   }
 
   /**
+   * Recurring schedule template (PLAN-AUDIT-ROADMAP-2026Q3.md §2.1 R1):
+   * materializes every active `is_default_entry` category into an empty
+   * "reserve" entry on `projectId` — one blank placeholder row per category,
+   * for the team to fill in, exactly like a manually-created reserve slot.
+   * Reuses addEntryToSchedule's normal creation path (prefix resolution,
+   * sort order, code normalization) rather than inserting rows directly, so
+   * a templated project's schedule is indistinguishable from a hand-built one.
+   *
+   * Additive and idempotent by design: a category is only materialized if
+   * the project doesn't already have an entry in that section+category.
+   * Safe to call both on brand-new projects and, via the explicit "Apply
+   * template" action, on existing ones without duplicating anything.
+   */
+  static async applyDefaultTemplateEntries(
+    tx: PrismaTransaction,
+    projectId: string,
+    userId?: string
+  ): Promise<{ createdCategories: string[]; createdItems: string[]; noDefaultsConfigured: boolean }> {
+    // Ambil item template aktif (baru) + kategori default (lama, is_default_entry)
+    const [templateItems, defaultCategories] = await Promise.all([
+      tx.scheduleTemplateItem.findMany({
+        where: { is_active: true },
+        orderBy: [{ section: "asc" }, { schedule_category: "asc" }, { sort_order: "asc" }],
+      }),
+      tx.scheduleTemplate.findMany({
+        where: { is_active: true, is_default_entry: true },
+        orderBy: [{ section: "asc" }, { schedule_category: "asc" }],
+      }),
+    ]);
+
+    const noDefaultsConfigured = templateItems.length === 0 && defaultCategories.length === 0;
+    if (noDefaultsConfigured) return { createdCategories: [], createdItems: [], noDefaultsConfigured: true };
+
+    // Kunci idempotensi: per template_item_id (bukan per kategori)
+    const existingTemplateEntries = await tx.projectScheduleEntry.findMany({
+      where: { project_id: projectId, template_item_id: { not: null } },
+      select: { template_item_id: true },
+    });
+    const appliedItemIds = new Set(existingTemplateEntries.map((e) => e.template_item_id!));
+
+    // Kategori yang sudah ada (untuk idempotensi entri kosong / is_default_entry lama)
+    const existing = await tx.projectScheduleEntry.findMany({
+      where: { project_id: projectId },
+      select: { section: true, schedule_category: true },
+    });
+    const existingCategoryKeys = new Set(
+      existing.map((e) => `${e.section}:${e.schedule_category.toUpperCase()}`)
+    );
+
+    const createdItems: string[] = [];
+    const createdCategories: string[] = [];
+
+    // 1. Item template (spesifikasi sudah terisi)
+    for (const item of templateItems) {
+      if (appliedItemIds.has(item.id)) continue; // sudah ada di proyek ini
+
+      await this.addEntryToSchedule(
+        tx, projectId, item.schedule_category, "template",
+        undefined, undefined, item.section, userId,
+        undefined, // sourceOptionId
+        item.id    // templateItemId
+      );
+      appliedItemIds.add(item.id);
+      createdItems.push(`${item.section}:${item.schedule_category}:${item.id}`);
+    }
+
+    // 2. Kategori default lama (is_default_entry — entri kosong / reserve)
+    //    Perilaku lama dipertahankan: lewati kategori yang sudah punya baris APA PUN
+    for (const template of defaultCategories) {
+      const key = `${template.section}:${template.schedule_category.toUpperCase()}`;
+      if (existingCategoryKeys.has(key)) continue;
+      // Juga skip kalau sudah dibuat item template untuk kategori ini di loop atas
+      const hasTemplateItemInCategory = templateItems.some(
+        (i) => i.section === template.section &&
+                i.schedule_category.toUpperCase() === template.schedule_category.toUpperCase()
+      );
+      if (
+        hasTemplateItemInCategory &&
+        createdItems.some((c) => c.startsWith(`${template.section}:${template.schedule_category.toUpperCase()}`))
+      ) {
+        continue; // kategori sudah terisi oleh item template
+      }
+      if (existingCategoryKeys.has(key)) continue;
+
+      await this.addEntryToSchedule(
+        tx, projectId, template.schedule_category, "reserve",
+        undefined, undefined, template.section, userId
+      );
+      existingCategoryKeys.add(key);
+      createdCategories.push(`${template.section}:${template.schedule_category}`);
+    }
+
+    if (userId && (createdItems.length > 0 || createdCategories.length > 0)) {
+      await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_APPLY_TEMPLATE, "Project", projectId, userId, {
+        project_id: projectId,
+        created_categories: createdCategories,
+        created_items: createdItems.length,
+      });
+    }
+
+    return { createdCategories, createdItems, noDefaultsConfigured: false };
+  }
+
+  /**
    * Fetches the complete schedule sheet payload for a project
    * @param tx Prisma transaction client.
    * @param projectId Project id.
@@ -343,18 +472,8 @@ export class ScheduleService {
         include: {
           options: {
             orderBy: { option_label: "asc" },
-            include: { 
-              product_catalog: {
-                include: {
-                  product_requests: {
-                    where: { project_id: projectId },
-                    select: { status: true, project_id: true },
-                    orderBy: { created_at: "desc" },
-                    take: 1,
-                  }
-                }
-              },
-              // Also fetch requests linked directly to this option (covers custom/manual products)
+            include: {
+              // Requests linked directly to this option (covers custom/manual products)
               product_requests: {
                 where: { project_id: projectId },
                 select: { status: true, project_id: true, id: true },
@@ -369,9 +488,41 @@ export class ScheduleService {
       }),
     ]);
 
+    // Master Data terputus (M5): ProjectScheduleOption.sku_id is a plain
+    // column now, not a relation, so a request tied to the same catalog Sku
+    // (but not directly linked to this option) can no longer be pulled via a
+    // nested `include`. Fetch it separately and merge below.
+    const skuIds = Array.from(
+      new Set(
+        entriesRaw.flatMap((entry) =>
+          entry.options.map((option) => option.sku_id).filter((id): id is string => !!id)
+        )
+      )
+    );
+    const skuProductRequests = skuIds.length > 0
+      ? await tx.projectProductRequest.findMany({
+          where: { project_id: projectId, sku_id: { in: skuIds } },
+          select: { status: true, project_id: true, sku_id: true },
+          orderBy: { created_at: "desc" },
+        })
+      : [];
+    const latestRequestBySkuId = new Map<string, { status: string; project_id: string }>();
+    for (const request of skuProductRequests) {
+      if (request.sku_id && !latestRequestBySkuId.has(request.sku_id)) {
+        latestRequestBySkuId.set(request.sku_id, { status: request.status, project_id: request.project_id });
+      }
+    }
+
     const entries = entriesRaw.map(entry => ({
       ...entry,
-      schedule_code: `${entry.schedule_prefix}-${String(entry.schedule_increment).padStart(2, "0")}`
+      schedule_code: `${entry.schedule_prefix}-${String(entry.schedule_increment).padStart(2, "0")}`,
+      options: entry.options.map((option) => ({
+        ...option,
+        // Replaces the old `option.sku.product_requests` nested read.
+        sku_product_requests: option.sku_id && latestRequestBySkuId.has(option.sku_id)
+          ? [latestRequestBySkuId.get(option.sku_id)!]
+          : [],
+      })),
     }));
 
     const byCategory = new Map<string, (typeof entries)[number][]>();
@@ -469,11 +620,24 @@ export class ScheduleService {
     tx: PrismaTransaction,
     projectId: string,
     category: string,
-    mode: "catalog" | "manual" | "reserve",
+    mode: "catalog" | "manual" | "reserve" | "reuse" | "template",
     catalogItemId?: string | null,
     catalogCreateData?: ScheduleCatalogCreateInput & { catalog_type?: ProductType },
     section: ProductType = ProductType.material,
-    userId?: string
+    userId?: string,
+    /**
+     * Required when mode === "reuse". Id of a ProjectScheduleOption (from
+     * any project) whose snapshot becomes this new entry's first option —
+     * same copy semantics as addOptionFromReuse below, just at entry-creation
+     * time instead of adding an alternative to an existing entry. See
+     * PLAN-AUDIT-ROADMAP-2026Q3.md §2.2 R2.
+     */
+    sourceOptionId?: string,
+    /**
+     * Required when mode === "template". Id of a ScheduleTemplateItem whose
+     * frozen snapshot is copied into this entry's first option.
+     */
+    templateItemId?: string
   ): Promise<{ entry: ProjectScheduleEntry; createdCatalogId: string | null }> {
 
     const normalizedCategory = category.trim().toUpperCase();
@@ -481,12 +645,12 @@ export class ScheduleService {
       throw new ActionError("Valid product category is required. 'General' is no longer supported.", "VALIDATION_FAILED");
     }
 
-    // Validate Catalog Item if provided
+    // Validate Catalog Item if provided. Master Data terputus (M5): go
+    // through LibraryService's derived catalog_* view instead of a raw
+    // tx.sku.findUnique select, since the v2 Sku model no longer carries
+    // catalog_type/catalog_tags columns directly.
     if (mode === "catalog" && catalogItemId) {
-      const catalogItem = await tx.productCatalog.findUnique({
-        where: { id: catalogItemId },
-        select: { catalog_category: true, catalog_type: true },
-      });
+      const catalogItem = await LibraryService.getProductById(tx, catalogItemId);
       if (!catalogItem) {
         throw new ActionError("Product not found in catalog", "NOT_FOUND");
       }
@@ -496,10 +660,10 @@ export class ScheduleService {
           "VALIDATION_FAILED"
         );
       }
-      const itemCategory = catalogItem.catalog_category.trim().toUpperCase();
-      if (normalizedCategory !== itemCategory) {
+      const itemCategories = catalogItem.catalog_tags.map((tag) => tag.trim().toUpperCase());
+      if (!itemCategories.includes(normalizedCategory)) {
         throw new ActionError(
-          `Category mismatch: schedule category is "${normalizedCategory}" but product is in "${catalogItem.catalog_category}"`,
+          `Category mismatch: schedule category is "${normalizedCategory}" but Material tags are "${catalogItem.catalog_tags.join(", ")}"`,
           "VALIDATION_FAILED"
         );
       }
@@ -545,6 +709,7 @@ export class ScheduleService {
         schedule_prefix: prefixDict.prefix,
         schedule_increment: tempIncrement,
         prefix_id: prefixDict.id,
+        ...(mode === "template" && templateItemId ? { template_item_id: templateItemId } : {}),
       },
     });
 
@@ -576,6 +741,41 @@ export class ScheduleService {
       finalSnapshot = await buildScheduleSnapshot(tx, null, (catalogCreateData as unknown as Partial<ScheduleSnapshot>), "manual");
       isFinal = true;
       optionStatus = "APPROVED";
+    } else if (mode === "reuse") {
+      // Cross-project reuse pool (§6.14 / PLAN-AUDIT-ROADMAP-2026Q3.md §2.2
+      // R2): copy a past option's snapshot verbatim, same as
+      // addOptionFromReuse below, but as the first option on a brand-new
+      // entry rather than an alternative on an existing one.
+      if (!sourceOptionId) {
+        throw new ActionError("sourceOptionId is required for reuse mode", "VALIDATION_FAILED");
+      }
+      const source = await tx.projectScheduleOption.findUniqueOrThrow({
+        where: { id: sourceOptionId },
+        select: { sku_id: true, data_snapshot: true },
+      });
+      resolvedCatalogId = source.sku_id;
+      finalSnapshot = {
+        ...(source.data_snapshot as unknown as ScheduleSnapshot),
+        snapshot_captured_at: new Date().toISOString(),
+      };
+      isFinal = true;
+      optionStatus = "APPROVED";
+    } else if (mode === "template") {
+      if (!templateItemId) {
+        throw new ActionError("templateItemId is required for template mode", "VALIDATION_FAILED");
+      }
+      const templateItem = await tx.scheduleTemplateItem.findUniqueOrThrow({
+        where: { id: templateItemId },
+        select: { data_snapshot: true, sku_id: true },
+      });
+      resolvedCatalogId = templateItem.sku_id;
+      finalSnapshot = {
+        ...(templateItem.data_snapshot as unknown as ScheduleSnapshot),
+        schedule_category: normalizedCategory,
+        snapshot_captured_at: new Date().toISOString(),
+      };
+      isFinal = true;
+      optionStatus = "APPROVED";
     } else {
       resolvedCatalogId = await resolveCatalogItemForMode(
         tx,
@@ -585,23 +785,32 @@ export class ScheduleService {
         catalogItemId,
         catalogCreateData
       );
-      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "library");
+      finalSnapshot = await buildScheduleSnapshot(
+        tx,
+        resolvedCatalogId,
+        { schedule_category: normalizedCategory },
+        "library"
+      );
     }
 
-    await checkDuplicateProduct(tx, projectId, mode, resolvedCatalogId, finalSnapshot);
+    // checkDuplicateProduct doesn't know about "reuse" or "template" — they are
+    // not distinct duplicate-check strategies, just catalog/manual sourced from
+    // elsewhere. Same translation addOptionFromReuse already uses below.
+    const duplicateCheckMode = (mode === "reuse" || mode === "template")
+      ? (resolvedCatalogId ? "catalog" : "manual")
+      : mode;
+    await checkDuplicateProduct(tx, projectId, duplicateCheckMode, resolvedCatalogId, finalSnapshot);
 
     // Validate Snapshot before save
     const validatedSnapshot = ScheduleSnapshotSchema.parse(finalSnapshot);
 
-    await tx.projectScheduleOption.create({
-      data: {
-        entry_id: entry.id,
-        product_catalog_id: resolvedCatalogId,
-        data_snapshot: validatedSnapshot as unknown as Prisma.InputJsonValue,
-        option_label: "A",
-        is_final: isFinal,
-        status: optionStatus,
-      },
+    await createScheduleOption(tx, {
+      entry_id: entry.id,
+      sku_id: resolvedCatalogId,
+      option_label: "A",
+      is_final: isFinal,
+      status: optionStatus,
+      data_snapshot: validatedSnapshot,
     });
 
 
@@ -649,10 +858,7 @@ export class ScheduleService {
       });
       if (!entry) throw new ActionError("Entry not found", "NOT_FOUND");
 
-      const catalogItem = await tx.productCatalog.findUnique({
-        where: { id: catalogItemId },
-        select: { catalog_category: true, catalog_type: true },
-      });
+      const catalogItem = await LibraryService.getProductById(tx, catalogItemId);
       if (!catalogItem) {
         throw new ActionError("Product not found in catalog", "NOT_FOUND");
       }
@@ -662,10 +868,10 @@ export class ScheduleService {
           "VALIDATION_FAILED"
         );
       }
-      const itemCategory = catalogItem.catalog_category.trim().toUpperCase();
-      if (normalizedCategory !== itemCategory) {
+      const itemCategories = catalogItem.catalog_tags.map((tag) => tag.trim().toUpperCase());
+      if (!itemCategories.includes(normalizedCategory)) {
         throw new ActionError(
-          `Category mismatch: entry category is "${normalizedCategory}" but product is in "${catalogItem.catalog_category}"`,
+          `Category mismatch: entry category is "${normalizedCategory}" but Material tags are "${catalogItem.catalog_tags.join(", ")}"`,
           "VALIDATION_FAILED"
         );
       }
@@ -692,7 +898,12 @@ export class ScheduleService {
         catalogItemId,
         catalogCreateData
       );
-      finalSnapshot = await buildScheduleSnapshot(tx, resolvedCatalogId, undefined, "library");
+      finalSnapshot = await buildScheduleSnapshot(
+        tx,
+        resolvedCatalogId,
+        { schedule_category: normalizedCategory },
+        "library"
+      );
     }
 
     const entryData = await tx.projectScheduleEntry.findUniqueOrThrow({
@@ -704,27 +915,98 @@ export class ScheduleService {
     // Validate Snapshot before save
     const validatedSnapshot = ScheduleSnapshotSchema.parse(finalSnapshot);
 
-    const option = await tx.projectScheduleOption.create({
-      data: {
-        entry_id: entryId,
-        product_catalog_id: resolvedCatalogId,
-        data_snapshot: validatedSnapshot as unknown as Prisma.InputJsonValue,
-        option_label: nextLabel,
-        is_final: false,
-        status: "DRAFT",
-      },
-      include: { entry: true }
+    const option = await createScheduleOption(tx, {
+      entry_id: entryId,
+      sku_id: resolvedCatalogId,
+      option_label: nextLabel,
+      is_final: false,
+      status: "DRAFT",
+      data_snapshot: validatedSnapshot,
+    });
+    const optionWithEntry = await tx.projectScheduleOption.findUniqueOrThrow({
+      where: { id: option.id },
+      include: { entry: true },
     });
 
     if (userId) {
       await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_ADD_OPTION, "ProjectScheduleOption", option.id, userId, {
-        project_id: option.entry.project_id,
+        project_id: optionWithEntry.entry.project_id,
         entry_id: entryId
       });
     }
 
 
-    return { option, createdCatalogId: null };
+    return { option: optionWithEntry, createdCatalogId: null };
+  }
+
+  /**
+   * §6.14 Brand-First Library reuse pool (PLAN §3, §9 step 5). Copies a
+   * PAST option's snapshot into a NEW option on a different entry — "pilih
+   * satu → nilainya dikopi ke opsi baru". The source option is never
+   * mutated (immutable snapshots stay immutable); this only ever produces a
+   * new, independent row. sku_id is carried over only when the source was
+   * catalog-linked, so a reused catalog pick still resolves back to its
+   * Sku the same way addOptionToEntry's "catalog" mode would.
+   */
+  static async addOptionFromReuse(
+    tx: PrismaTransaction,
+    entryId: string,
+    sourceOptionId: string,
+    userId?: string
+  ): Promise<{ option: ProjectScheduleOption }> {
+    const source = await tx.projectScheduleOption.findUniqueOrThrow({
+      where: { id: sourceOptionId },
+      select: { sku_id: true, data_snapshot: true },
+    });
+
+    const existingOptions = await tx.projectScheduleOption.findMany({
+      where: { entry_id: entryId },
+      orderBy: { option_label: "asc" },
+    });
+    const lastLabel = existingOptions[existingOptions.length - 1]?.option_label || "@";
+    const nextLabel = String.fromCharCode(lastLabel.charCodeAt(0) + 1);
+
+    const reusedSnapshot: ScheduleSnapshot = {
+      ...(source.data_snapshot as unknown as ScheduleSnapshot),
+      snapshot_captured_at: new Date().toISOString(),
+    };
+    const validatedSnapshot = ScheduleSnapshotSchema.parse(reusedSnapshot);
+
+    const entryData = await tx.projectScheduleEntry.findUniqueOrThrow({
+      where: { id: entryId },
+      select: { project_id: true },
+    });
+    await checkDuplicateProduct(
+      tx,
+      entryData.project_id,
+      source.sku_id ? "catalog" : "manual",
+      source.sku_id,
+      validatedSnapshot
+    );
+
+    const option = await createScheduleOption(tx, {
+      entry_id: entryId,
+      sku_id: source.sku_id,
+      option_label: nextLabel,
+      is_final: false,
+      status: "DRAFT",
+      data_snapshot: validatedSnapshot,
+    });
+    const optionWithEntry = await tx.projectScheduleOption.findUniqueOrThrow({
+      where: { id: option.id },
+      include: { entry: true },
+    });
+
+    if (userId) {
+      await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_ADD_OPTION, "ProjectScheduleOption", option.id, userId, {
+        project_id: optionWithEntry.entry.project_id,
+        entry_id: entryId,
+        source: "reuse_pool",
+        source_option_id: sourceOptionId,
+      });
+    }
+
+    return { option: optionWithEntry };
   }
 
   /**
@@ -755,6 +1037,7 @@ export class ScheduleService {
     if (wasFinal) {
       if (remainingSiblings.length > 0) {
         const nextPromoted = remainingSiblings[0];
+        // eslint-disable-next-line no-restricted-syntax -- non-snapshot update: only promotes is_final/status, no data_snapshot
         await tx.projectScheduleOption.update({
           where: { id: nextPromoted.id },
           data: { is_final: true, status: "APPROVED" }
@@ -829,6 +1112,7 @@ export class ScheduleService {
     });
 
     // Approve target
+    // eslint-disable-next-line no-restricted-syntax -- non-snapshot update: only sets is_final/status, no data_snapshot
     const result = await tx.projectScheduleOption.update({
       where: { id: optionId },
       data: { is_final: true, status: "APPROVED" },
@@ -988,7 +1272,13 @@ export class ScheduleService {
 
     if (entries.length === 0) return { count: 0 };
 
-    // 4. Batch update entries
+    // 4. Batch update entries. The moved entries keep the source category's
+    // increments, which will almost always collide with the destination
+    // category's own numbering (both commonly start at 1) — so each moved
+    // entry gets a temporary negative placeholder here. normalizeCodes
+    // (gentle) below only ever assigns fresh numbers to entries it doesn't
+    // recognize as already valid, so it will leave the destination's
+    // existing entries untouched and append the incoming ones after them.
     for (const entry of entries) {
       currentSortOrder++;
       await tx.projectScheduleEntry.update({
@@ -998,6 +1288,7 @@ export class ScheduleService {
           prefix_id: dstPrefix.id,
           schedule_prefix: dstPrefix.prefix,
           schedule_sort_order: currentSortOrder,
+          schedule_increment: -currentSortOrder,
         }
       });
     }
@@ -1028,7 +1319,87 @@ export class ScheduleService {
    * Safe normalization of codes using split prefix and increment.
    * Enforces global uniqueness within the category.
    */
+  // GENTLE. Only assigns a number to entries that don't have a valid one yet
+  // (schedule_increment <= 0 — the temporary placeholder every entry-creation
+  // path uses before its real code is settled, e.g. addEntryToSchedule's
+  // tempIncrement). An entry that already holds a valid positive increment is
+  // left exactly as-is: the DB's unique constraint on
+  // (project, section, schedule_prefix, schedule_increment) means a live,
+  // valid increment cannot already collide with anything, so there is
+  // nothing to "fix" by touching it.
+  //
+  // This used to force-renumber EVERY entry in the category to 1..N on every
+  // call (see resequenceCategory below, which still does that for the
+  // explicit-reorder callers that actually want it). That forced renumber
+  // ran as a side effect of unrelated operations too — adding one item,
+  // deleting one item, a SketchUp material linking — silently discarding
+  // intentional non-sequential numbering (codes moved to make room, etc.)
+  // every time ANYTHING in the category changed. Combined with the SketchUp
+  // code-convergence queue (see catalog-ownership.ts), that produced a real
+  // oscillation: schedule renumbers back to 1..N -> looks like a divergence
+  // from the model's already-renamed materials -> a rename gets queued to
+  // revert the model -> next sync renumbers again -> repeat.
   static async normalizeCodes(tx: PrismaTransaction, projectId: string, section: ProductType, category: string) {
+    const normalizedCategory = category.trim().toUpperCase();
+    if (!normalizedCategory || normalizedCategory.toLowerCase() === "general") {
+      return;
+    }
+
+    const entries = await tx.projectScheduleEntry.findMany({
+      where: { project_id: projectId, section, schedule_category: normalizedCategory },
+      orderBy: { schedule_sort_order: "asc" },
+      include: { prefix_ref: true },
+    });
+
+    if (entries.length === 0) return;
+
+    // Prefix drift correction is independent of numbering — still applied to
+    // every entry with a valid number, but only written when it actually
+    // differs from the category's PrefixDictionary entry.
+    const usedIncrements = new Set<number>();
+    const needsAssignment: typeof entries = [];
+    for (const entry of entries) {
+      if (entry.schedule_increment > 0) {
+        usedIncrements.add(entry.schedule_increment);
+        const canonicalPrefix = entry.prefix_ref?.prefix || entry.schedule_prefix || "ITEM";
+        if (entry.schedule_prefix !== canonicalPrefix) {
+          await tx.projectScheduleEntry.update({
+            where: { id: entry.id },
+            data: { schedule_prefix: canonicalPrefix },
+          });
+        }
+      } else {
+        needsAssignment.push(entry);
+      }
+    }
+
+    if (needsAssignment.length === 0) return;
+
+    let nextNumber = 1;
+    for (const entry of needsAssignment) {
+      while (usedIncrements.has(nextNumber)) nextNumber += 1;
+      const prefix = entry.prefix_ref?.prefix || entry.schedule_prefix || "ITEM";
+      usedIncrements.add(nextNumber);
+      await tx.projectScheduleEntry.update({
+        where: { id: entry.id },
+        data: {
+          schedule_prefix: prefix,
+          schedule_increment: nextNumber,
+          index_number: nextNumber,
+        },
+      });
+      nextNumber += 1;
+    }
+  }
+
+  // FORCEFUL. The original normalizeCodes behavior: every entry in the
+  // category is renumbered 1..N to match schedule_sort_order, regardless of
+  // what it held before. Reserved ONLY for callers where the user explicitly
+  // reviewed and confirmed a complete new order for the whole category
+  // (drag-reorder, the Code Manager "apply reviewed order" and "apply
+  // reviewed swaps" flows) — never called as a side effect of an unrelated
+  // add/delete/link, which is what normalizeCodes (gentle, above) is for.
+  static async resequenceCategory(tx: PrismaTransaction, projectId: string, section: ProductType, category: string) {
     const normalizedCategory = category.trim().toUpperCase();
     if (!normalizedCategory || normalizedCategory.toLowerCase() === "general") {
       return;
@@ -1055,10 +1426,10 @@ export class ScheduleService {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const prefix = entry.prefix_ref?.prefix || "ITEM";
-      
+
       await tx.projectScheduleEntry.update({
         where: { id: entry.id },
-        data: { 
+        data: {
           schedule_prefix: prefix,
           schedule_increment: i + 1,
           index_number: i + 1
@@ -1116,6 +1487,7 @@ export class ScheduleService {
       catalog_reference_url?: string | null;
       catalog_image_url?: string | null;
       catalog_price?: number | null;
+      catalog_notes?: string | null;
       catalog_contact_name?: string | null;
       catalog_contact_phone?: string | null;
       catalog_contact_email?: string | null;
@@ -1160,6 +1532,7 @@ export class ScheduleService {
       catalog_reference_url: data.catalog_reference_url !== undefined ? (data.catalog_reference_url || null) : (currentSnapshot.catalog_reference_url ?? null),
       catalog_image_url: data.catalog_image_url !== undefined ? (data.catalog_image_url || null) : (currentSnapshot.catalog_image_url ?? null),
       catalog_price: data.catalog_price !== undefined ? data.catalog_price : (currentSnapshot.catalog_price ?? null),
+      catalog_notes: data.catalog_notes !== undefined ? data.catalog_notes : (currentSnapshot.catalog_notes ?? null),
       catalog_contact_name: data.catalog_contact_name !== undefined ? (data.catalog_contact_name || null) : (currentSnapshot.catalog_contact_name ?? null),
       catalog_contact_phone: data.catalog_contact_phone !== undefined ? (data.catalog_contact_phone || null) : (currentSnapshot.catalog_contact_phone ?? null),
       catalog_contact_email: data.catalog_contact_email !== undefined ? (data.catalog_contact_email || null) : (currentSnapshot.catalog_contact_email ?? null),
@@ -1182,12 +1555,7 @@ export class ScheduleService {
     // Validate before update
     const validatedSnapshot = ScheduleSnapshotSchema.parse(updatedSnapshot);
 
-    const result = await tx.projectScheduleOption.update({
-      where: { id: optionId },
-      data: {
-        data_snapshot: validatedSnapshot as unknown as Prisma.InputJsonValue,
-      },
-    });
+    const result = await updateScheduleOptionSnapshot(tx, optionId, validatedSnapshot);
 
     await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_UPDATE_SNAPSHOT, "Project", option.entry.project_id, userId, {
       option_id: optionId,
@@ -1198,6 +1566,121 @@ export class ScheduleService {
     return result;
   }
 
+  /**
+   * §6.14 Brand-First Library — "pernah dipakai" reuse pool
+   * (PLAN-LIBRARY-BRAND-FIRST.md §3). Searches spec_search_key across every
+   * ProjectScheduleOption in the office, not just the current project: the
+   * point is "material kantor sudah pernah pakai", grouped by
+   * brand+product+color+finishing so the same spec picked in five different
+   * projects shows up once, with a usage count and last-used date.
+   *
+   * Deliberately no curation gate — PLAN §3 accepts that this pool reflects
+   * exactly what was typed, typos included, over a curated catalog that
+   * never finishes. Ordered by frequency then recency, never filtered, per
+   * the same section's reasoning: let the ranking do the work, not a
+   * deletion rule.
+   */
+  static async searchReusableSpecs(
+    tx: PrismaTransaction,
+    query: string,
+    limit = 20,
+    /**
+     * Restrict results to one section (material/fixture). Without this, a
+     * search from the Fixture tab could surface a Material result and create
+     * an entry under the wrong section when reused — see
+     * PLAN-AUDIT-ROADMAP-2026Q3.md §2.2 R2.
+     */
+    section?: ProductType
+  ): Promise<
+    Array<{
+      spec_search_key: string;
+      spec_brand_id: string | null;
+      spec_brand_name: string | null;
+      spec_product_name: string | null;
+      spec_color: string | null;
+      spec_finishing: string | null;
+      catalog_image_url: string | null;
+      usage_count: number;
+      last_used_at: Date;
+      sample_option_id: string;
+    }>
+  > {
+    const trimmed = query.trim().toLowerCase();
+    if (trimmed.length < 2) return [];
+
+    const options = await tx.projectScheduleOption.findMany({
+      where: {
+        spec_search_key: { not: null, contains: trimmed },
+        ...(section ? { entry: { section } } : {}),
+      },
+      select: {
+        id: true,
+        spec_search_key: true,
+        spec_brand_id: true,
+        spec_product_name: true,
+        spec_color: true,
+        spec_finishing: true,
+        data_snapshot: true,
+        created_at: true,
+      },
+      orderBy: { created_at: "desc" },
+      take: 500, // Cap the raw scan; grouped/ranked below. Revisit with a
+      // real GROUP BY once this runs against a live database — see PLAN §9
+      // step 8's regression-check note on spec_* being plain columns.
+    });
+
+    const groups = new Map<
+      string,
+      {
+        spec_search_key: string;
+        spec_brand_id: string | null;
+        spec_brand_name: string | null;
+        spec_product_name: string | null;
+        spec_color: string | null;
+        spec_finishing: string | null;
+        catalog_image_url: string | null;
+        usage_count: number;
+        last_used_at: Date;
+        sample_option_id: string;
+      }
+    >();
+
+    for (const opt of options) {
+      const key = opt.spec_search_key!;
+      const snapshot = opt.data_snapshot as unknown as ScheduleSnapshot | null;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.usage_count += 1;
+        if (opt.created_at > existing.last_used_at) {
+          existing.last_used_at = opt.created_at;
+        }
+        continue;
+      }
+      groups.set(key, {
+        spec_search_key: key,
+        spec_brand_id: opt.spec_brand_id,
+        // Master Data terputus (M5): no more spec_brand relation to join for
+        // the brand's display name — read it back out of the frozen snapshot
+        // instead (catalog_vendor_name is written from the same Brand at the
+        // time the option was created, see buildScheduleSnapshot above).
+        spec_brand_name: snapshot?.catalog_vendor_name ?? null,
+        spec_product_name: opt.spec_product_name,
+        spec_color: opt.spec_color,
+        spec_finishing: opt.spec_finishing,
+        catalog_image_url: snapshot?.catalog_image_url ?? null,
+        usage_count: 1,
+        last_used_at: opt.created_at,
+        sample_option_id: opt.id,
+      });
+    }
+
+    return [...groups.values()]
+      .sort((a, b) => {
+        if (b.usage_count !== a.usage_count) return b.usage_count - a.usage_count;
+        return b.last_used_at.getTime() - a.last_used_at.getTime();
+      })
+      .slice(0, limit);
+  }
 
   /**
    * Reorders entries and normalizes codes
@@ -1240,7 +1723,10 @@ export class ScheduleService {
       });
     }
 
-    await this.normalizeCodes(tx, projectId, section, normalizedCategory);
+    // Explicit drag-reorder: the user just set a new visual order, so codes
+    // must follow it exactly — this is the one case that wants the forceful
+    // 1..N resequence, not the gentle gap-fill.
+    await this.resequenceCategory(tx, projectId, section, normalizedCategory);
     return true;
   }
 
@@ -1274,7 +1760,7 @@ export class ScheduleService {
         where: { id: entryId },
         data: { schedule_sort_order: newSortOrder }
       });
-      await this.normalizeCodes(tx, entry.project_id, entry.section, normalizedTarget);
+      await this.resequenceCategory(tx, entry.project_id, entry.section, normalizedTarget);
       return;
     }
 
@@ -1304,6 +1790,369 @@ export class ScheduleService {
   }
 
   /**
+   * Reorders one complete schedule category and normalizes it once.
+   *
+   * Unlike a pair swap, this operation intentionally accepts a category with
+   * gaps because the user is explicitly reviewing a complete normalized order.
+   * Every entry in the category must be present, preventing hidden additions,
+   * deletions, or partial renumbering.
+   */
+  static async applyReviewedEntryOrder(
+    tx: PrismaTransaction,
+    projectId: string,
+    orderedEntryIds: string[],
+    userId: string
+  ) {
+    if (orderedEntryIds.length === 0 || new Set(orderedEntryIds).size !== orderedEntryIds.length) {
+      throw new ActionError("The reviewed code order is invalid.", "INVALID_REORDER");
+    }
+
+    const selectedEntries = await tx.projectScheduleEntry.findMany({
+      where: { id: { in: orderedEntryIds }, project_id: projectId },
+    });
+    if (selectedEntries.length !== orderedEntryIds.length) {
+      throw new ActionError("One or more entries were not found.", "NOT_FOUND");
+    }
+
+    const firstEntry = selectedEntries[0];
+    if (
+      selectedEntries.some(
+        (entry) =>
+          entry.section !== firstEntry.section ||
+          entry.schedule_category !== firstEntry.schedule_category ||
+          entry.schedule_prefix.toUpperCase() !== firstEntry.schedule_prefix.toUpperCase()
+      )
+    ) {
+      throw new ActionError(
+        "A code order can only contain one category.",
+        "CROSS_CATEGORY_REORDER_BLOCKED"
+      );
+    }
+
+    const categoryEntries = await tx.projectScheduleEntry.findMany({
+      where: {
+        project_id: projectId,
+        section: firstEntry.section,
+        schedule_category: firstEntry.schedule_category,
+      },
+      orderBy: [
+        { schedule_increment: "asc" },
+        { created_at: "asc" },
+        { id: "asc" },
+      ],
+      include: { prefix_ref: true },
+    });
+    const categoryEntryIds = new Set(categoryEntries.map((entry) => entry.id));
+    if (
+      categoryEntries.length !== orderedEntryIds.length ||
+      orderedEntryIds.some((entryId) => !categoryEntryIds.has(entryId))
+    ) {
+      throw new ActionError(
+        "The category changed while reviewing this draft. Nothing was applied.",
+        "STALE_REORDER_DRAFT"
+      );
+    }
+
+    const currentPrefixes = new Set(
+      categoryEntries.map((entry) => entry.schedule_prefix.trim().toUpperCase())
+    );
+    const normalizedPrefixes = new Set(
+      categoryEntries.map((entry) => (entry.prefix_ref?.prefix || "ITEM").trim().toUpperCase())
+    );
+    if (
+      currentPrefixes.size !== 1 ||
+      normalizedPrefixes.size !== 1 ||
+      [...currentPrefixes][0] !== [...normalizedPrefixes][0]
+    ) {
+      throw new ActionError(
+        `The ${firstEntry.schedule_category} prefix configuration is inconsistent. Nothing was applied.`,
+        "CATEGORY_PREFIX_MISMATCH"
+      );
+    }
+
+    const beforeById = new Map(
+      categoryEntries.map((entry) => [entry.id, entry.schedule_increment])
+    );
+    for (let index = 0; index < orderedEntryIds.length; index++) {
+      await tx.projectScheduleEntry.update({
+        where: { id: orderedEntryIds[index] },
+        data: { schedule_sort_order: index + 1 },
+      });
+    }
+
+    // The whole point here is the user reviewed a complete new order for this
+    // category — force the full 1..N resequence to match it exactly.
+    await this.resequenceCategory(
+      tx,
+      projectId,
+      firstEntry.section,
+      firstEntry.schedule_category
+    );
+
+    const normalizedEntries = await tx.projectScheduleEntry.findMany({
+      where: { id: { in: orderedEntryIds } },
+      select: { id: true, schedule_increment: true },
+    });
+    const normalizedById = new Map(normalizedEntries.map((entry) => [entry.id, entry]));
+    const changes: { id: string; beforeIncrement: number; afterIncrement: number }[] = [];
+
+    for (let index = 0; index < orderedEntryIds.length; index++) {
+      const entryId = orderedEntryIds[index];
+      const normalized = normalizedById.get(entryId);
+      if (!normalized || normalized.schedule_increment !== index + 1) {
+        throw new ActionError(
+          "The category changed while applying this draft. Nothing was applied.",
+          "STALE_REORDER_DRAFT"
+        );
+      }
+      changes.push({
+        id: entryId,
+        beforeIncrement: beforeById.get(entryId)!,
+        afterIncrement: normalized.schedule_increment,
+      });
+    }
+
+    await insertAuditLog(
+      tx,
+      AUDIT_ACTIONS.SCHEDULE_SWAP_ENTRIES,
+      "ProjectScheduleEntry",
+      firstEntry.id,
+      userId,
+      {
+        project_id: projectId,
+        section: firstEntry.section,
+        category: firstEntry.schedule_category,
+        prefix: firstEntry.schedule_prefix,
+        action: "REORDER_AND_NORMALIZE_SEQUENCE",
+        ordered_entry_ids: orderedEntryIds,
+        changes,
+      }
+    );
+
+    return {
+      section: firstEntry.section,
+      category: firstEntry.schedule_category,
+      prefix: firstEntry.schedule_prefix,
+      changes,
+    };
+  }
+
+  /**
+   * Applies disjoint code swaps as one deterministic batch.
+   *
+   * The browser preview is based on the codes currently visible to the user,
+   * not legacy `schedule_sort_order` values. Rebuild the internal ordering
+   * from that visible sequence first, apply every requested position swap,
+   * then normalize each affected category exactly once.
+   */
+  static async swapEntriesBatch(
+    tx: PrismaTransaction,
+    projectId: string,
+    swaps: { idA: string; idB: string }[],
+    userId: string
+  ) {
+    if (swaps.length === 0) {
+      return { changes: [] as { id: string; beforeIncrement: number; afterIncrement: number }[] };
+    }
+
+    const usedEntryIds = new Set<string>();
+    for (const swap of swaps) {
+      if (swap.idA === swap.idB) {
+        throw new ActionError("Choose two different items to swap.", "INVALID_SWAP");
+      }
+      for (const entryId of [swap.idA, swap.idB]) {
+        if (usedEntryIds.has(entryId)) {
+          throw new ActionError("An item can only appear in one pending swap.", "DUPLICATE_SWAP_ENTRY");
+        }
+        usedEntryIds.add(entryId);
+      }
+    }
+
+    const selectedEntries = await tx.projectScheduleEntry.findMany({
+      where: { id: { in: [...usedEntryIds] }, project_id: projectId },
+    });
+    if (selectedEntries.length !== usedEntryIds.size) {
+      throw new ActionError("One or more entries were not found.", "NOT_FOUND");
+    }
+
+    const selectedById = new Map(selectedEntries.map((entry) => [entry.id, entry]));
+    const groupedSwaps = new Map<
+      string,
+      {
+        section: ProductType;
+        category: string;
+        pairs: { idA: string; idB: string }[];
+      }
+    >();
+
+    for (const swap of swaps) {
+      const entryA = selectedById.get(swap.idA);
+      const entryB = selectedById.get(swap.idB);
+      if (!entryA || !entryB) {
+        throw new ActionError("One or more entries were not found.", "NOT_FOUND");
+      }
+      if (entryA.section !== entryB.section) {
+        throw new ActionError(
+          "Cannot swap entries: Different product types (Material vs Fixture)",
+          "CROSS_SECTION_SWAP_BLOCKED"
+        );
+      }
+      if (
+        entryA.schedule_category !== entryB.schedule_category ||
+        entryA.schedule_prefix.toUpperCase() !== entryB.schedule_prefix.toUpperCase()
+      ) {
+        throw new ActionError("Cannot swap entries: Different categories", "CROSS_CATEGORY_SWAP_BLOCKED");
+      }
+
+      const groupKey = JSON.stringify([entryA.section, entryA.schedule_category]);
+      const group = groupedSwaps.get(groupKey) ?? {
+        section: entryA.section,
+        category: entryA.schedule_category,
+        pairs: [],
+      };
+      group.pairs.push(swap);
+      groupedSwaps.set(groupKey, group);
+    }
+
+    const changes: { id: string; beforeIncrement: number; afterIncrement: number }[] = [];
+
+    for (const group of groupedSwaps.values()) {
+      const categoryEntries = await tx.projectScheduleEntry.findMany({
+        where: {
+          project_id: projectId,
+          section: group.section,
+          schedule_category: group.category,
+        },
+        orderBy: [
+          { schedule_increment: "asc" },
+          { created_at: "asc" },
+          { id: "asc" },
+        ],
+        include: { prefix_ref: true },
+      });
+      if (categoryEntries.length === 0) {
+        throw new ActionError("The category is no longer available.", "NOT_FOUND");
+      }
+
+      const categoryEntryById = new Map(categoryEntries.map((entry) => [entry.id, entry]));
+      if (
+        group.pairs.some(
+          (pair) => !categoryEntryById.has(pair.idA) || !categoryEntryById.has(pair.idB)
+        )
+      ) {
+        throw new ActionError(
+          "The category changed while reviewing this draft. Nothing was applied.",
+          "STALE_SWAP_DRAFT"
+        );
+      }
+
+      // A drag preview promises that only the two displayed codes exchange.
+      // Normalizing a category with gaps would renumber unrelated cards, so
+      // stop safely and ask for explicit normalization instead.
+      const hasSequentialVisibleCodes = categoryEntries.every(
+        (entry, index) => entry.schedule_increment === index + 1
+      );
+      if (!hasSequentialVisibleCodes) {
+        throw new ActionError(
+          `Codes in ${group.category} are not sequential. Normalize this category first, then review the swap again. Nothing was applied.`,
+          "CATEGORY_NORMALIZATION_REQUIRED"
+        );
+      }
+
+      const currentPrefixes = new Set(
+        categoryEntries.map((entry) => entry.schedule_prefix.trim().toUpperCase())
+      );
+      const normalizedPrefixes = new Set(
+        categoryEntries.map((entry) => (entry.prefix_ref?.prefix || "ITEM").trim().toUpperCase())
+      );
+      if (
+        currentPrefixes.size !== 1 ||
+        normalizedPrefixes.size !== 1 ||
+        [...currentPrefixes][0] !== [...normalizedPrefixes][0]
+      ) {
+        throw new ActionError(
+          `The ${group.category} prefix configuration is inconsistent. Nothing was applied.`,
+          "CATEGORY_PREFIX_MISMATCH"
+        );
+      }
+
+      // Start from the visible code order, deliberately ignoring stale legacy
+      // sort values. Because pairs are disjoint, their position swaps commute.
+      const desiredOrder = categoryEntries.map((entry) => entry.id);
+      for (const pair of group.pairs) {
+        const indexA = desiredOrder.indexOf(pair.idA);
+        const indexB = desiredOrder.indexOf(pair.idB);
+        if (indexA < 0 || indexB < 0) {
+          throw new ActionError(
+            "The category changed while reviewing this draft. Nothing was applied.",
+            "STALE_SWAP_DRAFT"
+          );
+        }
+        [desiredOrder[indexA], desiredOrder[indexB]] = [desiredOrder[indexB], desiredOrder[indexA]];
+      }
+
+      for (let index = 0; index < desiredOrder.length; index++) {
+        await tx.projectScheduleEntry.update({
+          where: { id: desiredOrder[index] },
+          data: { schedule_sort_order: index + 1 },
+        });
+      }
+
+      for (const pair of group.pairs) {
+        const entryA = categoryEntryById.get(pair.idA);
+        const entryB = categoryEntryById.get(pair.idB);
+        if (!entryA || !entryB) {
+          throw new ActionError("One or more entries were not found.", "NOT_FOUND");
+        }
+        await insertAuditLog(
+          tx,
+          AUDIT_ACTIONS.SCHEDULE_SWAP_ENTRIES,
+          "ProjectScheduleEntry",
+          entryA.id,
+          userId,
+          {
+            project_id: projectId,
+            entry_a_id: entryA.id,
+            entry_b_id: entryB.id,
+            action: "SWAP_POSITIONS",
+            entry_a_before_code: `${entryA.schedule_prefix}-${entryA.schedule_increment}`,
+            entry_b_before_code: `${entryB.schedule_prefix}-${entryB.schedule_increment}`,
+            source: "deterministic_batch",
+          }
+        );
+      }
+
+      // Same reasoning as applyReviewedEntryOrder: a reviewed swap plan
+      // implies the full new order, so this needs the forceful resequence.
+      await this.resequenceCategory(tx, projectId, group.section, group.category);
+
+      const normalizedEntries = await tx.projectScheduleEntry.findMany({
+        where: { id: { in: categoryEntries.map((entry) => entry.id) } },
+        select: { id: true, schedule_increment: true },
+      });
+      const normalizedById = new Map(normalizedEntries.map((entry) => [entry.id, entry]));
+
+      for (const entry of categoryEntries) {
+        const normalized = normalizedById.get(entry.id);
+        const expectedIncrement = desiredOrder.indexOf(entry.id) + 1;
+        if (!normalized || normalized.schedule_increment !== expectedIncrement) {
+          throw new ActionError(
+            "The category changed while applying this draft. Nothing was applied.",
+            "STALE_SWAP_DRAFT"
+          );
+        }
+        changes.push({
+          id: entry.id,
+          beforeIncrement: entry.schedule_increment,
+          afterIncrement: normalized.schedule_increment,
+        });
+      }
+    }
+
+    return { changes };
+  }
+
+  /**
    * Swaps two entries in the same category.
    * @param tx Prisma transaction client.
    * @param projectId Project id.
@@ -1312,58 +2161,7 @@ export class ScheduleService {
    * @param userId Actor user id for audit.
    */
   static async swapEntries(tx: PrismaTransaction, projectId: string, idA: string, idB: string, userId: string) {
-    const [entryA, entryB] = await Promise.all([
-      tx.projectScheduleEntry.findUnique({ where: { id: idA } }),
-      tx.projectScheduleEntry.findUnique({ where: { id: idB } })
-    ]);
-
-    if (!entryA || !entryB) {
-      throw new ActionError("One or both entries not found", "NOT_FOUND");
-    }
-
-    if (entryA.project_id !== entryB.project_id || entryA.project_id !== projectId) {
-      throw new ActionError(
-        "Cannot swap entries: Different projects or mismatch with context",
-        "CROSS_PROJECT_SWAP_BLOCKED"
-      );
-    }
-
-    if (entryA.section !== entryB.section) {
-      throw new ActionError(
-        "Cannot swap entries: Different product types (Material vs Fixture)",
-        "CROSS_SECTION_SWAP_BLOCKED"
-      );
-    }
-
-    if (entryA.schedule_category !== entryB.schedule_category) {
-      throw new ActionError(
-        "Cannot swap entries: Different categories",
-        "CROSS_CATEGORY_SWAP_BLOCKED"
-      );
-    }
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.SCHEDULE_SWAP_ENTRIES, "ProjectScheduleEntry", entryA.id, userId, {
-      project_id: entryA.project_id,
-      entry_a_id: entryA.id,
-      entry_b_id: entryB.id,
-      action: "SWAP_POSITIONS"
-    });
-
-    const sortOrderA = entryA.schedule_sort_order;
-    const sortOrderB = entryB.schedule_sort_order;
-
-    await Promise.all([
-      tx.projectScheduleEntry.update({
-        where: { id: idA },
-        data: { schedule_sort_order: sortOrderB }
-      }),
-      tx.projectScheduleEntry.update({
-        where: { id: idB },
-        data: { schedule_sort_order: sortOrderA }
-      })
-    ]);
-
-    await this.normalizeCodes(tx, projectId, entryA.section, entryA.schedule_category);
+    return this.swapEntriesBatch(tx, projectId, [{ idA, idB }], userId);
   }
 
 

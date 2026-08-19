@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { prisma } from "@/core/platform/db";
 import { ProjectLayoutShell, ProjectLiveProvider } from "@/ui_engine";
 import { ProjectChatSidebar } from "@/extensions/live-collaboration/components/project-chat-sidebar";
@@ -26,6 +27,15 @@ export default async function ProjectLayout({
     select: { id: true, name: true },
   });
 
+  // `notFound()` here, not a placeholder shell. This layout used to render
+  // itself with the literal title "Project Not Found" and an empty phase rail,
+  // while the page nested inside it called notFound() — so a bad id produced
+  // Next's bare 404 wrapped in project navigation that looked like it worked.
+  // One state, one answer: not-found.tsx in this folder.
+  if (!project) {
+    notFound();
+  }
+
   const phases = await prisma.phase.findMany({
     where: { project_id: projectId },
     select: {
@@ -34,8 +44,10 @@ export default async function ProjectLayout({
       status_enum: true,
       _count: {
         select: {
+          // Root tasks only — same rule as the approval gate. A nav badge that
+          // counts subtasks would show "6 open" for one blocking task.
           checklists: {
-            where: { is_checked: false }
+            where: { is_checked: false, parent_id: null }
           }
         }
       }
@@ -50,21 +62,6 @@ export default async function ProjectLayout({
     status_enum: phase.status_enum,
     unfinishedTodoCount: phase._count.checklists,
   }));
-
-  if (!project) {
-    // Handle project not found
-    const session = await getSession();
-    return (
-      <ProjectLayoutShell
-        projectId={projectId}
-        projectName="Project Not Found"
-        phases={[]}
-        userRole={session.role as string}
-      >
-        {children}
-      </ProjectLayoutShell>
-    );
-  }
 
   const session = await getSession();
   const initialSnapshot = await getProjectDiscussionSnapshot(projectId);

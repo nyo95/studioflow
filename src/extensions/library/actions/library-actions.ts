@@ -2,107 +2,66 @@
 
 import { createAction } from "@/lib/action-wrapper";
 import { LibraryService } from "../services/library-service";
-import { ProductCatalog } from "@/generated/prisma";
-import { assertAdmin, assertAdminOrStaff } from "@/core/rbac/permissions";
+import { Sku } from "@/generated/prisma";
+// Library gates are permission-based (see assertLibraryPermission below), so the
+// role-name helpers assertAdmin / assertAdminOrStaff are deliberately not used here.
 import { ActionError } from "@/lib/error-types";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_CUSTOM } from "@/lib/revalidation-tags";
-import { 
-  ProductCatalogInput, 
-  ProductCatalogWithRelations, 
-  LibraryVendor, 
+import {
+  ProductCatalogInput,
+  ProductCatalogWithRelations,
+  LibraryVendor,
   LibraryVendorInput,
   ProjectProductRequestWithDetails,
   ProjectProductRequestInput,
+  ReceiveProductRequestInput,
   ProductMetadataSchema,
-  LibraryItemStatusSchema
+  LibraryItemStatusSchema,
+  LibraryAccess,
+  LibrarySampleRow
 } from "../types";
-import { ProductRequestStatus, LibraryItemStatus, SampleAction, ProductType, SampleMovementLog, PromotionRequest } from "@/generated/prisma";
+import type { CatalogSampleStatus } from "../types";
+import { ProductRequestStatus, SampleAction, ProductType, SampleMovement, Sample, Role } from "@/generated/prisma";
+import { LibraryItemStatus } from "../types";
 import { REVALIDATE_LIBRARY, REVALIDATE_PROJECT } from "@/lib/revalidation-tags";
-import { RBAC } from "@/core/rbac/rbac";
+import { hasPermission, PERMISSION } from "@/core/rbac/rbac";
 import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
 
-interface PromotionRequestWithRelations {
-  id: string;
-  project_id: string;
-  schedule_option_id: string;
-  requested_by_id: string;
-  snapshot_data: unknown;
-  notes: string | null;
-  status: string;
-  reviewed_by_id: string | null;
-  reviewed_at: Date | null;
-  created_at: Date;
-  updated_at: Date;
-  project?: { id: string; name: string };
-  schedule_option?: { id: string; option_label: string };
-  requested_by?: { id: string; name: string };
+/**
+ * Library authorization helper.
+ *
+ * STAFF maintains the list while admin-level roles (ADMIN, DEVELOPER) own its
+ * quality gate. Gating on permissions rather than role names keeps server
+ * checks and UI affordances aligned and lets admin-level roles inherit both
+ * capabilities without special cases.
+ */
+function assertLibraryPermission(role: Role, permission: PERMISSION) {
+  if (!hasPermission(role, permission)) {
+    throw new ActionError(`Unauthorized: missing ${permission}`, "UNAUTHORIZED_ACTION");
+  }
 }
 
-export const getPromotionRequestsAction = createAction<void, PromotionRequestWithRelations[]>(async ({ ctx, tx }) => {
-  assertAdmin(ctx.role);
-  const results = await LibraryService.getPromotionRequestsWithDetails(tx);
-  return results as unknown as PromotionRequestWithRelations[];
-});
+/** Explicit Material-curation capability: admin-level (ADMIN, DEVELOPER) only. */
+function canApproveMaterial(role: Role) {
+  return hasPermission(role, PERMISSION.MASTERDATA_MATERIAL_APPROVE);
+}
 
-export const reviewPromotionRequestAction = createAction<{ requestId: string; action: "APPROVED" | "REJECTED"; notes?: string }, PromotionRequestWithRelations>(
-  async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
-
-    const result = await LibraryService.reviewPromotionRequest(tx, input.requestId, input.action, ctx.userId, input.notes);
-    invalidateCache({ scope: REVALIDATE_LIBRARY });
-    return result as unknown as PromotionRequestWithRelations;
-  }
-);
-
-export const createPromotionRequestAction = createAction<{ 
-  schedule_option_id: string; 
-  project_id: string; 
-  notes?: string 
-}, PromotionRequest>(
-  async ({ input, ctx, tx }) => {
-    await getProjectMembershipOrThrow(tx, input.project_id, ctx.userId, ctx.role);
-    RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
-
-    const option = await tx.projectScheduleOption.findUnique({
-      where: { id: input.schedule_option_id },
-      include: { entry: true }
-    });
-
-    if (!option) throw new Error("Schedule option not found");
-    if (option.entry.project_id !== input.project_id) {
-      throw new Error("Ownership mismatch: Schedule option does not belong to this project.");
-    }
-    if (!option.data_snapshot) throw new Error("Cannot promote option without snapshot data");
-
-    const result = await LibraryService.createPromotionRequest(tx, {
-      project_id: input.project_id,
-      schedule_option_id: input.schedule_option_id,
-      requested_by_id: ctx.userId,
-      snapshot_data: option.data_snapshot,
-      notes: input.notes
-    });
-
-    if (ctx.role === "ADMIN") {
-      await LibraryService.reviewPromotionRequest(tx, result.id, "APPROVED", ctx.userId, "Auto-approved for ADMIN");
-    }
-
-    invalidateCache({ scope: REVALIDATE_LIBRARY });
-    invalidateCache({ scope: REVALIDATE_PROJECT, id: input.project_id });
-
-    return result;
-  }
-);
+// Promotion-request queue (project draft -> global Master Data) was removed
+// 2026-08-10: it operated on MaterialCandidate/SampleCandidate-era concepts
+// that Master Data v2 dropped, and FEATURE_PROMOTION_QUEUE_ENABLED was already
+// `false` (see src/core/platform/feature-flags.ts) — no live caller depended
+// on it. See docs/PLAN-MASTERDATA-V2.md Q13.
 
 // --- VENDOR ACTIONS ---
 
 export const getVendorsAction = createAction<void, LibraryVendor[]>(async ({ tx }) => {
   return LibraryService.getAllVendors(tx);
-});
+}, { useTransaction: false });
 
 export const createVendorAction = createAction<LibraryVendorInput, LibraryVendor>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_VENDORS);
 
     const result = await LibraryService.createVendor(input, ctx.userId, tx);
 
@@ -115,7 +74,7 @@ export const createVendorAction = createAction<LibraryVendorInput, LibraryVendor
 
 export const updateVendorAction = createAction<{ id: string; data: Partial<LibraryVendorInput> }, LibraryVendor>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_VENDORS);
 
     const result = await LibraryService.updateVendor(input.id, input.data, ctx.userId, tx);
     // LibraryService.updateVendor() handles audit logging
@@ -127,7 +86,7 @@ export const updateVendorAction = createAction<{ id: string; data: Partial<Libra
 
 export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_VENDORS);
 
     const result = await LibraryService.deleteVendor(input.id, ctx.userId, tx);
     // LibraryService.deleteVendor() handles audit logging
@@ -138,7 +97,10 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
 
 export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetVendorId: string }, void>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    // Consolidating duplicate brands is list curation, so it follows brand
+    // management. Note this is the one bulk write in the Library: it re-points
+    // every product of the source vendor. Project snapshots stay untouched.
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_BRANDS);
 
     await LibraryService.mergeVendors(tx, input.sourceVendorId, input.targetVendorId, ctx.userId);
 
@@ -149,48 +111,151 @@ export const mergeVendorsAction = createAction<{ sourceVendorId: string; targetV
 // --- PRODUCT CATALOG ACTIONS ---
 
 export const getProductsAction = createAction<
-  { 
-    category?: string; 
-    vendorId?: string; 
-    search?: string; 
-    hasPhysicalOnly?: boolean; 
+  {
+    category?: string;
+    vendorId?: string;
+    search?: string;
+    hasPhysicalOnly?: boolean;
     status?: LibraryItemStatus | LibraryItemStatus[];
     type?: ProductType;
+    tags?: string[];
+    sort?: "sku" | "newest" | "updated" | "name" | "brand";
     page?: number;
     pageSize?: number;
   },
   { items: ProductCatalogWithRelations[]; total: number }
 >(
-  async ({ input, tx }) => {
-    return LibraryService.getAllProducts(tx, input) as Promise<{ items: ProductCatalogWithRelations[]; total: number }>;
-  }
+  async ({ input, ctx, tx }) => {
+    // Pending is usable and therefore visible wherever Approved is visible.
+    // Rejected remains curator-only. A caller cannot widen its own visibility
+    // by requesting REJECTED explicitly.
+    const requestedStatuses = input?.status
+      ? Array.isArray(input.status)
+        ? input.status
+        : [input.status]
+      : null;
+    const status = canApproveMaterial(ctx.role)
+      ? input?.status
+      : requestedStatuses
+        ? requestedStatuses.filter(
+            (candidate) =>
+              candidate === LibraryItemStatus.PENDING ||
+              candidate === LibraryItemStatus.APPROVED
+          )
+        : [LibraryItemStatus.PENDING, LibraryItemStatus.APPROVED];
+
+    return LibraryService.getAllProducts(tx, { ...input, status }) as Promise<{
+      items: ProductCatalogWithRelations[];
+      total: number;
+    }>;
+  },
+  { useTransaction: false }
 );
 
 /**
- * Returns unique values for sub_category and finishing fields in the catalog.
- * Used to power the smart-suggest dropdowns in LibraryFormModal.
+ * One SKU with every relation, fetched by id.
+ *
+ * Exists so a LIST does not have to carry detail. The Master Data materials
+ * table used to embed the whole `ProductCatalogWithRelations` object in every
+ * row purely so the edit dialog would have it on click — which meant shipping
+ * ~200 full object graphs to render one dialog. The table now sends scalars
+ * only and calls this when a row is actually opened.
+ *
+ * Thin on purpose: `LibraryService.getProductById` already existed and does the
+ * work. This adds the permission gate and nothing else.
  */
-export const getProductMetadataAction = createAction<void, { subCategories: string[]; finishings: string[] }>(
-  async ({ tx }) => {
-    return LibraryService.getProductMetadata(tx);
-  }
+export const getSkuDetailAction = createAction<
+  { id: string },
+  ProductCatalogWithRelations | null
+>(
+  async ({ input, ctx, tx }) => {
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_VIEW);
+    return LibraryService.getProductById(tx, input.id) as Promise<ProductCatalogWithRelations | null>;
+  },
+  { useTransaction: false }
 );
 
+/**
+ * Returns unique values for sub_category, finishing and tags in the catalog.
+ * Used to power the smart-suggest dropdowns and the filter facets.
+ */
+export const getProductMetadataAction = createAction<void, { subCategories: string[]; finishings: string[]; tags: string[] }>(
+  async ({ tx }) => {
+    return LibraryService.getProductMetadata(tx);
+  },
+  { useTransaction: false }
+);
+
+/**
+ * Which categories each brand actually carries — Taco supplies HPL and SPC alike.
+ * Powers suggestion + filtering only; new categories remain allowed.
+ */
+export const getBrandCategoryCoverageAction = createAction<
+  void,
+  Record<string, { category: string; section: ProductType; count: number }[]>
+>(async ({ tx }) => {
+  return LibraryService.getBrandCategoryCoverage(tx);
+}, { useTransaction: false });
+
+/**
+ * Physical sample inventory, queried directly rather than derived from the
+ * paginated catalog list.
+ */
+export const getPhysicalSamplesAction = createAction<
+  {
+    search?: string;
+    status?: CatalogSampleStatus;
+    vendorId?: string;
+    page?: number;
+    pageSize?: number;
+  },
+  { items: LibrarySampleRow[]; total: number }
+>(async ({ input, ctx, tx }) => {
+  assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_VIEW);
+  return LibraryService.getPhysicalSamples(tx, input) as Promise<{
+    items: LibrarySampleRow[];
+    total: number;
+  }>;
+}, { useTransaction: false });
+
+/**
+ * The caller's effective Library rights, resolved from the permission matrix.
+ *
+ * The UI must gate on this rather than comparing role strings. Previously the
+ * tabs and buttons were derived from `role === "STAFF" || …` while the server
+ * gated on permissions, so STAFF was shown a Requests tab that was always empty
+ * and a Modify button whose save always failed.
+ */
+export const getMyLibraryAccessAction = createAction<void, LibraryAccess>(async ({ ctx }) => {
+  const can = (p: PERMISSION) => hasPermission(ctx.role, p);
+  return {
+    role: ctx.role,
+    canView: can(PERMISSION.LIBRARY_VIEW),
+    canCreate: can(PERMISSION.LIBRARY_CREATE_ITEM),
+    canEdit: can(PERMISSION.LIBRARY_EDIT_ITEM),
+    canDelete: can(PERMISSION.LIBRARY_DELETE_ITEM),
+    canManageVendors: can(PERMISSION.LIBRARY_MANAGE_VENDORS),
+    canManageBrands: can(PERMISSION.LIBRARY_MANAGE_BRANDS),
+    canManageSamples: can(PERMISSION.LIBRARY_MANAGE_SAMPLES),
+    canProcessRequests: can(PERMISSION.LIBRARY_PROCESS_REQUEST),
+    canRequestMaterial: can(PERMISSION.LIBRARY_REQUEST_MATERIAL),
+    canExport: can(PERMISSION.LIBRARY_EXPORT_LIST),
+    canApproveMaterial: canApproveMaterial(ctx.role),
+    canApprovePromotions: can(PERMISSION.MASTERDATA_PROMOTION_APPROVE),
+  };
+}, { useTransaction: false });
 
 
-export const createProductAction = createAction<ProductCatalogInput, ProductCatalog>(
+
+export const createProductAction = createAction<ProductCatalogInput, Sku>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_CREATE_ITEM);
 
-    // GATEKEEPING: Only ADMIN can approve global library items directly.
-    // STAFF entries default to PENDING.
-    const statusToApply = ctx.role === "ADMIN" 
-      ? (input.catalog_status ? LibraryItemStatusSchema.parse(input.catalog_status) : "APPROVED")
-      : "PENDING";
-
+    // Direct intake always starts Pending, including intake by an approver.
+    // Approval is a separate, audited update. Pending remains usable.
     const validatedInput: ProductCatalogInput = {
       ...input,
-      catalog_status: statusToApply,
+      catalog_status: LibraryItemStatus.PENDING,
       catalog_metadata: input.catalog_metadata ? ProductMetadataSchema.parse(input.catalog_metadata) : undefined,
     };
 
@@ -203,16 +268,20 @@ export const createProductAction = createAction<ProductCatalogInput, ProductCata
 
 export const updateProductAction = createAction<{ id: string; data: Partial<ProductCatalogInput> }, ProductCatalogWithRelations>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
-    
-    // Non-admins (Staff) cannot set/approve products directly. Force status to PENDING if they attempt to set it to APPROVED.
-    const statusToApply = ctx.role === "ADMIN"
-      ? (input.data.catalog_status ? LibraryItemStatusSchema.parse(input.data.catalog_status) : undefined)
-      : (input.data.catalog_status === "APPROVED" ? "PENDING" : input.data.catalog_status ? LibraryItemStatusSchema.parse(input.data.catalog_status) : undefined);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_EDIT_ITEM);
+
+    // Editing preserves the current status unless an approver explicitly
+    // changes it. A STAFF request may carry the status echoed by its form, but
+    // the server strips that field so a crafted request still cannot approve
+    // or reject a SKU.
+    const { catalog_status: requestedStatus, ...dataWithoutStatus } = input.data;
+    const statusToApply = canApproveMaterial(ctx.role) && requestedStatus
+      ? LibraryItemStatusSchema.parse(requestedStatus)
+      : undefined;
 
     const validatedData: Partial<ProductCatalogInput> = {
-      ...input.data,
-      catalog_status: statusToApply,
+      ...dataWithoutStatus,
+      ...(statusToApply !== undefined ? { catalog_status: statusToApply } : {}),
       catalog_metadata: input.data.catalog_metadata ? ProductMetadataSchema.parse(input.data.catalog_metadata) : undefined,
     };
 
@@ -222,9 +291,9 @@ export const updateProductAction = createAction<{ id: string; data: Partial<Prod
   }
 );
 
-export const deleteProductAction = createAction<{ id: string }, ProductCatalog>(
+export const deleteProductAction = createAction<{ id: string }, Sku>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_DELETE_ITEM);
 
     const result = await LibraryService.deleteProduct(input.id, ctx.userId, tx);
     invalidateCache({ scope: REVALIDATE_LIBRARY });
@@ -234,7 +303,7 @@ export const deleteProductAction = createAction<{ id: string }, ProductCatalog>(
 
 export const getLibraryCategoriesAction = createAction<void, string[]>(async ({ tx }) => {
   return LibraryService.getCategories(tx);
-});
+}, { useTransaction: false });
 
 /**
  * Returns categories grouped by section (MATERIAL / FIXTURE) from PrefixDictionary.
@@ -259,32 +328,38 @@ export const getGroupedCategoriesAction = createAction<
   }
 
   return { materials, fixtures };
-});
+}, { useTransaction: false });
 
 export const getMyRoleAction = createAction<void, string>(async ({ ctx }) => {
   return ctx.role;
-});
+}, { useTransaction: false });
 
 export const getCatalogSuggestionsAction = createAction<void, Awaited<ReturnType<typeof LibraryService.getSuggestions>>>(
   async ({ tx }) => {
     return LibraryService.getSuggestions(tx);
-  }
+  },
+  { useTransaction: false }
 );
 
 // --- PROJECT PRODUCT REQUEST ACTIONS ---
 
 export const getAllProductRequestsAction = createAction<void, ProjectProductRequestWithDetails[]>(
   async ({ ctx, tx }) => {
-    assertAdmin(ctx.role);
+    // Fulfilling designers' sample requests is the administrative staff's job, so
+    // this follows LIBRARY_PROCESS_REQUEST rather than admin level. Previously the
+    // UI showed STAFF a Requests tab that this gate kept permanently empty.
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_PROCESS_REQUEST);
     return LibraryService.getAllProductRequests(tx);
-  }
+  },
+  { useTransaction: false }
 );
 
 export const getProjectProductRequestsAction = createAction<{ projectId: string }, ProjectProductRequestWithDetails[]>(
   async ({ input, ctx, tx }) => {
     await getProjectMembershipOrThrow(tx, input.projectId, ctx.userId, ctx.role);
     return LibraryService.getProjectProductRequests(input.projectId, tx);
-  }
+  },
+  { useTransaction: false }
 );
 
 export const createProjectProductRequestAction = createAction<ProjectProductRequestInput, ProjectProductRequestWithDetails>(
@@ -307,7 +382,7 @@ export const updateProductRequestStatusAction = createAction<{ id: string; statu
     if (!request) throw new ActionError("Product request not found", "NOT_FOUND");
     
     await getProjectMembershipOrThrow(tx, request.project_id, ctx.userId, ctx.role);
-    RBAC.assert(tx, "plugin.library.manage", ctx.role);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_PROCESS_REQUEST);
 
     // If RECEIVED and no name provided, use the current user's name
     const staffToRecord = input.staffName || (input.status === "RECEIVED" ? (ctx.user.name ?? null) : null);
@@ -318,9 +393,40 @@ export const updateProductRequestStatusAction = createAction<{ id: string; statu
   }
 );
 
+/**
+ * §6.14 / PLAN-LIBRARY-BRAND-FIRST.md §9 step 6. Marks a brand-first request
+ * RECEIVED by producing a Sku + Sample + rack/box from what STAFF read off
+ * the physical box — the request itself only ever carried a Brand and free
+ * text, never an SKU. Distinct from updateProductRequestStatusAction, which
+ * flips status without creating anything and remains correct for requests
+ * that already resolved a sku_id another way.
+ */
+export const receiveProjectProductRequestAction = createAction<
+  ReceiveProductRequestInput,
+  ProjectProductRequestWithDetails
+>(async ({ input, ctx, tx }) => {
+  const request = await tx.projectProductRequest.findUnique({
+    where: { id: input.request_id },
+    select: { project_id: true },
+  });
+  if (!request) throw new ActionError("Product request not found", "NOT_FOUND");
+
+  await getProjectMembershipOrThrow(tx, request.project_id, ctx.userId, ctx.role);
+  assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MARK_RECEIVED);
+
+  const result = (await LibraryService.receiveProjectProductRequest(
+    input,
+    ctx.userId,
+    tx
+  )) as ProjectProductRequestWithDetails;
+
+  invalidateCache({ scope: REVALIDATE_CUSTOM, path: `/projects/${result.project_id}` });
+  return result;
+});
+
 export const deleteProjectProductRequestAction = createAction<{ id: string }, ProjectProductRequestWithDetails>(
   async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_PROCESS_REQUEST);
 
     const result = await LibraryService.deleteProjectProductRequest(input.id, ctx.userId, tx);
     
@@ -329,13 +435,13 @@ export const deleteProjectProductRequestAction = createAction<{ id: string }, Pr
   }
 );
 
-export const recordSampleMovementAction = createAction<{ 
-  sampleId: string; 
-  action: SampleAction; 
-  notes?: string | null 
-}, SampleMovementLog>(
+export const recordSampleMovementAction = createAction<{
+  sampleId: string;
+  action: SampleAction;
+  notes?: string | null
+}, SampleMovement>(
   async ({ input, ctx, tx }) => {
-    assertAdminOrStaff(ctx.role);
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_SAMPLES);
 
     const result = await LibraryService.logSampleAction(tx, {
       sample_id: input.sampleId,
@@ -343,6 +449,22 @@ export const recordSampleMovementAction = createAction<{
       notes: input.notes,
       userId: ctx.userId
     });
+
+    invalidateCache({ scope: REVALIDATE_LIBRARY });
+    return result;
+  }
+);
+
+/**
+ * Removes ONE physical sample (soft delete). This is the only sanctioned removal
+ * path: saving a product never deletes samples, so a sample can no longer vanish
+ * as a side effect of an unrelated edit.
+ */
+export const deletePhysicalSampleAction = createAction<{ sampleId: string }, Sample>(
+  async ({ input, ctx, tx }) => {
+    assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_SAMPLES);
+
+    const result = await LibraryService.deletePhysicalSample(tx, input.sampleId, ctx.userId);
 
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;

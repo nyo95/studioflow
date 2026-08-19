@@ -16,14 +16,23 @@ export const isPlaceholder = (val?: string | null) => {
 export function getEffectiveTitle(snapshot: ScheduleSnapshot | null | undefined): string {
   if (!snapshot) return "Reserved Slot";
 
-  // Handle both legacy and namespaced snapshot formats
-  const legacySpecs = (snapshot as any)?.specs || {};
-  
-  const name = snapshot.catalog_product_name || legacySpecs.catalog_product_name;
-  const sku = snapshot.specs?.catalog_sku || legacySpecs.catalog_sku;
-  const color = snapshot.specs?.catalog_color || legacySpecs.catalog_color || (snapshot as any).catalog_color;
-  const motif = snapshot.specs?.catalog_motif || legacySpecs.catalog_motif || (snapshot as any).catalog_motif;
-  const finishing = snapshot.specs?.catalog_finishing || legacySpecs.catalog_finishing || (snapshot as any).catalog_finishing;
+  // Support legacy snapshot format where fields sat at the top level or under
+  // a different key. Cast through `unknown` to avoid `as any`.
+  type LegacySnap = Record<string, unknown>;
+  const legacySnap = snapshot as unknown as LegacySnap;
+  const legacySpecs = (legacySnap["specs"] as LegacySnap | undefined) ?? {};
+
+  const name = snapshot.catalog_product_name || (legacySpecs["catalog_product_name"] as string | undefined);
+  const sku = snapshot.specs?.catalog_sku || (legacySpecs["catalog_sku"] as string | undefined);
+  const color = snapshot.specs?.catalog_color
+    || (legacySpecs["catalog_color"] as string | undefined)
+    || (legacySnap["catalog_color"] as string | undefined);
+  const motif = snapshot.specs?.catalog_motif
+    || (legacySpecs["catalog_motif"] as string | undefined)
+    || (legacySnap["catalog_motif"] as string | undefined);
+  const finishing = snapshot.specs?.catalog_finishing
+    || (legacySpecs["catalog_finishing"] as string | undefined)
+    || (legacySnap["catalog_finishing"] as string | undefined);
 
   // Primary Identity
   const primary = !isPlaceholder(name) ? name : (!isPlaceholder(sku) ? sku : null);

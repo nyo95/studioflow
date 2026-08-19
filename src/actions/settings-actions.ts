@@ -6,15 +6,16 @@ import { assertAdmin } from "@/core/rbac/permissions";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_HOME, REVALIDATE_SETTINGS } from "@/lib/revalidation-tags";
 import { ProductType } from "@/generated/prisma";
-import { 
-  UpdateUISettingsSchema, 
+import {
+  UpdateUISettingsSchema,
   UpsertScheduleCategorySchema,
   SetAutoNamingSchema,
   UpsertTimelineTemplateSchema,
   CreateChecklistTemplateSchema,
   DeleteByIdSchema,
   DeleteScheduleCategorySchema,
-  MergeGlobalCategoriesSchema
+  MergeGlobalCategoriesSchema,
+  SetScheduleTemplateDefaultEntrySchema
 } from "@/lib/validations";
 
 export const mergeGlobalCategoriesAction = createAction(
@@ -144,6 +145,25 @@ export const deleteScheduleCategoryConfig = createAction(
     return result;
   },
   { schema: DeleteScheduleCategorySchema }
+);
+
+export const setScheduleTemplateDefaultEntry = createAction(
+  async ({ input, ctx, tx }) => {
+    assertAdmin(ctx.role);
+
+    const result = await settingsService.executeSetScheduleTemplateDefaultEntry(tx, {
+      section: input.section,
+      category: input.schedule_category,
+      isDefaultEntry: input.is_default_entry,
+      userId: ctx.userId,
+    });
+
+    invalidateCache({ scope: REVALIDATE_SETTINGS });
+    invalidateCache({ scope: REVALIDATE_HOME });
+
+    return result;
+  },
+  { schema: SetScheduleTemplateDefaultEntrySchema }
 );
 
 export const getAvailableSchedulerCategories = createAction(async ({ tx }) => {

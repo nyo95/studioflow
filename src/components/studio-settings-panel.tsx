@@ -5,9 +5,10 @@ import { Blocks, Palette, Settings2, Users2, ShoppingBag, ChevronLeft, ChevronRi
 import type { Role, ProductType } from "@/generated/prisma";
 import { TemplateManager } from "@/components/template-manager";
 import { UserManagement } from "@/components/user-management";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/ui_engine";
 import { cn } from "@/lib/utils";
 import type { UISettings } from "@/types/common";
+import { useAppConfirm } from "@/hooks/use-app-confirm";
 
 interface TimelineTemplate {
   phase_enum: string;
@@ -25,6 +26,7 @@ interface ScheduleTemplateConfig {
   schedule_category: string;
   section: ProductType;
   is_active: boolean;
+  is_default_entry: boolean;
 }
 
 interface SchedulePrefixConfig {
@@ -101,6 +103,7 @@ export function StudioSettingsPanel({
   const [appTitle, setAppTitle] = useState(appTitleInitial);
   const [isSaving, setIsSaving] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const appConfirm = useAppConfirm();
 
   const scroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
@@ -177,7 +180,11 @@ export function StudioSettingsPanel({
   };
 
   const handleResetToDefault = async () => {
-    if (!window.confirm("Are you sure you want to reset all design system settings to default?")) return;
+    if (!(await appConfirm.confirm({
+      title: "Reset the design system?",
+      description: "All design system settings will return to their defaults.",
+      confirmLabel: "Reset settings",
+    }))) return;
     setIsSaving(true);
     try {
       const { DEFAULT_UI_SETTINGS } = await import("@/lib/ui-settings");
@@ -387,9 +394,9 @@ export function StudioSettingsPanel({
               </p>
             </div>
 
-            <div className="mt-4 p-4 bg-amber-50/50 border border-amber-100 rounded-[var(--ui-radius-control)]">
+            <div className="mt-4 p-4 bg-amber-50/50 border border-amber-100 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]">
               <p className="text-xs text-amber-800 font-medium leading-relaxed font-sans">
-                ⚠️ <strong>Note:</strong> Fitur UI Engine ini belum sesuai harapan sepenuhnya sebagai sebuah template engine. Kami akan menyempurnakannya di tahapan pengembangan berikutnya. Sementara waktu, Anda dapat menggunakan tombol <strong>Reset to Default</strong> di bawah untuk mengembalikan pengaturan visual ke nilai awal design system.
+                ⚠️ <strong>Note:</strong> The UI Engine is not yet a complete template engine. It will be improved in a later development phase. For now, use <strong>Reset to Default</strong> below to restore the original design-system values.
               </p>
             </div>
 
@@ -622,6 +629,7 @@ export function StudioSettingsPanel({
           </section>
         ) : null}
       </div>
+      {appConfirm.dialog}
     </div>
   );
 }

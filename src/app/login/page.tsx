@@ -8,12 +8,10 @@ export const revalidate = 3600;
 export default async function LoginPage() {
   let appTitle = "StudioFlow";
   try {
-    const [systemConfig] = await prisma.$queryRaw<Array<{ app_title: string }>>`
-      SELECT "app_title"
-      FROM "SystemConfig"
-      WHERE "id" = ${SYSTEM_CONFIG_ID}
-      LIMIT 1
-    `;
+    const systemConfig = await prisma.systemConfig.findUnique({
+      where: { id: SYSTEM_CONFIG_ID },
+      select: { app_title: true },
+    });
     if (systemConfig?.app_title) {
       appTitle = systemConfig.app_title;
     }

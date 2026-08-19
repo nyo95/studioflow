@@ -1,0 +1,19 @@
+# Normalize line endings for all text files so Windows/Unix checkouts stop
+# producing full-file diffs on every commit. See PLAN-AUDIT-ROADMAP-2026Q3.md
+# §1.2 A1.
+* text=auto eol=lf
+
+# Explicit binary types — never touched by line-ending normalization.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary
+graphify-out/graph.json merge=graphify

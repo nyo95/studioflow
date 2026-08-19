@@ -1,15 +1,12 @@
-version: '3.8'
-
 services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: radsaas-2-postgres
+  db:
+    image: postgres:15-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: studioflow
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,6 +14,28 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Database khusus test integrasi. Datanya berada di tmpfs, tidak memakai
+  # volume `postgres_data`, dan container selalu dibuang oleh test runner.
+  # Port host sengaja berbeda dari DB development supaya kedua database tidak
+  # mungkin tertukar hanya karena memakai nama service yang mirip.
+  db-test:
+    image: postgres:15-alpine
+    profiles: ["test"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: studioflow_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d studioflow_test"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+    restart: "no"
 
 volumes:
   postgres_data:

@@ -2,7 +2,28 @@ import { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { insertAuditLog } from "@/actions/_shared";
 import { PhaseStatus, RevisionStatus, Role } from "@/generated/prisma";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { AUDIT_ACTIONS } from "./types";
+
+/**
+ * Recovers the phase's PREVIOUS status timestamp from an audit log's details.
+ *
+ * Undo restores a phase to an earlier status, so it must also restore when the
+ * phase entered that status. Stamping `new Date()` here would be a lie with
+ * teeth: a phase that has been sitting with the client for two weeks would,
+ * after an unrelated undo, report "waiting 0 days" and drop off every stalled-
+ * work view — the exact signal src/lib/domain/phase-presenter.ts exists to give.
+ *
+ * Returns null when the log predates migration 20260803120000 (older rows carry
+ * no `previous_status_changed_at`). Null is the honest answer — "we do not know"
+ * — and the presenter renders no duration for it.
+ */
+function restoredStatusChangedAt(details: Record<string, unknown>): Date | null {
+  const raw = details.previous_status_changed_at;
+  if (typeof raw !== "string" && !(raw instanceof Date)) return null;
+  const parsed = raw instanceof Date ? raw : new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { logId: string; userId: string }) {
   const { logId, userId } = params;
@@ -25,6 +46,7 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
         data: {
           status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.PENDING,
           is_locked: Boolean(details.previous_is_locked ?? false),
+          status_changed_at: restoredStatusChangedAt(details),
         },
       });
       if (createdRevisionId) {
@@ -38,7 +60,10 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
     case AUDIT_ACTIONS.SUBMIT_FOR_CLIENT_REVIEW: {
       await tx.phase.update({
         where: { id: log.entity_id },
-        data: { status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.IN_PROGRESS },
+        data: {
+          status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.IN_PROGRESS,
+          status_changed_at: restoredStatusChangedAt(details),
+        },
       });
       break;
     }
@@ -50,6 +75,7 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
         data: {
           status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.ON_REVIEW_CLIENT,
           is_locked: Boolean(details.previous_is_locked ?? false),
+          status_changed_at: restoredStatusChangedAt(details),
         },
       });
       await tx.project.update({
@@ -72,7 +98,10 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
 
       await tx.phase.update({
         where: { id: log.entity_id },
-        data: { status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.ON_REVIEW_INTERNAL },
+        data: {
+          status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.ON_REVIEW_INTERNAL,
+          status_changed_at: restoredStatusChangedAt(details),
+        },
       });
 
       if (newRevisionId) {
@@ -100,6 +129,7 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
         data: {
           status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.READY_FOR_NEXT,
           is_locked: Boolean(details.previous_is_locked ?? true),
+          status_changed_at: restoredStatusChangedAt(details),
         },
       });
 
@@ -126,6 +156,7 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
         data: {
           status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.IN_PROGRESS,
           is_locked: Boolean(details.previous_is_locked ?? false),
+          status_changed_at: restoredStatusChangedAt(details),
         },
       });
 
@@ -179,6 +210,7 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
           data: {
             status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.IN_PROGRESS,
             is_locked: Boolean(details.previous_is_locked ?? false),
+            status_changed_at: restoredStatusChangedAt(details),
           },
         });
       }
@@ -193,6 +225,7 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
         data: {
           status_enum: (details.previous_phase_status as PhaseStatus) ?? PhaseStatus.PENDING,
           is_locked: false,
+          status_changed_at: restoredStatusChangedAt(details),
         },
       });
 
@@ -225,7 +258,7 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
 }
 
 export function canUndoAuditLog(action: string, role: Role) {
-  if (role !== "ADMIN" && role !== "DIC") {
+  if (!isAdminLevel(role) && role !== "DIC") {
     return false;
   }
 

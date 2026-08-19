@@ -1,16 +1,17 @@
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { Role } from "@/generated/prisma";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { getSession, requireSession } from "@/lib/auth";
 import { prisma } from "@/core/platform/db";
 import { updateUserName } from "@/actions/user-actions";
 import { ActionError } from "@/lib/error-types";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_SETTINGS } from "@/lib/revalidation-tags";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/ui_engine";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui_engine";
+import { Input } from "@/ui_engine";
+import { Label } from "@/ui_engine";
 import { unwrapActionResult } from "@/lib/result";
 import { SettingsShell } from "@/ui_engine";
 
@@ -29,7 +30,7 @@ export default async function ProfileSettingsPage() {
     redirect("/login");
   }
 
-  const isAdmin = role === Role.ADMIN;
+  const isAdmin = isAdminLevel(role);
 
   async function saveProfile(formData: FormData) {
     "use server";
@@ -196,7 +197,7 @@ export default async function ProfileSettingsPage() {
                 {user.role}
               </h3>
               <p className="max-w-[200px] text-xs text-slate-400">
-                {user.role === "ADMIN"
+                {user.role === "ADMIN" || user.role === "DEVELOPER"
                   ? "Full administrative access to studio configurations."
                   : "Standard production access for project management."}
               </p>

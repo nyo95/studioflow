@@ -1,21 +1,40 @@
+/**
+ * Turns raw audit-log rows into a readable sentence.
+ *
+ * English, matching the rest of the UI (roadmap §D4). Verbs are past tense
+ * because the audit log is a record of what happened, not a live feed —
+ * "approved internal review", not "approves".
+ *
+ * An action with no entry here falls back to its own name with the underscores
+ * removed. That is deliberate: a new AUDIT_ACTIONS constant should render as
+ * slightly awkward English rather than disappear or throw, so the gap is
+ * visible in the UI and someone fills it in.
+ */
+
 const ACTION_LABELS: Record<string, string> = {
-  ACTIVATE_PHASE: "memulai fase",
-  SUBMIT_FOR_INTERNAL_REVIEW: "mengirim ke review internal",
-  APPROVE_INTERNAL: "menyetujui review internal",
-  SUBMIT_FOR_CLIENT_REVIEW: "mengirim ke review klien",
-  APPROVE_CLIENT_PHASE: "menyetujui fase dari klien",
-  REJECT_PHASE_INTERNAL: "mengembalikan fase dari review internal",
-  REJECT_PHASE_CLIENT: "mengembalikan fase dari review klien",
-  REOPEN_PHASE: "membuka ulang fase",
-  COMPLETE_SUPERVISION_PHASE: "menyelesaikan fase supervisi",
-  PROJECT_COMPLETED_MANUAL: "menandai proyek selesai",
-  REVISION_OVERRIDE_ADMIN: "melakukan override revisi",
-  BYPASS_PHASE_TO_COMPLETED: "melewati fase ke selesai",
-  TOGGLE_ACTIVITY_STATUS: "mengubah status aktivitas",
-  SYNC_PROJECT_CHECKLISTS: "sinkron checklist proyek",
-  ADD_ACTIVITY: "menambah aktivitas",
-  UPDATE_ACTIVITY: "memperbarui aktivitas",
-  DELETE_ACTIVITY: "menghapus aktivitas",
+  ACTIVATE_PHASE: "started phase",
+  SUBMIT_FOR_INTERNAL_REVIEW: "sent for internal review",
+  APPROVE_INTERNAL: "approved internal review",
+  SUBMIT_FOR_CLIENT_REVIEW: "sent for client review",
+  APPROVE_CLIENT_PHASE: "approved phase with client",
+  REJECT_PHASE_INTERNAL: "returned phase from internal review",
+  REJECT_PHASE_CLIENT: "returned phase from client review",
+  REOPEN_PHASE: "reopened phase",
+  COMPLETE_SUPERVISION_PHASE: "completed supervision phase",
+  PROJECT_COMPLETED_MANUAL: "marked project complete",
+  REVISION_OVERRIDE_ADMIN: "overrode revision",
+  BYPASS_PHASE_TO_COMPLETED: "skipped phase to complete",
+  TOGGLE_ACTIVITY_STATUS: "changed activity status",
+  SYNC_PROJECT_CHECKLISTS: "synced project checklist",
+  ADD_ACTIVITY: "added activity",
+  UPDATE_ACTIVITY: "updated activity",
+  DELETE_ACTIVITY: "deleted activity",
+  TOGGLE_CHECKLIST: "ticked a task",
+  ADD_CHECKLIST_ITEM: "added a task",
+  UPDATE_CHECKLIST_ITEM: "updated a task",
+  DELETE_CHECKLIST_ITEM: "deleted a task",
+  DETACH_CHECKLIST_TEMPLATE: "detached a task from its template",
+  REORDER_CHECKLIST: "reordered tasks",
 };
 
 function normalizeWords(value: string) {
@@ -36,12 +55,7 @@ export function humanizeAuditAction(action: string) {
 }
 
 export function humanizeEntityType(entityType: string) {
-  const normalized = normalizeWords(entityType);
-  if (normalized === "project") return "proyek";
-  if (normalized === "phase") return "fase";
-  if (normalized === "activity") return "aktivitas";
-  if (normalized === "revision") return "revisi";
-  return normalized;
+  return normalizeWords(entityType);
 }
 
 export function buildActivitySentence(params: {
@@ -49,10 +63,10 @@ export function buildActivitySentence(params: {
   action: string;
   entityType: string;
 }) {
-  const actor = params.actorName || "Sistem";
+  const actor = params.actorName || "System";
   const action = humanizeAuditAction(params.action);
   const entity = humanizeEntityType(params.entityType);
-  return `${actor} ${action} pada ${entity}`;
+  return `${actor} ${action} on ${entity}`;
 }
 
 export function formatActionLabel(action: string) {

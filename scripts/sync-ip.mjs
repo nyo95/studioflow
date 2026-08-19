@@ -1,6 +1,7 @@
 import { networkInterfaces } from 'os';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { execSync } from 'child_process';
 
 /**
  * Sync IP script for StudioFlow
@@ -10,18 +11,45 @@ import { join } from 'path';
 
 function getLocalIp() {
   const interfaces = networkInterfaces();
+  let candidates = [];
+
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
-      // Look for IPv4 and skip internal (loopback) addresses
       if (iface.family === 'IPv4' && !iface.internal) {
-        // Typically we want the 172.x.x.x or 192.x.x.x address
-        if (iface.address.startsWith('172.') || iface.address.startsWith('192.')) {
-          return iface.address;
+        const addr = iface.address;
+        // Skip Docker/Hyper-V virtual adapters (172.17.0.0 – 172.31.255.255)
+        if (addr.startsWith('172.')) {
+          const secondOctet = parseInt(addr.split('.')[1], 10);
+          if (secondOctet >= 17 && secondOctet <= 31) continue;
+        }
+        if (addr.startsWith('192.') || addr.startsWith('172.') || addr.startsWith('10.')) {
+          candidates.push({ addr, name });
         }
       }
     }
   }
-  return null;
+
+  // Prefer interface with a default gateway (real network)
+  const gateways = new Set();
+  try {
+    const output = execSync('route print -4', { encoding: 'utf8' });
+    const lines = output.split('\n');
+    for (const line of lines) {
+      if (line.trim().startsWith('0.0.0.0')) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 3) gateways.add(parts[parts.length - 1]);
+      }
+    }
+  } catch (_) {}
+
+  if (gateways.size > 0) {
+    for (const { addr, name } of candidates) {
+      if (gateways.has(addr)) return addr;
+    }
+  }
+
+  // Fallback: first valid candidate
+  return candidates.length > 0 ? candidates[0].addr : null;
 }
 
 const envPath = join(process.cwd(), '.env');
@@ -55,23 +83,18 @@ try {
   console.error('❌ Error updating .env:', error.message);
 }
 
-const nextConfigPath = join(process.cwd(), 'next.config.ts');
+// Sync allowedDevOrigins in next.config.ts (wildcard "*" tidak bekerja di matchWildcardDomain)
+const configPath = join(process.cwd(), 'next.config.ts');
 try {
-  let configContent = readFileSync(nextConfigPath, 'utf8');
-  const updatedConfig = configContent
-    .replace(
-      /allowedDevOrigins: \[.*\]/,
-      `allowedDevOrigins: ["${newIp}", "localhost:3000"]`
-    )
-    .replace(
-      /allowedOrigins: \[.*\]/,
-      `allowedOrigins: ["localhost:3000", "${newIp}:3000"]`
-    );
-
+  let configContent = readFileSync(configPath, 'utf8');
+  const updatedConfig = configContent.replace(
+    /allowedDevOrigins: \[[^\]]*\]/,
+    `allowedDevOrigins: ["${newIp}", "localhost:3000"]`
+  );
   if (configContent === updatedConfig) {
     console.log('✅ next.config.ts is already up to date.');
   } else {
-    writeFileSync(nextConfigPath, updatedConfig);
+    writeFileSync(configPath, updatedConfig);
     console.log('🚀 next.config.ts has been successfully updated with the new IP!');
   }
 } catch (error) {

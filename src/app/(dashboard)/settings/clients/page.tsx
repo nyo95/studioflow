@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { ClientManagementTable } from "@/components/client-management-table";
 import { SettingsShell } from "@/ui_engine";
 
@@ -11,7 +12,7 @@ export default async function ClientSettingsPage() {
     redirect("/login");
   }
 
-  if (role !== "ADMIN") {
+  if (!isAdminLevel(role)) {
     redirect("/settings");
   }
 

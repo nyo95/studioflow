@@ -14,6 +14,9 @@
   --ui-border-subtle: #f1f5f9;    /* slate-100 — lighter */
   --ui-border-default: #e2e8f0;   /* slate-200 */
   --ui-border-focus: #94a3b8;     /* slate-400 */
+  --ui-border-width: 1px;
+  --ui-outline-width: 2px;
+  --ui-outline-offset: 2px;
 
   /* Text */
   --ui-text-primary: #0f172a;     /* slate-950 */
@@ -26,6 +29,89 @@
   --ui-action-text: #ffffff;
   --ui-action-hover: #1e293b;     /* slate-800 */
 
+  /* Change previews */
+  --ui-change-before: #b91c1c;        /* red-700 */
+  --ui-change-before-bg: #fef2f2;     /* red-50 */
+  --ui-change-before-border: #fecaca; /* red-200 */
+  --ui-change-after: #047857;         /* emerald-700 */
+  --ui-change-after-bg: #ecfdf5;      /* emerald-50 */
+  --ui-change-after-border: #a7f3d0;  /* emerald-200 */
+  --ui-change-pending: #b45309;       /* amber-700 */
+  --ui-change-pending-bg: #fffbeb;    /* amber-50 */
+  --ui-change-pending-border: #fde68a;/* amber-200 */
+  --ui-change-hover-strength: 88%;
+  --ui-drag-source-opacity: 0.55;
+  --ui-disabled-opacity: 0.55;
+
+  /* Functional controls */
+  --ui-icon-size-sm: 1rem;
+  --ui-copy-max-width: 42rem;
+  --ui-code-manager-column-min: 20rem;
+  --ui-combobox-menu-max-height: 16rem;
+  --ui-brand-table-min-width: 78rem;
+  --ui-brand-table-col-brand: 16%;
+  --ui-brand-table-col-category: 20%;
+  --ui-brand-table-col-hashtag: 15%;
+  --ui-brand-table-col-links: 18%;
+  --ui-brand-table-col-count: 6%;
+  --ui-brand-table-col-complete: 7%;
+  --ui-brand-table-col-actions: 12%;
+  --ui-supplier-table-min-width: 52rem;
+  --ui-supplier-table-col-company: 30%;
+  --ui-supplier-table-col-roles: 30%;
+  --ui-supplier-table-col-count: 15%;
+  --ui-supplier-table-col-actions: 10%;
+  --ui-supplier-brands-table-min-width: 36rem;
+  --ui-supplier-brand-sku-table-min-width: 54rem;
+  --ui-supplier-prices-table-min-width: 54rem;
+  --ui-pricing-material-table-min-width: 72rem;
+  --ui-pricing-material-col-brand: 14%;
+  --ui-pricing-material-col-supplier: 14%;
+  --ui-pricing-material-col-code: 10%;
+  --ui-pricing-material-col-item: 22%;
+  --ui-pricing-material-col-unit: 7%;
+  --ui-pricing-material-col-price: 14%;
+  --ui-pricing-material-col-updated: 15%;
+  --ui-pricing-material-col-actions: 4%;
+  --ui-sku-viewer-price-table-min-width: 42rem;
+  --ui-sku-viewer-history-table-min-width: 56rem;
+  --ui-sku-directory-table-min-width: 68rem;
+  --ui-sku-directory-col-brand: 16%;
+  --ui-sku-directory-col-product: 22%;
+  --ui-sku-directory-col-category: 20%;
+  --ui-sku-directory-col-unit: 10%;
+  --ui-sku-directory-col-price: 17%;
+  --ui-sku-directory-col-complete: 9%;
+  --ui-sku-directory-col-actions: 6%;
+  --ui-sample-library-table-min-width: 64rem;
+  --ui-sample-request-table-min-width: 64rem;
+
+  /* Render Board callouts */
+  --ui-render-accent: var(--ui-text-primary);
+  --ui-render-leader-stroke: 1px;
+  --ui-render-leader-opacity: 0.94;
+  --ui-render-pin-size: 0.45rem;
+  --ui-render-pin-hit-size: 1.25rem;
+  --ui-render-pin-print-size: 1.8mm;
+  --ui-render-label-code-size: 0.72rem;
+  --ui-render-label-code-tracking: 0.02em;
+  --ui-render-print-code-size: 9pt;
+  --ui-render-print-meta-size: 7.5pt;
+  --ui-render-print-kicker-tracking: 0.16em;
+  --ui-render-lens-size: 7rem;
+  --ui-render-lens-border: 2px;
+  --ui-render-lens-offset: 0.75rem;
+  --ui-render-lens-crosshair-size: 1rem;
+  --ui-render-lens-crosshair-stroke: 1px;
+  --ui-render-tool-gap: 0.75rem;
+  --ui-render-tool-select-width: 18rem;
+  --ui-render-print-page-width: 297mm;
+  --ui-render-print-page-height: 210mm;
+  --ui-render-print-padding-x: 14mm;
+  --ui-render-print-padding-y: 12mm;
+  --ui-render-print-heading-size: 14pt;
+  --ui-render-print-heading-gap: 4mm;
+
   /* Radius — single source */
   --ui-radius-card: 0.5rem;      /* 8px — down from 12px */
   --ui-radius-control: 0.375rem; /* 6px — down from 8px */
@@ -36,6 +122,16 @@
   --ui-section-px: 1.25rem;      /* 20px — down from 24px */
   --ui-section-py: 1.25rem;      /* 20px — down from 24px */
   --ui-section-gap: 1.25rem;     /* 20px — down from 24px */
+
+  /* Dialog widths - global because portals render outside dashboard wrappers */
+  --ui-dialog-width-sm: 420px;
+  --ui-dialog-width-md: 560px;
+  --ui-dialog-width-lg: 760px;
+  --ui-dialog-width-xl: 980px;
+  --ui-dialog-width-full: 1180px;
+  --ui-dialog-max-height: 90vh;
+  --ui-dialog-header-close-clearance: 3rem;
+  --ui-filter-secondary-width: 18rem;
 
   /* Shadow */
   --ui-shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.03);

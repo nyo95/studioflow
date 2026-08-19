@@ -1,26 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { addActivity } from "@/actions/phase-actions";
 import { addProjectActivity } from "@/actions/project-actions";
 import { unwrapActionResult } from "@/lib/result";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui_engine";
 
 interface ActivePhase {
   phaseId: string;
@@ -71,27 +57,26 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
   const availablePhases = selectedProject?.phases ?? [];
   const selectedPhase = availablePhases.find((p) => p.phaseId === selectedPhaseId);
 
-  // Smart Tagging logic
-  useEffect(() => {
-    if (!taskName) return;
-    const match = taskName.match(/(?:^|\s)#(\w+)/);
-    if (match) {
-      const tag = match[1].toLowerCase().replace(/_/g, "");
-      const canonicalName = PHASE_ALIASES[tag] || tag;
-      const foundPhase = availablePhases.find((p) =>
-        p.phaseName.toLowerCase().replace(/ |\_/g, "") === canonicalName.replace(/ |\_/g, "") ||
-        p.phaseName.toLowerCase().replace(/ |\_/g, "").includes(tag)
-      );
-      if (foundPhase && foundPhase.phaseId !== selectedPhaseId) {
-        if (foundPhase.isLocked) {
-          setError(`Phase "${foundPhase.phaseName}" is locked. You cannot add tasks to it.`);
-        } else {
-          setSelectedPhaseId(foundPhase.phaseId);
-          setError(null);
-        }
+  // Smart Tagging: called inline from the task name onChange handler.
+  const applySmartTag = useCallback((name: string) => {
+    if (!name) return;
+    const match = name.match(/(?:^|\s)#(\w+)/);
+    if (!match) return;
+    const tag = match[1].toLowerCase().replace(/_/g, "");
+    const canonicalName = PHASE_ALIASES[tag] || tag;
+    const foundPhase = availablePhases.find((p) =>
+      p.phaseName.toLowerCase().replace(/ |\_/g, "") === canonicalName.replace(/ |\_/g, "") ||
+      p.phaseName.toLowerCase().replace(/ |\_/g, "").includes(tag)
+    );
+    if (foundPhase && foundPhase.phaseId !== selectedPhaseId) {
+      if (foundPhase.isLocked) {
+        setError(`Phase "${foundPhase.phaseName}" is locked. You cannot add tasks to it.`);
+      } else {
+        setSelectedPhaseId(foundPhase.phaseId);
+        setError(null);
       }
     }
-  }, [taskName, availablePhases, selectedPhaseId]);
+  }, [availablePhases, selectedPhaseId]);
 
   function handleProjectChange(value: string) {
     setSelectedProjectId(value);
@@ -259,8 +244,10 @@ export function TodayQuickAddModal({ projects }: TodayQuickAddModalProps) {
               type="text"
               value={taskName}
               onChange={(event) => {
-                setTaskName(event.target.value);
+                const next = event.target.value;
+                setTaskName(next);
                 setError(null);
+                applySmartTag(next);
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {

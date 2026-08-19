@@ -1,6 +1,7 @@
 import { DashboardPageShell, PageHeader } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { Role } from "@/generated/prisma";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { auditService } from "@/core/platform/audit";
 import { ActivityLogTable } from "@/components/activity-log-table";
 
@@ -29,14 +30,14 @@ export default async function ActivityPage({
   return (
     <DashboardPageShell>
       <PageHeader
-        eyebrow="Aktivitas Tim"
-        title="Pusat Aktivitas"
-        description="Ringkasan aktivitas terbaru tim. Gunakan filter bila ingin lihat orang, fase, atau rentang tanggal tertentu."
+        eyebrow="Team activity"
+        title="Activity Center"
+        description="Recent activity across the studio. Filter by person, phase, or date range."
       />
 
       <ActivityLogTable
         logs={data.logs}
-        canUndo={role === Role.ADMIN || role === Role.DIC}
+        canUndo={isAdminLevel(role) || role === Role.DIC}
         filters={{
           users: data.filters.users.map((user) => ({ id: user.id, label: user.name })),
           actions: data.filters.actions.map((action) => ({ id: action, label: action.replace(/_/g, " ") })),

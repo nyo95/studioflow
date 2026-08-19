@@ -5,7 +5,7 @@ import { Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { undoAction } from "@/actions/audit-actions";
 import { unwrapActionResult } from "@/lib/result";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/ui_engine";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/ui_engine";
 
 interface UndoButtonProps {
   logId: string;

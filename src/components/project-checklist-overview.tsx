@@ -1,99 +1,74 @@
 "use client";
 
+/**
+ * Project-level (global) task list — the sidebar card on the project page.
+ *
+ * Rendering is delegated to `TaskList`, the same component the phase view uses.
+ * This file used to hold its own flat list that re-sorted alphabetically in the
+ * browser, patching over a server query that ordered by UUID. Both are gone:
+ * ordering now comes from `sort_order` on the server, in one place.
+ */
+
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { toggleChecklist } from "@/actions/phase-actions";
 import { syncProjectChecklists } from "@/actions/project-actions";
-import { cn } from "@/lib/utils";
-import { CheckCircle2, Check } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Heading } from "@/ui_engine";
 import { unwrapActionResult } from "@/lib/result";
-
-interface ChecklistItem {
-  id: string;
-  label: string;
-  completed: boolean;
-  phase_id: string | null;
-}
+import { TaskList } from "@/components/task-list";
+import type { ChecklistTask, ChecklistUserRef } from "@/types/checklist";
 
 interface ProjectChecklistOverviewProps {
   projectId: string;
-  checklists: ChecklistItem[];
+  checklists: ChecklistTask[];
   canEdit: boolean;
+  currentUserId: string | null;
+  members: ChecklistUserRef[];
+  knownLabels?: { id: string; name: string; color: string }[];
+  /** Admin-only. Where global checklist items are actually defined. */
+  settingsHref?: string | null;
 }
 
 export function ProjectChecklistOverview({
   projectId,
   checklists,
   canEdit,
+  currentUserId,
+  members,
+  knownLabels = [],
+  settingsHref = null,
 }: ProjectChecklistOverviewProps) {
   const router = useRouter();
 
-  // Sort checklists to keep UI stable
-  const sortedChecklists = [...checklists].sort((a, b) => a.label.localeCompare(b.label));
-
+  // Pulls in any template added since the project was created. Additive and
+  // idempotent — it dedups on (template_id, phase_id), so re-running it never
+  // duplicates a row and never touches a task somebody typed.
   React.useEffect(() => {
-    // We keep the sync logic to ensure global templates are loaded
-    syncProjectChecklists({ projectId }).then((result) => {
-      unwrapActionResult(result);
-      router.refresh();
-    }).catch(console.error);
+    let cancelled = false;
+
+    void syncProjectChecklists({ projectId })
+      .then((result) => {
+        const synced = unwrapActionResult(result);
+        // Only refresh when the sync actually produced something. Refreshing
+        // unconditionally on mount meant every visit to the project page did a
+        // second server render for no reason.
+        if (!cancelled && synced.count > 0) router.refresh();
+      })
+      .catch(console.error);
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, router]);
 
-  async function handleToggle(id: string, current: boolean) {
-    if (!canEdit) return;
-    try {
-      unwrapActionResult(await toggleChecklist({ checklistId: id, isChecked: !current }));
-      router.refresh();
-    } catch (error) {
-      console.error("Failed to toggle checklist:", error);
-    }
-  }
-
   return (
-    <div className="divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-      {sortedChecklists.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-          <div className="mb-3 rounded-full bg-slate-50 p-3 text-slate-300">
-            <CheckCircle2 className="h-6 w-6" />
-          </div>
-          <p className="text-sm font-medium text-slate-600">No global project checklists configured.</p>
-          <p className="text-xs text-slate-400 mt-1">Global items appear here when added to the Project Engine templates.</p>
-        </div>
-      ) : (
-        sortedChecklists.map((item) => (
-          <div
-            key={item.id}
-            onClick={() => handleToggle(item.id, item.completed)}
-            className={cn(
-              "group flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-slate-50",
-              !canEdit && "pointer-events-none opacity-80"
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded-md border transition-all",
-                  item.completed
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 bg-white group-hover:border-slate-400"
-                )}
-              >
-                {item.completed && <Check className="h-3.5 w-3.5" />}
-              </div>
-              <span
-                className={cn(
-                  "text-xs font-medium transition-all",
-                  item.completed ? "text-slate-400 line-through" : "text-slate-700"
-                )}
-              >
-                {item.label}
-              </span>
-            </div>
-          </div>
-        ))
-      )}
-    </div>
+    <TaskList
+      tasks={checklists}
+      projectId={projectId}
+      canEdit={canEdit}
+      currentUserId={currentUserId}
+      members={members}
+      knownLabels={knownLabels}
+      settingsHref={settingsHref}
+      emptyMessage="No global checklist items. These come from Studio settings and apply to every project."
+    />
   );
 }

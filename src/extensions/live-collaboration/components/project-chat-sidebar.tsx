@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useRef, useEffect } from "react";
+import { useTransition, useRef, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { HydrationGuard } from "@/ui_engine/components/HydrationGuard";
 import { CommentWithAuthor } from "../types/comment";
@@ -11,6 +11,8 @@ import { MessageSquare, X, Upload } from "lucide-react";
 import React from "react";
 import { useProjectLive } from "@/ui_engine";
 import { toast } from "sonner";
+import { useHasMounted } from "@/hooks/use-hydration";
+import { useAppConfirm } from "@/hooks/use-app-confirm";
 
 interface ProjectChatSidebarProps {
   projectId: string;
@@ -27,18 +29,243 @@ export function ProjectChatSidebar({
 }: ProjectChatSidebarProps) {
   const [isPending, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasMounted = useHasMounted();
   const { comments, addOptimisticComment, replaceComment, removeComment, syncNow, isSidebarOpen, toggleSidebar } =
     useProjectLive();
   const [isDragOver, setIsDragOver] = React.useState(false);
-
+  const [lastReadAt, setLastReadAt] = useState<string>("");
+  const previousCommentIdsRef = useRef<string[] | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const isAudioUnlockedRef = useRef(false);
+  const appConfirm = useAppConfirm();
 
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const storageKey = useMemo(
+    () => `project-discussion-last-read:${projectId}:${currentUserId}`,
+    [currentUserId, projectId]
+  );
+
+  const latestCommentTimestamp = useMemo(() => {
+    const latestComment = comments[comments.length - 1];
+    return latestComment ? new Date(latestComment.created_at).toISOString() : "";
+  }, [comments]);
+
+  const unreadCount = useMemo(() => {
+    if (!lastReadAt) {
+      return 0;
+    }
+
+    const lastReadTime = new Date(lastReadAt).getTime();
+    if (Number.isNaN(lastReadTime)) {
+      return 0;
+    }
+
+    return comments.filter((comment) => {
+      if (comment.author_id === currentUserId) {
+        return false;
+      }
+
+      return new Date(comment.created_at).getTime() > lastReadTime;
+    }).length;
+  }, [comments, currentUserId, lastReadAt]);
+
+  const persistLastReadAt = React.useCallback(
+    (value: string) => {
+      setLastReadAt(value);
+      if (!hasMounted) {
+        return;
+      }
+
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(value));
+      } catch (error) {
+        console.error("Failed to persist discussion read state:", error);
+      }
+    },
+    [hasMounted, storageKey]
+  );
+
+  const markDiscussionAsRead = React.useCallback(() => {
+    if (!latestCommentTimestamp) {
+      return;
+    }
+
+    persistLastReadAt(latestCommentTimestamp);
+  }, [latestCommentTimestamp, persistLastReadAt]);
+
+  const playNotificationSound = React.useCallback(() => {
+    if (!hasMounted || !isAudioUnlockedRef.current) {
+      return;
+    }
+
+    try {
+      const AudioContextConstructor = window.AudioContext ?? (window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      }).webkitAudioContext;
+
+      if (!AudioContextConstructor) {
+        return;
+      }
+
+      const context = audioContextRef.current ?? new AudioContextConstructor();
+      audioContextRef.current = context;
+
+      if (context.state === "suspended") {
+        void context.resume().catch(() => undefined);
+      }
+
+      const now = context.currentTime;
+      const masterGain = context.createGain();
+      masterGain.gain.setValueAtTime(0.0001, now);
+      masterGain.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+      masterGain.connect(context.destination);
+
+      const createTone = (frequency: number, startAt: number, duration: number) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(frequency, startAt);
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(0.18, startAt + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+        oscillator.connect(gain);
+        gain.connect(masterGain);
+
+        oscillator.start(startAt);
+        oscillator.stop(startAt + duration);
+      };
+
+      createTone(880, now, 0.22);
+      createTone(659.25, now + 0.26, 0.3);
+    } catch (error) {
+      console.error("Failed to play discussion notification sound:", error);
+    }
+  }, [hasMounted]);
+
+  const unlockNotificationSound = React.useCallback(() => {
+    if (!hasMounted || isAudioUnlockedRef.current) {
+      return;
+    }
+
+    try {
+      const AudioContextConstructor = window.AudioContext ?? (window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      }).webkitAudioContext;
+
+      if (!AudioContextConstructor) {
+        return;
+      }
+
+      const context = audioContextRef.current ?? new AudioContextConstructor();
+      audioContextRef.current = context;
+
+      const finalizeUnlock = () => {
+        const now = context.currentTime;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(440, now);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.00015, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now);
+        oscillator.stop(now + 0.03);
+        isAudioUnlockedRef.current = true;
+      };
+
+      if (context.state === "suspended") {
+        void context.resume().then(finalizeUnlock).catch(() => undefined);
+        return;
+      }
+
+      finalizeUnlock();
+    } catch (error) {
+      console.error("Failed to unlock discussion notification sound:", error);
+    }
+  }, [hasMounted]);
+
+  useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
+    try {
+      const storedValue = window.localStorage.getItem(storageKey);
+      if (storedValue) {
+        setLastReadAt(JSON.parse(storedValue) as string);
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to restore discussion read state:", error);
+    }
+
+    persistLastReadAt(latestCommentTimestamp || new Date().toISOString());
+  }, [hasMounted, latestCommentTimestamp, persistLastReadAt, storageKey]);
+
+  useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
+    const handleInteraction = () => {
+      unlockNotificationSound();
+    };
+
+    window.addEventListener("pointerdown", handleInteraction, { passive: true });
+    window.addEventListener("keydown", handleInteraction);
+
+    return () => {
+      window.removeEventListener("pointerdown", handleInteraction);
+      window.removeEventListener("keydown", handleInteraction);
+    };
+  }, [hasMounted, unlockNotificationSound]);
 
   useEffect(() => {
     if (scrollRef.current && isSidebarOpen) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [comments, isSidebarOpen]);
+
+  useEffect(() => {
+    if (isSidebarOpen) {
+      markDiscussionAsRead();
+    }
+  }, [comments, isSidebarOpen, markDiscussionAsRead]);
+
+  useEffect(() => {
+    const previousCommentIds = previousCommentIdsRef.current;
+    const nextCommentIds = comments.map((comment) => comment.id);
+
+    if (previousCommentIds === null) {
+      previousCommentIdsRef.current = nextCommentIds;
+      return;
+    }
+
+    const previousCommentIdSet = new Set(previousCommentIds);
+    const incomingComments = comments.filter(
+      (comment) =>
+        !previousCommentIdSet.has(comment.id) && comment.author_id !== currentUserId
+    );
+
+    if (incomingComments.length > 0) {
+      playNotificationSound();
+    }
+
+    previousCommentIdsRef.current = nextCommentIds;
+  }, [comments, currentUserId, playNotificationSound]);
+
+  useEffect(() => {
+    return () => {
+      void audioContextRef.current?.close().catch(() => undefined);
+      audioContextRef.current = null;
+    };
+  }, []);
 
   // Click outside to close
   useEffect(() => {
@@ -103,7 +330,11 @@ export function ProjectChatSidebar({
   };
 
   const handleDelete = async (commentId: string) => {
-    if (!confirm("Are you sure you want to delete this message?")) return;
+    if (!(await appConfirm.confirm({
+      title: "Delete this message?",
+      description: "This message will be permanently removed from the project discussion.",
+      confirmLabel: "Delete message",
+    }))) return;
     
     startTransition(async () => {
       const deletedComment = comments.find((comment) => comment.id === commentId);
@@ -128,8 +359,14 @@ export function ProjectChatSidebar({
 
   // Re-write the render logic to be safer
   const toggleButton = (
-    <button 
-      onClick={toggleSidebar}
+      <button 
+      onClick={() => {
+        unlockNotificationSound();
+        toggleSidebar();
+        if (!isSidebarOpen) {
+          markDiscussionAsRead();
+        }
+      }}
       className={cn(
         "fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl hover:bg-slate-800 transition-transform active:scale-95",
         isSidebarOpen && "hidden" // Hide when sidebar is open
@@ -138,9 +375,9 @@ export function ProjectChatSidebar({
       title="Toggle project discussion"
     >
       <MessageSquare className="h-6 w-6" aria-hidden="true" />
-      {comments.length > 0 && (
+      {unreadCount > 0 && (
         <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold ring-2 ring-white">
-          {comments.length > 99 ? '99+' : comments.length}
+          {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}
     </button>
@@ -190,7 +427,7 @@ export function ProjectChatSidebar({
         
         await handlePost(`Attached file: ${attachment.filename}`, [attachment.id]);
         toast.success("File uploaded and posted");
-      } catch (error) {
+      } catch {
         toast.error("Failed to upload dropped file");
       }
     }
@@ -257,12 +494,14 @@ export function ProjectChatSidebar({
                     </p>
                   </div>
                 ) : (
-                  comments.map((comment) => (
-                    <CommentItem 
-                      key={comment.id} 
-                      comment={comment} 
+                  comments.map((comment, index) => (
+                    <CommentItem
+                      key={comment.id}
+                      comment={comment}
+                      prevComment={comments[index - 1]}
+                      currentUserId={currentUserId}
                       onDelete={handleDelete}
-                      canDelete={comment.author_id === currentUserId || userRole === "ADMIN"}
+                      canDelete={comment.author_id === currentUserId || userRole === "ADMIN" || userRole === "DEVELOPER"}
                     />
                   ))
                 )}
@@ -275,6 +514,7 @@ export function ProjectChatSidebar({
           </aside>
         )}
       </HydrationGuard>
+      {appConfirm.dialog}
     </>
   );
 }

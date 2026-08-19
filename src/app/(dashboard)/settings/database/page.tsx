@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Role } from "@/generated/prisma";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { getSession } from "@/lib/auth";
 import { DatabaseSettingsPanel } from "@/components/DatabaseSettingsPanel";
 import { SettingsShell } from "@/ui_engine";
@@ -11,7 +11,7 @@ export default async function DatabaseSettingsPage() {
     redirect("/login");
   }
 
-  if (role !== Role.ADMIN) {
+  if (!isAdminLevel(role)) {
     redirect("/settings/profile");
   }
 

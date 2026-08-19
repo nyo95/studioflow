@@ -2,6 +2,11 @@ import "server-only";
 
 import { prisma } from "@/core/platform/db";
 import { ACTIVITY_FETCH_LIMIT, MILLISECONDS_PER_DAY } from "@/lib/constants";
+import {
+  CHECKLIST_TASK_ORDER_BY,
+  CHECKLIST_TASK_SELECT,
+  toChecklistTask,
+} from "@/lib/services/checklist-task";
 import type { PhaseHeartbeatSnapshot } from "@/types/common";
 
 export type {
@@ -14,16 +19,14 @@ export async function getPhaseHeartbeatSnapshot(
   phaseId: string
 ): Promise<PhaseHeartbeatSnapshot> {
   try {
-    const [checklistItems, activeRevision] = await Promise.all([
+    const [checklistRows, activeRevision] = await Promise.all([
+      // Ordering and shape come from checklist-task.ts so that this and the
+      // project overview cannot drift apart again. This query used to say
+      // `orderBy: { id: "asc" }` over a UUID, which produced no order at all.
       prisma.projectChecklist.findMany({
         where: { phase_id: phaseId },
-        select: {
-          id: true,
-          label: true,
-          is_checked: true,
-          phase_id: true,
-        },
-        orderBy: { id: "asc" },
+        select: CHECKLIST_TASK_SELECT,
+        orderBy: CHECKLIST_TASK_ORDER_BY,
       }),
       prisma.revision.findFirst({
         where: { phase_id: phaseId, status_enum: "ACTIVE" },
@@ -46,7 +49,7 @@ export async function getPhaseHeartbeatSnapshot(
     ]);
 
     return {
-      checklistItems,
+      checklistItems: checklistRows.map(toChecklistTask),
       activities: activeRevision?.activities ?? [],
     };
   } catch (error) {

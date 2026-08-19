@@ -6,24 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { overrideRevision } from "@/actions/phase-actions";
 import { unwrapActionResult } from "@/lib/result";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Button, Input, Label, Checkbox, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui_engine";
 
 interface AdminRevisionOverrideProps {
   phaseId: string;

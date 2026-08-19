@@ -3,13 +3,14 @@
 import { createAction } from "@/lib/action-wrapper";
 import { auditService } from "@/core/platform/audit";
 import { assertAdmin, throwActionError } from "@/core/rbac/permissions";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { Role } from "@/generated/prisma";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_ACTIVITY, REVALIDATE_HOME, REVALIDATE_TODAY } from "@/lib/revalidation-tags";
 
 export const undoAction = createAction(
   async ({ input, ctx, tx }) => {
-    if (ctx.role !== Role.ADMIN && ctx.role !== Role.DIC) {
+    if (!isAdminLevel(ctx.role) && ctx.role !== Role.DIC) {
       throwActionError("UNAUTHORIZED_ACTION");
     }
 

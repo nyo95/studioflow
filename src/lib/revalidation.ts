@@ -25,6 +25,7 @@ export function invalidateCache(
     revalidatePath(`/projects/${options.id}`);
     revalidatePath(`/projects/${options.id}/activity`);
     revalidatePath(`/projects/${options.id}/extensions/product-catalog`);
+    revalidatePath(`/projects/${options.id}/mom`);
     return;
   }
 

@@ -1,4 +1,4 @@
-import { ProjectScheduleEntry, ProjectScheduleOption, PrefixDictionary, ProductType, ProductCatalog } from "@/generated/prisma";
+import { ProjectScheduleEntry, ProjectScheduleOption, PrefixDictionary, ProductType, Sku } from "@/generated/prisma";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
 export type { ScheduleSnapshot as ScheduleOptionSnapshot } from "@/lib/validations/schedule-snapshot";
 // export removed to avoid duplicate export; ScheduleSnapshot is re‑exported as ScheduleOptionSnapshot above
@@ -24,7 +24,17 @@ export type GradualFormData = {
   customData: GradualFormCustomData;
 };
 
-export type GradualFormProducts = Pick<ProductCatalog, "id" | "catalog_sku" | "catalog_product_name" | "catalog_brand" | "catalog_image_url">[];
+// `catalog_brand` is no longer a Sku column — the brand lives on its own row —
+// so the picker carries it as a resolved string alongside the Sku fields.
+// MASTER DATA v2 (2026-08-10): Sku no longer has catalog_sku/catalog_product_name/
+// catalog_image_url columns — those are legacy-named fields DERIVED by
+// `attachDerivedCatalogFields` (src/extensions/library/types.ts) from the v2
+// columns (code/name/media). Picked directly from Sku here since this type
+// only needs the id plus display strings.
+export type GradualFormProducts = (Pick<Sku, "id" | "code" | "name"> & {
+  catalog_brand: string | null;
+  catalog_image_url?: string | null;
+})[];
 
 
 export type ProjectScheduleOptionWithProduct = ProjectScheduleOption & {
@@ -32,7 +42,8 @@ export type ProjectScheduleOptionWithProduct = ProjectScheduleOption & {
     status: string;
     project_id: string;
   }[];
-  product_catalog?: (ProductCatalog & {
+  sku?: (Sku & {
+    catalog_brand?: string | null;
     product_requests?: {
       status: string;
       project_id: string;

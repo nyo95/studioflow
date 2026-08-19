@@ -3,20 +3,14 @@
 import { Role } from "@/generated/prisma";
 import {
   updateUserRole,
-  createUser
+  createUser,
+  deleteUser
 } from "@/actions/user-actions";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
+import { Input, Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui_engine";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
+import { Trash2 } from "lucide-react";
 
 export function UserManagement({ 
   allUsers, 
@@ -53,6 +47,22 @@ export function UserManagement({
         toast.success("Role updated");
       } catch {
         toast.error("Failed to update role");
+      }
+    });
+  }
+
+  async function handleDeleteUser(targetId: string, targetName: string) {
+    startTransition(async () => {
+      try {
+        unwrapActionResult(await deleteUser({ targetUserId: targetId }));
+        toast.success(`${targetName} removed. Their name stays on past records; re-add the same email to restore access.`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        toast.error(
+          message.includes("CANNOT_REMOVE_LAST_ADMIN")
+            ? "Can't remove the last admin/developer."
+            : "Failed to remove user"
+        );
       }
     });
   }
@@ -95,6 +105,7 @@ export function UserManagement({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ADMIN" className="text-[9px] font-bold uppercase tracking-widest">ADMIN</SelectItem>
+              <SelectItem value="DEVELOPER" className="text-[9px] font-bold uppercase tracking-widest">DEVELOPER</SelectItem>
               <SelectItem value="DIC" className="text-[9px] font-bold uppercase tracking-widest">DIC</SelectItem>
               <SelectItem value="DRIC" className="text-[9px] font-bold uppercase tracking-widest">DRIC</SelectItem>
               <SelectItem value="STAFF" className="text-[9px] font-bold uppercase tracking-widest">STAFF</SelectItem>
@@ -140,11 +151,24 @@ export function UserManagement({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ADMIN" className="text-[9px] font-bold uppercase tracking-widest">ADMIN</SelectItem>
+                      <SelectItem value="DEVELOPER" className="text-[9px] font-bold uppercase tracking-widest">DEVELOPER</SelectItem>
                       <SelectItem value="DIC" className="text-[9px] font-bold uppercase tracking-widest">DIC</SelectItem>
                       <SelectItem value="DRIC" className="text-[9px] font-bold uppercase tracking-widest">DRIC</SelectItem>
                       <SelectItem value="STAFF" className="text-[9px] font-bold uppercase tracking-widest">STAFF</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => handleDeleteUser(user.id, user.name)}
+                    aria-label={`Remove ${user.name}`}
+                    title="Remove user"
+                    className="h-7 w-7 p-0 text-slate-300 hover:text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               )}
             </div>

@@ -1,21 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, LayoutGrid, Lock, Settings, ShieldAlert } from "lucide-react";
+import { Calendar, LayoutGrid, ListTodo, Lock, Settings, ShieldAlert } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@/ui_engine";
 import { useStablePathname } from "@/hooks/use-stable-pathname";
 import { useSidebar } from "@/context/sidebar-context";
 import { EXTENSIONS } from "@/extensions/registry";
 import { cn } from "@/lib/utils";
 
+// Two task views, deliberately separate: `/` answers "what is on each of my
+// projects", `/upcoming` answers "what is due when". One list cannot answer both
+// without lying in its title, which is what "Today's View" used to do.
 const coreItems = [
   { icon: LayoutGrid, label: "Projects", href: "/projects" },
-  { icon: Calendar, label: "Today", href: "/" },
+  { icon: ListTodo, label: "Tasks", href: "/" },
+  { icon: Calendar, label: "Upcoming", href: "/upcoming" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
@@ -24,10 +28,10 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
   const { close, isOpen } = useSidebar();
 
   const items = [
-    ...coreItems.slice(0, 2),
+    ...coreItems.slice(0, 3),
     // for extension: library //
     ...EXTENSIONS,
-    ...coreItems.slice(2),
+    ...coreItems.slice(3),
   ];
 
   function isActiveHref(href: string) {
@@ -53,7 +57,7 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
           const itemContent = isDisabled ? (
             <div
               className={cn(
-                "group relative flex items-center rounded-[var(--ui-radius-control)] border border-transparent text-slate-400",
+                "group relative flex items-center rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))] border border-transparent text-slate-400",
                 showLabels
                   ? "h-11 gap-3 px-4 opacity-60"
                   : "h-12 w-12 justify-center opacity-45"
@@ -79,8 +83,8 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
                 "group flex items-center border transition-all duration-200",
                 showLabels ? "h-11 gap-3 px-4" : "h-12 w-12 justify-center",
                 isActive
-                  ? "border-transparent bg-slate-100 text-slate-900 rounded-[var(--ui-radius-control)]"
-                  : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-[var(--ui-radius-control)]"
+                  ? "border-transparent bg-slate-100 text-slate-900 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]"
+                  : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]"
               )}
             >
               <Icon className="h-5 w-5" />
@@ -112,7 +116,7 @@ export function NavOuter({ appTitle = "StudioFlow", userRole = "STAFF" }: { appT
   return (
     <TooltipProvider delayDuration={0}>
       <aside 
-        className="fixed left-0 top-14 bottom-0 z-30 hidden w-[78px] border-r border-[var(--ui-border-subtle)] bg-white/96 py-4 text-slate-500 backdrop-blur lg:block"
+        className="fixed left-0 top-14 bottom-0 z-30 hidden w-[78px] border-r border-[var(--ui-border-subtle,rgb(241_245_249))] bg-white/96 py-4 text-slate-500 backdrop-blur lg:block"
       >
         {renderNavList(false)}
       </aside>

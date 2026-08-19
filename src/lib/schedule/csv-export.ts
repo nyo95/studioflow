@@ -17,14 +17,15 @@ export function exportScheduleToCsv(
     "Unit",
     "Price",
     "Total",
+    "Notes",
     "Contact",
-    "Image URL"
+    "Image URL",
   ];
 
-  const rows = entries.map(entry => {
-    const finalOption = entry.options.find((o) => o.is_final);
+  const rows = entries.map((entry) => {
+    const finalOption = entry.options.find((option) => option.is_final);
     const snapshot = finalOption?.data_snapshot as unknown as ScheduleSnapshot | null;
-    
+
     return [
       `${entry.schedule_prefix}-${entry.schedule_increment}`,
       entry.schedule_category,
@@ -38,9 +39,10 @@ export function exportScheduleToCsv(
       entry.schedule_unit || "",
       snapshot?.catalog_price?.toString() || "0",
       ((entry.schedule_qty || 0) * (snapshot?.catalog_price || 0)).toString(),
+      snapshot?.catalog_notes || "",
       snapshot?.catalog_contact_name || "",
-      snapshot?.catalog_image_url || ""
-    ].map(v => `"${v.replace(/"/g, '""')}"`).join(",");
+      snapshot?.catalog_image_url || "",
+    ].map((value) => `"${value.replace(/"/g, '""')}"`).join(",");
   });
 
   return [headers.join(","), ...rows].join("\n");

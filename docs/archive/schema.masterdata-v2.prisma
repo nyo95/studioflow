@@ -1,0 +1,855 @@
+// =============================================================================
+// MASTER DATA v2 — DRAFT SKEMA (belum diterapkan)
+// =============================================================================
+// Status : RANCANGAN. Bukan schema aktif. Tidak dibaca `prisma generate`.
+// Sumber : `design database masterdata.xlsx` (Table 1–4) + audit schema v1.
+// Doc    : `docs/PLAN-MASTERDATA-V2.md` — alasan tiap keputusan ada di sana.
+//
+// Cara memvalidasi berkas ini sendirian:
+//   npx prisma validate --schema prisma/schema.masterdata-v2.prisma
+//
+// Berkas ini sengaja SELF-CONTAINED: tidak ada satu pun FK yang menyeberang ke
+// schema `studioflow`. Itu bukan kebetulan — lihat §Arah Strategis roadmap poin
+// 2 ("StudioFlow diputus dari Library/Master Data"). Rujukan lintas app disimpan
+// sebagai kolom id biasa + snapshot nama, bukan relasi.
+//
+// -----------------------------------------------------------------------------
+// APA YANG BOLEH DIBACA SIAPA — keputusan owner 2026-08-10
+// -----------------------------------------------------------------------------
+// StudioFlow membaca TEPAT SATU view: `v_library_brand` (Table 1 kolom A–G).
+// Card brand + link, untuk menjawab "gw mau cari terazzo, merek apa aja ya?".
+//
+// StudioFlow TIDAK BOLEH membaca `Sku`, `SkuPrice`, `WorkPrice`, `PartyContact`,
+// maupun `Sample` — termasuk dari Schedule dan SketchUp. Pemilihan produk di
+// Schedule akan memakai library milik StudioFlow sendiri atau salinan snapshot
+// antar proyek, bukan Master Data.
+//
+// BQ membaca `v_bq_material_rate` dan `v_bq_work_rate`. Belum dibangun.
+//
+// Hanya app Master Data yang MENULIS ke schema ini.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/masterdata-v2"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["master_data"]
+}
+
+// =============================================================================
+// 1. PARTY — satu tabel entitas bisnis, banyak peran
+// =============================================================================
+// Menggantikan v1: Company + ServiceVendor + kolom teks bebas
+// `MaterialPrice.supplied_by` / `Sku.catalog_*`.
+//
+// Excel Table 1 kolom J ("Supplier's Company") dan K ("Company Categories:
+// supplier, subcon, vendor, retail store, manufacture") menggambarkan SATU
+// entitas dengan BANYAK peran, bukan beberapa jenis entitas. Ace Hardware bisa
+// jadi RETAIL hari ini dan SUBCON besok; TACO adalah MANUFACTURER yang juga
+// menjual langsung. Tabel terpisah per peran memaksa baris ganda dan
+// menggandakan kontak serta link yang sama.
+//
+// Ongkosnya jujur: integritas peran tidak lagi dijamin FK. Tidak ada yang
+// menghalangi Party ber-peran MANUFACTURER saja dipasang sebagai supplier di
+// SkuPrice. Penjaganya di service layer + CHECK constraint opsional (lihat doc).
+
+model Party {
+  id String @id @default(uuid())
+
+  /// Nama dagang — yang dipakai orang menyebutnya. "TACO", "BDA Group",
+  /// "Ace Hardware", "Andi". Excel Table 1 kolom B.
+  name String @unique
+
+  /// Slug ternormalisasi untuk dedup & pencarian. Diturunkan dari `name`,
+  /// jangan pernah diketik manual.
+  slug String @unique
+
+  /// Badan hukum terdaftar — "PT Tangkas Cipta Optimal", "PT BDA Sejahtera".
+  /// Excel Table 1 kolom A. NULL kalau tidak diketahui; JANGAN pernah menyalin
+  /// `name` ke sini (cacat yang sudah pernah terjadi di v1 pada Brand).
+  legal_name String?
+
+  /// Perorangan atau badan usaha. Excel Table 3/4 mencantumkan "rahmat",
+  /// "Tukang", "Andi" sebagai vendor — mereka bukan perusahaan, dan memaksa
+  /// mereka masuk tabel bernama Company adalah bohong yang murah dihindari.
+  type PartyType @default(COMPANY)
+
+  address String?
+  notes   String?
+
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime? @updatedAt
+  deleted_at DateTime?
+
+  /// Denormalisasi untuk kolom "Update by" di layar daftar tanpa join audit.
+  updated_by_name String?
+
+  roles    PartyRole[]
+  contacts PartyContact[]
+  links    PartyLink[]
+
+  owned_brands     Brand[]         @relation("BrandOwner")
+  supplied_brands  BrandSupplier[]
+  supplied_prices  SkuPrice[]      @relation("SkuPriceSupplier")
+  work_prices      WorkPrice[]     @relation("WorkPriceVendor")
+
+  @@index([type])
+  @@index([is_active])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+model PartyRole {
+  id       String        @id @default(uuid())
+  party_id String
+  role     PartyRoleKind
+  notes    String?
+
+  party Party @relation(fields: [party_id], references: [id], onDelete: Cascade)
+
+  /// Satu peran satu kali. Bukan array di Party: array tidak bisa di-FK, tidak
+  /// bisa diberi catatan per peran, dan filter "semua supplier" jadi scan.
+  @@unique([party_id, role])
+  @@index([role])
+  @@schema("master_data")
+}
+
+model PartyContact {
+  id       String @id @default(uuid())
+  party_id String
+
+  /// Excel Table 1 kolom H ("Sales Name").
+  person_name String
+  job_title   String?
+
+  /// TEXT selamanya. Jangan pernah di-parse atau diformat ulang: angka nol di
+  /// depan bermakna, dan satu field sah berisi beberapa nomor sekaligus.
+  /// Excel Table 1 kolom I.
+  phone String?
+  email String?
+
+  is_primary Boolean @default(false)
+  notes      String?
+
+  /// Kontak yang khusus menangani satu merek di perusahaan ini — "sales TACO
+  /// di Ace Hardware". NULL berarti kontak umum perusahaan.
+  ///
+  /// Kolom ini menutup celah nyata: v1 punya `BrandContact` (kontak melekat
+  /// pada merek) dan `CompanyContact` (kontak melekat pada badan usaha) dan
+  /// tidak bisa menyatakan yang di antara keduanya. Excel menaruh "Sales Name"
+  /// di grup **Supplier Information** — jadi kontaknya milik penjual — tetapi
+  /// yang ditanyakan orang selalu "siapa sales untuk merek ini". Keduanya
+  /// benar; yang dibutuhkan cakupan opsional, bukan tabel ketiga.
+  brand_id String?
+  brand    Brand?  @relation(fields: [brand_id], references: [id], onDelete: SetNull)
+
+  party Party @relation(fields: [party_id], references: [id], onDelete: Cascade)
+
+  @@index([party_id])
+  @@index([brand_id])
+  @@schema("master_data")
+}
+
+model PartyLink {
+  id       String   @id @default(uuid())
+  party_id String
+  kind     LinkKind
+  url      String
+
+  /// Salinan arsip milik kantor (mis. PDF di Drive), supaya link brand yang
+  /// mati tidak mematikan katalog. `url` tetap sumber asal; `archive_url` yang
+  /// dirender saat keduanya ada.
+  archive_url String?
+  label       String?
+  sort_order  Int     @default(0)
+
+  party Party @relation(fields: [party_id], references: [id], onDelete: Cascade)
+
+  /// URL yang sama dua kali pada satu Party adalah salah ketik, bukan dua link.
+  /// `kind` sengaja BUKAN bagian kunci: satu URL diklasifikasikan sekali.
+  @@unique([party_id, url])
+  @@index([party_id, kind])
+  @@schema("master_data")
+}
+
+// =============================================================================
+// 2. BRAND — merek produk, milik sebuah Party
+// =============================================================================
+// Excel Table 1 kolom C ("Product Brand": Valpra, TACO - HPL).
+//
+// Catatan pembacaan Excel: kolom A + B ("PT BDA Sejahtera" + "BDA Group")
+// BUKAN dua entitas. Keduanya satu Party — legal_name + name. Yang jadi Brand
+// hanya kolom C. Membuat tiga level (Company → Brand → ProductBrand) akan
+// menghasilkan satu level yang selamanya berisi duplikat nama induknya.
+
+model Brand {
+  id String @id @default(uuid())
+
+  name String @unique
+  slug String @unique
+
+  /// Pemilik merek. NULLABLE: merek generik ("plywood lokal") tidak punya
+  /// badan usaha, dan memaksa relasi ini akan melahirkan Party palsu.
+  owner_party_id String?
+  owner          Party?  @relation("BrandOwner", fields: [owner_party_id], references: [id], onDelete: SetNull)
+
+  notes String?
+
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  categories BrandCategory[]
+  skus       Sku[]
+  links      BrandLink[]
+  suppliers  BrandSupplier[]
+
+  /// Kontak yang cakupannya khusus merek ini — lihat PartyContact.brand_id.
+  scoped_contacts PartyContact[]
+
+  @@index([owner_party_id])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+model BrandLink {
+  id       String   @id @default(uuid())
+  brand_id String
+  kind     LinkKind
+  url      String
+
+  archive_url String?
+  label       String?
+  sort_order  Int     @default(0)
+
+  brand Brand @relation(fields: [brand_id], references: [id], onDelete: Cascade)
+
+  /// Katalog harga yang jadi sumber angka di SkuPrice.
+  price_sources SkuPrice[] @relation("SkuPriceSourceLink")
+
+  @@unique([brand_id, url])
+  @@index([brand_id, kind])
+  @@schema("master_data")
+}
+
+/// Siapa menjual merek apa. Many-to-many: satu toko menjual banyak merek, satu
+/// merek dijual banyak toko. Di v1 ini teks bebas dan karena itu tidak bisa
+/// dijawab pertanyaan "TACO bisa dibeli di mana saja".
+model BrandSupplier {
+  id       String @id @default(uuid())
+  brand_id String
+  party_id String
+
+  /// Distributor resmi vs toko yang kebetulan menjualnya.
+  is_authorized Boolean @default(false)
+  notes         String?
+
+  brand Brand @relation(fields: [brand_id], references: [id], onDelete: Cascade)
+  party Party @relation(fields: [party_id], references: [id], onDelete: Cascade)
+
+  @@unique([brand_id, party_id])
+  @@index([party_id])
+  @@schema("master_data")
+}
+
+// =============================================================================
+// 3. CATEGORY — satu pohon, menggantikan enam kolom kategori teks bebas
+// =============================================================================
+// Excel memunculkan pasangan dua tingkat berulang kali dengan nama berbeda:
+//   Table 1 : Category (brand)
+//   Table 2 : Material  + Category      ("HPL" di bawah "Bahan Baku")
+//   Table 3 : Vendor Category + Category ("Lighting" di bawah "MEP")
+//   Table 4 : Vendor Category + Category ("Furniture" di bawah "Furniture")
+//
+// v1 memodelkan ini sebagai enam kolom String terpisah plus satu tabel
+// Category ber-slug yang tidak terhubung ke satupun di antaranya (lihat
+// roadmap §T2). Akibatnya "MEP" di ServicePrice dan "MEP" di MaterialLaborPrice
+// adalah dua string yang kebetulan sama.
+//
+// Satu pohon self-referencing menutup semuanya, berapa pun dalamnya, dan
+// mengubah "ganti nama kategori" dari migrasi data jadi satu UPDATE.
+
+model Category {
+  id String @id @default(uuid())
+
+  name String
+  slug String
+
+  /// Domain pohon. Kategori produk dan kategori pekerjaan hidup di tabel yang
+  /// sama tapi tidak boleh saling terlihat di picker.
+  kind CategoryKind
+
+  parent_id String?
+  parent    Category?  @relation("CategoryTree", fields: [parent_id], references: [id], onDelete: Restrict)
+  children  Category[] @relation("CategoryTree")
+
+  /// Jalur materialized ("mep/lighting") — dirawat aplikasi. Ada supaya
+  /// breadcrumb dan filter "semua turunan MEP" tidak butuh recursive CTE di
+  /// jalur baca yang panas.
+  path String?
+
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true)
+
+  created_at DateTime  @default(now())
+  updated_at DateTime? @updatedAt
+
+  brands      BrandCategory[]
+  skus        SkuCategory[]
+  work_prices WorkPrice[]
+
+  /// Kunci sengaja `[kind, slug]` GLOBAL, bukan `[parent_id, slug]`.
+  /// Di Postgres NULL tidak sama dengan NULL, jadi `[parent_id, slug]` TIDAK
+  /// akan mencegah dua kategori akar bernama sama — jebakan senyap yang mahal
+  /// ditemukan belakangan. Konsekuensi yang diterima: slug unik se-domain,
+  /// sehingga "Lighting" tidak bisa muncul di dua induk berbeda tanpa slug
+  /// yang dibedakan ("lighting-mep" vs "lighting-furniture").
+  @@unique([kind, slug])
+  @@index([kind, parent_id, sort_order])
+  @@index([path])
+  @@schema("master_data")
+}
+
+model BrandCategory {
+  id          String @id @default(uuid())
+  brand_id    String
+  category_id String
+  sort_order  Int    @default(0)
+
+  /// Dari mana baris ini datang. Menjawab roadmap §A4: baris hasil kurasi
+  /// (SEED) tidak boleh terhapus saat rekonsiliasi terhadap tag SKU, dan di v1
+  /// keduanya tidak bisa dibedakan.
+  source     CategorySource @default(DERIVED_FROM_SKU)
+  created_at DateTime       @default(now())
+
+  brand    Brand    @relation(fields: [brand_id], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
+
+  @@unique([brand_id, category_id])
+  @@index([category_id])
+  @@index([brand_id, sort_order])
+  @@schema("master_data")
+}
+
+model SkuCategory {
+  id          String @id @default(uuid())
+  sku_id      String
+  category_id String
+
+  /// Kategori utama untuk Schedule. v1 memakai konvensi "tag pertama adalah
+  /// yang utama" — konvensi urutan yang rusak tanpa suara begitu ada yang
+  /// menyortir ulang. Flag eksplisit tidak bisa rusak diam-diam.
+  /// Keunikannya butuh partial unique index (lihat SQL di doc §Migrasi).
+  is_primary Boolean @default(false)
+  sort_order Int     @default(0)
+  created_at DateTime @default(now())
+
+  sku      Sku      @relation(fields: [sku_id], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
+
+  @@unique([sku_id, category_id])
+  @@index([category_id])
+  @@index([sku_id, sort_order])
+  @@schema("master_data")
+}
+
+// =============================================================================
+// 4. SKU — identitas produk, TANPA harga
+// =============================================================================
+// Excel Table 2 mencampur dua hal yang berubah dengan kecepatan berbeda:
+// identitas produk (SKU, brand, kategori, spesifikasi, dimensi) dan syarat
+// dagang (harga, unit, dibeli di mana, kapan). Memisahkannya adalah keuntungan
+// terbesar dari rombakan ini — lihat SkuPrice.
+
+model Sku {
+  id String @id @default(uuid())
+
+  /// Kode artikel pabrikan. "TH 231 AC". Excel Table 2 kolom A bagian pertama.
+  ///
+  /// NULLABLE — keputusan owner 2026-08-10 (Q7).
+  /// `docs/masterdata-seed/BUILD_SUMMARY.json` mencatat
+  /// `source_has_explicit_sku_column: false` dan `fake_sku_generation: false`:
+  /// workbook sumbernya tidak punya kolom SKU, dan impor 31 Juli sengaja
+  /// menolak mengarangnya. Excel baru pun begitu — `TH 231 AC` punya kode,
+  /// `plywood 9mm` tidak.
+  ///
+  /// Kode artikel pabrikan adalah FAKTA TENTANG BARANG, bukan KUNCI BASIS DATA.
+  /// Mewajibkannya memaksa mengarang fakta. Keunikannya di mana ia terisi
+  /// dijaga partial unique index (lihat migrasi).
+  code String?
+
+  /// Nama produk / motif. "ANDESH WALNUT", "Plywood 9mm".
+  name String
+
+  /// Identitas kanonik. Diturunkan dari `name`, tidak pernah diketik.
+  /// Inilah kunci yang menggantikan `code` setelah Q7 — lihat @@unique di bawah.
+  slug String
+
+  /// NULLABLE — perubahan penting dari v1 yang mewajibkannya.
+  /// Excel Table 2 kolom D menyatakan eksplisit: "apabila tidak ada brand bisa
+  /// dikosongkan", dan contohnya (plywood 9mm, brand "-") membuktikan barang
+  /// generik memang harus bisa disimpan. v1 memaksa brand_id dan itu yang
+  /// melahirkan brand sampah bernama "-".
+  brand_id String?
+  brand    Brand?  @relation(fields: [brand_id], references: [id], onDelete: Restrict)
+
+  kind   SkuKind   @default(MATERIAL)
+  status SkuStatus @default(DRAFT)
+
+  /// Excel Table 2 kolom E–F ("Specification 1/2", "bisa disimpan dalam json
+  /// apabila ada lebih dari 2 keterangan"). JSONB + index GIN: bisa dicari,
+  /// tidak butuh migrasi tiap kali muncul atribut baru.
+  /// Bentuk: {"birch": "...", "bending": "..."} — key bebas, value string.
+  spec Json?
+
+  /// Excel Table 2 kolom G. Disimpan NUMERIK, bukan satu string "1220 x 2440
+  /// mm": BQ menghitung m2 dari sini. `dim_display` adalah cache tampilan.
+  dim_length  Decimal? @db.Decimal(12, 3)
+  dim_width   Decimal? @db.Decimal(12, 3)
+  dim_height  Decimal? @db.Decimal(12, 3)
+  dim_unit    String?  @default("mm")
+  dim_display String?
+
+  /// Satuan kanonik produk. WAJIB, tanpa default — harga tanpa satuan tidak
+  /// bisa diestimasi, dan satuan tebakan merusak BQ tanpa suara.
+  base_unit String
+
+  notes String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  categories SkuCategory[]
+  media      SkuMedia[]
+  prices     SkuPrice[]
+  samples    Sample[]
+
+  /// Identitas kanonik: satu nama produk sekali per merek. Menggantikan
+  /// `[brand_id, code]` setelah `code` jadi nullable (Q7).
+  ///
+  /// Untuk SKU tanpa brand (brand_id NULL) keunikan TIDAK terjaga di sini —
+  /// NULL berbeda dari NULL di Postgres. Ditutup partial unique index di
+  /// migrasi, bersama keunikan `code` di mana ia terisi.
+  @@unique([brand_id, slug])
+  @@index([brand_id])
+  @@index([kind, status])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+/// v1 menaruh lima kolom URL di tabel Sku (image, thumbnail, original,
+/// reference, folder). Lima kolom berarti tepat satu foto per produk, dan
+/// menambah jenis media keenam berarti migrasi.
+model SkuMedia {
+  id         String    @id @default(uuid())
+  sku_id     String
+  kind       MediaKind
+  url        String
+  label      String?
+  sort_order Int       @default(0)
+  created_at DateTime  @default(now())
+
+  sku Sku @relation(fields: [sku_id], references: [id], onDelete: Cascade)
+
+  @@unique([sku_id, url])
+  @@index([sku_id, kind, sort_order])
+  @@schema("master_data")
+}
+
+// =============================================================================
+// 5. SKUPRICE — harga per (SKU × supplier × periode)
+// =============================================================================
+// Excel Table 2 kolom H–K. Tiga hal yang v1 tidak bisa jawab dan ini bisa:
+//   1. "Barang ini di toko mana paling murah?"      → banyak baris per SKU
+//   2. "Harga tahun lalu berapa?"                    → valid_from/valid_to
+//   3. "Kenapa angkanya berubah?"                    → source_link + audit
+// Di v1 harga adalah kolom di dalam produk, jadi menyimpan harga baru berarti
+// menghapus harga lama.
+
+model SkuPrice {
+  id     String @id @default(uuid())
+  sku_id String
+  sku    Sku    @relation(fields: [sku_id], references: [id], onDelete: Cascade)
+
+  /// Excel Table 2 kolom K ("Supplied by — dibeli dimana"). NULLABLE: harga
+  /// list dari pabrikan sah ada tanpa toko.
+  supplier_party_id String?
+  supplier          Party?  @relation("SkuPriceSupplier", fields: [supplier_party_id], references: [id], onDelete: SetNull)
+
+  /// Decimal, BUKAN Float. v1 memakai Float di 10 kolom uang; penjumlahan
+  /// float mengakumulasi galat pembulatan dan BQ adalah dokumen komersial yang
+  /// angkanya ditandatangani orang.
+  price_list Decimal? @db.Decimal(16, 2)
+  price_net  Decimal  @db.Decimal(16, 2)
+  currency   String   @default("IDR")
+
+  /// Satuan jual di supplier ini — boleh berbeda dari `Sku.base_unit`
+  /// (mis. produk per m2, toko menjual per lembar).
+  unit String
+
+  /// Excel Table 2 kolom "Qty", ditandai penulisnya sendiri "(need curations)".
+  ///
+  /// ⚠️ DISIMPAN TAPI TIDAK DIPAKAI — keputusan owner 2026-08-10 (Q12):
+  /// *"simpan saja tapi tidak usah dipakai, soalnya memang kurang jelas utk apa
+  /// kolom ini."*
+  ///
+  /// Aturannya, dan ini yang menjaga kolom ini tetap tidak berbahaya:
+  ///   - Tidak boleh masuk perhitungan apa pun. `price` selalu berarti harga
+  ///     per satu `unit`, terlepas dari isi kolom ini.
+  ///   - Tidak boleh diekspos ke view BQ maupun Library.
+  ///   - Hanya tampil di form Master Data sebagai kolom catatan.
+  ///
+  /// Draft sebelumnya menafsirkannya sebagai ukuran kemasan (`pack_size`) dan
+  /// memberinya default 1. Tafsir itu dibuang: menebak arti sebuah kolom lalu
+  /// memakainya dalam hitungan adalah cara paling senyap merusak angka. Kolom
+  /// yang jujur tidak diketahui artinya lebih aman daripada kolom yang salah
+  /// diartikan.
+  qty Decimal? @db.Decimal(12, 3)
+
+  valid_from DateTime @default(now())
+  valid_to   DateTime?
+
+  /// Denormalisasi sengaja. Tanpanya "harga berlaku sekarang" butuh window
+  /// function di tiap pembacaan katalog. Dijaga partial unique index.
+  is_current Boolean @default(true)
+
+  /// Dokumen sumber angka ini — link ber-kind PRICE_LIST di brand.
+  source_link_id String?
+  source_link    BrandLink? @relation("SkuPriceSourceLink", fields: [source_link_id], references: [id], onDelete: SetNull)
+
+  notes String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  updated_by_name String?
+
+  @@index([sku_id, is_current])
+  @@index([supplier_party_id])
+  @@index([valid_from])
+  @@schema("master_data")
+}
+
+// =============================================================================
+// 6. WORKPRICE — Table 3 + Table 4 digabung
+// =============================================================================
+// KEPUTUSAN (menjawab pertanyaan di Excel):
+//
+// Kedua blok di Excel punya struktur identik kecuali blok kedua menambah kolom
+// "Items". Kolom itu bukan konsep baru — ia adalah NAMA PEKERJAAN, slot yang di
+// blok pertama terisi di "Specification 1" ("Penarikan kabel CAT"). Jadi:
+//
+//   → JANGAN tambah kolom "Items" di keduanya.
+//   → JANGAN taruh nama pekerjaan di JSON `spec` — ia wajib, dicari, dan
+//     ditampilkan; atribut wajib tidak boleh tinggal di JSON.
+//   → Satu kolom `name` wajib di kedua kasus. `spec` tetap untuk keterangan
+//     tambahan (CAT 6, H 20-50) yang jumlahnya tidak tetap.
+//
+// Dan Table 3 vs Table 4 bukan dua tabel: bedanya hanya ADA TIDAKNYA komponen
+// material. Itu perbedaan DATA, bukan STRUKTUR. Dua tabel dengan kolom identik
+// akan memaksa setiap pembaca BQ meng-UNION keduanya selamanya.
+//
+//   material_price NULL/0 → Table 4 (upah murni)
+//   material_price terisi → Table 3 (material + upah)
+
+model WorkPrice {
+  id String @id @default(uuid())
+
+  /// Kode stabil yang dirujuk baris BQ, mis. "MEP-LGT-CAT6".
+  code String @unique
+
+  /// Nama pekerjaan. "Penarikan kabel CAT", "Screeding Base", "Meja 10x10".
+  /// Inilah jawaban kolom "Items" di Excel.
+  name String
+
+  /// Daun pohon kategori kind=WORK. Induknya adalah "Vendor Category" di
+  /// Excel (MEP, Sipil, Furniture) — tidak lagi kolom string kedua.
+  category_id String
+  category    Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
+
+  /// Excel Table 3/4 kolom C ("Vendor Name"). NULLABLE: kantor juga menyimpan
+  /// tarif internalnya sendiri yang bukan milik vendor manapun.
+  vendor_party_id String?
+  vendor          Party?  @relation("WorkPriceVendor", fields: [vendor_party_id], references: [id], onDelete: SetNull)
+
+  /// Spesifikasi tambahan berjumlah tidak tetap. {"spec_1":"CAT 6"}.
+  spec Json?
+
+  /// Pekerjaan jarang punya dimensi terstruktur; contoh Excel-nya "-".
+  dim_display String?
+
+  unit String
+
+  material_price Decimal? @db.Decimal(16, 2)
+  labor_price    Decimal? @db.Decimal(16, 2)
+
+  /// Turunan material + labor. Disimpan supaya BQ membaca satu kolom, dan
+  /// dijadikan GENERATED ALWAYS AS ... STORED di migrasi supaya tidak mungkin
+  /// menyimpang dari kedua komponennya. Prisma memperlakukannya read-only.
+  total_price Decimal? @db.Decimal(16, 2)
+
+  currency String @default("IDR")
+
+  /// Apa yang termasuk dan tidak termasuk dalam tarif. Di sinilah ambiguitas
+  /// ditaruh, alih-alih dipipihkan ke dalam angkanya.
+  scope_note String?
+  notes      String?
+
+  valid_from DateTime  @default(now())
+  valid_to   DateTime?
+  is_current Boolean   @default(true)
+  is_active  Boolean   @default(true)
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  project_refs WorkPriceProjectRef[]
+
+  @@index([category_id])
+  @@index([vendor_party_id])
+  @@index([is_current, is_active])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+/// Excel Table 3/4 kolom "Project Reference": "Sociolla SPZ, Sociolla GI, dst"
+/// — daftar dipisah koma di dalam satu sel. Dinormalisasi jadi baris.
+///
+/// `project_id` sengaja KOLOM BIASA, bukan FK ke studioflow.Project. Roadmap
+/// §Arah Strategis poin 2 memutus ketergantungan langsung master_data →
+/// studioflow; FK di sini akan mengembalikannya lewat pintu belakang.
+/// `project_name` adalah snapshot supaya rujukan tetap terbaca kalau proyeknya
+/// dihapus — persis alasan `updated_by_name` bukan FK ke User.
+model WorkPriceProjectRef {
+  id            String @id @default(uuid())
+  work_price_id String
+
+  project_id   String
+  project_name String
+
+  used_at DateTime?
+  notes   String?
+
+  work_price WorkPrice @relation(fields: [work_price_id], references: [id], onDelete: Cascade)
+
+  @@unique([work_price_id, project_id])
+  @@index([project_id])
+  @@schema("master_data")
+}
+
+// =============================================================================
+// 7. SAMPLE — perpustakaan fisik
+// =============================================================================
+// TIDAK ada di Excel. Dipertahankan dari v1 dengan sengaja, bukan karena
+// terlewat: rak/box sample adalah fungsi bisnis nyata yang berjalan hari ini.
+// Dicatat di sini supaya keputusannya terlihat, bukan tersembunyi.
+
+model Sample {
+  id     String @id @default(uuid())
+  sku_id String
+  sku    Sku    @relation(fields: [sku_id], references: [id], onDelete: Restrict)
+
+  rack_number   String
+  box_number    String
+  location_note String?
+  quantity      Int          @default(1)
+  status        SampleStatus @default(AVAILABLE)
+
+  /// Teks bebas: peminjam termasuk klien dan kontraktor yang tidak punya akun.
+  borrower_name String?
+  borrowed_at   DateTime?
+  due_at        DateTime?
+  notes         String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime? @updatedAt
+
+  /// Soft delete: SampleMovement cascade, jadi hard delete akan memusnahkan
+  /// riwayat pinjam-kembali yang justru alasan register ini ada.
+  deleted_at DateTime?
+
+  movements SampleMovement[]
+
+  @@index([sku_id])
+  @@index([status])
+  @@index([rack_number, box_number])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+model SampleMovement {
+  id          String       @id @default(uuid())
+  sample_id   String
+  action      SampleAction
+  notes       String?
+
+  /// id user studioflow. Kolom biasa, bukan relasi — dua alasan sekaligus:
+  /// riwayat harus selamat saat user dihapus, dan master_data tidak boleh
+  /// menyeberang ke studioflow.
+  actor_id   String?
+  actor_name String
+
+  taken_by    String?
+  date_out    DateTime?
+  date_return DateTime?
+  created_at  DateTime  @default(now())
+
+  sample Sample @relation(fields: [sample_id], references: [id], onDelete: Cascade)
+
+  @@index([sample_id, created_at])
+  @@schema("master_data")
+}
+
+// =============================================================================
+// 8. AUDIT — menggantikan pasangan kolom "Update by / Update Time"
+// =============================================================================
+// Excel meminta kolom itu di keempat tabel. Kolom denormalisasi tetap ada di
+// tiap entitas (`updated_by_name`, `updated_at`) supaya daftar tidak perlu
+// join. Tabel ini menyimpan RIWAYATNYA — yang kolom tidak bisa lakukan, karena
+// update berikutnya menimpanya.
+
+model MasterDataAudit {
+  id String @id @default(uuid())
+
+  /// Nama model, mis. "SkuPrice".
+  entity    String
+  entity_id String
+  action    AuditAction
+
+  actor_id   String?
+  actor_name String
+
+  /// Diff bentuk {"field": {"from": x, "to": y}}. Hanya field yang berubah.
+  changes Json?
+
+  created_at DateTime @default(now())
+
+  @@index([entity, entity_id, created_at])
+  @@index([created_at])
+  @@schema("master_data")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum PartyType {
+  COMPANY
+  INDIVIDUAL
+
+  @@schema("master_data")
+}
+
+/// Excel Table 1 kolom K: "supplier, subcon, vendor, retail store, manufacture".
+enum PartyRoleKind {
+  MANUFACTURER
+  DISTRIBUTOR
+  SUPPLIER
+  RETAIL
+  SUBCON
+  SERVICE_VENDOR
+
+  @@schema("master_data")
+}
+
+enum LinkKind {
+  WEBSITE
+  INSTAGRAM
+  FACEBOOK
+  TIKTOK
+  YOUTUBE
+  LINKEDIN
+  WHATSAPP
+  MARKETPLACE
+  /// Excel Table 1 kolom E ("Google Drive URL").
+  DRIVE
+  CATALOG
+  /// Master Data-only. Tidak pernah masuk allowlist StudioFlow — daftar harga
+  /// bukan katalog.
+  PRICE_LIST
+  OTHER
+
+  @@schema("master_data")
+}
+
+enum CategoryKind {
+  /// Pohon kategori produk: Bahan Baku → HPL, Plywood, Sink.
+  PRODUCT
+  /// Pohon kategori pekerjaan: MEP → Lighting; Sipil → Floor Works.
+  WORK
+
+  @@schema("master_data")
+}
+
+enum CategorySource {
+  /// Ditetapkan manusia lewat kurasi. Rekonsiliasi otomatis tidak boleh
+  /// menghapusnya (roadmap §A4).
+  SEED
+  /// Diturunkan dari kategori SKU milik brand. Boleh direkonsiliasi.
+  DERIVED_FROM_SKU
+
+  @@schema("master_data")
+}
+
+enum SkuKind {
+  MATERIAL
+  FURNITURE
+  FIXTURE
+  SERVICE
+
+  @@schema("master_data")
+}
+
+enum SkuStatus {
+  DRAFT
+  ACTIVE
+  DISCONTINUED
+
+  @@schema("master_data")
+}
+
+enum MediaKind {
+  IMAGE
+  THUMBNAIL
+  ORIGINAL
+  REFERENCE
+  FOLDER
+
+  @@schema("master_data")
+}
+
+enum SampleStatus {
+  AVAILABLE
+  BORROWED
+  LOST
+  DISCARDED
+
+  @@schema("master_data")
+}
+
+enum SampleAction {
+  IN
+  OUT
+  RETURN
+  ADJUST
+
+  @@schema("master_data")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+
+  @@schema("master_data")
+}

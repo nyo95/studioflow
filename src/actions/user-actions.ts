@@ -58,6 +58,22 @@ export const updateUserRole = createAction(
   }
 );
 
+export const deleteUser = createAction(
+  async ({ input, ctx, tx }) => {
+    assertAdmin(ctx.role);
+
+    const params = input as { targetUserId: string };
+
+    const result = await userService.executeDeleteUser(tx, {
+      targetUserId: params.targetUserId,
+      actorId: ctx.userId,
+    });
+
+    invalidateCache({ scope: REVALIDATE_SETTINGS });
+    return result;
+  }
+);
+
 export const updateUserName = createAction(
   async ({ input, ctx, tx }) => {
     const params = input as { userId: string; newName: string };

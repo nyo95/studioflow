@@ -43,6 +43,11 @@ export async function getCroppedImg(
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
 
+  // When the crop is zoomed out past the image edge, the extra area would be
+  // transparent → black in JPEG. Fill white so the padding stays clean.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   ctx.drawImage(
     image,
     pixelCrop.x,

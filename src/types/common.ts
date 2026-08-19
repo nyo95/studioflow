@@ -35,12 +35,12 @@ export const defaultUISettings: UISettings = {
   radiusAction: "0.25rem",
 };
 
-export interface PhaseHeartbeatChecklistItem {
-  id: string;
-  label: string;
-  is_checked: boolean;
-  phase_id: string | null;
-}
+/**
+ * Alias, kept so the many existing `PhaseHeartbeatChecklistItem` imports keep
+ * resolving. The shape now lives in `@/types/checklist` because the phase view
+ * is no longer its only reader — see `lib/services/checklist-task.ts`.
+ */
+export type PhaseHeartbeatChecklistItem = import("@/types/checklist").ChecklistTask;
 
 export interface PhaseHeartbeatActivity {
   id: string;

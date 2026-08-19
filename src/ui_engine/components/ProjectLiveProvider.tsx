@@ -51,8 +51,8 @@ export function ProjectLiveProvider({
 
       const nextSnapshot = (await response.json()) as ProjectDiscussionSnapshot;
       setSnapshot(nextSnapshot);
-    } catch (error: any) {
-      console.warn(`[SYNC_NOW_NETWORK_ERROR] Project ${projectId}:`, error.message || error);
+    } catch (error: unknown) {
+      console.warn(`[SYNC_NOW_NETWORK_ERROR] Project ${projectId}:`, error instanceof Error ? error.message : error);
     }
   }, [projectId]);
 
@@ -81,9 +81,9 @@ export function ProjectLiveProvider({
             return hasChanged ? nextSnapshot : current;
           });
         }
-      } catch (error: any) {
-        if (error.name === "AbortError") return;
-        console.warn(`[HEARTBEAT_NETWORK_ERROR] Project ${projectId}:`, error.message || error);
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === "AbortError") return;
+        console.warn(`[HEARTBEAT_NETWORK_ERROR] Project ${projectId}:`, error instanceof Error ? error.message : error);
       }
     };
 

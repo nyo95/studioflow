@@ -1,8 +1,6 @@
 "use client";
 
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
+import { Input, Checkbox, Button } from "@/ui_engine";
 
 export interface ActivityFilterOption {
   id: string;

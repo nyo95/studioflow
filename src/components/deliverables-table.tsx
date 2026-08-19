@@ -1,17 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ExternalLink, FileText, Link as LinkIcon, UploadCloud } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileText, Link as LinkIcon } from "lucide-react";
 import { Role } from "@/generated/prisma";
 import { DeliverableUploadDialog } from "@/components/deliverable-upload-dialog";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/ui_engine";
 import { cn } from "@/lib/utils";
 import { 
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@/ui_engine";
 import { 
   TableCard, 
   TableCardHeader, 
@@ -43,6 +43,7 @@ export interface DeliverablePhaseRow {
 }
 
 interface DeliverablesTableProps {
+  projectId: string;
   rows: DeliverablePhaseRow[];
   userId: string;
   userRole: Role;
@@ -70,6 +71,7 @@ function formatUploadedDate(date: Date | null) {
 }
 
 export function DeliverablesTable({
+  projectId,
   rows,
   userId,
   userRole,
@@ -97,7 +99,7 @@ export function DeliverablesTable({
   );
 
   return (
-    <TableCard header={headerContent} layout="fixed">
+    <TableCard header={headerContent} layout="fixed" minWidth="760px">
       <TableCardHeader>
         <TableCardHead 
           style={{ width: `${widths.phase}%` }}
@@ -251,6 +253,8 @@ export function DeliverablesTable({
 
                     return (
                       <DeliverableUploadDialog
+                        projectId={projectId}
+                        phaseId={row.phaseId}
                         revisionId={row.currentRevision.id}
                         userId={userId}
                         userRole={userRole}

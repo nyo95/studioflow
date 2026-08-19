@@ -8,28 +8,11 @@ import {
   updateCDStatus,
   deleteCDItem
 } from "@/actions/phase-actions";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Button, Input, SectionCard, TableCard, TableCardHeader, TableCardHead, TableCardBody, TableCardRow, TableCardCell, Heading } from "@/ui_engine";
 import { ArrowDownAZ, ArrowUpAZ, Loader2, Plus, Trash2 } from "lucide-react";
 import { Role } from "@/generated/prisma";
-import { 
-  SectionCard, 
-  TableCard, 
-  TableCardHeader, 
-  TableCardHead, 
-  TableCardBody, 
-  TableCardRow, 
-  TableCardCell,
-  Heading
-} from "@/ui_engine";
 import { unwrapActionResult } from "@/lib/result";
+import { useAppConfirm } from "@/hooks/use-app-confirm";
 
 interface CDItem {
   id: string;
@@ -131,7 +114,7 @@ function buildGroupedRows(items: CDItem[]) {
 }
 
 function formatAddedDate(date: Date) {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -157,6 +140,7 @@ export function CDListTable({
   const [sortBy, setSortBy] = useState<"drawing_code" | "group">("drawing_code");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const router = useRouter();
+  const appConfirm = useAppConfirm();
 
   const isEditable = canMutate;
 
@@ -215,7 +199,11 @@ export function CDListTable({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this drawing?")) return;
+    if (!(await appConfirm.confirm({
+      title: "Delete this drawing?",
+      description: "This drawing will be permanently deleted from the phase.",
+      confirmLabel: "Delete drawing",
+    }))) return;
     setLoading(id);
     try {
       unwrapActionResult(await deleteCDItem({ itemId: id }));
@@ -350,8 +338,8 @@ export function CDListTable({
           </div>
         )}
 
-        <div className="w-full overflow-hidden">
-          <table className="w-full border-collapse text-sm">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse text-sm">
             <TableCardHeader>
               <TableCardHead className="w-28">Group</TableCardHead>
               <TableCardHead className="w-32">Drawing Code</TableCardHead>
@@ -521,6 +509,7 @@ export function CDListTable({
           </table>
         </div>
       </div>
+      {appConfirm.dialog}
     </SectionCard>
   );
 }

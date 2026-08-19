@@ -8,8 +8,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { logout } from "@/actions/user-actions";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/ui_engine";
+import { Button } from "@/ui_engine";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +17,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/ui_engine";
 import { useSidebar } from "@/context/sidebar-context";
 import type { Role } from "@/generated/prisma";
 import { useLocalStorage, useRelativeTime } from "@/hooks/use-hydration";
@@ -62,6 +62,11 @@ type HeaderActivityNotificationItem = {
   href: string;
 };
 
+type HeaderSubappLink = {
+  href: string;
+  label: string;
+};
+
 function NotificationTime({ value }: { value: string }) {
   const relative = useRelativeTime(value, true);
   const absolute = new Intl.DateTimeFormat("id-ID", {
@@ -83,6 +88,8 @@ export function TopHeader({
   theme = "light",
   projectSearchItems = [],
   activityNotifications = [],
+  subappLinks = [],
+  showSearch = true,
 }: {
   userName: string;
   userInitials?: string | null;
@@ -92,6 +99,8 @@ export function TopHeader({
   theme?: "light" | "dark";
   projectSearchItems?: HeaderProjectSearchItem[];
   activityNotifications?: HeaderActivityNotificationItem[];
+  subappLinks?: readonly HeaderSubappLink[];
+  showSearch?: boolean;
 }) {
   const { toggle } = useSidebar();
   const router = useRouter();
@@ -132,16 +141,15 @@ export function TopHeader({
   }, [projectSearchItems, query]);
 
   useEffect(() => {
-    if (isOpen) setTimeout(() => setIsOpen(false), 0);
+    const timeoutId = window.setTimeout(() => setIsOpen(false), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [pathname]);
 
   // Re-sync active index when query or filtered list changes
   useEffect(() => {
-    if (activeIndex !== 0) setTimeout(() => setActiveIndex(0), 0);
+    const timeoutId = window.setTimeout(() => setActiveIndex(0), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [query]);
-
-  // Ensure index is within bounds of filtered list
-  const effectiveActiveIndex = activeIndex > filteredProjects.length - 1 ? 0 : activeIndex;
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -248,7 +256,7 @@ export function TopHeader({
           </Link>
         </div>
 
-        <div ref={searchContainerRef} className="relative mx-4 hidden max-w-lg flex-1 md:block lg:mx-8">
+        {showSearch && <div ref={searchContainerRef} className="relative mx-4 hidden max-w-lg flex-1 md:block lg:mx-8">
           <form onSubmit={handleSearchSubmit} className="relative">
             <Search
               className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
@@ -335,9 +343,21 @@ export function TopHeader({
               )}
             </div>
           ) : null}
-        </div>
+        </div>}
 
         <div className="flex items-center gap-2 lg:gap-3">
+          {subappLinks.map((link) => (
+            <Button
+              key={link.href}
+              asChild
+              variant="ghost"
+              size="sm"
+              className="hidden font-sans sm:inline-flex"
+            >
+              <Link href={link.href}>{link.label}</Link>
+            </Button>
+          ))}
+
           <DropdownMenu onOpenChange={(open) => {
             if (open) {
               setLastSeenAt(new Date().toISOString());
@@ -367,7 +387,7 @@ export function TopHeader({
                   Notifications
                 </DropdownMenuLabel>
                 <span className="text-xs text-slate-500">
-                  {unreadCount > 0 ? `${unreadCount} baru` : "Semua terbaca"}
+                  {unreadCount > 0 ? `${unreadCount} baru` : "Mark all read"}
                 </span>
               </div>
               <DropdownMenuSeparator className="my-0" />
@@ -402,7 +422,7 @@ export function TopHeader({
                   ))
                 ) : (
                   <div className="px-4 py-6 text-center text-sm text-slate-500">
-                    Belum ada aktivitas terbaru.
+                    No recent activity.
                   </div>
                 )}
               </div>
@@ -410,7 +430,7 @@ export function TopHeader({
               <DropdownMenuSeparator className="my-0" />
               <div className="p-2">
                 <Button asChild variant="ghost" size="sm" className="h-8 w-full justify-center text-xs">
-                  <Link href="/activity">Lihat semua aktivitas</Link>
+                  <Link href="/activity">See all activity</Link>
                 </Button>
               </div>
             </DropdownMenuContent>

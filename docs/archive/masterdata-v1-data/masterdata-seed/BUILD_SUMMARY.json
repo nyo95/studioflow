@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-07-31T08:47:15.409Z",
+  "source_workbook": "docs/RAD - Material + Supplier.xlsx",
+  "source_checksum": "1AB11BD57893424EA226135F670197B31B96B861BA05C0C4962AF5BC8D0FBCEE",
+  "source_rows": {
+    "list": 483,
+    "physical_samples": 287,
+    "delete_sheet_excluded_rows": 47
+  },
+  "seed_payload": {
+    "vendors": 392,
+    "vendor_contacts": 399,
+    "vendor_links": 1010,
+    "materials": 0,
+    "physical_samples": 0
+  },
+  "review_queue": {
+    "material_candidates": 756,
+    "sample_candidates": 287,
+    "blockers": 1046,
+    "warnings": 51,
+    "information": 1
+  },
+  "decisions": {
+    "status_for_seeded_materials": "PENDING",
+    "pending_usable": true,
+    "approved_usable": true,
+    "rejected_new_usage": false,
+    "rejected_takedown_preserves_existing_project_snapshots": true,
+    "source_has_explicit_sku_column": false,
+    "source_brand_vendor_relation_confirmed": false,
+    "fake_sku_generation": false,
+    "unlinked_sample_creation": false
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "source_checksum_verified": "1AB11BD57893424EA226135F670197B31B96B861BA05C0C4962AF5BC8D0FBCEE",
+  "list_rows_read": 483,
+  "vendors_out": 395,
+  "vendors_new": 394,
+  "vendors_match_existing": 1,
+  "contacts_out": 401,
+  "contacts_role_only_no_name": 310,
+  "offerings_out": 483,
+  "offerings_active": 460,
+  "offerings_archived": 23,
+  "offerings_jess_verified": 433,
+  "vendor_only_no_offering": 0,
+  "review_blockers": 0,
+  "review_warnings": 26,
+  "review_info": 24
+}

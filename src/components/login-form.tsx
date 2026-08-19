@@ -2,12 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { signIn, getSession } from "next-auth/react";
+import type { Role } from "@/generated/prisma";
+import { landingRouteFor } from "@/core/rbac/app-access";
+import { Button } from "@/ui_engine";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui_engine";
+import { Input } from "@/ui_engine";
+import { Label } from "@/ui_engine";
+import { Checkbox } from "@/ui_engine";
 
 interface LoginFormProps {
   appTitle: string;
@@ -45,7 +47,12 @@ export function LoginForm({ appTitle }: LoginFormProps) {
       return;
     }
 
-    router.push("/");
+    // Route by role, not a hardcoded "/". STAFF/ESTIMATOR own subapps
+    // (/masterdata, /bq); pushing "/" would strand them on StudioFlow since
+    // the proxy gate lets those roles into "/" and never redirects them off it.
+    const session = await getSession();
+    const role = session?.user?.role as Role | undefined;
+    router.push(landingRouteFor(role));
     router.refresh();
   }
 

@@ -5,6 +5,7 @@ import { prisma } from "@/core/platform/db";
 import { Role } from "@/generated/prisma";
 import { authConfig } from "./auth.config";
 import { authSecret } from "./auth.shared";
+import { LEAST_PRIVILEGE_ROLE } from "@/core/rbac/app-access";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -44,8 +45,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         console.log(`[AUTH_DEBUG]: Attempting login for email: ${email}`);
 
-        const user = await prisma.user.findUnique({
-          where: { email },
+        // findFirst + deleted_at filter: a soft-deleted (removed) account must
+        // not be able to authenticate, even though its row still exists to keep
+        // historical relations resolvable.
+        const user = await prisma.user.findFirst({
+          where: { email, deleted_at: null },
           select: {
             id: true,
             name: true,
@@ -56,7 +60,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!user) {
-          console.log(`[AUTH_DEBUG]: User not found for email: ${email}`);
+          console.log(`[AUTH_DEBUG]: User not found (or removed) for email: ${email}`);
           return null;
         }
 
@@ -92,7 +96,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = String(token.id ?? "");
-        session.user.role = (token.role as Role | undefined) ?? "STAFF";
+        // SECURITY: this fallback used to be "STAFF". Once STAFF became the
+        // owner of Master Data (vendors, SKUs, pricing), a malformed or stale
+        // JWT with no `role` claim silently resolved to a write-capable role.
+        // LEAST_PRIVILEGE_ROLE is the safe floor — see the rationale in
+        // src/core/rbac/app-access.ts. Never widen this default.
+        session.user.role = (token.role as Role | undefined) ?? LEAST_PRIVILEGE_ROLE;
       }
 
       return session;

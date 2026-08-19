@@ -5,21 +5,33 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["studioflow", "master_data", "bq"]
 }
 
 model User {
-  id                   String                   @id @default(uuid())
-  name                 String
-  email                String                   @unique
-  password             String
-  role                 Role                     @default(STAFF)
-  audit_logs           AuditLog[]
-  assigned_cd_drawings CDList[]
-  comments             Comment[]
-  projects_as_designer Project[]                @relation("Designer")
-  projects_as_drafter  Project[]                @relation("Drafter")
-  product_requests     ProjectProductRequest[]
-  assigned_activities  Activity[]
+  id                     String                  @id @default(uuid())
+  name                   String
+  email                  String                  @unique
+  password               String
+  role                   Role                    @default(STAFF)
+  // Soft-delete marker. A removed user keeps its row (so every relation — e.g.
+  // Project.designer, Comment.author, AuditLog.user — still resolves to a real
+  // name instead of "user not found"), but is hidden from the roster, excluded
+  // from login, and no longer offered for new assignments. Re-adding the same
+  // email reactivates the row (see userService.executeCreateUser).
+  deleted_at             DateTime?
+  audit_logs             AuditLog[]
+  assigned_cd_drawings   CDList[]
+  comments               Comment[]
+  created_mom_documents  ProjectMomDocument[]    @relation("MomCreatedBy")
+  projects_as_designer   Project[]               @relation("Designer")
+  projects_as_drafter    Project[]               @relation("Drafter")
+  product_requests       ProjectProductRequest[]
+  assigned_activities    Activity[]
+  assigned_checklists    ProjectChecklist[]      @relation("ChecklistAssignee")
+  checklist_filter_views ChecklistFilterView[]
+
+  @@schema("studioflow")
 }
 
 model Client {
@@ -29,51 +41,69 @@ model Client {
   logo_url   String?
   updated_at DateTime  @updatedAt
   projects   Project[]
+
+  @@schema("studioflow")
 }
 
 model Project {
-  id                String                   @id @default(uuid())
-  project_code      String                   @unique
-  name              String                   @unique
+  id                String                  @id @default(uuid())
+  project_code      String                  @unique
+  name              String                  @unique
   pic_designer_id   String
   pic_drafter_id    String
   clientId          String?
   opening_date      DateTime?
-  core_project_type String                   @default("RETAIL")
-  status_progress   ProjectStatus            @default(ACTIVE)
-  priority          ProjectPriority          @default(NORMAL)
+  core_project_type String                  @default("RETAIL")
+  status_progress   ProjectStatus           @default(ACTIVE)
+  priority          ProjectPriority         @default(NORMAL)
   client_contact    String?
   address           String?
   area              Float?
   audit_logs        AuditLog[]
   comments          Comment[]
   phases            Phase[]
-  client            Client?                  @relation(fields: [clientId], references: [id])
-  designer          User                     @relation("Designer", fields: [pic_designer_id], references: [id])
-  drafter           User                     @relation("Drafter", fields: [pic_drafter_id], references: [id])
+  client            Client?                 @relation(fields: [clientId], references: [id])
+  designer          User                    @relation("Designer", fields: [pic_designer_id], references: [id])
+  drafter           User                    @relation("Drafter", fields: [pic_drafter_id], references: [id])
   checklists        ProjectChecklist[]
   product_requests  ProjectProductRequest[]
   schedule_entries  ProjectScheduleEntry[]
   timelines         ProjectTimeline[]
   activities        Activity[]
   sketchup_projects SketchupProject[]
+  mom_documents     ProjectMomDocument[]
+  render_boards     RenderBoard[]
+
+  @@schema("studioflow")
 }
 
 model Phase {
-  id          String             @id @default(uuid())
-  project_id  String
-  name_enum   PhaseName
-  status_enum PhaseStatus        @default(PENDING)
-  order_index Int
-  is_locked      Boolean            @default(false)
-  allow_parallel Boolean            @default(false)
-  audit_logs     AuditLog[]
-  cd_lists       CDList[]
-  comments       Comment[]
-  project        Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  checklists     ProjectChecklist[]
-  timelines      ProjectTimeline[]
-  revisions      Revision[]
+  id             String      @id @default(uuid())
+  project_id     String
+  name_enum      PhaseName
+  status_enum    PhaseStatus @default(PENDING)
+  order_index    Int
+  is_locked      Boolean     @default(false)
+  allow_parallel Boolean     @default(false)
+
+  /// When status_enum last changed. Drives the "waiting N days" reading in the
+  /// UI, which is the single most useful signal for spotting a stalled phase.
+  /// Nullable on purpose: for phases that existed before migration
+  /// 20260803120000_add_phase_status_changed_at we only know the answer where
+  /// an AuditLog row survives. NULL means "unknown" and the UI shows no
+  /// duration rather than inventing one. Derivable from AuditLog in principle,
+  /// but that is a per-phase scan — too expensive for a project list.
+  status_changed_at DateTime?
+
+  audit_logs AuditLog[]
+  cd_lists   CDList[]
+  comments   Comment[]
+  project    Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  checklists ProjectChecklist[]
+  timelines  ProjectTimeline[]
+  revisions  Revision[]
+
+  @@schema("studioflow")
 }
 
 model Revision {
@@ -86,6 +116,8 @@ model Revision {
   activities  Activity[]
   files       File[]
   phase       Phase          @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+
+  @@schema("studioflow")
 }
 
 model Activity {
@@ -98,13 +130,26 @@ model Activity {
   assigned_to_id        String?
   phase_id              String?
   deferred_from_version String?
-  created_at            DateTime       @default(now())
-  updated_at            DateTime?      @updatedAt
+
+  /// Date-only, same convention as `ProjectChecklist.due_at`: no UI offers a
+  /// time picker, so every value lands at midnight.
+  ///
+  /// Added 2026-08-10 for the Upcoming view. Without it, half of what people
+  /// actually chase a deadline on — loose work items and revision feedback —
+  /// could never appear on a date-based screen, and a date view that shows
+  /// half the work is one nobody trusts.
+  due_at DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime? @updatedAt
 
   project Project? @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   revision    Revision? @relation(fields: [revision_id], references: [id], onDelete: Cascade)
   assigned_to User?     @relation(fields: [assigned_to_id], references: [id])
+
+  @@index([due_at])
+  @@schema("studioflow")
 }
 
 model File {
@@ -118,6 +163,8 @@ model File {
   is_external Boolean  @default(false)
   created_at  DateTime @default(now())
   revision    Revision @relation(fields: [revision_id], references: [id], onDelete: Cascade)
+
+  @@schema("studioflow")
 }
 
 model AuditLog {
@@ -134,6 +181,8 @@ model AuditLog {
   phase       Phase?    @relation(fields: [phase_id], references: [id], onDelete: SetNull)
   project     Project?  @relation(fields: [project_id], references: [id], onDelete: SetNull)
   user        User      @relation(fields: [user_id], references: [id])
+
+  @@schema("studioflow")
 }
 
 model ProjectTimeline {
@@ -147,12 +196,16 @@ model ProjectTimeline {
   updated_at DateTime       @updatedAt
   phase      Phase?         @relation(fields: [phase_id], references: [id], onDelete: Cascade)
   project    Project        @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@schema("studioflow")
 }
 
 model TimelineTemplate {
   id            String @id @default(uuid())
   phase_enum    String @unique
   duration_days Int    @default(7)
+
+  @@schema("studioflow")
 }
 
 model ChecklistTemplate {
@@ -160,6 +213,10 @@ model ChecklistTemplate {
   phase_enum String?
   label      String
   is_active  Boolean @default(true)
+
+  generated_items ProjectChecklist[]
+
+  @@schema("studioflow")
 }
 
 model SystemConfig {
@@ -167,134 +224,877 @@ model SystemConfig {
   app_title              String  @default("StudioFlow")
   is_auto_naming_enabled Boolean @default(true)
   ui_settings            Json?
+
+  @@schema("studioflow")
 }
 
-model Vendor {
-  id            String            @id @default(uuid())
-  brand_name    String            @unique
-  company_name  String?
-  company_pt    String?
-  address       String?
-  website_url   String?
-  instagram_url String?
-  deleted_at    DateTime?
-  products      ProductCatalog[]
-  contacts      VendorContact[]
+// =============================================================================
+// MASTER DATA v2 — diterapkan 2026-08-10
+// =============================================================================
+// Sumber : `design database masterdata.xlsx` (Table 1–4) + keputusan owner
+//          2026-08-10. Dasar: `docs/PLAN-MASTERDATA-V2.md`,
+//          `docs/PENYIMPANGAN-DARI-EXCEL.md`, `docs/TANYA-SEBELUM-EKSEKUSI.md`.
+// Migrasi: `prisma/migrations-masterdata-v2/01-04` (dijalankan manual, lihat
+//          README di folder itu) + baseline resmi di `prisma/migrations/`.
+//
+// StudioFlow membaca TEPAT SATU view: `v_library_brand`. Schedule dan
+// SketchUp TIDAK memilih SKU dari Master Data — lihat kolom snapshot di
+// ProjectProductRequest/ProjectScheduleOption di bawah.
+// =============================================================================
+
+model Party {
+  id String @id @default(uuid())
+
+  /// Nama dagang. Excel Table 1 kolom B.
+  /// TIDAK `@unique` sejak 2026-08-18 — dijaga index PARSIAL, bukan index polos.
+  ///
+  /// Tabel ini memakai soft-delete. `@unique` tanpa syarat berarti baris yang
+  /// sudah dihapus tetap memegang namanya selamanya, sehingga nama supplier yang
+  /// pernah dihapus tidak pernah bisa dipakai lagi, dan setiap quick-create yang
+  /// menemukannya berakhir menabrak index. Prisma tidak bisa menyatakan
+  /// `WHERE deleted_at IS NULL` di `@unique`, jadi jaminannya ditulis SQL di
+  /// `20260818120000_masterdata_live_unique_indexes` — pola yang sama dengan
+  /// `Sku_slug_nobrand_uniq` dan `Sku_brand_code_uniq` di `03_invariants.sql`.
+  ///
+  /// Index itu juga `lower(name)`: nama dagang tidak peka huruf besar-kecil.
+  ///
+  /// KONSEKUENSI UNTUK KODE: `findUnique({ where: { name } })` tidak lagi sah.
+  /// Pakai `findFirst({ where: { name, deleted_at: null } })`.
+  name String
+  slug String
+
+  /// Badan hukum terdaftar. Excel Table 1 kolom A. NULL kalau tidak diketahui.
+  legal_name String?
+
+  type PartyType @default(COMPANY)
+
+  address String?
+  notes   String?
+
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime? @updatedAt
+  deleted_at DateTime?
+
+  updated_by_name String?
+
+  roles    PartyRole[]
+  contacts PartyContact[]
+  links    PartyLink[]
+
+  owned_brands    Brand[]         @relation("BrandOwner")
+  supplied_brands BrandSupplier[]
+  supplied_prices SkuPrice[]      @relation("SkuPriceSupplier")
+  work_prices     WorkPrice[]     @relation("WorkPriceVendor")
+
+  @@index([slug])
+  @@index([type])
+  @@index([is_active])
+  @@index([deleted_at])
+  @@schema("master_data")
 }
 
+model PartyRole {
+  id       String        @id @default(uuid())
+  party_id String
+  role     PartyRoleKind
+  notes    String?
 
-model VendorContact {
-  id             String  @id @default(uuid())
-  vendor_id      String
-  contact_person String
-  contact_role   String
-  phone_number   String?
-  email          String?
-  vendor         Vendor  @relation(fields: [vendor_id], references: [id])
+  party Party @relation(fields: [party_id], references: [id], onDelete: Cascade)
+
+  @@unique([party_id, role])
+  @@index([role])
+  @@schema("master_data")
 }
 
-model ProductCatalog {
-  id                  String                   @id @default(uuid())
-  vendor_id           String
-  catalog_category    String
-  catalog_sub_category String?
-  catalog_sku         String
-  catalog_brand       String?
-  catalog_product_name String?
-  catalog_motif       String?
-  catalog_tags        String[]                 @default([])
-  catalog_dimension_p String?
-  catalog_dimension_l String?
-  catalog_dimension_t String?
-  catalog_dimension_unit String?               @default("cm")
-  catalog_color       String
-  catalog_finishing   String?
-  catalog_image_url   String?
-  catalog_image_thumbnail_url String?
-  catalog_image_original_url String?
-  catalog_reference_url String?
-  catalog_folder_url  String?
-  catalog_type        ProductType              @default(material)
-  catalog_metadata    Json?
-  catalog_price       Float?
-  created_at          DateTime                 @default(now())
-  catalog_status      LibraryItemStatus        @default(PENDING)
-  deleted_at          DateTime?
-  vendor              Vendor                   @relation(fields: [vendor_id], references: [id])
-  physical_samples    PhysicalSample[]
-  product_requests    ProjectProductRequest[]
-  schedule_options    ProjectScheduleOption[]
+model PartyContact {
+  id       String @id @default(uuid())
+  party_id String
 
-  @@index([vendor_id])
-  @@index([catalog_category])
-  @@index([catalog_brand])
+  person_name String
+  job_title   String?
+
+  phone String?
+  email String?
+
+  is_primary Boolean @default(false)
+  notes      String?
+
+  /// Kontak khusus satu merek di perusahaan ini. NULL = kontak umum.
+  brand_id String?
+  brand    Brand?  @relation(fields: [brand_id], references: [id], onDelete: SetNull)
+
+  party Party @relation(fields: [party_id], references: [id], onDelete: Cascade)
+
+  @@index([party_id])
+  @@index([brand_id])
+  @@schema("master_data")
 }
 
-model PhysicalSample {
-  id            String          @id @default(uuid())
-  product_id    String
-  catalog_rack_number   String
-  catalog_box_number    String
-  catalog_notes         String?
-  catalog_status        SampleStatus    @default(AVAILABLE)
-  current_borrower_name String?
-  created_at    DateTime        @default(now())
-  updated_at    DateTime        @updatedAt
-  product       ProductCatalog  @relation(fields: [product_id], references: [id], onDelete: Cascade)
-  movements     SampleMovementLog[]
-  requests      ProjectProductRequest[]
+model PartyLink {
+  id       String   @id @default(uuid())
+  party_id String
+  kind     LinkKind
+  url      String
 
-  @@index([product_id])
+  archive_url String?
+  label       String?
+  sort_order  Int     @default(0)
+
+  party Party @relation(fields: [party_id], references: [id], onDelete: Cascade)
+
+  @@unique([party_id, url])
+  @@index([party_id, kind])
+  @@schema("master_data")
 }
 
-model SampleMovementLog {
-  id            String       @id @default(uuid())
-  sample_id     String
-  action        SampleAction
+model Brand {
+  id String @id @default(uuid())
+
+  /// TIDAK `@unique` sejak 2026-08-18 — dijaga index PARSIAL, bukan index polos.
+  ///
+  /// Tabel ini memakai soft-delete. `@unique` tanpa syarat berarti baris yang
+  /// sudah dihapus tetap memegang namanya selamanya, sehingga nama supplier yang
+  /// pernah dihapus tidak pernah bisa dipakai lagi, dan setiap quick-create yang
+  /// menemukannya berakhir menabrak index. Prisma tidak bisa menyatakan
+  /// `WHERE deleted_at IS NULL` di `@unique`, jadi jaminannya ditulis SQL di
+  /// `20260818120000_masterdata_live_unique_indexes` — pola yang sama dengan
+  /// `Sku_slug_nobrand_uniq` dan `Sku_brand_code_uniq` di `03_invariants.sql`.
+  ///
+  /// Index itu juga `lower(name)`: nama dagang tidak peka huruf besar-kecil.
+  ///
+  /// KONSEKUENSI UNTUK KODE: `findUnique({ where: { name } })` tidak lagi sah.
+  /// Pakai `findFirst({ where: { name, deleted_at: null } })`.
+  name String
+  slug String
+
+  owner_party_id String?
+  owner          Party?  @relation("BrandOwner", fields: [owner_party_id], references: [id], onDelete: SetNull)
+
+  notes String?
+
+  /// Hashtag bebas — lebih umum & awam dibanding Category (mis. "batu",
+  /// "tegel murah", "finishing lantai"). Ditambahkan 2026-08-18 (owner
+  /// feedback item 5): Category tetap daftar ~40 opsi terkurasi lewat
+  /// checklist, tags ini pool bebas via CreatableTagInput yang sama dipakai
+  /// SKU. Tidak ada tabel terpisah — tags brand tidak perlu di-slug atau
+  /// dibagi lintas entity seperti Category.
+  tags String[] @default([])
+
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  categories BrandCategory[]
+  skus       Sku[]
+  links      BrandLink[]
+  suppliers  BrandSupplier[]
+
+  scoped_contacts PartyContact[]
+
+  @@index([slug])
+  @@index([owner_party_id])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+model BrandLink {
+  id       String   @id @default(uuid())
+  brand_id String
+  kind     LinkKind
+  url      String
+
+  archive_url String?
+  label       String?
+  sort_order  Int     @default(0)
+
+  brand Brand @relation(fields: [brand_id], references: [id], onDelete: Cascade)
+
+  price_sources SkuPrice[] @relation("SkuPriceSourceLink")
+
+  @@unique([brand_id, url])
+  @@index([brand_id, kind])
+  @@schema("master_data")
+}
+
+model BrandSupplier {
+  id       String @id @default(uuid())
+  brand_id String
+  party_id String
+
+  is_authorized Boolean @default(false)
   notes         String?
-  user_id       String
-  taken_by      String?
-  date_out      DateTime?
-  date_return   DateTime?
-  created_at    DateTime     @default(now())
-  sample        PhysicalSample @relation(fields: [sample_id], references: [id], onDelete: Cascade)
 
-  @@index([sample_id])
+  brand Brand @relation(fields: [brand_id], references: [id], onDelete: Cascade)
+  party Party @relation(fields: [party_id], references: [id], onDelete: Cascade)
+
+  @@unique([brand_id, party_id])
+  @@index([party_id])
+  @@schema("master_data")
+}
+
+model Category {
+  id String @id @default(uuid())
+
+  name String
+  slug String
+
+  kind CategoryKind
+
+  parent_id String?
+  parent    Category?  @relation("CategoryTree", fields: [parent_id], references: [id], onDelete: Restrict)
+  children  Category[] @relation("CategoryTree")
+
+  /// Materialized path ("bahan-baku/plywood") untuk `LIKE 'bahan-baku/%'` —
+  /// AGENTS.md §4. DIPELIHARA OTOMATIS oleh `upsertCategory()` +
+  /// `propagateDescendantPaths()` di `category-tree-service.ts` (B7,
+  /// 2026-08-18): rename/re-parent sebuah kategori menulis ulang path
+  /// SELURUH keturunannya lewat prefix match, dalam transaksi yang sama.
+  /// Audit skema 2026-08-19 sempat mencatat ini sebagai risiko tak terjamin
+  /// — KOREKSI: sudah ditangani sejak B7, bukan celah terbuka. Jangan tulis
+  /// kolom ini manual di luar fungsi itu.
+  path String?
+
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true)
+
+  created_at DateTime  @default(now())
+  updated_at DateTime? @updatedAt
+
+  brands      BrandCategory[]
+  skus        SkuCategory[]
+  work_prices WorkPrice[]
+
+  // `(kind, slug)` TIDAK LAGI `@unique` sejak 2026-08-19 (audit skema, item
+  // 3) — dijaga index PARSIAL `Category_kind_slug_live_uniq` (WHERE
+  // is_active), pola yang sama dengan Party/Brand name/slug live-uniq
+  // (20260818120000, lihat AGENTS.md §2). Category tidak punya `deleted_at`
+  // (tidak soft-delete), jadi "hidup" di sini berarti `is_active`, bukan
+  // `deleted_at IS NULL`. Category BELUM punya action delete/nonaktifkan
+  // apa pun hari ini (audit skema 2026-08-19, temuan #3) — fix ini murni
+  // pencegahan sebelum fitur itu ada, supaya kalau nanti "nonaktifkan
+  // kategori" dibangun, slug yang dinonaktifkan bisa dipakai ulang, bukan
+  // terkunci selamanya seperti B2 sebelum ditambal untuk Party/Brand.
+  @@index([kind, slug])
+  @@index([kind, parent_id, sort_order])
+  @@index([path])
+  @@schema("master_data")
+}
+
+model BrandCategory {
+  id          String @id @default(uuid())
+  brand_id    String
+  category_id String
+  sort_order  Int    @default(0)
+
+  source     CategorySource @default(DERIVED_FROM_SKU)
+  created_at DateTime       @default(now())
+
+  brand    Brand    @relation(fields: [brand_id], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
+
+  @@unique([brand_id, category_id])
+  @@index([category_id])
+  @@index([brand_id, sort_order])
+  @@schema("master_data")
+}
+
+model SkuCategory {
+  id          String @id @default(uuid())
+  sku_id      String
+  category_id String
+
+  is_primary Boolean  @default(false)
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+
+  sku      Sku      @relation(fields: [sku_id], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
+
+  @@unique([sku_id, category_id])
+  @@index([category_id])
+  @@index([sku_id, sort_order])
+  @@schema("master_data")
+}
+
+model Sku {
+  id String @id @default(uuid())
+
+  /// Kode artikel pabrikan. NULLABLE (Q7) — workbook sumber tidak punya kolom
+  /// SKU eksplisit; keunikannya di mana terisi dijaga partial unique index.
+  code String?
+
+  name String
+  slug String
+
+  /// NULLABLE (Q7) — barang generik ("plywood 9mm") sah tanpa brand.
+  ///
+  /// `onDelete: Restrict` mencegah HARD DELETE Brand yang masih punya Sku —
+  /// tapi Brand memakai soft-delete (`deleted_at`), dan belum ada action
+  /// delete Brand di manapun di repo (audit skema 2026-08-19, temuan #5).
+  /// Restrict ini belum pernah benar-benar dieksekusi. KALAU nanti "delete
+  /// brand" dibangun mengikuti pola soft-delete tabel lain, Restrict TIDAK
+  /// akan terpicu — proteksi "jangan hapus brand yang masih dipakai SKU
+  /// aktif" harus ditulis eksplisit di application code (mirip
+  /// `assertPartyDeletable` untuk Party), jangan diasumsikan dari FK ini.
+  brand_id String?
+  brand    Brand?  @relation(fields: [brand_id], references: [id], onDelete: Restrict)
+
+  kind   SkuKind   @default(MATERIAL)
+  status SkuStatus @default(DRAFT)
+
+  spec Json?
+
+  dim_length  Decimal? @db.Decimal(12, 3)
+  dim_width   Decimal? @db.Decimal(12, 3)
+  dim_height  Decimal? @db.Decimal(12, 3)
+  dim_unit    String?  @default("mm")
+  dim_display String?
+
+  base_unit String
+
+  // ── BQ costing fields (pindahan dari BqMaterialProfile) ────────────────
+  // Sebelumnya hidup di bq.BqMaterialProfile. Dipindahkan 2026-08-19 agar
+  // SKU baru langsung siap dipakai BQ tanpa langkah tambahan.
+  usage_unit         String?
+  purchase_unit      String?
+  conversion         Decimal?  @db.Decimal(18,6)   // CHECK > 0 di app layer
+  default_waste_pct  Decimal?  @db.Decimal(9,6)    // presedensi level 3
+  minimum_order      Decimal?  @db.Decimal(18,6)
+  rounding_increment Decimal?  @db.Decimal(18,6)   // default 1
+  preferred_supplier_party_id String?  // preferensi supplier untuk BQ
+
+  notes String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  categories SkuCategory[]
+  media      SkuMedia[]
+  prices     SkuPrice[]
+  samples    Sample[]
+
+  @@unique([brand_id, slug])
+  @@index([brand_id])
+  @@index([kind, status])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+model SkuMedia {
+  id         String    @id @default(uuid())
+  sku_id     String
+  kind       MediaKind
+  url        String
+  label      String?
+  sort_order Int       @default(0)
+  created_at DateTime  @default(now())
+
+  sku Sku @relation(fields: [sku_id], references: [id], onDelete: Cascade)
+
+  @@unique([sku_id, url])
+  @@index([sku_id, kind, sort_order])
+  @@schema("master_data")
+}
+
+model SkuPrice {
+  id     String @id @default(uuid())
+  sku_id String
+  sku    Sku    @relation(fields: [sku_id], references: [id], onDelete: Cascade)
+
+  supplier_party_id String?
+  supplier          Party?  @relation("SkuPriceSupplier", fields: [supplier_party_id], references: [id], onDelete: SetNull)
+
+  /// Harga tunggal yang berlaku. Pasangan `price_list` / `price_net` dihapus
+  /// 2026-08-14 (keputusan owner): yang dicatat studio adalah harga yang
+  /// benar-benar dipakai, bukan sepasang angka sebelum/sesudah diskon.
+  price_net Decimal @db.Decimal(16, 2)
+  currency  String  @default("IDR")
+
+  unit String
+
+  /// TIDAK DIPAKAI — keputusan owner 2026-08-10 (Q12). Lihat COMMENT kolom di
+  /// 03_invariants.sql. Jangan masukkan ke perhitungan apa pun.
+  qty Decimal? @db.Decimal(12, 3)
+
+  valid_from DateTime  @default(now())
+  valid_to   DateTime?
+
+  is_current Boolean @default(true)
+
+  source_link_id String?
+  source_link    BrandLink? @relation("SkuPriceSourceLink", fields: [source_link_id], references: [id], onDelete: SetNull)
+
+  notes String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  updated_by_name String?
+
+  @@index([sku_id, is_current])
+  @@index([supplier_party_id])
+  @@index([valid_from])
+  @@schema("master_data")
+}
+
+model WorkPrice {
+  id String @id @default(uuid())
+
+  code String @unique
+  name String
+
+  category_id String
+  category    Category @relation(fields: [category_id], references: [id], onDelete: Restrict)
+
+  vendor_party_id String?
+  vendor          Party?  @relation("WorkPriceVendor", fields: [vendor_party_id], references: [id], onDelete: SetNull)
+
+  spec        Json?
+  dim_display String?
+
+  unit String
+
+  /// TIDAK DIPAKAI — sama seperti `SkuPrice.qty` (Q12/X12). Excel Table 3 dan 4
+  /// punya kolom `Qty` yang penulisnya sendiri tandai "(need curations)".
+  /// Disimpan apa adanya, dilarang masuk perhitungan. Lihat COMMENT kolomnya.
+  qty Decimal? @db.Decimal(12, 3)
+
+  /// SATU harga, sesuai Excel Table 3 dan Table 4 yang keduanya hanya punya
+  /// kolom `Price`. Menggantikan `material_price` + `labor_price` +
+  /// `total_price` generated (E8, keputusan owner 2026-08-11).
+  ///
+  /// Yang hilang bersama pemisahan itu memang tidak pernah ada di Excel: paket
+  /// supply-and-install dikutip satu angka, dan dua kotak kosong memaksa orang
+  /// mengarang pembagiannya — persis kesalahan yang X12 hindari dengan tidak
+  /// menebak arti kolom `Qty`.
+  price Decimal @db.Decimal(16, 2)
+
+  /// Pembeda Table 3 dari Table 4, dinyatakan bukan disimpulkan.
+  ///
+  /// Sebelumnya disimpulkan dari `material_price != null`, yang berarti tarif
+  /// upah-murni yang kebetulan diketik lengkap dengan biaya materialnya tidak
+  /// bisa dibedakan dari paket supply-and-install. Kolom eksplisit membuat
+  /// `v_bq_work_rate.has_material` membaca sebuah fakta, bukan tebakan.
+  kind WorkPriceKind @default(LABOR_ONLY)
+
+  currency String @default("IDR")
+
+  scope_note String?
+  notes      String?
+
+  /// TIDAK DIPAKAI sebagai riwayat multi-baris — keputusan owner 2026-08-19
+  /// (audit skema, SK1). Ketiga kolom di bawah terlihat identik dengan pola
+  /// `SkuPrice` (yang memang tabel riwayat, lihat AGENTS.md §3.3), tapi
+  /// `WorkPrice.code` di atas `@unique` GLOBAL — secara struktural mencegah
+  /// dua baris berbagi `code`, jadi tidak pernah ada "baris lama" +
+  /// "baris baru" yang bisa disupersede seperti `SkuPrice`.
+  /// `updateServicePriceAction`/`updateMaterialLaborPriceAction`
+  /// (`pricing-actions.ts`) memang mengedit baris ini DI TEMPAT; ketiga
+  /// kolom ini TIDAK PERNAH ditulis ulang sesudah `create`. Riwayat harga
+  /// jasa yang berubah hanya ada di `MasterDataAudit.changes` (JSON diff per
+  /// edit), bukan baris ber-struktur yang bisa di-query seperti `SkuPrice`.
+  /// JANGAN menganggap ketiganya berfungsi seperti pasangannya di
+  /// `SkuPrice` tanpa membangun `recordWorkPrice()`/`closeCurrentWorkPrice()`
+  /// setara DAN melepas `code` dari `@unique` global lebih dulu — itu
+  /// perubahan skema 🔒, butuh keputusan owner + migrasi baru.
+  valid_from DateTime  @default(now())
+  valid_to   DateTime?
+  is_current Boolean   @default(true)
+  is_active  Boolean   @default(true)
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  project_refs WorkPriceProjectRef[]
+
+  @@index([category_id])
+  @@index([vendor_party_id])
+  @@index([is_current, is_active])
+  @@index([kind])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+model WorkPriceProjectRef {
+  id            String @id @default(uuid())
+  work_price_id String
+
+  /// Kolom biasa, BUKAN FK ke studioflow.Project — master_data tidak boleh
+  /// bergantung ke studioflow.
+  project_id   String
+  project_name String
+
+  used_at DateTime?
+  notes   String?
+
+  work_price WorkPrice @relation(fields: [work_price_id], references: [id], onDelete: Cascade)
+
+  @@unique([work_price_id, project_id])
+  @@index([project_id])
+  @@schema("master_data")
+}
+
+model Sample {
+  id     String @id @default(uuid())
+  sku_id String
+  sku    Sku    @relation(fields: [sku_id], references: [id], onDelete: Restrict)
+
+  rack_number   String
+  box_number    String
+  location_note String?
+  quantity      Int          @default(1)
+  status        SampleStatus @default(AVAILABLE)
+
+  borrower_name String?
+  borrowed_at   DateTime?
+  due_at        DateTime?
+  notes         String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime? @updatedAt
+  deleted_at DateTime?
+
+  movements SampleMovement[]
+
+  @@index([sku_id])
+  @@index([status])
+  @@index([rack_number, box_number])
+  @@index([deleted_at])
+  @@schema("master_data")
+}
+
+model SampleMovement {
+  id        String       @id @default(uuid())
+  sample_id String
+  action    SampleAction
+  notes     String?
+
+  /// id user studioflow. Kolom biasa: master_data tidak boleh menyeberang ke
+  /// studioflow, dan riwayat harus selamat saat user dihapus.
+  actor_id   String?
+  actor_name String
+
+  taken_by    String?
+  date_out    DateTime?
+  date_return DateTime?
+  created_at  DateTime  @default(now())
+
+  sample Sample @relation(fields: [sample_id], references: [id], onDelete: Cascade)
+
+  @@index([sample_id, created_at])
+  @@schema("master_data")
+}
+
+model MasterDataAudit {
+  id String @id @default(uuid())
+
+  entity    String
+  entity_id String
+  action    AuditAction
+
+  actor_id   String?
+  actor_name String
+
+  changes Json?
+
+  created_at DateTime @default(now())
+
+  @@index([entity, entity_id, created_at])
+  @@index([created_at])
+  @@schema("master_data")
+}
+
+enum PartyType {
+  COMPANY
+  INDIVIDUAL
+
+  @@schema("master_data")
+}
+
+enum PartyRoleKind {
+  MANUFACTURER
+  DISTRIBUTOR
+  SUPPLIER
+  RETAIL
+  SUBCON
+  SERVICE_VENDOR
+
+  @@schema("master_data")
+}
+
+enum LinkKind {
+  WEBSITE
+  INSTAGRAM
+  FACEBOOK
+  TIKTOK
+  YOUTUBE
+  LINKEDIN
+  WHATSAPP
+  MARKETPLACE
+  DRIVE
+  CATALOG
+  PRICE_LIST
+  OTHER
+
+  @@schema("master_data")
+}
+
+enum CategoryKind {
+  PRODUCT
+  WORK
+
+  @@schema("master_data")
+}
+
+/// Excel Table 3 vs Table 4. Both tables have identical columns and one
+/// `Price`; what separates them is what that price covers.
+enum WorkPriceKind {
+  /// Table 3 — "Database Harga Material + Upah". Price covers both.
+  MATERIAL_LABOR
+  /// Table 4 — "Database Upah". Price is labour only.
+  LABOR_ONLY
+
+  @@schema("master_data")
+}
+
+enum CategorySource {
+  SEED
+  DERIVED_FROM_SKU
+
+  @@schema("master_data")
+}
+
+enum SkuKind {
+  MATERIAL
+  FURNITURE
+  FIXTURE
+  SERVICE
+
+  @@schema("master_data")
+}
+
+enum SkuStatus {
+  DRAFT
+  ACTIVE
+  DISCONTINUED
+
+  @@schema("master_data")
+}
+
+enum MediaKind {
+  IMAGE
+  THUMBNAIL
+  ORIGINAL
+  REFERENCE
+  FOLDER
+
+  @@schema("master_data")
+}
+
+enum SampleStatus {
+  AVAILABLE
+  BORROWED
+
+  /// Ditambahkan ke DATABASE oleh migrasi 20260812120000, tetapi enum di berkas
+  /// ini tidak ikut diperbarui sampai 2026-08-18. Selama enam hari itu Prisma
+  /// Client tidak mengenal nilainya, sehingga UI "Di klien" menyimpan BORROWED
+  /// diam-diam dan hitungannya selalu nol. Urutannya (setelah BORROWED, sebelum
+  /// LOST) SENGAJA sama persis dengan `ADD VALUE ... BEFORE 'LOST'` di migrasi
+  /// itu — Prisma membandingkan enum berdasarkan urutan, dan urutan yang
+  /// berbeda dibaca sebagai drift yang menuntut migrasi baru.
+  SENT_TO_CLIENT
+
+  /// LOST dan DISCARDED adalah keadaan AKHIR: benda tidak ada di rak dan tidak
+  /// dipegang siapa pun. Keduanya tidak boleh dipetakan ke BORROWED — itulah
+  /// yang membuat sample hilang terbaca "Dipinjam" sampai 2026-08-18.
+  LOST
+  DISCARDED
+
+  @@schema("master_data")
+}
+
+enum SampleAction {
+  IN
+  OUT
+  RETURN
+  ADJUST
+
+  @@schema("master_data")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+
+  @@schema("master_data")
 }
 
 model ProjectProductRequest {
-  id                   String               @id @default(uuid())
-  project_id           String
-  product_catalog_id   String?
-  schedule_entry_id    String?
-  schedule_option_id   String?
-  custom_product_name  String?
-  reference_url        String?
-  requested_by_id      String
-  status               ProductRequestStatus @default(REQUESTED)
-  area_location        String?
-  is_scheduled         Boolean              @default(true)
-  notes                String?
-  staff_name_override  String?
-  linked_sample_id     String?
-  created_at           DateTime             @default(now())
-  updated_at           DateTime             @updatedAt
-  product_catalog      ProductCatalog?      @relation(fields: [product_catalog_id], references: [id])
-  schedule_entry       ProjectScheduleEntry? @relation(fields: [schedule_entry_id], references: [id], onDelete: SetNull)
-  schedule_option      ProjectScheduleOption? @relation(fields: [schedule_option_id], references: [id], onDelete: SetNull)
-  physical_sample      PhysicalSample?      @relation(fields: [linked_sample_id], references: [id])
-  project              Project              @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  requested_by         User                 @relation(fields: [requested_by_id], references: [id])
+  id                  String                 @id @default(uuid())
+  project_id          String
+  /// Master Data terputus dari StudioFlow (M5, 2026-08-10) — FK ke
+  /// master_data.Brand/Sku/Sample dilepas. Kolom ini kolom biasa; identitas
+  /// dibekukan lewat snapshot di bawah karena baris master data yang
+  /// dirujuknya bisa saja sudah tidak ada.
+  brand_id            String?
+  brand_name_snapshot String?
+  sku_id              String?
+  sku_name_snapshot   String?
+  schedule_entry_id   String?
+  schedule_option_id  String?
+  custom_product_name String?
+  reference_url       String?
+  requested_by_id     String
+  status              ProductRequestStatus   @default(REQUESTED)
+  area_location       String?
+  is_scheduled        Boolean                @default(true)
+  notes               String?
+  staff_name_override String?
+  /// Master Data terputus (M5) — bukan FK lagi, lihat catatan brand_id di atas.
+  linked_sample_id    String?
+  /// R9 (2026-08-05) — vendor follow-up, written from Master Data.
+  /// Plain string, not a FK: the row must keep its audit trail after a staff
+  /// account is deactivated, same reasoning as MaterialPrice.updated_by_name.
+  vendor_contacted_by String?
+  vendor_contacted_at DateTime?
+  /// Price the vendor quoted for this item. When filled, Master Data upserts a
+  /// matching master_data.MaterialPrice row so the number does not have to be
+  /// re-entered on the Harga page.
+  vendor_quoted_price Float?
+  vendor_quoted_unit  String?
+  /// Free-text notes from the vendor conversation (lead time, MOQ, stock).
+  vendor_notes        String?
+  created_at          DateTime               @default(now())
+  updated_at          DateTime               @updatedAt
+  schedule_entry      ProjectScheduleEntry?  @relation(fields: [schedule_entry_id], references: [id], onDelete: SetNull)
+  schedule_option     ProjectScheduleOption? @relation(fields: [schedule_option_id], references: [id], onDelete: SetNull)
+  project             Project                @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  requested_by        User                   @relation(fields: [requested_by_id], references: [id])
+
+  @@index([brand_id])
+  @@index([status])
+  @@schema("studioflow")
 }
 
+/// Task list. Holds TWO kinds of row in one table:
+///
+///   - `template_id != null` — generated from a `ChecklistTemplate`. Regenerable
+///     at any time by `executeSyncProjectChecklists`; losing one costs nothing.
+///   - `template_id == null` — written by a user. Gone for good if deleted.
+///
+/// Nearly every rule below exists to keep those two kinds from corrupting each
+/// other's assumptions. Read `roadmap.md` §C before changing any of them.
 model ProjectChecklist {
-  id         String  @id @default(uuid())
+  id         String    @id @default(uuid())
   project_id String
   phase_id   String?
   label      String
-  is_checked Boolean @default(false)
-  phase      Phase?  @relation(fields: [phase_id], references: [id], onDelete: Cascade)
-  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  is_checked Boolean   @default(false)
+  /// Timestamp of the most recent check-off. Set when is_checked becomes
+  /// true, cleared when unchecked. Used to purge stale done-items from the
+  /// Today feed after CHECKLIST_DONE_RETENTION_DAYS days.
+  checked_at DateTime?
+
+  /// Subtask parent. Depth is capped at ONE level in validation
+  /// (`MAX_CHECKLIST_DEPTH`), not here — loosening that later needs no
+  /// migration, tightening it would.
+  parent_id String?
+
+  /// Manual ordering. Ties broken by `created_at`. Both readers
+  /// (`phase-heartbeat.ts`, `project-checklist-overview.tsx`) must sort by the
+  /// same pair; before this column they each sorted differently and neither
+  /// produced insertion order.
+  sort_order Int @default(0)
+
+  /// 1 = P1 (highest) … 4 = none. Int rather than an enum so `ORDER BY priority
+  /// ASC` is correct by construction; a Prisma enum sorts by declaration
+  /// position, which quietly puts meaning on the order the enum was typed in.
+  priority Int @default(4)
+
+  /// Date-only by construction: no UI surfaces a time picker, so every value
+  /// lands at midnight. A `due_has_time Boolean @default(false)` column can be
+  /// added later and every pre-existing row will already be correct.
+  due_at DateTime?
+
+  assigned_to_id String?
+
+  /// Origin of the row, and the identity `executeSyncProjectChecklists` dedups
+  /// on. Was `${phase_id}::${label}` before — which collided with user-written
+  /// rows of the same label AND duplicated rows whenever a template was
+  /// renamed. `SetNull` on template delete: the row may already be ticked, so
+  /// deleting it would throw away completed work. It simply becomes a plain
+  /// task.
+  template_id String?
+
+  created_at DateTime @default(now())
+
+  phase       Phase?                 @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+  project     Project                @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  parent      ProjectChecklist?      @relation("ChecklistTree", fields: [parent_id], references: [id], onDelete: Cascade)
+  children    ProjectChecklist[]     @relation("ChecklistTree")
+  assigned_to User?                  @relation("ChecklistAssignee", fields: [assigned_to_id], references: [id])
+  template    ChecklistTemplate?     @relation(fields: [template_id], references: [id], onDelete: SetNull)
+  labels      ChecklistLabelOnItem[]
+  comments    Comment[]
+
+  @@index([project_id, parent_id])
+  @@index([phase_id, is_checked])
+  @@index([assigned_to_id])
+  @@schema("studioflow")
+}
+
+/// A named personal slice of the Tasks feed. `query_json` stores structured
+/// predicates (status/priority/assignee/due), never a free-form query language.
+/// That keeps persistence stable while allowing a richer filter editor later.
+model ChecklistFilterView {
+  id         String   @id @default(uuid())
+  owner_id   String
+  name       String
+  query_json Json
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  owner User @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+
+  @@unique([owner_id, name])
+  @@index([owner_id, created_at])
+  @@schema("studioflow")
+}
+
+/// Free-form label, shared across every project. A table rather than a
+/// `String[]` on purpose: Master Data took the `String[]` route via
+/// `Sku.catalog_tags` and had to be extracted back out of it. That extraction
+/// finished with the v2 rebaseline — the column is gone and categories now live
+/// in `SkuCategory`. Kept as a warning, not as a pointer: the `String[]` route
+/// is cheap to start and expensive to leave.
+model ChecklistLabel {
+  id    String @id @default(uuid())
+  name  String @unique
+  color String @default("slate")
+
+  items ChecklistLabelOnItem[]
+
+  @@schema("studioflow")
+}
+
+model ChecklistLabelOnItem {
+  checklist_id String
+  label_id     String
+
+  checklist ProjectChecklist @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+  label     ChecklistLabel   @relation(fields: [label_id], references: [id], onDelete: Cascade)
+
+  @@id([checklist_id, label_id])
+  @@index([label_id])
+  @@schema("studioflow")
 }
 
 model CDList {
@@ -307,6 +1107,8 @@ model CDList {
   created_at     DateTime     @default(now())
   assigned_to    User?        @relation(fields: [assigned_to_id], references: [id])
   phase          Phase        @relation(fields: [phase_id], references: [id], onDelete: Cascade)
+
+  @@schema("studioflow")
 }
 
 model Comment {
@@ -315,13 +1117,20 @@ model Comment {
   author_id        String
   project_id       String
   phase_id         String?
+  /// Was a dangling column for a model that never shipped. Now wired to
+  /// `ProjectChecklist` — which is what gives tasks comments, authorship, and
+  /// attachments without any of it being built twice.
   task_id          String?
   created_at       DateTime              @default(now())
   updated_at       DateTime              @updatedAt
   author           User                  @relation(fields: [author_id], references: [id])
   phase            Phase?                @relation(fields: [phase_id], references: [id], onDelete: Cascade)
   project          Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  task             ProjectChecklist?     @relation(fields: [task_id], references: [id], onDelete: Cascade)
   temp_attachments TemporaryAttachment[]
+
+  @@index([task_id])
+  @@schema("studioflow")
 }
 
 model TemporaryAttachment {
@@ -335,6 +1144,69 @@ model TemporaryAttachment {
   comment    Comment? @relation(fields: [comment_id], references: [id], onDelete: Cascade)
 
   @@index([expires_at])
+  @@schema("studioflow")
+}
+
+model ProjectMomDocument {
+  id                   String           @id @default(uuid())
+  project_id           String
+  mom_topic            String           @default("SITE INSPECTION REPORT")
+  mom_date             DateTime
+  mom_venue            String?
+  mom_attendees        String?
+  mom_prepared_by_name String
+  created_by           String
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
+  created_by_user      User             @relation("MomCreatedBy", fields: [created_by], references: [id])
+  project              Project          @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  mom_items            ProjectMomItem[]
+
+  @@index([project_id, mom_date])
+  @@schema("studioflow")
+}
+
+model ProjectMomItem {
+  id              String             @id @default(uuid())
+  mom_document_id String
+  sort_order      Int
+  is_text_only    Boolean            @default(false)
+  list_style      MomListStyle       @default(decimal)
+  created_at      DateTime           @default(now())
+  updated_at      DateTime           @updatedAt
+  mom_document    ProjectMomDocument @relation(fields: [mom_document_id], references: [id], onDelete: Cascade)
+  mom_points      ProjectMomPoint[]
+  mom_images      ProjectMomImage[]
+
+  @@index([mom_document_id, sort_order])
+  @@schema("studioflow")
+}
+
+model ProjectMomPoint {
+  id          String         @id @default(uuid())
+  mom_item_id String
+  sort_order  Int
+  text        String
+  style       MomPointStyle  @default(default)
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+  mom_item    ProjectMomItem @relation(fields: [mom_item_id], references: [id], onDelete: Cascade)
+
+  @@index([mom_item_id, sort_order])
+  @@schema("studioflow")
+}
+
+model ProjectMomImage {
+  id          String         @id @default(uuid())
+  mom_item_id String
+  sort_order  Int
+  file_url    String
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+  mom_item    ProjectMomItem @relation(fields: [mom_item_id], references: [id], onDelete: Cascade)
+
+  @@index([mom_item_id, sort_order])
+  @@schema("studioflow")
 }
 
 model PrefixDictionary {
@@ -345,85 +1217,189 @@ model PrefixDictionary {
   entries           ProjectScheduleEntry[]
 
   @@unique([section, schedule_category])
+  @@schema("studioflow")
 }
 
 model ProjectScheduleEntry {
-  id                String                   @id @default(uuid())
-  project_id        String
-  schedule_category String
-  schedule_prefix   String
-  schedule_increment Int
-  index_number      Int
+  id                  String                  @id @default(uuid())
+  project_id          String
+  schedule_category   String
+  schedule_prefix     String
+  schedule_increment  Int
+  index_number        Int
   schedule_sort_order Int
-  schedule_qty     Float?
-  schedule_unit    String?
-  schedule_location String?
-  section           ProductType              @default(material)
-  active_index      Int                      @default(0)
-  version_locked    Boolean                  @default(false)
-  prefix_id         String?
-  created_at        DateTime                 @default(now())
-  updated_at        DateTime                 @updatedAt
-  prefix_ref        PrefixDictionary?        @relation(fields: [prefix_id], references: [id])
-  project           Project                  @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  options           ProjectScheduleOption[]
-  product_requests  ProjectProductRequest[]
-  sketchup_materials SketchupMaterial[]
+  schedule_qty        Float?
+  schedule_unit       String?
+  schedule_location   String?
+  section             ProductType             @default(material)
+  active_index        Int                     @default(0)
+  version_locked      Boolean                 @default(false)
+  prefix_id           String?
+  template_item_id    String?
+  created_at          DateTime                @default(now())
+  updated_at          DateTime                @updatedAt
+  prefix_ref          PrefixDictionary?       @relation(fields: [prefix_id], references: [id])
+  project             Project                 @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  template_item       ScheduleTemplateItem?   @relation(fields: [template_item_id], references: [id], onDelete: SetNull)
+  options             ProjectScheduleOption[]
+  product_requests    ProjectProductRequest[]
+  sketchup_materials  SketchupMaterial[]
+  render_annotations  RenderAnnotation[]
 
   @@unique([project_id, section, schedule_prefix, schedule_increment])
   @@index([project_id])
+  @@index([project_id, template_item_id])
+  @@schema("studioflow")
 }
 
 model ProjectScheduleOption {
-  id                  String               @id @default(uuid())
-  entry_id            String
-  product_catalog_id  String?
-  manual_data         Json?
-  data_snapshot       Json?
-  option_label        String
-  is_final            Boolean              @default(false)
-  status              ScheduleOptionStatus @default(DRAFT)
-  created_at          DateTime             @default(now())
-  updated_at          DateTime             @updatedAt
-  entry               ProjectScheduleEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
-  product_catalog     ProductCatalog?      @relation(fields: [product_catalog_id], references: [id], onDelete: SetNull)
-  product_requests    ProjectProductRequest[]
+  id                String                  @id @default(uuid())
+  entry_id          String
+  /// Master Data terputus dari StudioFlow (M5, 2026-08-10) — FK ke
+  /// master_data.Sku/Brand dilepas. `data_snapshot` sudah membekukan isi
+  /// produk yang dipilih, jadi kolom ini tetap boleh menunjuk baris yang
+  /// sudah tidak ada.
+  sku_id            String?
+  manual_data       Json?
+  data_snapshot     Json?
+  option_label      String
+  is_final          Boolean                 @default(false)
+  status            ScheduleOptionStatus    @default(DRAFT)
+  /// §6.14 reuse-search columns. Written by the service layer from the same
+  /// input used to build `data_snapshot`, in the same transaction — plain
+  /// columns, not Postgres GENERATED, because this schema change was made
+  /// without a live database connection to verify STORED-generated-column
+  /// behavior against Prisma 7.5. Revisit once there is DB access to test;
+  /// until then, correctness depends on the write path keeping these two in
+  /// sync, which PLAN-LIBRARY-BRAND-FIRST.md §9 flags as a step-8 regression
+  /// check, not an assumption.
+  spec_brand_id     String?
+  spec_product_name String?
+  spec_color        String?
+  spec_finishing    String?
+  /// Normalized (lowercased, trimmed) concatenation of brand+product+color+
+  /// finishing, for reuse-pool dedup/grouping without scanning JSONB.
+  spec_search_key   String?
+  /// Existing operational timestamps. The Brand-First migration is additive
+  /// and deliberately preserves these columns; schedule reuse also orders by
+  /// `created_at`, so they must remain mapped in Prisma.
+  created_at        DateTime                @default(now())
+  updated_at        DateTime                @updatedAt
+  entry             ProjectScheduleEntry    @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  product_requests  ProjectProductRequest[]
+
+  @@index([spec_search_key])
+  @@index([spec_brand_id])
+  @@schema("studioflow")
 }
 
 model ScheduleTemplate {
-  id                String          @id @default(uuid())
+  id                String      @id @default(uuid())
   schedule_category String
-  section           ProductType     @default(material)
-  is_active         Boolean         @default(true)
+  section           ProductType @default(material)
+  is_active         Boolean     @default(true)
+  // Recurring schedule template (PLAN-AUDIT-ROADMAP-2026Q3.md §2.1 R1): when
+  // true, this category is auto-materialized as an empty "reserve" entry on
+  // every new project (and via the explicit "Apply template" action for
+  // existing ones), so the team stops re-creating the same PT-/FL-/etc. rows
+  // by hand. One global default set per section — see §2.1's decision note.
+  is_default_entry  Boolean     @default(false)
 
   @@unique([section, schedule_category])
+  @@schema("studioflow")
+}
+
+/// Item default yang otomatis dipasang ke setiap proyek baru — kartu yang sudah
+/// terisi spesifikasinya, bukan sekadar kategori kosong. Snapshot-nya beku dan
+/// DISALIN saat apply (tidak ada propagasi), formatnya identik dengan
+/// ProjectScheduleOption.data_snapshot.
+model ScheduleTemplateItem {
+  id                String                 @id @default(uuid())
+  section           ProductType            @default(material)
+  schedule_category String
+  sort_order        Int
+  data_snapshot     Json
+  /// Ikut kalau sumbernya pernah ditautkan ke Library. Nullable dan boleh
+  /// menunjuk baris yang sudah hilang (sama dengan ProjectScheduleOption.sku_id).
+  sku_id            String?
+  is_active         Boolean                @default(true)
+  created_at        DateTime               @default(now())
+  updated_at        DateTime               @updatedAt
+  entries           ProjectScheduleEntry[]
+
+  @@index([section, schedule_category, sort_order])
+  @@schema("studioflow")
 }
 
 model PromotionRequest {
-  id               String    @id @default(uuid())
-  project_id       String
+  id                 String    @id @default(uuid())
+  project_id         String
   schedule_option_id String
-  requested_by_id   String
-  snapshot_data    Json?
-  notes            String?
-  status           String    @default("PENDING")
-  reviewed_by_id   String?
-  reviewed_at      DateTime?
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @updatedAt
+  requested_by_id    String
+  snapshot_data      Json?
+  notes              String?
+  status             String    @default("PENDING")
+  reviewed_by_id     String?
+  reviewed_at        DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  @@schema("studioflow")
 }
 
 enum TimelineStatus {
   NOT_STARTED
   IN_PROGRESS
   COMPLETED
+
+  @@schema("studioflow")
 }
 
+enum MomListStyle {
+  decimal
+  disc
+  dash
+  none
+
+  @@schema("studioflow")
+}
+
+enum MomPointStyle {
+  default
+  none
+
+  @@schema("studioflow")
+}
+
+// Role drives BOTH permission grants (src/core/rbac/matrix.ts) and which app
+// surface a user may enter (src/core/rbac/app-access.ts). Adding a value here
+// is a compile-time breaking change on purpose: ROLE_PERMISSIONS and
+// APP_ACCESS are typed as Record<Role, ...>, so TypeScript refuses to build
+// until the new role is explicitly granted (or explicitly denied) everywhere.
+// Never widen this enum without updating both matrices.
 enum Role {
+  // ADMIN = studio boss. Full web-app admin access, but NOT the SketchUp
+  // plugin surface (API keys, merge queue, synced-code swaps) — that is
+  // DEVELOPER-only. (This role absorbed the former OWNER role.)
   ADMIN
+  // DEVELOPER = technical superuser. Everything ADMIN has PLUS the SketchUp
+  // plugin surface, which is hard-gated to role === "DEVELOPER" at each call
+  // site. isAdminLevel(ADMIN|DEVELOPER) is true for both.
+  DEVELOPER
   DIC
   DRIC
+  // STAFF maintains Master Data (vendors, offerings, SKUs, prices, samples).
+  // Material/promotion curation is NOT a STAFF capability — it belongs to
+  // admin-level roles (ADMIN, DEVELOPER) only. (This role absorbed the former
+  // CURATOR role, minus the two approval permissions.)
   STAFF
+  // ESTIMATOR = BQ subapp only. Shares StudioFlow login/identity but has no
+  // StudioFlow project surface. See UPSTREAM-BQ-MATERIAL-SOURCE.md §0.2:
+  // granular BQ_* permissions are enforced inside BQ, not here. StudioFlow
+  // holds exactly one BQ permission (BQ_ACCESS) to gate the /bq entry point.
+  ESTIMATOR
+
+  @@schema("studioflow")
 }
 
 enum PhaseName {
@@ -433,18 +1409,24 @@ enum PhaseName {
   CD
   SUPERVISION
   COMPLETED
+
+  @@schema("studioflow")
 }
 
 enum ProjectStatus {
   ACTIVE
   COMPLETED
   ON_HOLD
+
+  @@schema("studioflow")
 }
 
 enum ProjectPriority {
   URGENT
   NORMAL
   LOW
+
+  @@schema("studioflow")
 }
 
 enum PhaseStatus {
@@ -455,135 +1437,659 @@ enum PhaseStatus {
   ON_REVIEW_CLIENT
   READY_FOR_NEXT
   COMPLETED
+
+  @@schema("studioflow")
 }
 
 enum RevisionStatus {
   ACTIVE
   COMPLETED
+
+  @@schema("studioflow")
 }
 
 enum ActivityStatus {
   OPEN
   COMPLETED
+
+  @@schema("studioflow")
 }
 
 enum ActivityMode {
   TODO
   FEEDBACK
+
+  @@schema("studioflow")
 }
 
 enum CDItemStatus {
   PENDING
   IN_PROGRESS
   COMPLETED
+
+  @@schema("studioflow")
 }
 
-enum LibraryItemStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
+// LibraryItemStatus dihapus 2026-08-10. Setelah Master Data v2, tidak ada satu
+// pun model yang memakainya — `Sku.status` memakai `SkuStatus`. Enum yang
+// dideklarasikan tapi tak terpakai TIDAK ikut dikirim Prisma ke bundle browser,
+// jadi tiap komponen client yang membacanya meledak saat module evaluation
+// meski `tsc` hijau. Nilai PENDING/APPROVED/REJECTED sekarang hidup sebagai
+// const TS di `src/extensions/library/types.ts` — tempat yang jujur, karena ia
+// memang status tampilan, bukan kolom database.
 
 enum ProductRequestStatus {
   REQUESTED
   IN_PROGRESS
   RECEIVED
   UNAVAILABLE
+
+  @@schema("studioflow")
 }
 
 enum ScheduleOptionStatus {
   DRAFT
   APPROVED
   NOT_USED
+
+  @@schema("studioflow")
 }
 
 enum ProductType {
   material
   fixture
+
+  @@schema("studioflow")
 }
 
-enum SampleAction {
-  IN
-  OUT
-  TRANSFER
-  REJECT
-  CHECK_IN
-  CHECK_OUT
-  AUDITED
-  BORROW
-  RETURN
-}
-
-enum SampleStatus {
-  AVAILABLE
-  BORROWED
-  SENT_TO_CLIENT
-}
+// SampleAction dan SampleStatus v1 (studioflow-scoped) dihapus 2026-08-10 —
+// hanya dipakai model master_data.Sample/SampleMovementLog v1 yang sudah
+// dibuang. Definisinya sekarang di blok MASTER DATA v2 (@@schema master_data).
 
 model SketchupProject {
-  id                    String                @id @default(uuid())
-  project_id            String
-  sketchup_model_name   String
-  api_key               String                @unique
-  created_at            DateTime              @default(now())
-  updated_at            DateTime              @updatedAt
-  project               Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  materials             SketchupMaterial[]
-  ffes                  SketchupFFE[]
-  merge_actions         SketchupMergeAction[]
+  id                  String                @id @default(uuid())
+  project_id          String
+  sketchup_model_name String
+  api_key             String                @unique
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @updatedAt
+  project             Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  materials           SketchupMaterial[]
+  ffes                SketchupFFE[]
+  merge_actions       SketchupMergeAction[]
 
   @@index([project_id])
+  @@schema("studioflow")
 }
 
 model SketchupMaterial {
-  id                    String                @id @default(uuid())
-  sketchup_project_id   String
-  code                  String
-  uuid                  String
-  brand                 String?
-  type                  String?
-  finish                String?
-  image_url             String?
-  location_notes        String?
-  area                  Float?
-  face_count            Int?
-  backface_count        Int?
-  layers                Json?
-  parents               Json?
-  linked_entry_id       String?
-  linked_entry          ProjectScheduleEntry? @relation(fields: [linked_entry_id], references: [id], onDelete: SetNull)
-  created_at            DateTime              @default(now())
-  updated_at            DateTime              @updatedAt
-  sketchup_project      SketchupProject       @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
+  id                  String                @id @default(uuid())
+  sketchup_project_id String
+  code                String
+  uuid                String
+  brand               String?
+  type                String?
+  finish              String?
+  image_url           String?
+  reference_url       String?
+  location_notes      String?
+  item_no             String?
+  qty                 Float?
+  unit                String?
+  color_size          String?
+  unit_cost           Float?
+  notes               String?
+  catalog_fields      Json?
+  area                Float?
+  face_count          Int?
+  backface_count      Int?
+  layers              Json?
+  parents             Json?
+  is_reserved         Boolean               @default(false)
+  linked_entry_id     String?
+  linked_entry        ProjectScheduleEntry? @relation(fields: [linked_entry_id], references: [id], onDelete: SetNull)
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @updatedAt
+  sketchup_project    SketchupProject       @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
 
   @@unique([sketchup_project_id, uuid])
   @@index([sketchup_project_id])
+  @@schema("studioflow")
 }
 
 model SketchupFFE {
-  id                    String                @id @default(uuid())
-  sketchup_project_id   String
-  code                  String
-  instance_count        Int                   @default(1)
-  area                  Float?
-  metadata              Json?
-  created_at            DateTime              @default(now())
-  updated_at            DateTime              @updatedAt
-  sketchup_project      SketchupProject       @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
+  id                  String          @id @default(uuid())
+  sketchup_project_id String
+  code                String
+  instance_count      Int             @default(1)
+  area                Float?
+  metadata            Json?
+  created_at          DateTime        @default(now())
+  updated_at          DateTime        @updatedAt
+  sketchup_project    SketchupProject @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
 
   @@unique([sketchup_project_id, code])
   @@index([sketchup_project_id])
+  @@schema("studioflow")
 }
 
 model SketchupMergeAction {
-  id                    String                @id @default(uuid())
-  sketchup_project_id   String
-  source_code           String
-  target_code           String
-  executed_at           DateTime?
-  created_at            DateTime              @default(now())
-  updated_at            DateTime              @updatedAt
-  sketchup_project      SketchupProject       @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
+  id                  String          @id @default(uuid())
+  sketchup_project_id String
+  source_code         String
+  target_code         String
+  queue_order         Int             @default(0)
+  executed_at         DateTime?
+  created_at          DateTime        @default(now())
+  updated_at          DateTime        @updatedAt
+  sketchup_project    SketchupProject @relation(fields: [sketchup_project_id], references: [id], onDelete: Cascade)
 
   @@index([sketchup_project_id])
+  @@schema("studioflow")
+}
+
+// Non-destructive annotation of a designer's render. The image (image_url) is
+// stored as-is and never modified; annotations are a separate overlay layer
+// (pin coordinates as % of the image + a link to a Product Schedule entry), so
+// deleting annotations leaves the render untouched.
+model RenderBoard {
+  id          String             @id @default(uuid())
+  project_id  String
+  title       String             @default("Render Board")
+  image_url   String
+  image_ratio Float? // natural width / height, for stable layout
+  sort_order  Int                @default(0)
+  created_by  String
+  created_at  DateTime           @default(now())
+  updated_at  DateTime           @updatedAt
+  project     Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  annotations RenderAnnotation[]
+
+  @@index([project_id, sort_order])
+  @@schema("studioflow")
+}
+
+model RenderAnnotation {
+  id                String                @id @default(uuid())
+  board_id          String
+  schedule_entry_id String?
+  pin_x             Float // 0-100, % of image width
+  pin_y             Float // 0-100, % of image height
+  label_side        RenderLabelSide       @default(auto)
+  note              String? // optional per-pin override / extra text
+  sort_order        Int                   @default(0)
+  created_at        DateTime              @default(now())
+  updated_at        DateTime              @updatedAt
+  board             RenderBoard           @relation(fields: [board_id], references: [id], onDelete: Cascade)
+  schedule_entry    ProjectScheduleEntry? @relation(fields: [schedule_entry_id], references: [id], onDelete: SetNull)
+
+  @@index([board_id, sort_order])
+  @@schema("studioflow")
+}
+
+enum RenderLabelSide {
+  auto
+  left
+  right
+
+  @@schema("studioflow")
+}
+
+// ============================================================================
+// BQ — FIXTURE BREAKDOWN (schema `bq`)
+// ============================================================================
+//
+// Sumber: `D:\Misc\ProjectsHUB\BQ\PRD_Fixture_Breakdown.md`. Dibangun sebagai
+// subapp DI DALAM StudioFlow di `/bq` (keputusan owner 2026-08-19) — bukan
+// repo terpisah seperti yang diasumsikan `UPSTREAM-BQ-MATERIAL-SOURCE.md` §0.
+// Konsekuensi keputusan itu ada di `AGENTS.md` §🧾 BQ Contract.
+//
+// ----------------------------------------------------------------------------
+// TIGA LAPIS, TIDAK LEBIH
+// ----------------------------------------------------------------------------
+//   L1 BqObject      satu fixture utuh — qty, unit, markup, rate hasil hitung
+//     L2 BqSubObject   bagian fixture — PUNYA QTY PENGALI SENDIRI
+//       L3 BqMaterialLine / BqServiceLine   baris biaya paling dasar
+//
+// Tidak ada sub-sub-object (PRD §2.2). Kalau ada bagian yang terasa perlu
+// lapis keempat, ia dipecah jadi dua L2 sejajar. Nesting tak terbatas
+// terdengar fleksibel tapi membuat perhitungan, tampilan, dan agregasi
+// pembelian jauh lebih rumit tanpa kasus nyata yang menuntutnya.
+//
+// ----------------------------------------------------------------------------
+// KENAPA BAHAN DAN JASA DUA TABEL, BUKAN SATU DENGAN KOLOM NULLABLE
+// ----------------------------------------------------------------------------
+// PRD §3.2: baris jasa tidak punya waste dan tidak punya konversi,
+// *"Ditegakkan lewat skema — tabel baris jasa memang tidak punya kolomnya."*
+// AT-07 menguji tepat itu. Satu tabel dengan `waste_override_pct` nullable
+// akan membuat AT-07 lolos hanya selama ada yang ingat menulis cek
+// aplikasinya. Dua tabel membuatnya mustahil dilanggar.
+//
+// Efek sampingnya kebetulan menguntungkan: FR-EXP-03 memang meminta baris
+// dikelompokkan bahan dulu, jasa kemudian.
+//
+// ----------------------------------------------------------------------------
+// KENAPA SNAPSHOT ADA DI SETIAP BARIS L3
+// ----------------------------------------------------------------------------
+// PRD §5.4 — larangan silent update, *"aturan yang paling tidak boleh
+// dilanggar"*. Setiap baris L3 membekukan harga, konversi, satuan, waste
+// default, dan tanggal saat baris itu dibuat. Sistem TIDAK membaca ulang
+// master data saat menampilkan breakdown. Harga master berubah → banner,
+// bukan angka yang berubah sendiri.
+//
+// Kolom `sku_id` / `work_price_id` di baris L3 sengaja BUKAN foreign key.
+// Sama alasannya dengan `WorkPriceProjectRef.project_id` (AGENTS.md §8): yang
+// disimpan adalah snapshot id + nama, dan snapshot harus selamat dari apa pun
+// yang terjadi pada master data sesudahnya. FK dengan `SetNull` pun tidak
+// cukup — ia benar hari ini dan diam-diam salah kalau suatu saat seseorang
+// menulis `Cascade`.
+//
+// Sebaliknya, tabel SETELAN (`BqMaterialProfile`, `BqCategoryWaste`) MEMANG
+// ber-FK ke `master_data`: mereka bukan snapshot, mereka pelengkap master
+// data, dan baris pelengkap untuk SKU yang tidak ada memang tidak ada artinya.
+//
+// ----------------------------------------------------------------------------
+// PRESISI
+// ----------------------------------------------------------------------------
+// PRD Bab 3: qty `numeric(18,6)`, uang `numeric(18,4)`. Persentase disimpan
+// sebagai FRAKSI (`0.1` = 10%), bukan `10` — supaya tidak ada tempat di mana
+// seseorang harus ingat membagi 100.
+// ============================================================================
+
+enum BqProjectStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+
+  @@schema("bq")
+}
+
+/// Setelan global kantor. Satu baris, `id` dikunci ke `SETTINGS_ID`
+/// (`src/subapps/bq/lib/constants.ts`) — pola yang sama dengan
+/// `studioflow.SystemConfig`.
+model BqSettings {
+  id String @id
+
+  /// Fraksi. 0.2 = 20%. Menjawab PRD §11 open decision 1: ADA default kantor,
+  /// DAN ia bisa di-override per object — nilainya disalin ke `BqObject`
+  /// saat object dibuat, jadi mengubah default di sini tidak pernah mengubah
+  /// object yang sudah ada (alasan yang sama dengan snapshot harga).
+  default_markup_pct Decimal @default(0.2) @db.Decimal(9, 6)
+
+  currency String @default("IDR")
+
+  updated_at      DateTime? @updatedAt
+  updated_by_name String?
+
+  @@schema("bq")
+}
+
+/// Wadah project BQ. BERDIRI SENDIRI dari `studioflow.Project` (keputusan
+/// owner 2026-08-19, sejalan dengan PRD §0.1 "database proyek terpisah").
+///
+/// `studioflow_project_id` adalah kolom biasa berisi snapshot id + nama —
+/// pola yang sama dengan `WorkPriceProjectRef` (AGENTS.md §8). Ini yang
+/// membuat estimator bisa menyusun BQ untuk tender yang belum jadi project
+/// StudioFlow, dan membuat BQ tidak ikut terhapus kalau project-nya batal.
+model BqProject {
+  id String @id @default(uuid())
+
+  /// Bebas diisi kantor. Tidak mengikuti Project Naming Protocol StudioFlow —
+  /// BQ boleh ada sebelum nomor project terbit.
+  code String?
+  name String
+
+  studioflow_project_id   String?
+  studioflow_project_name String?
+
+  status BqProjectStatus @default(DRAFT)
+  notes  String?
+
+  created_by_id   String?
+  created_by_name String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  objects BqObject[]
+
+  @@index([status, deleted_at])
+  @@index([studioflow_project_id])
+  @@index([deleted_at])
+  @@schema("bq")
+}
+
+/// L1 — satu fixture utuh yang jadi satu baris BQ.
+///
+/// `rate` TIDAK disimpan. Ia dihitung `computeObject()` dari baris di
+/// bawahnya setiap kali dibaca. Menyimpannya berarti punya dua sumber
+/// kebenaran yang bisa selisih, dan yang tersimpan selalu yang dipercaya
+/// orang. Yang membekukan angka di BQ adalah snapshot di baris L3, bukan
+/// hasil hitung di L1.
+model BqObject {
+  id         String    @id @default(uuid())
+  project_id String
+  project    BqProject @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  code String?
+  name String
+
+  qty  Decimal @default(1) @db.Decimal(18, 6)
+  unit String  @default("unit")
+
+  /// Fraksi. Disalin dari `BqSettings.default_markup_pct` saat object dibuat.
+  /// Markup diterapkan di L1, bukan per baris L3 (PRD §3.4): ia keputusan
+  /// komersial atas satu fixture utuh, bukan atas sebatang edging.
+  ///
+  /// TIDAK PERNAH tercetak ke klien — klien lihat rate saja.
+  markup_pct Decimal @default(0.2) @db.Decimal(9, 6)
+
+  /// Presedensi waste level 2 — "seluruh object ini waste 5%". NULL = tidak
+  /// di-override; 0 adalah nilai sah yang menang atas default bahan.
+  waste_override_pct Decimal? @db.Decimal(9, 6)
+
+  sort_order Int     @default(0)
+  notes      String?
+
+  /// Object terkunci tidak menerima refresh harga apa pun, banner pun tidak
+  /// muncul (PRD §5.4).
+  locked_at      DateTime?
+  locked_by_name String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  sub_objects BqSubObject[]
+
+  @@index([project_id, sort_order])
+  @@index([deleted_at])
+  @@schema("bq")
+}
+
+/// L2 — bagian dari fixture, dengan QTY PENGALI sendiri.
+///
+/// Inilah kunci desain seluruh alat ini (PRD §2.1). Estimator menulis
+/// kebutuhan untuk SATU ambalan (0,50 sqm) lalu set jumlahnya 3. Ubah jadi 5,
+/// seluruh bahan di bawahnya ikut. Tanpa `qty` di lapis ini, alat ini cuma
+/// Excel yang lebih rapi — estimator tetap harus menghitung 0,50 × 3 di
+/// kepalanya dan menghitung ulang semuanya saat jumlah ambalan berubah.
+model BqSubObject {
+  id        String   @id @default(uuid())
+  object_id String
+  object    BqObject @relation(fields: [object_id], references: [id], onDelete: Cascade)
+
+  name String
+
+  /// Berapa banyak sub-object ini di dalam 1 object.
+  qty Decimal @default(1) @db.Decimal(18, 6)
+
+  /// Link ke template library (R2). NULL = standalone (◇); non-null = instance
+  /// (⧉). Setiap mutasi baris L3 memutuskan link ini secara otomatis
+  /// (copy-on-write di `detachFromTemplate`). Kalau template dihapus dari
+  /// library, `onDelete: SetNull` memastikan sub-object tetap hidup sebagai ◇.
+  library_sub_object_id String?
+  library_sub_object    BqLibrarySubObject? @relation(fields: [library_sub_object_id], references: [id], onDelete: SetNull)
+
+  sort_order Int     @default(0)
+  notes      String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  updated_by_name String?
+
+  material_lines BqMaterialLine[]
+  service_lines  BqServiceLine[]
+
+  @@index([object_id, sort_order])
+  @@index([library_sub_object_id])
+  @@schema("bq")
+}
+
+/// L3 bahan. Semua kolom `snapshot_*` dibekukan saat baris dibuat dan TIDAK
+/// PERNAH dibaca ulang dari master data (PRD §5.4).
+///
+/// Estimator boleh menyunting nilai snapshot langsung di BQ (keputusan owner
+/// 2026-08-19: *"kalau mau diedit via BQ saja bisa — nanti jadi snapshot saja
+/// levelnya, tiap project BQ punya snapshot sendiri"*). Suntingan itu hidup
+/// di baris ini saja: ia tidak pernah merambat balik ke Master Data, dan
+/// ditandai `is_manual_override` supaya Internal Cost Detail bisa
+/// membedakannya dari angka yang datang apa adanya dari master.
+///
+/// Yang TIDAK boleh: baris yang tidak pernah menunjuk master data sama sekali.
+/// Master data adalah SSOT — bahan yang belum ada di sana harus diminta ke
+/// staff lewat Master Data lebih dulu. `sku_id` nullable hanya untuk baris
+/// yang SKU-nya benar-benar lenyap sesudahnya, bukan pintu masuk baris karangan.
+model BqMaterialLine {
+  id            String      @id @default(uuid())
+  sub_object_id String
+  sub_object    BqSubObject @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
+
+  /// Kolom biasa, BUKAN FK — lihat catatan snapshot di kepala blok ini.
+  sku_id            String?
+  sku_price_id      String?
+  supplier_party_id String?
+
+  /// Kebutuhan untuk SATU sub-object, dalam `snapshot_usage_unit`.
+  qty_per_sub Decimal @db.Decimal(18, 6)
+
+  /// Presedensi waste level 1. NULL = tidak di-override. 0 eksplisit adalah
+  /// nilai sah yang menang atas seluruh default di bawahnya (PRD §4.1, AT-04).
+  waste_override_pct Decimal? @db.Decimal(9, 6)
+
+  // --- snapshot identitas -------------------------------------------------
+  snapshot_name          String
+  snapshot_code          String?
+  snapshot_brand_name    String?
+  snapshot_category_path String?
+  snapshot_supplier_name String?
+
+  // --- snapshot satuan & harga -------------------------------------------
+  snapshot_usage_unit    String
+  snapshot_purchase_unit String
+
+  /// Konversi saat baris dibuat. Ikut dibekukan karena ia bagian dari
+  /// MENDEFINISIKAN harga, bukan tingkat detail (PRD §4).
+  snapshot_conversion Decimal @db.Decimal(18, 6)
+
+  /// Harga per PURCHASE unit. Bukan per usage unit — pembagiannya terjadi di
+  /// mesin hitung, bukan di simpanan, supaya asal angkanya tetap terlihat.
+  snapshot_price    Decimal @db.Decimal(18, 4)
+  snapshot_currency String  @default("IDR")
+
+  // --- snapshot asumsi estimasi -------------------------------------------
+  /// Presedensi level 3 dan 4 disimpan TERPISAH, bukan sudah dikerucutkan
+  /// jadi satu angka. Kalau digabung, `wasteSource` tidak bisa lagi menjawab
+  /// "kenapa waste-nya 10%" — dan AT-03 tidak bisa diuji di mesin hitung.
+  snapshot_material_default_waste_pct Decimal? @db.Decimal(9, 6)
+  snapshot_category_default_waste_pct Decimal? @db.Decimal(9, 6)
+
+  snapshot_minimum_order      Decimal? @db.Decimal(18, 6)
+  snapshot_rounding_increment Decimal  @default(1) @db.Decimal(18, 6)
+
+  // --- provenance ---------------------------------------------------------
+  snapshot_price_valid_from    DateTime?
+  snapshot_price_verified_from DateTime?
+  snapshot_taken_at            DateTime  @default(now())
+
+  /// TRUE kalau estimator menyunting salah satu nilai snapshot di dalam BQ.
+  is_manual_override Boolean @default(false)
+  override_note      String?
+
+  sort_order Int     @default(0)
+  notes      String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  updated_by_name String?
+
+  @@index([sub_object_id, sort_order])
+  @@index([sku_id])
+  @@schema("bq")
+}
+
+/// L3 jasa. Tanpa waste, tanpa konversi, tanpa minimum order — dan itu
+/// ditegakkan oleh KETIADAAN kolomnya di sini, bukan oleh cek aplikasi
+/// (PRD §3.2, AT-07).
+///
+/// Kalau suatu saat `waste_override_pct` muncul di tabel ini, yang salah
+/// adalah migrasinya. Jangan menambahkannya "supaya seragam dengan bahan".
+model BqServiceLine {
+  id            String      @id @default(uuid())
+  sub_object_id String
+  sub_object    BqSubObject @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
+
+  work_price_id   String?
+  vendor_party_id String?
+
+  /// Kebutuhan untuk SATU sub-object, dalam `snapshot_rate_unit`.
+  qty_per_sub Decimal @db.Decimal(18, 6)
+
+  snapshot_name          String
+  snapshot_code          String?
+  snapshot_category_path String?
+  snapshot_vendor_name   String?
+
+  /// PRD §5.3: sqm, m', pcs, ls, org-hari.
+  snapshot_rate_unit String
+
+  snapshot_price    Decimal @db.Decimal(18, 4)
+  snapshot_currency String  @default("IDR")
+
+  /// PRD §5.3 menyebutnya penting: "Jasa Pasang HPL" harus jelas sudah
+  /// termasuk lem atau belum. Dibekukan bersama harganya karena scope yang
+  /// berubah di master adalah harga yang berubah artinya.
+  snapshot_scope_note String?
+
+  /// `WorkPrice.kind = MATERIAL_LABOR` — paket supply-and-install. Dibekukan
+  /// supaya Internal Cost Detail bisa menjelaskan kenapa sebuah baris jasa
+  /// tampak mahal tanpa harus menebaknya dari harga.
+  snapshot_has_material Boolean @default(false)
+
+  snapshot_price_valid_from DateTime?
+  snapshot_taken_at         DateTime  @default(now())
+
+  is_manual_override Boolean @default(false)
+  override_note      String?
+
+  sort_order Int     @default(0)
+  notes      String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  updated_by_name String?
+
+  @@index([sub_object_id, sort_order])
+  @@index([work_price_id])
+  @@schema("bq")
+}
+
+// =============================================================================
+// Library — resep yang bisa dipanggil ulang
+// =============================================================================
+// Dua tabel terpisah (L1 dan L2) karena dipanggil di tempat berbeda.
+// Tidak ada kolom snapshot_* — library menyimpan resep, bukan angka terkunci.
+// =============================================================================
+
+/// Library L1 — satu fixture utuh yang bisa dipanggil di project lain.
+model BqLibraryObject {
+  id   String @id @default(uuid())
+  code String?
+  name String
+
+  unit        String
+  markup_pct  Decimal @db.Decimal(9, 6)
+  notes       String?
+
+  created_by_name String
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+
+  sub_objects BqLibrarySubObjectOfObject[]
+
+  @@schema("bq")
+}
+
+/// Sub-object yang disimpan di dalam L1 library — BUKAN FK ke BqLibrarySubObject.
+/// Supaya mengubah "Ambalan standar" tidak diam-diam mengubah setiap L1 yang
+/// pernah memakainya. Pola yang sama dengan snapshot di baris L3.
+model BqLibrarySubObjectOfObject {
+  id                 String @id @default(uuid())
+  library_object_id  String
+  library_object     BqLibraryObject @relation(fields: [library_object_id], references: [id], onDelete: Cascade)
+
+  name  String
+  qty   Decimal @db.Decimal(18, 6)
+  notes String?
+
+  sort_order Int @default(0)
+
+  materials BqLibraryMaterialLine[]
+  services  BqLibraryServiceLine[]
+
+  @@index([library_object_id, sort_order])
+  @@schema("bq")
+}
+
+/// Library L2 — sub-object berdiri sendiri yang bisa dipanggil langsung.
+model BqLibrarySubObject {
+  id   String @id @default(uuid())
+  name String
+  qty  Decimal @db.Decimal(18, 6)
+
+  notes String?
+
+  created_by_name String
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+
+  materials  BqLibraryMaterialLine[]
+  services   BqLibraryServiceLine[]
+  /// Instance BqSubObject yang terhubung ke template ini.
+  instances  BqSubObject[]
+
+  @@schema("bq")
+}
+
+/// Baris material di library — menyimpan resep, bukan snapshot.
+model BqLibraryMaterialLine {
+  id String @id @default(uuid())
+
+  // FK ke salah satu dari dua parent (keduanya nullable, validasi di app layer)
+  sub_object_of_object_id String?
+  sub_object_of_object    BqLibrarySubObjectOfObject? @relation(fields: [sub_object_of_object_id], references: [id], onDelete: Cascade)
+  sub_object_id           String?
+  sub_object              BqLibrarySubObject? @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
+
+  sku_id         String
+  qty_per_sub    Decimal  @db.Decimal(18, 6)
+  waste_override_pct Decimal? @db.Decimal(9, 6)
+  sort_order     Int      @default(0)
+
+  @@index([sub_object_of_object_id])
+  @@index([sub_object_id])
+  @@schema("bq")
+}
+
+/// Baris jasa di library — menyimpan resep, bukan snapshot.
+model BqLibraryServiceLine {
+  id String @id @default(uuid())
+
+  sub_object_of_object_id String?
+  sub_object_of_object    BqLibrarySubObjectOfObject? @relation(fields: [sub_object_of_object_id], references: [id], onDelete: Cascade)
+  sub_object_id           String?
+  sub_object              BqLibrarySubObject? @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
+
+  work_price_id String
+  qty_per_sub   Decimal @db.Decimal(18, 6)
+  sort_order    Int     @default(0)
+
+  @@index([sub_object_of_object_id])
+  @@index([sub_object_id])
+  @@schema("bq")
 }

@@ -17,6 +17,14 @@ Candidate products associated with an Entry. Each Entry can have multiple Option
 - **status**: `DRAFT`, `APPROVED`, or `NOT_USED`.
 - **Smart Deletion**: Deleting a "Final" option automatically promotes the next available sibling to "Final" to ensure the Entry always has a representative product.
 
+### **Write Path Guard (2026-08-12)**
+`data_snapshot` WAJIB ditulis melalui `createScheduleOption` atau `updateScheduleOptionSnapshot` di
+`src/extensions/schedule/services/schedule-option-writer.ts`. Jangan panggil
+`tx.projectScheduleOption.create/update` dengan `data_snapshot` di luar berkas itu.
+Alasannya: `spec_*` adalah index turunan dari snapshot (dipakai reuse pool); menulis snapshot
+tanpa menderivasi ulang index-nya membuat reuse pool tidak pernah menemukan apa pun.
+Lihat `docs/ANALISA-SCHEDULE-REUSE-2026-08-12.md §2` untuk detail.
+
 ### **ScheduleOptionSnapshot (Snapshot)**
 An immutable JSON blob capturing the product specifications. 
 - **Namespaced Fields**: All fields strictly use namespaced prefixes (`catalog_` for library fields, `schedule_` for project context).
@@ -41,7 +49,16 @@ StudioFlow follows a strict **Snapshot-First** architecture to ensure data integ
 ## 3. General Workflows
 
 ### **Adding Products**
-- **From Library**: Search and pick from the `ProductCatalog`. A snapshot is created automatically.
+> **2026-08-04:** the picker modal this section originally described (in the
+> now-deleted `src/extensions/schedule/components/`) has been replaced by
+> `src/extensions/sketchup/components/CatalogBoard.tsx`'s "Add schedule item"
+> dialog. Current sources there are **Manual** (project-local draft) and
+> **From a past project** (cross-project reuse pool, `searchReusableSpecs` /
+> `addEntryToSchedule(..., "reuse", ...)`) — catalog-based add was removed
+> 2026-08-04, see PLAN-AUDIT-ROADMAP-2026Q3.md §2.2 R2. The bullets below are
+> kept for the underlying concepts (snapshot creation, CSV import) but "From
+> Library" and "picker modal" no longer match the live UI.
+- ~~**From Library**: Search and pick from the `ProductCatalog`. A snapshot is created automatically.~~ Removed 2026-08-04 — see note above.
 - **Hybrid Quick Draft**: Triggered from the search bar when a product is not found in the library. Mandates Category, Brand, and Classification (Stage 1 Draft).
 - **Manual Creation (Legacy)**: Input data manually via the picker modal.
 - **CSV Import**: Batch import from Google Sheets. Imports are tagged as `snapshot_source_origin: "gsheets_import"`.

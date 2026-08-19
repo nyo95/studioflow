@@ -62,9 +62,35 @@ export function ProjectLayoutShell({
 
   return (
     <div className="flex min-h-full flex-1">
-      {/* Desktop: inline project nav (collapsible) */}
+      {/* Desktop: project nav, PINNED.
+          =====================================================================
+          WHY `fixed` AND NOT `sticky`
+          =====================================================================
+          This was `lg:sticky lg:top-0` and it did not hold — the panel scrolled
+          away with the page. So does ActionSidebar's own `lg:sticky lg:top-8`
+          elsewhere on the project page, which is the tell: sticky is not
+          resolving against the scroll container anywhere in this shell, not
+          just here. Rather than keep guessing at which ancestor breaks it,
+          this pins to the viewport, which cannot be defeated by an ancestor's
+          overflow, transform or animation.
+          =====================================================================
+          GEOMETRY — this reproduces the previous layout exactly
+          =====================================================================
+          `left-[78px]` is the width of the fixed NavOuter rail in
+          src/app/(dashboard)/layout.tsx, which also pads `main` by the same
+          `lg:pl-[78px]`. `top-14` clears the fixed 3.5rem TopHeader.
+          The sibling spacer below keeps the flex row's first column, so page
+          content still starts to the right of the panel instead of sliding
+          underneath it.
+          If the rail width changes, both numbers move together. */}
+      <div
+        className="hidden shrink-0 lg:block"
+        style={{ width: isCollapsedDesktop ? "78px" : "256px" }}
+        aria-hidden
+      />
+
       <aside
-        className={cn("hidden lg:flex lg:flex-col")}
+        className="hidden lg:fixed lg:left-[78px] lg:top-14 lg:bottom-0 lg:z-20 lg:flex lg:flex-col"
         style={{
           width: isCollapsedDesktop ? "78px" : "256px",
         }}

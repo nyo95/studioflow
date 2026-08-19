@@ -2,19 +2,18 @@ import { prisma } from "@/core/platform/db";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { ProjectListClient } from "@/components/project-list-client";
 import { getSession } from "@/lib/auth";
-import { Role } from "@/generated/prisma";
+import { eligibleDesigners, eligibleDrafters } from "@/core/rbac/project-pic";
 import { DashboardPageShell, PageHeader } from "@/ui_engine";
 import { DEFAULT_PAGINATION_LIMIT } from "@/lib/constants";
 import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
+import { isAdminLevel } from "@/core/rbac/rbac";
 
 export default async function ProjectsPage() {
   const { userId, role } = await getSession();
-  const [systemConfig] = await prisma.$queryRaw<Array<{ is_auto_naming_enabled: boolean }>>`
-    SELECT "is_auto_naming_enabled"
-    FROM "SystemConfig"
-    WHERE "id" = ${SYSTEM_CONFIG_ID}
-    LIMIT 1
-  `;
+  const systemConfig = await prisma.systemConfig.findUnique({
+    where: { id: SYSTEM_CONFIG_ID },
+    select: { is_auto_naming_enabled: true },
+  });
 
   const projects = await prisma.project.findMany({
     select: {
@@ -67,6 +66,7 @@ export default async function ProjectsPage() {
 
   const [users, revisions, allClients] = await Promise.all([
     prisma.user.findMany({
+      where: { deleted_at: null },
       select: {
         id: true,
         name: true,
@@ -111,20 +111,19 @@ export default async function ProjectsPage() {
     })),
   }));
 
-  const designers = users.filter(
-    (user) => user.role === Role.ADMIN || user.role === Role.DIC || user.role === Role.STAFF
-  );
-  const drafters = users.filter(
-    (user) => user.role === Role.STAFF || user.role === Role.DRIC
-  );
+  // Designer seat: DIC plus admin-level roles (owner, 2026-08-10). Drafter
+  // seat: DRIC only. See core/rbac/project-pic.ts. No incumbent to preserve
+  // here — this list feeds the "new project" dialog.
+  const designers = eligibleDesigners(users);
+  const drafters = eligibleDrafters(users);
 
   return (
     <DashboardPageShell>
       <PageHeader
-        title="PROJECTS"
+        title="Projects"
         description="Monitor and manage all studio projects in one place."
         action={
-          role === Role.ADMIN ? (
+          isAdminLevel(role) ? (
             <CreateProjectDialog
               designers={designers}
               drafters={drafters}

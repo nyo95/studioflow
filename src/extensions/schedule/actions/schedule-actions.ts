@@ -145,9 +145,9 @@ export const addScheduleEntryWithProductAction = createAction(
     const product = await LibraryService.getProductById(tx, input.product_catalog_id);
     if (!product) throw new ActionError("Product not found in Catalog", "NOT_FOUND");
 
-    if (product.catalog_status !== "APPROVED") {
+    if (product.catalog_status === "REJECTED") {
       throw new ActionError(
-        "Cannot use non-approved items in schedule. Status: " + product.catalog_status,
+        "Cannot use a rejected Material in Schedule.",
         "INVALID_CATALOG_STATE"
       );
     }
@@ -186,16 +186,17 @@ export const addScheduleOptionAction = createAction(
     assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_ADD);
 
     if (input.mode === "catalog" && input.catalogItemId) {
-      const catalogItem = await tx.productCatalog.findUnique({
-        where: { id: input.catalogItemId },
-        select: { catalog_category: true, catalog_type: true, catalog_status: true },
-      });
+      // Master Data terputus (M5): go through LibraryService's derived
+      // catalog_* view instead of a raw tx.sku.findUnique select — the v2 Sku
+      // model no longer carries catalog_type/catalog_status/catalog_tags
+      // columns directly.
+      const catalogItem = await LibraryService.getProductById(tx, input.catalogItemId);
       if (!catalogItem) {
         throw new ActionError("Product not found in catalog", "NOT_FOUND");
       }
-      if (catalogItem.catalog_status !== "APPROVED") {
+      if (catalogItem.catalog_status === "REJECTED") {
         throw new ActionError(
-          "Cannot use non-approved items in schedule. Status: " + catalogItem.catalog_status,
+          "Cannot use a rejected Material in Schedule.",
           "INVALID_CATALOG_STATE"
         );
       }
@@ -206,10 +207,10 @@ export const addScheduleOptionAction = createAction(
         );
       }
       const entryCategory = entry.schedule_category.trim().toUpperCase();
-      const itemCategory = catalogItem.catalog_category.trim().toUpperCase();
-      if (entryCategory !== itemCategory) {
+      const itemCategories = catalogItem.catalog_tags.map((tag) => tag.trim().toUpperCase());
+      if (!itemCategories.includes(entryCategory)) {
         throw new ActionError(
-          `Category mismatch: entry is "${entry.schedule_category}" but product is in "${catalogItem.catalog_category}"`,
+          `Category mismatch: entry is "${entry.schedule_category}" but Material tags are "${catalogItem.catalog_tags.join(", ")}"`,
           "VALIDATION_FAILED"
         );
       }
@@ -229,6 +230,49 @@ export const addScheduleOptionAction = createAction(
     return option;
   },
   { schema: AddScheduleOptionSchema }
+);
+
+/**
+ * §6.14 Brand-First Library reuse pool (PLAN-LIBRARY-BRAND-FIRST.md §3, §9
+ * step 5). Read-only search across every project's spec_* columns — "pernah
+ * dipakai". Gated on PLUGIN_SCHEDULE_VIEW (broad read), not membership in a
+ * specific project, because the whole point is cross-project reuse.
+ */
+export const searchReusableSpecsAction = createAction(
+  async ({ input, ctx, tx }) => {
+    assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_VIEW);
+    return ScheduleService.searchReusableSpecs(tx, input.query, input.limit ?? 20);
+  },
+  { schema: z.object({ query: z.string(), limit: z.number().int().positive().max(50).optional() }) }
+);
+
+/**
+ * Inserts a new option on `entryId` by copying a past option's snapshot
+ * (found via the reuse-pool search above). Same permission and membership
+ * checks as addScheduleOptionAction — this is a normal ADD, just sourced
+ * from history instead of the catalog or a manual form.
+ */
+export const addOptionFromReuseAction = createAction(
+  async ({ input, ctx, tx }) => {
+    const entry = await tx.projectScheduleEntry.findUniqueOrThrow({
+      where: { id: input.entryId },
+      select: { id: true, project_id: true },
+    });
+    await getProjectMembershipOrThrow(tx, entry.project_id, ctx.userId, ctx.role);
+    RBAC.assert(tx, "plugin.schedule.manage", ctx.role);
+    assertScheduleAccess(ctx, PERMISSION.PLUGIN_SCHEDULE_ADD);
+
+    const { option } = await ScheduleService.addOptionFromReuse(
+      tx,
+      input.entryId,
+      input.sourceOptionId,
+      ctx.userId
+    );
+
+    invalidateCache({ scope: REVALIDATE_PROJECT, id: entry.project_id });
+    return option;
+  },
+  { schema: z.object({ entryId: z.string(), sourceOptionId: z.string() }) }
 );
 
 export const approveScheduleOptionAction = createAction(
@@ -486,4 +530,3 @@ export const mergeScheduleCategoriesAction = createAction(
   },
   { schema: MergeScheduleCategoriesSchema }
 );
-

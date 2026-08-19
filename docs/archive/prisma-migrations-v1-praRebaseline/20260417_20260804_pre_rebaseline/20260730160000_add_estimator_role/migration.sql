@@ -1,0 +1,15 @@
+-- Add the ESTIMATOR role: BQ subapp only.
+--
+-- Shares StudioFlow login/identity (UPSTREAM-BQ-MATERIAL-SOURCE.md §0.1) but
+-- gets NO StudioFlow project surface. Granular BQ_* permissions stay inside BQ
+-- per §0.2; StudioFlow holds only BQ_ACCESS to gate the /bq entry point.
+--
+-- SAFETY: additive enum change. No table, column, constraint or row is touched.
+-- Zero rows can already hold 'ESTIMATOR', so no backfill and no data loss is
+-- possible. Rollback would require recreating the type, so this migration is
+-- deliberately forward-only.
+--
+-- IF NOT EXISTS makes the statement idempotent, so a re-run after a partially
+-- applied migration is safe. Requires PostgreSQL 12+ (ALTER TYPE ... ADD VALUE
+-- inside a transaction). Verify with: SHOW server_version;
+ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'ESTIMATOR';

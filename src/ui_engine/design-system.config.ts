@@ -84,6 +84,26 @@ export const DESIGN_SYSTEM_CONFIG = {
     outerWidth: "var(--ui-sidebar-rail-width, 78px)",
     innerWidth: "var(--ui-sidebar-width, 256px)",
   },
+  renderBoard: {
+    screen: {
+      gutterPercent: 12,
+      imageWidthPercent: 76,
+    },
+    print: {
+      gutterPercent: 6,
+      imageWidthPercent: 88,
+    },
+    labelSafeTopPercent: 8,
+    labelSafeBottomPercent: 92,
+    labelPitchPercent: 12,
+    labelInnerGapPercent: 1.25,
+    labelTextGapPercent: 0.45,
+    leaderAngleDegrees: 30,
+    leaderMinimumRisePercent: 4,
+    pointingZoom: 3,
+    pointingLensFlipPercent: 20,
+    fallbackImageRatio: 16 / 9,
+  },
   ui: {
     topBar: {
       theme: "dark" as "light" | "dark",

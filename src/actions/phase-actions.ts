@@ -18,7 +18,7 @@ import {
 
   ERR,
 } from "@/core/rbac/permissions";
-import { evaluateAccess, PERMISSION } from "@/core/rbac/rbac";
+import { evaluateAccess, isAdminLevel, PERMISSION } from "@/core/rbac/rbac";
 import { createAction } from "@/lib/action-wrapper";
 import { phaseService } from "@/lib/services/phase-service";
 import { invalidateCache } from "@/lib/revalidation";
@@ -31,9 +31,9 @@ import {
   UpdateCDItemSchema,
   UpdateCDStatusSchema,
   ToggleChecklistSchema,
-  AddChecklistItemSchema,
   AddActivitySchema,
   UpdateActivitySchema,
+  SetActivityDueDateSchema,
   ToggleActivityStatusSchema,
   DeleteActivitySchema,
   AddDeliverableSchema,
@@ -193,16 +193,6 @@ export const toggleChecklist = createAction(async ({ input, ctx, tx }) => {
   return result;
 }, { schema: ToggleChecklistSchema });
 
-export const addChecklistItem = createAction(async ({ input, ctx, tx }) => {
-  const phase = await getPhaseWithProjectOrThrow(tx, input.phaseId);
-  assertPhaseContentMutationAccess(phase, ctx.userId, ctx.role);
-
-  const result = await phaseService.executeAddChecklistItem(tx, { phaseId: input.phaseId, label: input.label, userId: ctx.userId });
-
-  invalidateCache({ scope: REVALIDATE_TODAY });
-  invalidateCache({ scope: REVALIDATE_PROJECT, id: result.project_id });
-  return result;
-}, { schema: AddChecklistItemSchema });
 
 export const addActivity = createAction(async ({ input, ctx, tx }) => {
   const revision = await getRevisionWithPhaseOrThrow(tx, input.revisionId);
@@ -235,6 +225,25 @@ export const updateActivityContent = createAction(async ({ input, ctx, tx }) => 
   invalidateCache({ scope: REVALIDATE_TODAY });
   return result;
 }, { schema: UpdateActivitySchema });
+
+export const setActivityDueDate = createAction(async ({ input, ctx, tx }) => {
+  const activity = await getActivityWithPhaseOrThrow(tx, input.activityId);
+  if (activity.revision) {
+    assertPhaseContentMutationAccess(activity.revision.phase, ctx.userId, ctx.role);
+  } else if (activity.project_id) {
+    await getProjectMembershipOrThrow(tx, activity.project_id, ctx.userId, ctx.role);
+  }
+
+  const result = await phaseService.executeSetActivityDueDate(tx, {
+    activityId: input.activityId,
+    dueAt: input.dueAt,
+    userId: ctx.userId,
+  });
+
+  invalidateCache({ scope: REVALIDATE_PROJECT, id: activity.revision?.phase.project.id || activity.project_id! });
+  invalidateCache({ scope: REVALIDATE_TODAY });
+  return result;
+}, { schema: SetActivityDueDateSchema });
 
 export const toggleActivityStatus = createAction(async ({ input, ctx, tx }) => {
   const activity = await getActivityWithPhaseOrThrow(tx, input.activityId);
@@ -289,6 +298,12 @@ export const addDeliverable = createAction(async ({ input, ctx, tx }) => {
     uploadedBy: ctx.userId,
   });
 
+  await Promise.all(
+    result.replacedFiles
+      .filter((file) => !file.is_external && file.file_url)
+      .map((file) => phaseService.deleteManagedDeliverableAsset(file.file_url))
+  );
+
   invalidateCache({ scope: REVALIDATE_PROJECT, id: revision.phase.project.id });
   return result;
 }, { schema: AddDeliverableSchema });
@@ -342,7 +357,7 @@ export const deferActivity = createAction(async ({ input, ctx, tx }) => {
   const canDefer = evaluateAccess(ctx.role, PERMISSION.PROJECT_SYNC_CHECKLIST, {
     userId: ctx.userId,
     picDesignerId: project.pic_designer_id,
-  }) || ctx.role === "ADMIN";
+  }) || isAdminLevel(ctx.role);
 
   if (!canDefer) throwActionError(ERR.UNAUTHORIZED_ACTION);
 

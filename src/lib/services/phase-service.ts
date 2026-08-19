@@ -7,13 +7,39 @@ import { AUDIT_ACTIONS } from "@/core/platform/audit";
 import { PhasePolicy } from "@/lib/domain/phase-policy";
 import { projectService } from "./project-service";
 import { parsePhaseTag } from "./task-tagger";
+import { unlink } from "fs/promises";
+import { isManagedDeliverableUrl, resolveManagedDeliverableAssetPath } from "@/lib/deliverable-storage";
+
+// Resolves whichever of the two on-disk locations a file_url refers to (the
+// new private/authenticated scheme, or a pre-2026-08-04 public one) and
+// deletes it — see @/lib/deliverable-storage for why both still need to be
+// handled, and PLAN-AUDIT-ROADMAP-2026Q3.md §2.3 R3.
+async function deleteManagedDeliverableAsset(fileUrl: string) {
+  if (!isManagedDeliverableUrl(fileUrl)) {
+    return;
+  }
+
+  const fullPath = resolveManagedDeliverableAssetPath(fileUrl);
+  if (!fullPath) {
+    return;
+  }
+
+  try {
+    await unlink(fullPath);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code !== "ENOENT") {
+      console.error("Failed to delete replaced deliverable asset:", error);
+    }
+  }
+}
 
 /**
  * Asserts that there are no pending tasks blocking phase approval.
  * Checks for:
  * 1. Open activities in the active revision.
  * 2. Deferred activities (revision_id = null) tied to this phase.
- * 3. Unchecked checklist items for this phase.
+ * 3. Unchecked ROOT checklist items for this phase (subtasks excluded — see below).
  */
 async function assertNoPendingTasks(tx: PrismaTransaction, phaseId: string) {
   const activeRevision = await getActiveRevisionWithActivities(tx, phaseId);
@@ -26,8 +52,12 @@ async function assertNoPendingTasks(tx: PrismaTransaction, phaseId: string) {
     where: { phase_id: phaseId, revision_id: null, status: ActivityStatus.OPEN }
   });
 
+  // Root tasks only. A subtask is an internal detail of its parent, so counting
+  // subtasks here would turn one blocking task into six and start holding up
+  // phases that pass today — a behaviour change nobody asked for. Closing the
+  // parent already implies its subtasks are settled.
   const uncheckedChecklistsCount = await tx.projectChecklist.count({
-    where: { phase_id: phaseId, is_checked: false }
+    where: { phase_id: phaseId, is_checked: false, parent_id: null }
   });
 
   if (hasOpenActivities || deferredTasksCount > 0 || uncheckedChecklistsCount > 0) {
@@ -43,6 +73,7 @@ async function assertNoPendingTasks(tx: PrismaTransaction, phaseId: string) {
  * Pure business logic should reside here, detached from the Action/Web context.
  */
 export const phaseService = {
+  deleteManagedDeliverableAsset,
   /**
    * Activates a PENDING phase, moving it to IN_PROGRESS and creating the first Revision (1.0).
    */
@@ -88,9 +119,10 @@ export const phaseService = {
     // Update status
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
-      data: { 
-        status_enum: PhaseStatus.IN_PROGRESS, 
-        is_locked: false
+      data: {
+        status_enum: PhaseStatus.IN_PROGRESS,
+        is_locked: false,
+        status_changed_at: new Date(),
       },
     });
 
@@ -110,6 +142,7 @@ export const phaseService = {
       project_id: phase.project_id,
       previous_phase_status: phase.status_enum,
       previous_is_locked: phase.is_locked,
+      previous_status_changed_at: phase.status_changed_at,
       created_revision_id: revision.id,
     });
 
@@ -151,6 +184,7 @@ export const phaseService = {
       data: {
         status_enum: targetPhaseStatus,
         is_locked: true,
+        status_changed_at: new Date(),
       },
     });
 
@@ -174,6 +208,7 @@ export const phaseService = {
       phase_id: phaseId,
       project_id: phase.project_id,
       previous_phase_status: phase.status_enum,
+      previous_status_changed_at: phase.status_changed_at,
       resulting_phase_status: updatedPhase.status_enum,
       created_revision_id: revision.id,
       bypassed: true,
@@ -221,13 +256,14 @@ export const phaseService = {
 
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
-      data: { status_enum: PhaseStatus.ON_REVIEW_INTERNAL },
+      data: { status_enum: PhaseStatus.ON_REVIEW_INTERNAL, status_changed_at: new Date() },
     });
 
     await insertAuditLog(tx, AUDIT_ACTIONS.SUBMIT_FOR_INTERNAL_REVIEW, "PHASE", phaseId, userId, {
       phase_id: phaseId,
       project_id: phase.project_id,
       previous_phase_status: phase.status_enum,
+      previous_status_changed_at: phase.status_changed_at,
     });
 
     return updatedPhase;
@@ -324,7 +360,7 @@ export const phaseService = {
 
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
-      data: { status_enum: PhaseStatus.IN_PROGRESS },
+      data: { status_enum: PhaseStatus.IN_PROGRESS, status_changed_at: new Date() },
     });
 
     await insertAuditLog(
@@ -337,6 +373,7 @@ export const phaseService = {
         phase_id: phaseId,
         project_id: phase.project_id,
         previous_phase_status: phase.status_enum,
+        previous_status_changed_at: phase.status_changed_at,
         previous_revision_id: activeRevision.id,
         previous_revision_status: activeRevision.status_enum,
         new_revision_id: newRevision.id,
@@ -418,13 +455,13 @@ export const phaseService = {
 
       await tx.phase.update({
         where: { id: phaseId },
-        data: { status_enum: PhaseStatus.IN_PROGRESS, is_locked: false },
+        data: { status_enum: PhaseStatus.IN_PROGRESS, is_locked: false, status_changed_at: new Date() },
       });
     } else {
       // HARD_RESET_PENDING
       await tx.phase.update({
         where: { id: phaseId },
-        data: { status_enum: PhaseStatus.PENDING, is_locked: false },
+        data: { status_enum: PhaseStatus.PENDING, is_locked: false, status_changed_at: new Date() },
       });
     }
 
@@ -437,6 +474,7 @@ export const phaseService = {
       mode,
       previous_revision_id: activeRevision?.id ?? null,
       previous_phase_status: phase.status_enum,
+      previous_status_changed_at: phase.status_changed_at,
       target_version: mode === "HARD_RESET_ACTIVE" ? `v${targetMajorVersion}.${targetMinorVersion}` : "N/A (Pending)",
       resulting_phase_status: targetPhaseStatus,
       admin_note: note,
@@ -447,62 +485,56 @@ export const phaseService = {
   },
 
   /**
-   * Toggles a checklist item status.
+   * Toggles a checklist item, cascading to its subtasks.
+   *
+   * The cascade runs in BOTH directions, which is the less obvious half. Only
+   * cascading downward on check would let this happen: tick a parent by
+   * mistake, its five subtasks silently go green, untick the parent — and the
+   * subtasks stay green. Work that was never done now reads as done, and
+   * nothing on screen says so. A parent that is an authoritative switch is
+   * duller and safe.
+   *
+   * Subtasks do not roll up: ticking every child does not tick the parent.
+   * Rolling up would fight the approval gate, which counts root tasks only and
+   * would then be satisfied by a decision nobody made.
    */
   async executeToggleChecklist(tx: PrismaTransaction, params: { checklistId: string; isChecked: boolean; userId: string }) {
     const { checklistId, isChecked, userId } = params;
 
     const updated = await tx.projectChecklist.update({
       where: { id: checklistId },
-      data: { is_checked: isChecked },
+      data: { is_checked: isChecked, checked_at: isChecked ? new Date() : null },
       include: {
         phase: { select: { project_id: true } }
       }
     });
 
-    await insertAuditLog(tx, AUDIT_ACTIONS.TOGGLE_CHECKLIST, "ProjectChecklist", checklistId, userId, { 
+    // Only a root task has children worth cascading to — depth is capped at one
+    // level (MAX_CHECKLIST_DEPTH), so a subtask never has any.
+    let cascaded = 0;
+    if (updated.parent_id === null) {
+      const result = await tx.projectChecklist.updateMany({
+        where: { parent_id: checklistId, is_checked: !isChecked },
+        data: { is_checked: isChecked, checked_at: isChecked ? new Date() : null },
+      });
+      cascaded = result.count;
+    }
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.TOGGLE_CHECKLIST, "ProjectChecklist", checklistId, userId, {
       project_id: updated.project_id,
       phase_id: updated.phase_id,
-      isChecked 
+      isChecked,
+      subtasks_cascaded: cascaded,
     });
 
     return updated;
   },
 
-  /**
-   * Adds a new checklist item to a phase.
-   */
-  async executeAddChecklistItem(tx: PrismaTransaction, params: { phaseId: string; label: string; userId: string }) {
-    const { phaseId, label, userId } = params;
-
-    const phase = await tx.phase.findUnique({
-      where: { id: phaseId },
-      include: {
-        project: {
-          select: { id: true },
-        },
-      },
-    });
-    if (!phase) throw new ActionError("Phase not found", "NOT_FOUND");
-    if (phase.status_enum !== PhaseStatus.IN_PROGRESS) throw new ActionError(ERR.INVALID_PHASE_STATE, "INVALID_STATE");
-
-    const newItem = await tx.projectChecklist.create({
-      data: {
-        project_id: phase.project_id,
-        phase_id: phaseId,
-        label: label.trim(),
-        is_checked: false,
-      },
-    });
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.ADD_CHECKLIST_ITEM, "ProjectChecklist", newItem.id, userId, { 
-      project_id: phase.project_id,
-      phase_id: phaseId,
-      label 
-    });
-
-    return newItem;
-  },
+  // `executeAddChecklistItem` was removed 2026-08-10. It created a ROOT
+  // checklist item for one phase, and root items are requirements — they come
+  // from `ChecklistTemplate` in Studio settings so that the same phase demands
+  // the same things in every project. Subtasks are created through
+  // `checklistService.executeCreateSubtask`.
 
   async executeApproveInternal(tx: PrismaTransaction, params: { phaseId: string; userId: string }) {
     const { phaseId, userId } = params;
@@ -521,13 +553,14 @@ export const phaseService = {
 
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
-      data: { status_enum: nextStatus },
+      data: { status_enum: nextStatus, status_changed_at: new Date() },
     });
 
     await insertAuditLog(tx, AUDIT_ACTIONS.APPROVE_INTERNAL, "PHASE", phaseId, userId, {
       phase_id: phaseId,
       project_id: phase.project_id,
       previous_phase_status: phase.status_enum,
+      previous_status_changed_at: phase.status_changed_at,
       resulting_phase_status: updatedPhase.status_enum,
     });
 
@@ -550,13 +583,14 @@ export const phaseService = {
 
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
-      data: { status_enum: PhaseStatus.ON_REVIEW_CLIENT },
+      data: { status_enum: PhaseStatus.ON_REVIEW_CLIENT, status_changed_at: new Date() },
     });
 
     await insertAuditLog(tx, AUDIT_ACTIONS.SUBMIT_FOR_CLIENT_REVIEW, "PHASE", phaseId, userId, {
       phase_id: phaseId,
       project_id: phase.project_id,
       previous_phase_status: phase.status_enum,
+      previous_status_changed_at: phase.status_changed_at,
     });
 
     return updatedPhase;
@@ -581,7 +615,7 @@ export const phaseService = {
 
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
-      data: { status_enum: PhaseStatus.READY_FOR_NEXT, is_locked: true },
+      data: { status_enum: PhaseStatus.READY_FOR_NEXT, is_locked: true, status_changed_at: new Date() },
     });
 
     const activeRevision = await getActiveRevision(tx, phaseId);
@@ -612,6 +646,7 @@ export const phaseService = {
       project_id: phase.project_id,
       previous_phase_status: phase.status_enum,
       previous_is_locked: phase.is_locked,
+      previous_status_changed_at: phase.status_changed_at,
       previous_revision_id: activeRevision?.id ?? null,
       previous_revision_status: activeRevision?.status_enum ?? null,
       previous_project_status: project.status_progress,
@@ -631,7 +666,7 @@ export const phaseService = {
 
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
-      data: { is_locked: false, status_enum: PhaseStatus.IN_PROGRESS },
+      data: { is_locked: false, status_enum: PhaseStatus.IN_PROGRESS, status_changed_at: new Date() },
     });
 
     const activeRevision = await getActiveRevisionWithActivities(tx, phaseId);
@@ -675,6 +710,7 @@ export const phaseService = {
       project_id: phase.project_id,
       previous_phase_status: phase.status_enum,
       previous_is_locked: phase.is_locked,
+      previous_status_changed_at: phase.status_changed_at,
       previous_revision_id: activeRevision?.id ?? null,
       previous_revision_status: activeRevision?.status_enum ?? null,
       created_revision_id: revision.id,
@@ -701,7 +737,7 @@ export const phaseService = {
 
     const updatedPhase = await tx.phase.update({
       where: { id: phaseId },
-      data: { status_enum: PhaseStatus.COMPLETED, is_locked: true },
+      data: { status_enum: PhaseStatus.COMPLETED, is_locked: true, status_changed_at: new Date() },
     });
 
     await tx.project.update({
@@ -721,6 +757,7 @@ export const phaseService = {
       project_id: phase.project_id,
       previous_phase_status: phase.status_enum,
       previous_is_locked: phase.is_locked,
+      previous_status_changed_at: phase.status_changed_at,
       previous_project_status: project.status_progress,
       previous_revision_id: activeRevision?.id ?? null,
       previous_revision_status: activeRevision?.status_enum ?? null,
@@ -898,7 +935,7 @@ export const phaseService = {
     const isActive = revision.status_enum === RevisionStatus.ACTIVE;
 
     if (isTodo && !isActive) {
-      throw new ActionError("Tidak bisa menambahkan TODO ke revision yang tidak aktif.", "INVALID_STATE");
+      throw new ActionError("Can't add a to-do to a revision that isn't active.", "INVALID_STATE");
     }
 
     const newActivity = await tx.activity.create({
@@ -950,6 +987,39 @@ export const phaseService = {
 
 
     return updatedActivity;
+  },
+
+  /**
+   * Sets or clears an activity's due date.
+   *
+   * `null` clears it, and that has to be reachable — a date you can set but
+   * never remove is worse than no date at all. The time component is stripped
+   * for the same reason as on checklist tasks: nothing offers a time picker, so
+   * storing one would promise precision the data does not carry.
+   */
+  async executeSetActivityDueDate(
+    tx: PrismaTransaction,
+    params: { activityId: string; dueAt: Date | null; userId: string }
+  ) {
+    const normalised = params.dueAt
+      ? new Date(params.dueAt.getFullYear(), params.dueAt.getMonth(), params.dueAt.getDate())
+      : null;
+
+    const updated = await tx.activity.update({
+      where: { id: params.activityId },
+      data: { due_at: normalised },
+      include: {
+        revision: { include: { phase: { select: { id: true, project_id: true } } } },
+      },
+    });
+
+    await insertAuditLog(tx, AUDIT_ACTIONS.UPDATE_ACTIVITY_DUE_DATE, "Activity", params.activityId, params.userId, {
+      project_id: updated.project_id || updated.revision?.phase.project_id,
+      phase_id: updated.revision?.phase.id,
+      due_at: normalised ? normalised.toISOString() : null,
+    });
+
+    return updated;
   },
 
   async executeToggleActivityStatus(tx: PrismaTransaction, params: { activityId: string; userId: string }) {
@@ -1023,6 +1093,31 @@ export const phaseService = {
       include: { phase: { select: { id: true, project_id: true } } },
     });
 
+    const previousFiles = await tx.file.findMany({
+      where: {
+        revision: {
+          phase_id: revision.phase.id,
+        },
+      },
+      select: {
+        id: true,
+        file_url: true,
+        file_name: true,
+        revision_id: true,
+        is_external: true,
+      },
+    });
+
+    if (previousFiles.length > 0) {
+      await tx.file.deleteMany({
+        where: {
+          id: {
+            in: previousFiles.map((file) => file.id),
+          },
+        },
+      });
+    }
+
     const newFile = await tx.file.create({
       data: {
         revision_id: params.revisionId,
@@ -1039,9 +1134,16 @@ export const phaseService = {
       project_id: revision.phase.project_id,
       phase_id: revision.phase.id,
       file_name: params.fileName,
+      replaced_file_ids: previousFiles.map((file) => file.id),
+      revision_id: params.revisionId,
     });
 
-    return newFile;
+    return {
+      ...newFile,
+      project_id: revision.phase.project_id,
+      phase_id: revision.phase.id,
+      replacedFiles: previousFiles,
+    };
   },
 
   async executeDeferActivity(tx: PrismaTransaction, params: { activityId: string; userId: string }) {

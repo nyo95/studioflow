@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyboardEvent, useEffect, useRef, useState, useTransition } from "react";
+import React, { KeyboardEvent, useEffect, useRef, useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
 import { addActivity } from "@/actions/phase-actions";
@@ -66,8 +66,12 @@ export function TodayInlineAdd({
   const availablePhases = allProjectPhases && allProjectPhases.length > 0 ? allProjectPhases : phases;
   const selectedPhase = availablePhases.find(p => p.id === selectedPhaseId) || availablePhases[0];
 
-  const [tagQuery, setTagQuery] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  // tagQuery is derived from value — no state or effect needed.
+  const tagQuery = useMemo(() => {
+    const m = value.match(/(?:^|\s)#([a-zA-Z0-9_]*)$/);
+    return m ? m[1] : null;
+  }, [value]);
 
   const filteredPhases = availablePhases.filter(p => {
     if (!tagQuery) return true;
@@ -89,43 +93,19 @@ export function TodayInlineAdd({
     }
   }, [isEditing]);
 
-  // Watch for hashtag typing for autocomplete
-  useEffect(() => {
-    if (!value) {
-      setTagQuery(null);
-      return;
-    }
-    const match = value.match(/(?:^|\s)#([a-zA-Z0-9_]*)$/);
-    if (match) {
-      const query = match[1];
-      setTagQuery(query);
-      
-      // Filter list based on query using the same alias rules
-      const queryLower = query.toLowerCase().replace(/_/g, "");
-      const tempFiltered = availablePhases.filter(p => {
-        const phaseNameClean = p.name.toLowerCase().replace(/ |\_/g, "");
-        const canonicalTarget = PHASE_ALIASES[queryLower] || queryLower;
-        if (phaseNameClean.includes(queryLower)) return true;
-        if (phaseNameClean.includes(canonicalTarget.replace(/ |\_/g, ""))) return true;
-        return Object.entries(PHASE_ALIASES).some(([alias, target]) => {
-          return target.replace(/ |\_/g, "") === phaseNameClean && alias.includes(queryLower);
-        });
-      });
-      
-      // Auto-focus the first non-locked phase
-      const firstActiveIdx = tempFiltered.findIndex(p => !p.isLocked);
-      setActiveIndex(firstActiveIdx !== -1 ? firstActiveIdx : 0);
-    } else {
-      setTagQuery(null);
-    }
-  }, [value, availablePhases]);
+  // Reset the keyboard-nav cursor when the hashtag filter text changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    const firstActive = filteredPhases.findIndex((p) => !p.isLocked);
+    setActiveIndex(firstActive !== -1 ? firstActive : 0);
+  }, [tagQuery]); // intentionally only tagQuery — filteredPhases is derived from it
 
-  function selectPhase(phase: any) {
+  type PhaseItem = { id: string; name: string; revisionId?: string; status: string; isProjectLevel?: boolean; projectId?: string; isLocked?: boolean };
+  function selectPhase(phase: PhaseItem) {
     if (phase.isLocked) return;
     setSelectedPhaseId(phase.id);
     const newValue = value.replace(/(?:^|\s)#[a-zA-Z0-9_]*$/, " ");
     setValue(newValue);
-    setTagQuery(null);
     inputRef.current?.focus();
   }
 
@@ -189,7 +169,6 @@ export function TodayInlineAdd({
         }
         setValue("");
         setIsEditing(false);
-        setTagQuery(null);
         router.refresh();
       } catch (err) {
         console.error("Failed to add task:", err);
@@ -238,7 +217,8 @@ export function TodayInlineAdd({
       }
       if (event.key === "Escape") {
         event.preventDefault();
-        setTagQuery(null);
+        // Clearing value clears tagQuery (derived). Just blur the dropdown.
+        setValue(value.replace(/(?:^|\s)#[a-zA-Z0-9_]*$/, " ").trimEnd());
         return;
       }
     }

@@ -229,13 +229,55 @@ export const settingsService = {
   },
 
   /**
-   * Fetches unique categories from both Library and existing Scheduler config
+   * Toggles whether a global schedule category is one of the defaults that
+   * gets auto-materialized (as an empty "reserve" entry) on every project.
+   * See PLAN-AUDIT-ROADMAP-2026Q3.md §2.1 (R1).
+   */
+  async executeSetScheduleTemplateDefaultEntry(
+    tx: PrismaTransaction,
+    params: { section: ProductType; category: string; isDefaultEntry: boolean; userId: string }
+  ) {
+    const { section, isDefaultEntry, userId } = params;
+    const category = params.category.trim().toUpperCase();
+
+    const template = await tx.scheduleTemplate.findFirst({
+      where: { section, schedule_category: { equals: category, mode: "insensitive" } },
+    });
+
+    if (!template) {
+      throw new ActionError("NOT_FOUND", `Category "${category}" not found in Global Config.`);
+    }
+
+    const result = await tx.scheduleTemplate.update({
+      where: { id: template.id },
+      data: { is_default_entry: isDefaultEntry },
+    });
+
+    await insertAuditLog(
+      tx,
+      AUDIT_ACTIONS.SET_SCHEDULE_TEMPLATE_DEFAULT_ENTRY,
+      "SYSTEM",
+      `${section}:${category}`,
+      userId,
+      { section, category, is_default_entry: isDefaultEntry }
+    );
+
+    return result;
+  },
+
+  /**
+   * Fetches unique categories from both Library and existing Scheduler config.
+   *
+   * MASTER DATA v2 (2026-08-10): Sku no longer carries a `catalog_tags`
+   * string array — product categorization now lives in the standalone
+   * `master_data.Category` table (kind PRODUCT), joined via SkuCategory. Read
+   * category names from there instead.
    */
   async getAvailableCategories(tx: PrismaTransaction) {
     const [catalogCats, dictionaryCats] = await Promise.all([
-      tx.productCatalog.findMany({
-        select: { catalog_category: true },
-        distinct: ["catalog_category"],
+      tx.category.findMany({
+        where: { kind: "PRODUCT" },
+        select: { name: true },
       }),
       tx.prefixDictionary.findMany({
         select: { schedule_category: true },
@@ -244,7 +286,7 @@ export const settingsService = {
     ]);
 
     const all = new Set([
-      ...catalogCats.map((c) => c.catalog_category.toUpperCase()),
+      ...catalogCats.map((c) => c.name.toUpperCase()),
       ...dictionaryCats.map((c) => c.schedule_category.toUpperCase()),
     ]);
 
@@ -279,11 +321,15 @@ export const settingsService = {
       }
     });
 
-    // 3. Update all ProductCatalog entries (Library)
-    const libraryUpdated = await tx.productCatalog.updateMany({
-      where: { catalog_type: section, catalog_category: src },
-      data: { catalog_category: dst }
-    });
+    // 3. [REMOVED — owner decision Q14, 2026-08-10] This used to also rename
+    // the source category tag on every matching master_data.Sku (via
+    // catalog_tags). Master Data v2 severs that link: schedule categories and
+    // product categories are no longer the same concept, so renaming a
+    // schedule category here must NOT reach into master_data anymore. This
+    // step now only ever touches StudioFlow's own
+    // ScheduleTemplate/PrefixDictionary/ProjectScheduleEntry rows (steps 2,
+    // 4, 5, 6 below).
+    const libraryUpdated = { count: 0 };
 
     // 4. Update PrefixDictionary (if exists) - we delete the source one
     await tx.prefixDictionary.deleteMany({

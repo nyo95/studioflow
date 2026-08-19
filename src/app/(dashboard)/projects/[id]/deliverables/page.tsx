@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { DeliverablesTable, type DeliverablePhaseRow } from "@/components/deliverables-table";
 import { DashboardPageShell, PageBackLink, PageHeader } from "@/ui_engine";
 
@@ -93,7 +94,7 @@ export default async function DeliverablesTrackingPage({
           }
         : null,
       isAuthorized:
-        session.role === "ADMIN" ||
+        isAdminLevel(session.role) ||
         (phase.name_enum === "CD"
           ? session.userId === project.pic_drafter_id
           : session.userId === project.pic_designer_id),
@@ -104,10 +105,11 @@ export default async function DeliverablesTrackingPage({
     <DashboardPageShell>
         <PageBackLink />
         <PageHeader
-          title="DELIVERABLES TRACKING"
+          title="Deliverables"
           description={`Compliance dashboard for ${project.name}`}
         />
         <DeliverablesTable
+          projectId={project.id}
           rows={rows}
           userId={session.userId}
           userRole={session.role}

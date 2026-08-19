@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-07-30T11:41:39.345Z",
+  "source_workbook": "docs/RAD - Material + Supplier.xlsx",
+  "source_sheet": "Sheet1",
+  "source_checksum": "1AB11BD57893424EA226135F670197B31B96B861BA05C0C4962AF5BC8D0FBCEE",
+  "rows": 287,
+  "available": 270,
+  "borrowed": 17,
+  "missing_source_number": 25,
+  "missing_brand": 9,
+  "missing_type": 1,
+  "missing_motif": 144,
+  "duplicate_identity_groups": 14,
+  "blockers": 0
+}

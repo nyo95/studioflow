@@ -19,6 +19,14 @@ interface TableCardProps {
   header?: ReactNode;
   headerVariant?: "light" | "dark";
   layout?: "auto" | "fixed";
+  /**
+   * Minimum total width for `layout="fixed"` tables, e.g. "720px". Below this
+   * viewport width the table scrolls horizontally instead of squeezing
+   * percentage-width columns until their contents clip/overlap — see
+   * PLAN-AUDIT-ROADMAP-2026Q3.md §1.2 A3 / §2.4 R4 and §2.6 R6. Ignored for
+   * `layout="auto"` (those tables already size to content).
+   */
+  minWidth?: string;
 }
 
 /**
@@ -26,10 +34,10 @@ interface TableCardProps {
  * Features: High-radius corners (3xl), subtle borders, and a clean white background with shadow.
  * Refactored to use SectionCard for container consistency.
  */
-export function TableCard({ children, className, header, headerVariant = "light", layout = "auto" }: TableCardProps) {
+export function TableCard({ children, className, header, headerVariant = "light", layout = "auto", minWidth }: TableCardProps) {
   return (
-    <SectionCard 
-      padding="none" 
+    <SectionCard
+      padding="none"
       className={cn("overflow-hidden", className)}
       headerVariant={headerVariant}
     >
@@ -38,11 +46,18 @@ export function TableCard({ children, className, header, headerVariant = "light"
           {header}
         </div>
       )}
-      <div className="w-full overflow-hidden">
-        <table className={cn(
-          "w-full border-collapse text-sm",
-          layout === "fixed" ? "table-fixed" : "table-auto"
-        )}>
+      {/* overflow-x-auto (not overflow-hidden): SectionCard's own overflow-hidden
+          already clips to the rounded corners, so this wrapper is free to scroll
+          horizontally instead of forcing fixed-width columns to collapse into
+          each other on narrow viewports. */}
+      <div className="w-full overflow-x-auto">
+        <table
+          className={cn(
+            "w-full border-collapse text-sm",
+            layout === "fixed" ? "table-fixed" : "table-auto"
+          )}
+          style={layout === "fixed" && minWidth ? { minWidth } : undefined}
+        >
           {children}
         </table>
       </div>

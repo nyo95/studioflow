@@ -1,9 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/ui_engine";
 import { completeProject } from "@/actions/project-actions";
-import { CheckCircle2, Loader2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { unwrapActionResult } from "@/lib/result";
 import { 
@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/ui_engine";
 
 interface ProjectAdminActionsProps {
   projectId: string;
@@ -46,20 +46,12 @@ export function ProjectAdminActions({
   if (isCompleted) return null;
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-          <AlertTriangle className="h-5 w-5" />
-        </div>
-        <div>
-          <h4 className="text-sm font-bold text-slate-900">Admin Actions</h4>
-          <p className="text-xs text-slate-500">Manual project lifecycle management.</p>
-        </div>
-      </div>
-
-      <div className="h-px w-full bg-slate-100" />
-
-      <AlertDialog>
+    // No wrapper card, icon tile, heading or divider. This component renders a
+    // single button and already sits inside an ActionSidebarSection titled
+    // "Admin"; the old chrome nested a card in a card and labelled the same
+    // thing three times ("Admin Diagnostics" / "Admin Actions" / "Manual
+    // project lifecycle management").
+    <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button 
             variant="outline" 
@@ -90,9 +82,8 @@ export function ProjectAdminActions({
             >
               Confirm Completion
             </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+      </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

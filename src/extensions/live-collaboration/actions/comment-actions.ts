@@ -6,6 +6,7 @@ import { CommentWithAuthor } from "../types/comment";
 import { getProjectDiscussionSnapshot } from "@/lib/project-discussion";
 import { throwActionError } from "@/lib/error-types";
 import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_CUSTOM } from "@/lib/revalidation-tags";
 
@@ -88,7 +89,7 @@ export async function deleteComment(commentId: string, projectId: string) {
   if (!comment) return;
 
   // Only author or admin can delete
-  if (comment.author_id !== userId && role !== "ADMIN") {
+  if (comment.author_id !== userId && !isAdminLevel(role)) {
     throwActionError("UNAUTHORIZED");
   }
 

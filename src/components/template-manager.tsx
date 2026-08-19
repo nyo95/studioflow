@@ -9,31 +9,20 @@ import {
   upsertScheduleCategoryConfig,
   deleteScheduleCategoryConfig,
   getAvailableSchedulerCategories,
-  mergeGlobalCategoriesAction
+  mergeGlobalCategoriesAction,
+  setScheduleTemplateDefaultEntry
 } from "@/actions/settings-actions";
+import {
+  listScheduleTemplateItemsAction,
+  deleteScheduleTemplateItemAction,
+} from "@/extensions/schedule/actions/schedule-template-item-actions";
 import { toast } from "sonner";
 import { useEffect } from "react";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Loader2, Plus, Trash2, Save, CheckCircle2, Pencil, GitMerge } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Role, ProductType } from "@/generated/prisma";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Input, Label, Button, ScrollArea, CreatableSearch, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/ui_engine";
+import { Loader2, Plus, Trash2, Save, CheckCircle2, Pencil, GitMerge, LayoutTemplate } from "lucide-react";
+import { Role, ProductType, ScheduleTemplateItem } from "@/generated/prisma";
 import { unwrapActionResult } from "@/lib/result";
-import { CreatableSearch } from "@/components/ui/creatable-search";
+import { cn } from "@/lib/utils";
 
 interface TimelineTemplate {
   phase_enum: string;
@@ -51,6 +40,7 @@ interface ScheduleTemplateConfig {
   schedule_category: string;
   section: ProductType;
   is_active: boolean;
+  is_default_entry: boolean;
 }
 
 interface SchedulePrefixConfig {
@@ -85,6 +75,8 @@ export function TemplateManager({
 }: TemplateManagerProps) {
   void userRole;
   const [loading, setLoading] = useState<string | null>(null);
+  const [templateItems, setTemplateItems] = useState<ScheduleTemplateItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [newChecklistLabels, setNewChecklistLabels] = useState<Record<string, string>>({});
   const [newSchedulerCategory, setNewSchedulerCategory] = useState<Record<ProductType, string>>({
     [ProductType.material]: "",
@@ -119,6 +111,14 @@ export function TemplateManager({
     };
     fetchCats();
   }, []);
+
+  useEffect(() => {
+    if (mode !== "project-engine") return;
+    setLoadingItems(true);
+    listScheduleTemplateItemsAction().then((res) => {
+      if ("items" in res && res.items) setTemplateItems(res.items);
+    }).finally(() => setLoadingItems(false));
+  }, [mode]);
 
   const handleSaveDuration = async (phase: string) => {
     setLoading(`duration-${phase}`);
@@ -213,8 +213,8 @@ export function TemplateManager({
       setIsMergeModalOpen(false);
       setTargetMergeCategory("");
       router.refresh();
-    } catch (err: any) {
-      toast.error("Failed to merge categories", { description: err.message });
+    } catch (err: unknown) {
+      toast.error("Failed to merge categories", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(null);
     }
@@ -235,13 +235,14 @@ export function TemplateManager({
   const getSchedulerConfigs = (section: ProductType) => {
     const templates = scheduleTemplates.filter((item) => item.section === section);
     const prefixes = schedulePrefixes.filter((item) => item.section === section);
-    const categoryMap = new Map<string, { category: string; prefix?: string; active: boolean }>();
+    const categoryMap = new Map<string, { category: string; prefix?: string; active: boolean; isDefaultEntry: boolean }>();
 
     for (const template of templates) {
       categoryMap.set(template.schedule_category, {
         category: template.schedule_category,
         prefix: categoryMap.get(template.schedule_category)?.prefix,
         active: template.is_active,
+        isDefaultEntry: template.is_default_entry,
       });
     }
 
@@ -251,10 +252,35 @@ export function TemplateManager({
         category: prefix.schedule_category,
         prefix: prefix.prefix,
         active: current?.active ?? false,
+        isDefaultEntry: current?.isDefaultEntry ?? false,
       });
     }
 
     return Array.from(categoryMap.values()).sort((a, b) => a.category.localeCompare(b.category));
+  };
+
+  const handleToggleDefaultEntry = async (section: ProductType, category: string, nextValue: boolean) => {
+    const key = `scheduler-default-${section}-${category}`;
+    setLoading(key);
+    try {
+      unwrapActionResult(
+        await setScheduleTemplateDefaultEntry({
+          section,
+          schedule_category: category,
+          is_default_entry: nextValue,
+        })
+      );
+      toast.success(
+        nextValue
+          ? `"${category}" will now be added automatically to every project.`
+          : `"${category}" removed from the default project template.`
+      );
+      router.refresh();
+    } catch (err: unknown) {
+      toast.error("Failed to update default template", { description: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setLoading(null);
+    }
   };
 
   return (
@@ -476,6 +502,57 @@ export function TemplateManager({
               ))}
             </Accordion>
           </div>
+
+          {mode === "project-engine" && (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium mb-2">Item Default (spesifikasi terisi)</h4>
+              {loadingItems ? (
+                <p className="text-xs text-muted-foreground">Memuat…</p>
+              ) : templateItems.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Belum ada. Gunakan tombol &quot;Set as default item&quot; di Catalog Board untuk menambah.
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {templateItems.map((item) => {
+                    const snapshot = item.data_snapshot as Record<string, unknown>;
+                    const productName = (snapshot?.catalog_product_name as string | undefined) ?? "—";
+                    const brand = (snapshot?.catalog_brand as string | undefined) ?? "—";
+                    return (
+                      <div key={item.id} className="flex items-center justify-between rounded border border-slate-200 bg-white px-3 py-2 text-sm">
+                        <div>
+                          <span className="font-medium">{item.schedule_category}</span>
+                          <span className="mx-1 text-muted-foreground">·</span>
+                          <span>{productName}</span>
+                          {brand && brand !== "—" && (
+                            <span className="ml-1 text-muted-foreground text-xs">ex. {brand}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setLoading(`tpl-del-${item.id}`);
+                            const res = await deleteScheduleTemplateItemAction(item.id);
+                            if ("error" in res) toast.error(res.error);
+                            else {
+                              setTemplateItems((prev) => prev.filter((i) => i.id !== item.id));
+                              toast.success("Item default dihapus.");
+                            }
+                            setLoading(null);
+                          }}
+                          disabled={loading === `tpl-del-${item.id}`}
+                          className="ml-2 text-xs text-red-500 hover:underline disabled:opacity-50"
+                          aria-label={`Hapus item default ${productName}`}
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -529,13 +606,22 @@ export function TemplateManager({
                         ) : (
                           configs.map((config) => {
                             const deleteKey = `scheduler-delete-${section}-${config.category}`;
+                            const defaultKey = `scheduler-default-${section}-${config.category}`;
                             return (
                               <div
                                 key={`${section}-${config.category}`}
                                 className="group flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition-all hover:border-slate-300 hover:shadow-sm"
                               >
                                 <div className="min-w-0">
-                                  <div className="truncate text-sm font-bold text-slate-900">{config.category}</div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate text-sm font-bold text-slate-900">{config.category}</span>
+                                    {config.isDefaultEntry && (
+                                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-indigo-600">
+                                        <LayoutTemplate className="h-2.5 w-2.5" />
+                                        Default
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                                     <span className="font-medium">Prefix:</span>
                                     <span className="rounded bg-slate-100 px-1 font-mono text-slate-900">{config.prefix || "--"}</span>
@@ -544,6 +630,31 @@ export function TemplateManager({
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                  {config.active && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className={cn(
+                                        "h-8 w-8",
+                                        config.isDefaultEntry
+                                          ? "text-indigo-600 hover:bg-indigo-50"
+                                          : "text-slate-400 hover:bg-slate-50 hover:text-slate-900"
+                                      )}
+                                      title={
+                                        config.isDefaultEntry
+                                          ? "Remove from default project template"
+                                          : "Add to default project template (auto-added to every project)"
+                                      }
+                                      onClick={() => handleToggleDefaultEntry(section, config.category, !config.isDefaultEntry)}
+                                      disabled={loading === defaultKey}
+                                    >
+                                      {loading === defaultKey ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <LayoutTemplate className="h-3.5 w-3.5" />
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"

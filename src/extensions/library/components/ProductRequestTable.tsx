@@ -1,16 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { ProductRequestStatus } from "@/generated/prisma";
 import type { LucideIcon } from "lucide-react";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Button, Badge, UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/ui_engine";
 import { 
   Loader2, 
   Box, 
@@ -22,8 +16,6 @@ import {
   Link as LinkIcon,
   User as UserIcon
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ProjectProductRequestWithDetails } from "../types";
 import { updateProductRequestStatusAction, deleteProjectProductRequestAction } from "../actions/library-actions";
 import { toast } from "sonner";
@@ -31,22 +23,6 @@ import { cn } from "@/lib/utils";
 import { unwrapActionResult } from "@/lib/result";
 import { getEffectiveTitle } from "../../schedule/lib/display-utils";
 import type { ScheduleSnapshot } from "@/lib/validations/schedule-snapshot";
-import {
-  UI_ENGINE_BG_SUBTLE,
-  UI_ENGINE_BORDER_SUBTLE,
-  UI_ENGINE_RADIUS_ACTION,
-  UI_ENGINE_RADIUS_CARD,
-  UI_ENGINE_RADIUS_CONTROL,
-  UI_ENGINE_TYPE_META,
-} from "@/ui_engine";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator
-} from "@/components/ui/dropdown-menu";
 
 interface ProductRequestTableProps {
   requests: ProjectProductRequestWithDetails[];
@@ -63,6 +39,7 @@ const STATUS_CONFIG: Record<ProductRequestStatus, { label: string; color: string
 
 export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRequestTableProps) {
   const [updatingId, setUpdatingId] = React.useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
   const [showHistory, setShowHistory] = React.useState(false);
 
   const now = React.useRef(Date.now()).current;
@@ -99,12 +76,13 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Are you sure you want to delete this request?")) return;
-    setUpdatingId(id);
+  async function confirmDelete() {
+    if (!pendingDeleteId) return;
+    setUpdatingId(pendingDeleteId);
     try {
-      unwrapActionResult(await deleteProjectProductRequestAction({ id }));
+      unwrapActionResult(await deleteProjectProductRequestAction({ id: pendingDeleteId }));
       toast.success("Request deleted");
+      setPendingDeleteId(null);
       onRefresh();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to delete request");
@@ -169,7 +147,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
           {allDisplayed.map((req) => {
             const config = STATUS_CONFIG[req.status] || STATUS_CONFIG.REQUESTED;
             const StatusIcon = config.icon;
-            const mat = req.product_catalog;
+            const mat = req.sku;
 
             return (
               <TableRow key={req.id} className={cn("group transition-colors border-b min-h-[70px]", UI_ENGINE_BORDER_SUBTLE)}>
@@ -186,14 +164,13 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <div className={cn("h-10 w-10 overflow-hidden flex-shrink-0 border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
-                      {mat?.catalog_image_url ? (
-                        <img src={mat.catalog_image_url} alt={mat.catalog_sku} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-200">
-                          <Box className="h-4 w-4" />
-                        </div>
-                      )}
+                    <div className={cn("relative h-10 w-10 overflow-hidden flex-shrink-0 border", UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CONTROL)}>
+                      {/* Master Data terputus dari StudioFlow (M5) — request hanya
+                          menyimpan snapshot nama, bukan relasi ke Sku, jadi tidak
+                          ada gambar untuk ditampilkan di sini. */}
+                      <div className="w-full h-full flex items-center justify-center text-slate-200">
+                        <Box className="h-4 w-4" />
+                      </div>
                     </div>
                     <div className="flex flex-col">
                       <div className="flex items-center gap-1.5 mb-0.5">
@@ -204,7 +181,7 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                         )}
                         <span className="font-serif font-medium text-slate-900 text-xs">
                           {mat ? (
-                            mat.catalog_sku || mat.catalog_product_name
+                            mat.name
                           ) : req.schedule_option?.data_snapshot ? (
                             getEffectiveTitle(req.schedule_option.data_snapshot as unknown as ScheduleSnapshot)
                           ) : (
@@ -214,7 +191,10 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                         </span>
                       </div>
                       <span className="text-[10px] text-slate-400 font-sans uppercase tracking-widest font-bold">
-                        {mat?.catalog_brand || mat?.vendor?.brand_name || (req.schedule_option?.data_snapshot as any)?.catalog_brand || "Custom Source"}
+                        {req.brand?.name ||
+                          (req.schedule_option?.data_snapshot as unknown as ScheduleSnapshot | null)
+                            ?.catalog_brand ||
+                          "Custom Source"}
                       </span>
                     </div>
                   </div>
@@ -239,6 +219,31 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                     {req.status === "RECEIVED" && (
                       <span className="text-[9px] text-emerald-600 font-bold font-sans ml-1">
                         By {req.staff_name_override || "Admin"}
+                      </span>
+                    )}
+                    {/* R10: vendor follow-up recorded from Master Data. Read-only
+                        here — a designer sees that someone is working on it and
+                        what the vendor quoted, but the write path stays in
+                        Master Data so there is one place that owns the field. */}
+                    {req.vendor_contacted_by && (
+                      <span className="ml-1 font-sans text-[9px] text-slate-400">
+                        Vendor dihubungi {req.vendor_contacted_by}
+                        {req.vendor_contacted_at
+                          ? ` · ${new Intl.DateTimeFormat("id-ID", {
+                              day: "2-digit",
+                              month: "short",
+                            }).format(new Date(req.vendor_contacted_at))}`
+                          : ""}
+                      </span>
+                    )}
+                    {req.vendor_quoted_price != null && (
+                      <span className="ml-1 font-sans text-[9px] font-semibold tabular-nums text-slate-500">
+                        {new Intl.NumberFormat("id-ID", {
+                          style: "currency",
+                          currency: "IDR",
+                          maximumFractionDigits: 0,
+                        }).format(req.vendor_quoted_price)}
+                        {req.vendor_quoted_unit ? ` / ${req.vendor_quoted_unit}` : ""}
                       </span>
                     )}
                   </div>
@@ -283,11 +288,11 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                             </div>
                           </DropdownMenuItem>
                         ))}
-                        {(userRole === "ADMIN" || userRole === "STAFF") && (
+                        {(userRole === "ADMIN" || userRole === "DEVELOPER" || userRole === "STAFF") && (
                           <>
                             <DropdownMenuSeparator className={cn(UI_ENGINE_BG_SUBTLE)} />
                             <DropdownMenuItem 
-                              onClick={() => handleDelete(req.id)}
+                              onClick={() => setPendingDeleteId(req.id)}
                               className="rounded-lg cursor-pointer text-rose-500 focus:bg-rose-50 focus:text-rose-600 py-1.5 font-bold text-[11px]"
                             >
                                Delete Request
@@ -304,6 +309,34 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
         </TableBody>
       </Table>
       </div>
+
+      <AlertDialog
+        open={!!pendingDeleteId}
+        onOpenChange={(open) => !open && setPendingDeleteId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this sample request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The request is removed from the queue. The project schedule entry and
+              the library product it points at are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!updatingId}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDelete();
+              }}
+              disabled={!!updatingId}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              {updatingId ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

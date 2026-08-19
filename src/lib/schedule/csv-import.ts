@@ -1,8 +1,9 @@
-import { Prisma, ProductType } from "@/generated/prisma";
+import { ProductType } from "@/generated/prisma";
 import { ActionError } from "@/lib/error-types";
 import { TxClient } from "@/core/rbac/permissions";
 import { buildScheduleSnapshot, ScheduleService, SourceOrigin } from "@/extensions/schedule/services/schedule-service";
 import { ScheduleCsvImportRow } from "./csv-types";
+import { createScheduleOption, updateScheduleOptionSnapshot } from "@/extensions/schedule/services/schedule-option-writer";
 
 export interface ImportScheduleOptions {
   projectId: string;
@@ -79,7 +80,7 @@ function buildManualImportData(row: ScheduleCsvImportRow, category: string) {
 async function upsertApprovedOption(
   tx: TxClient,
   entryId: string,
-  snapshotJson: Prisma.InputJsonValue
+  snapshot: import("@/lib/validations/schedule-snapshot").ScheduleSnapshot
 ) {
   const existingOptions = await tx.projectScheduleOption.findMany({
     where: { entry_id: entryId },
@@ -89,13 +90,9 @@ async function upsertApprovedOption(
   const approved = existingOptions.find((option) => option.is_final) ?? existingOptions[0];
 
   if (approved) {
-    await tx.projectScheduleOption.update({
-      where: { id: approved.id },
-      data: {
-        data_snapshot: snapshotJson,
-        is_final: true,
-        status: "APPROVED",
-      },
+    await updateScheduleOptionSnapshot(tx as import("@/types/common").PrismaTransaction, approved.id, snapshot, {
+      is_final: true,
+      status: "APPROVED",
     });
 
     const demoteIds = existingOptions
@@ -115,14 +112,12 @@ async function upsertApprovedOption(
     return;
   }
 
-  await tx.projectScheduleOption.create({
-    data: {
-      entry_id: entryId,
-      data_snapshot: snapshotJson,
-      option_label: "A",
-      is_final: true,
-      status: "APPROVED",
-    },
+  await createScheduleOption(tx as import("@/types/common").PrismaTransaction, {
+    entry_id: entryId,
+    option_label: "A",
+    is_final: true,
+    status: "APPROVED",
+    data_snapshot: snapshot,
   });
 }
 
@@ -139,6 +134,7 @@ export async function importScheduleFromCsv(
 
   let created = 0;
   let updated = 0;
+  let newEntryOrdinal = 0;
 
   for (const row of rows) {
     if (!row.code) continue;
@@ -158,10 +154,9 @@ export async function importScheduleFromCsv(
     const category = normalizeImportCategory(existing?.schedule_category ?? await resolveImportCategory(tx, row, section));
     const manualData = buildManualImportData(row, category);
     const snapshot = await buildScheduleSnapshot(tx, null, manualData, sourceOrigin || "gsheets_import");
-    const snapshotJson = snapshot as unknown as Prisma.InputJsonValue;
 
     if (existing) {
-      await upsertApprovedOption(tx, existing.id, snapshotJson);
+      await upsertApprovedOption(tx, existing.id, snapshot);
 
       if (row.schedule_qty !== undefined || row.schedule_unit !== undefined || row.location !== undefined) {
         await tx.projectScheduleEntry.update({
@@ -202,30 +197,35 @@ export async function importScheduleFromCsv(
 
     const normalizedCategory = category.trim().toUpperCase();
 
+    // The placeholder increment must be <= 0 and unique within this import
+    // batch (see catalog-ownership.ts / normalizeCodes below): a positive
+    // guess here — the previous code used the section's last sort_order+1,
+    // not even scoped to this category — could collide with or shadow a real
+    // increment in this category, and normalizeCodes (gentle) treats any
+    // positive value as already-valid and would never revisit it.
+    newEntryOrdinal += 1;
     const entry = await tx.projectScheduleEntry.create({
       data: {
         project_id: projectId,
         schedule_category: normalizedCategory,
         section,
         schedule_prefix: prefixDict.prefix || "ITEM",
-        schedule_increment: (lastEntry?.schedule_increment ?? 0) + 1,
+        schedule_increment: -newEntryOrdinal,
         prefix_id: prefixDict.id,
         schedule_sort_order: (lastEntry?.schedule_sort_order ?? 0) + 1,
-        index_number: (lastEntry?.index_number ?? 0) + 1,
+        index_number: 0,
         schedule_qty: section === ProductType.material ? null : (row.schedule_qty ?? null),
         schedule_unit: row.schedule_unit ?? null,
         schedule_location: row.location ?? null,
       },
     });
 
-    await tx.projectScheduleOption.create({
-      data: {
-        entry_id: entry.id,
-        data_snapshot: snapshotJson,
-        option_label: "A",
-        is_final: true,
-        status: "APPROVED",
-      },
+    await createScheduleOption(tx as import("@/types/common").PrismaTransaction, {
+      entry_id: entry.id,
+      option_label: "A",
+      is_final: true,
+      status: "APPROVED",
+      data_snapshot: snapshot,
     });
 
     // Canonical scheduler codes are normalized from prefix/category order, not imported raw text.

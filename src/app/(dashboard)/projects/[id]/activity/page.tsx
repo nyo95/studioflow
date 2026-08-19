@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Role } from "@/generated/prisma";
+import { isAdminLevel } from "@/core/rbac/rbac";
 import { getSession } from "@/lib/auth";
 import { auditService, type AuditFiltersInput } from "@/core/platform/audit";
 import { ActivityLogTable } from "@/components/activity-log-table";
@@ -45,14 +46,14 @@ export default async function ProjectActivityPage({
     <DashboardPageShell>
       <PageBackLink />
       <PageHeader
-        eyebrow="Aktivitas Proyek"
+        eyebrow="Project activity"
         title={`${data.project.name} Activity`}
-        description="Riwayat aktivitas khusus proyek ini dalam bahasa yang lebih mudah dibaca, plus filter, ekspor, dan undo."
+        description="What happened on this project, in plain words — with filters, export, and undo."
       />
 
       <ActivityLogTable
         logs={data.logs}
-        canUndo={role === Role.ADMIN || role === Role.DIC}
+        canUndo={isAdminLevel(role) || role === Role.DIC}
         filters={{
           users: data.filters.users.map((user) => ({ id: user.id, label: user.name })),
           actions: data.filters.actions.map((action) => ({ id: action, label: action.replace(/_/g, " ") })),

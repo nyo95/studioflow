@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/ui_engine";
 import { useStablePathname } from "@/hooks/use-stable-pathname";
 
 export function LayoutClient({ children }: { children: ReactNode }) {

@@ -1,158 +1,69 @@
-import { prisma } from "@/core/platform/db";
-import { Prisma, Role, PhaseStatus } from "@/generated/prisma";
 import { TodayQuickAddModal } from "@/components/today-quick-add-modal";
 import { TodayView } from "@/components/today-view";
-import { DashboardProject, DashboardPhase } from "@/types/dashboard";
-import {
-  DashboardPageShell,
-  PageHeader,
-  SectionCard,
-} from "@/ui_engine";
+import { DashboardPageShell, PageHeader, SectionCard } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { CalendarCheck2 } from "lucide-react";
+import { getTaskFeed, getTaskFeedLookups } from "@/lib/services/task-feed-query";
+import { groupTasksByProject } from "@/lib/services/task-feed";
+import { getChecklistFilterViews } from "@/lib/services/checklist-filter-view";
 
-function formatPhaseName(name: string) {
-  return name.replace(/_/g, " ");
-}
+/**
+ * Tasks — the by-project view.
+ *
+ * This page was called "Today's View" and showed everything regardless of date,
+ * which made the title a lie. The date question moved to `/upcoming`, where it
+ * can be answered properly; this one answers the other question — what is on
+ * each project I hold — and is named for it.
+ *
+ * Scope is always the projects you hold. There is no studio-wide toggle: this
+ * is a personal working list, and `/projects` already gives anyone who needs it
+ * the view across everything.
+ */
+export default async function TasksPage() {
+  const { userId } = await getSession();
 
-export default async function HomePage() {
-  const { userId, role } = await getSession();
+  const [{ projects, tasks, addTargets }, { members, labels }, savedFilters] = await Promise.all([
+    getTaskFeed(userId),
+    getTaskFeedLookups(),
+    getChecklistFilterViews(userId),
+  ]);
 
-  const activePhaseStatuses: PhaseStatus[] = ["IN_PROGRESS", "ON_REVIEW_INTERNAL", "ON_REVIEW_CLIENT"];
-
-  const whereClause: Prisma.ProjectWhereInput = {
-    phases: {
-      some: { status_enum: { in: activePhaseStatuses } },
-    },
-  };
-
-  if (role !== Role.ADMIN) {
-    whereClause.OR = [
-      { pic_designer_id: userId },
-      { pic_drafter_id: userId },
-    ];
-  }
-
-  const projects = await prisma.project.findMany({
-    where: whereClause,
-    include: {
-      phases: {
-        orderBy: { order_index: "asc" },
-        include: {
-          revisions: {
-            where: { status_enum: "ACTIVE" },
-            take: 1,
-            include: {
-              activities: {
-                where: { mode: { in: ["TODO", "FEEDBACK"] } },
-                orderBy: { id: "asc" },
-              },
-            },
-          },
-        },
-      },
-      activities: {
-        where: { phase_id: null, revision_id: null, mode: { in: ["TODO", "FEEDBACK"] } },
-        orderBy: { id: "asc" },
-      },
-    },
-    orderBy: [
-      { priority: "asc" },
-      { name: "asc" },
-    ],
-  });
-
-  // Filter projects/phases with 0 tasks and transform
-  const projectsWithTasks: DashboardProject[] = projects.map((project) => {
-    const phasesWithTasks: DashboardPhase[] = project.phases.map((phase) => {
-      const activeRevision = phase.revisions[0];
-      const tasks = activeRevision?.activities || [];
-      return {
-        id: phase.id,
-        name: formatPhaseName(phase.name_enum),
-        status: phase.status_enum,
-        revisionId: activeRevision?.id,
-        isLocked: phase.is_locked,
-        tasks: tasks.map(t => ({
-          id: t.id,
-          content: t.content,
-          status: t.status,
-          mode: t.mode,
-          projectName: project.name,
-          phaseName: formatPhaseName(phase.name_enum),
-          isUrgent: project.priority === "URGENT"
-        }))
-      };
-    });
-
-    const projectTodoTasks = project.activities || [];
-    if (projectTodoTasks.length > 0) {
-      phasesWithTasks.push({
-        id: `general-${project.id}`,
-        name: "General Tasks",
-        status: "IN_PROGRESS" as PhaseStatus,
-        isProjectLevel: true,
-        projectId: project.id,
-        tasks: projectTodoTasks.map(t => ({
-          id: t.id,
-          content: t.content,
-          status: t.status,
-          mode: t.mode,
-          projectName: project.name,
-          phaseName: "General Tasks",
-          isUrgent: project.priority === "URGENT"
-        }))
-      });
-    }
-
-    return {
-      id: project.id,
-      name: project.name,
-      isUrgent: project.priority === "URGENT",
-      phases: phasesWithTasks
-    };
-  }).filter(p => p.phases.length > 0);
-
-  const modalProjects = projects.map((project) => ({
-    projectId: project.id,
-    projectName: project.name,
-    phases: [
-      {
-        phaseId: "general",
-        phaseName: "General Tasks",
-        isProjectLevel: true,
-        isLocked: false,
-      },
-      ...project.phases.map((phase) => ({
-        phaseId: phase.id,
-        activeRevisionId: phase.revisions[0]?.id,
-        phaseName: formatPhaseName(phase.name_enum),
-        isLocked: phase.is_locked || (!phase.revisions[0]?.id),
-      })),
-    ],
-  }));
+  // Projects drive the grouping, not tasks — that is what keeps a project you
+  // hold on screen when its queue is empty.
+  const groups = groupTasksByProject(projects, tasks);
 
   return (
     <DashboardPageShell>
       <PageHeader
-        eyebrow="Daily Pulse"
-        title="Today's View"
-        description="All active phases across your projects in one place."
-        action={<TodayQuickAddModal projects={modalProjects} />}
+        eyebrow="Workload"
+        title="Tasks"
+        description="Every project you hold, with whatever is open on each."
+        action={<TodayQuickAddModal projects={addTargets} />}
       />
 
-      {projectsWithTasks.length === 0 ? (
+      {groups.length === 0 ? (
         <SectionCard className="min-h-[320px]">
           <div className="flex min-h-[260px] flex-col items-center justify-center gap-4 text-center">
             <CalendarCheck2 className="h-10 w-10 text-slate-200" />
             <div className="space-y-1">
-              <h3 className="font-sans text-sm font-medium text-slate-400">No open tasks today.</h3>
-              <p className="text-xs text-slate-300">Active phases and feedback items will appear here.</p>
+              <h3 className="font-sans text-sm font-medium text-slate-400">
+                You aren&apos;t on any active project.
+              </h3>
+              <p className="text-xs text-slate-300">
+                Projects appear here as soon as you are their designer or drafter.
+              </p>
             </div>
           </div>
         </SectionCard>
       ) : (
-        <TodayView projects={projectsWithTasks} />
+        <TodayView
+          groups={groups}
+          addTargets={addTargets}
+          currentUserId={userId}
+          members={members}
+          knownLabels={labels}
+          initialSavedFilters={savedFilters}
+        />
       )}
     </DashboardPageShell>
   );

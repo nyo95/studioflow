@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { Button } from "@/ui_engine";
+import { Input } from "@/ui_engine";
 import { 
   addActivity, 
   updateActivityContent,
@@ -16,6 +17,7 @@ import { Role, PhaseName } from "@/generated/prisma";
 import { usePhaseLive, Activity } from "@/ui_engine";
 import { unwrapActionResult } from "@/lib/result";
 import { ActivityListSorted } from "@/components/activity-list-sorted";
+import { useAppConfirm } from "@/hooks/use-app-confirm";
 
 interface ActivityManagerProps {
   revisionId: string;
@@ -47,6 +49,7 @@ export function ActivityManager({
   const [loading, setLoading] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftContent, setDraftContent] = useState("");
+  const appConfirm = useAppConfirm();
 
   const targetMode: "TODO" | "FEEDBACK" = phaseStatus.startsWith("ON_REVIEW") ? "FEEDBACK" : "TODO";
   const isEditable = !isLocked && canMutate;
@@ -63,6 +66,7 @@ export function ActivityManager({
       void syncNow();
     } catch (error) {
       console.error(error);
+      toast.error("The item could not be added. Try again.");
     } finally {
       setLoading(null);
     }
@@ -85,6 +89,7 @@ export function ActivityManager({
     } catch (error) {
       setInternalActivities(contextActivities);
       console.error(error);
+      toast.error("The status could not be changed. The update was reverted.");
     } finally {
       setLoading(null);
     }
@@ -92,7 +97,11 @@ export function ActivityManager({
 
   const handleDelete = async (id: string) => {
     if (!isEditable) return;
-    if (!confirm("Are you sure you want to delete this?")) return;
+    if (!(await appConfirm.confirm({
+      title: "Delete this item?",
+      description: "This item will be permanently deleted.",
+      confirmLabel: "Delete",
+    }))) return;
     setLoading(id);
     
     // Optimistic Delete
@@ -104,6 +113,7 @@ export function ActivityManager({
     } catch (error) {
       setInternalActivities(contextActivities);
       console.error(error);
+      toast.error("The item could not be deleted. The update was reverted.");
     } finally {
       setLoading(null);
     }
@@ -111,7 +121,11 @@ export function ActivityManager({
 
   const handleDefer = async (id: string) => {
     if (loading) return;
-    if (!confirm("Move this task to project scope? It will no longer block this phase submission.")) return;
+    if (!(await appConfirm.confirm({
+      title: "Move this task to project scope?",
+      description: "It will no longer block this phase submission.",
+      confirmLabel: "Move task",
+    }))) return;
     setLoading(`defer-${id}`);
     
     try {
@@ -119,6 +133,7 @@ export function ActivityManager({
       void syncNow();
     } catch (error) {
       console.error(error);
+      toast.error("The task could not be moved to project scope.");
     } finally {
       setLoading(null);
     }
@@ -148,6 +163,7 @@ export function ActivityManager({
     } catch (error) {
       setInternalActivities(contextActivities);
       console.error(error);
+      toast.error("The changes could not be saved. The previous content was restored.");
     } finally {
       setLoading(null);
     }
@@ -283,6 +299,8 @@ export function ActivityManager({
           </div>
         )}
       />
+
+      {appConfirm.dialog}
 
     </div>
   );

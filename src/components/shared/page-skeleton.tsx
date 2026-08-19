@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/ui_engine";
 import { cn } from "@/lib/utils";
 import { DashboardPageShell } from "@/ui_engine";
 

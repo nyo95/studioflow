@@ -5,7 +5,6 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useStablePathname } from "@/hooks/use-stable-pathname";
 import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
-import { Heading } from "@/ui_engine/components/heading";
 import { 
   ChevronDown, 
   LayoutDashboard, 
@@ -16,7 +15,8 @@ import {
   HardHat, 
   FolderCheck, 
   ShoppingBag,
-  Info 
+  Info,
+  ClipboardList,
 } from "lucide-react";
 
 interface PhaseItem {
@@ -97,7 +97,7 @@ export function NavInner({
         <div className={cn("flex items-start justify-between gap-3", collapsed && "justify-center")}>
           {collapsed ? null : (
             <div className="min-w-0">
-              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--ui-text-tertiary)] mb-1 font-sans">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1 font-sans">
                 Project
               </div>
               <h2
@@ -133,7 +133,7 @@ export function NavInner({
         {/* GROUP: GENERAL */}
         <div>
           {collapsed ? null : (
-            <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--ui-text-tertiary)] px-3 mb-1 font-sans">
+            <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 px-3 mb-1 font-sans">
               Project
             </div>
           )}
@@ -145,11 +145,11 @@ export function NavInner({
                 className={cn(
                   "flex items-center text-sm transition-colors duration-150",
                   collapsed 
-                    ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
-                    : "px-3 py-2 rounded-[var(--ui-radius-control)]",
+                    ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]" 
+                    : "px-3 py-2 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]",
                   projectId && pathname === `/projects/${projectId}`
-                    ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
-                    : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
+                    ? "bg-slate-100 text-slate-950 font-medium"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
                 )}
                 title="Overview"
               >
@@ -171,7 +171,7 @@ export function NavInner({
             title="Phases"
           >
             {collapsed ? null : (
-              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--ui-text-tertiary)] px-3 mb-1 font-sans">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 px-3 mb-1 font-sans">
                 PHASES
               </div>
             )}
@@ -197,11 +197,11 @@ export function NavInner({
                       className={cn(
                         "flex items-center text-sm transition-colors duration-150",
                         collapsed 
-                          ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
-                          : "px-3 py-2 rounded-[var(--ui-radius-control)]",
+                          ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]" 
+                          : "px-3 py-2 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]",
                         isActive
-                          ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
-                          : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
+                          ? "bg-slate-100 text-slate-950 font-medium"
+                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
                       )}
                       title={formatPhaseLabel(phase.name_enum, phase.label)}
                     >
@@ -235,7 +235,7 @@ export function NavInner({
             title="Extensions"
           >
             {collapsed ? null : (
-              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--ui-text-tertiary)] px-3 mb-1 font-sans">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 px-3 mb-1 font-sans">
                 EXTENSIONS
               </div>
             )}
@@ -257,11 +257,11 @@ export function NavInner({
                   className={cn(
                     "flex items-center text-sm font-sans transition-colors duration-150",
                     collapsed 
-                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
-                      : "px-3 py-2 rounded-[var(--ui-radius-control)]",
+                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]" 
+                      : "px-3 py-2 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]",
                     pathname.endsWith("/deliverables")
-                      ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
-                      : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
+                      ? "bg-slate-100 text-slate-950 font-medium"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
                   )}
                   title="Deliverables"
                 >
@@ -271,16 +271,35 @@ export function NavInner({
               </li>
               <li>
                 <Link 
+                  href={projectId ? `/projects/${projectId}/mom` : "#"} 
+                  onClick={handleNavigate}
+                  className={cn(
+                    "flex items-center text-sm font-sans transition-colors duration-150",
+                    collapsed 
+                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]" 
+                      : "px-3 py-2 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]",
+                    pathname.includes(`/projects/${projectId}/mom`)
+                      ? "bg-slate-100 text-slate-950 font-medium"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
+                  )}
+                  title="MOM Reports"
+                >
+                  <ClipboardList className={cn("w-4 h-4", collapsed ? "" : "mr-2")} />
+                  {collapsed ? null : "MOM Reports"}
+                </Link>
+              </li>
+              <li>
+                <Link 
                   href={projectId ? `/projects/${projectId}/extensions/product-catalog` : "#"} 
                   onClick={handleNavigate}
                   className={cn(
                     "flex items-center text-sm font-sans transition-colors duration-150",
                     collapsed 
-                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
-                      : "px-3 py-2 rounded-[var(--ui-radius-control)]",
+                      ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]" 
+                      : "px-3 py-2 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]",
                     pathname.includes(`/projects/${projectId}/extensions/product-catalog`)
-                      ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
-                      : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
+                      ? "bg-slate-100 text-slate-950 font-medium"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
                   )}
                   title="Product & Fixtures"
                 >
@@ -288,19 +307,19 @@ export function NavInner({
                   {collapsed ? null : "Product Schedule"}
                 </Link>
               </li>
-              {userRole === "ADMIN" && (
+              {userRole === "DEVELOPER" && (
                 <li>
-                  <Link 
-                    href={projectId ? `/projects/${projectId}/sketchup` : "#"} 
+                  <Link
+                    href={projectId ? `/projects/${projectId}/sketchup` : "#"}
                     onClick={handleNavigate}
                     className={cn(
                       "flex items-center text-sm font-sans transition-colors duration-150",
                       collapsed 
-                        ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control)]" 
-                        : "px-3 py-2 rounded-[var(--ui-radius-control)]",
+                        ? "justify-center px-0 py-2.5 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]" 
+                        : "px-3 py-2 rounded-[var(--ui-radius-control,calc(var(--ui-radius-card,0.75rem)*0.66))]",
                       pathname.includes(`/projects/${projectId}/sketchup`)
-                        ? "bg-slate-100 text-[var(--ui-text-primary)] font-medium"
-                        : "text-[var(--ui-text-secondary)] hover:bg-slate-50 hover:text-[var(--ui-text-primary)]"
+                        ? "bg-slate-100 text-slate-950 font-medium"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
                     )}
                     title="SketchUp"
                   >

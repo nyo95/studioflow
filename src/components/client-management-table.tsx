@@ -8,11 +8,11 @@ import {
   mergeClients,
   updateClientBranding,
 } from "@/actions/client-actions";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/ui_engine";
 import { ClientBranding, getClientInitials } from "@/components/client-branding";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/ui_engine";
+import { Input } from "@/ui_engine";
+import { Label } from "@/ui_engine";
 import {
   Dialog,
   DialogContent,
@@ -20,13 +20,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/ui_engine";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@/ui_engine";
 import {
   TableCard,
   TableCardHeader,
@@ -150,7 +150,7 @@ export function ClientManagementTable({ clients }: ClientManagementTableProps) {
       ) : null}
 
       <TooltipProvider delayDuration={0}>
-        <TableCard>
+        <TableCard minWidth="640px">
           <TableCardHeader>
             <TableCardHead>Client</TableCardHead>
             <TableCardHead>Address</TableCardHead>

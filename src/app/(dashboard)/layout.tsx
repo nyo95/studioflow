@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { APP, canEnterApp, landingRouteFor, subappLinksFor } from "@/core/rbac/app-access";
 import { NavOuter } from "@/components/nav-outer";
 import { TopHeader } from "@/components/top-header";
 import { SidebarProvider } from "@/context/sidebar-context";
@@ -18,7 +20,15 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = await getSession();
+  const { user, role } = await getSession();
+
+  // DEFENSE IN DEPTH. The edge proxy (src/auth.config.ts -> authorized) already
+  // blocks roles that may not enter StudioFlow, but this layout re-checks
+  // server-side so a proxy matcher change or middleware bypass cannot leak
+  // project data to an ESTIMATOR. Cheap: no extra query, role is already loaded.
+  if (!canEnterApp(role, APP.STUDIOFLOW)) {
+    redirect(landingRouteFor(role));
+  }
   const userInitials =
     typeof (user as { initials?: string | null } | null)?.initials === "string"
       ? (user as { initials?: string | null }).initials
@@ -94,26 +104,33 @@ export default async function DashboardLayout({
         className={cn("flex h-screen w-full flex-col overflow-hidden", UI_ENGINE_CANVAS_CLASS)}
         style={uiStyle}
       >
+        {/* userRole previously fell back to "STAFF" here. With STAFF owning
+            Master Data that default rendered a privileged nav for a session
+            with no role claim. `role` from getSession() is already resolved
+            against LEAST_PRIVILEGE_ROLE, so pass it straight through.
+            subappLinks is non-empty only for ADMIN/DEVELOPER — see
+            src/core/rbac/app-access.ts#subappLinksFor. */}
         <TopHeader
           userName={user?.name || "Guest"}
           userInitials={userInitials}
-          userRole={user?.role || "STAFF"}
+          userRole={role}
           appTitle={appTitle}
           logoUrl={logoUrl}
           theme={topBarTheme}
           projectSearchItems={projectSearchItems}
           activityNotifications={recentActivity}
+          subappLinks={subappLinksFor(role)}
         />
 
         <div className="flex flex-1 pt-14 min-h-0 relative">
-          <NavOuter appTitle={appTitle} userRole={user?.role || "STAFF"} />
+          <NavOuter appTitle={appTitle} userRole={role} />
 
           <main className={cn("flex flex-1 flex-col overflow-y-auto lg:pl-[78px] lg:pr-6", UI_ENGINE_CANVAS_CLASS)}>
             <div className="flex flex-1 flex-col w-full">
               {children}
             </div>
             
-            <footer className="mt-auto flex justify-center py-4 border-t border-[var(--ui-border-subtle)] text-slate-400">
+            <footer className="mt-auto flex justify-center py-4 border-t border-[var(--ui-border-subtle,rgb(241_245_249))] text-slate-400">
               <p className="select-none font-sans text-[10px] font-medium uppercase tracking-[0.2em]">
                 {appTitle} by BK (c)2026
               </p>
