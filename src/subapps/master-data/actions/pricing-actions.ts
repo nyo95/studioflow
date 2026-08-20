@@ -112,12 +112,6 @@ const WorkPriceFields = {
   specification_2: z.string().default(""),
   /** Excel "Dimensions" — one free-text string, as the workbook has it. */
   dimensions: z.string().default(""),
-  /** Excel "Qty (need curations)" — stored, never used. See X12/E6. */
-  qty: z.union([z.number(), z.string(), z.null()]).nullable().default(null),
-  /** Excel "Project Reference". */
-  project_refs: z
-    .array(z.object({ project_id: z.string().min(1), project_name: z.string().min(1) }))
-    .default([]),
   scope_note: z.string().default(""),
   notes: z.string().default(""),
   service_vendor_id: z.string().nullable().default(null),
@@ -139,6 +133,14 @@ const MaterialPriceInputSchema = z.object({
   ).nullable(),
   valid_from: z.string().nullable().default(null),
   notes: z.string().default(""),
+  usage_unit: z.string().default(""),
+  conversion: z.union([z.number(), z.string(), z.null()]).transform(
+    (v) => (v === null || v === "" ? null : Number(v))
+  ).nullable().default(null),
+  /** Dimensi tampilan dari kalkulator (e.g. "1200 × 2400 mm"). */
+  dim_display: z.string().nullable().default(null),
+  /** Nama kategori produk (PRODUCT kind) yang dipilih untuk SKU ini. */
+  category_names: z.array(z.string()).default([]),
 });
 
 const MaterialLaborPriceInputSchema = z.object(WorkPriceFields);
@@ -244,7 +246,6 @@ async function generateWorkPriceCode(tx: PrismaTransaction): Promise<string> {
 const WORK_PRICE_INCLUDE = {
   vendor: { select: { id: true, name: true } },
   category: { select: { name: true, parent: { select: { name: true } } } },
-  project_refs: { select: { project_id: true, project_name: true } },
 } as const;
 
 async function refetchWorkPrice(tx: PrismaTransaction, id: string) {
@@ -275,31 +276,6 @@ function readWorkSpec(spec: unknown): { specification_1: string; specification_2
     specification_1: typeof obj.specification_1 === "string" ? obj.specification_1 : "",
     specification_2: typeof obj.specification_2 === "string" ? obj.specification_2 : "",
   };
-}
-
-/**
- * Excel "Project Reference" — replaced wholesale, like contacts and links.
- *
- * `project_id` is a plain column, NOT a foreign key: `master_data` must not
- * depend on `studioflow` (§Arah Strategis poin 2, X14). `project_name` is
- * frozen alongside it so a renamed or archived project still reads correctly
- * on an old rate.
- */
-async function replaceProjectRefs(
-  tx: PrismaTransaction,
-  workPriceId: string,
-  refs: { project_id: string; project_name: string }[] | undefined
-) {
-  await tx.workPriceProjectRef.deleteMany({ where: { work_price_id: workPriceId } });
-  const unique = new Map((refs ?? []).map((r) => [r.project_id, r]));
-  if (unique.size === 0) return;
-  await tx.workPriceProjectRef.createMany({
-    data: [...unique.values()].map((r) => ({
-      work_price_id: workPriceId,
-      project_id: r.project_id,
-      project_name: r.project_name,
-    })),
-  });
 }
 
 function mapServiceVendor(p: {
@@ -341,13 +317,12 @@ function mapServiceVendor(p: {
  */
 type WorkPriceRow = {
   id: string; code: string; name: string; unit: string;
-  price: unknown; qty: unknown; spec: unknown; dim_display: string | null;
+  price: unknown; spec: unknown; dim_display: string | null;
   scope_note: string | null; notes: string | null;
   vendor_party_id: string | null; updated_by_name: string | null;
   is_active: boolean; created_at: Date; updated_at: Date | null;
   category: { name: string; parent: { name: string } | null };
   vendor: { id: string; name: string } | null;
-  project_refs: { project_id: string; project_name: string }[];
 };
 
 function mapWorkPriceCommon(p: WorkPriceRow) {
@@ -364,13 +339,8 @@ function mapWorkPriceCommon(p: WorkPriceRow) {
     // never ran. Kept as `null` type would fight the column type; per §13
     // this is simply dead code, not a null-safety gap.
     price: Number(p.price),
-    qty: p.qty != null ? Number(p.qty) : null,
     ...readWorkSpec(p.spec),
     dimensions: p.dim_display ?? "",
-    project_refs: p.project_refs.map((r) => ({
-      project_id: r.project_id,
-      project_name: r.project_name,
-    })),
     scope_note: p.scope_note,
     notes: p.notes,
     service_vendor_id: p.vendor_party_id,
@@ -395,7 +365,14 @@ function mapMaterialPrice(p: {
   supplier_party_id: string | null; valid_from: Date; valid_to: Date | null; is_current: boolean;
   notes: string | null; updated_by_name: string | null;
   created_at: Date; updated_at: Date | null;
-  sku: { id: string; code: string | null; name: string; brand_id: string | null; brand: { id: string; name: string } | null } | null;
+  sku: {
+    id: string; code: string | null; name: string; brand_id: string | null;
+    brand: { id: string; name: string } | null;
+    base_unit: string;
+    usage_unit: string | null; purchase_unit: string | null; conversion: unknown;
+    dim_display: string | null;
+    categories: { category: { name: string } }[];
+  } | null;
   supplier: { id: string; name: string } | null;
 }): MaterialPriceData {
   return {
@@ -420,6 +397,10 @@ function mapMaterialPrice(p: {
     // SkuPrice has no soft-delete column — it is a history row, not a
     // record that gets "undeleted". Always null; kept for type compat.
     deleted_at: null,
+    sku_usage_unit: p.sku?.usage_unit ?? null,
+    sku_conversion: p.sku?.conversion != null ? Number(p.sku.conversion) : null,
+    sku_dim_display: p.sku?.dim_display ?? null,
+    sku_categories: p.sku?.categories.map((c) => c.category.name) ?? [],
   };
 }
 
@@ -632,7 +613,6 @@ export const createServicePriceAction = createAction<ServicePriceInput, ServiceP
         unit: input.unit.trim(),
         price: assertWorkPrice(input.price),
         kind: "LABOR_ONLY",
-        qty: toNumberOrNull(input.qty),
         spec: buildWorkSpec(input),
         dim_display: input.dimensions?.trim() || null,
         scope_note: input.scope_note?.trim() || null,
@@ -642,7 +622,6 @@ export const createServicePriceAction = createAction<ServicePriceInput, ServiceP
       },
       include: WORK_PRICE_INCLUDE,
     });
-    await replaceProjectRefs(tx, row.id, input.project_refs);
     await recordAudit(tx, {
       entity: "WorkPrice",
       entity_id: row.id,
@@ -679,7 +658,6 @@ export const updateServicePriceAction = createAction<
         category_id: category.id,
         unit: input.data.unit.trim(),
         price: assertWorkPrice(input.data.price),
-        qty: toNumberOrNull(input.data.qty),
         spec: buildWorkSpec(input.data),
         dim_display: input.data.dimensions?.trim() || null,
         scope_note: input.data.scope_note?.trim() || null,
@@ -704,7 +682,6 @@ export const updateServicePriceAction = createAction<
         changes,
       });
     }
-    await replaceProjectRefs(tx, input.id, input.data.project_refs);
     return mapWorkPriceAsService(await refetchWorkPrice(tx, input.id));
   },
   { schema: z.object({ id: z.string(), data: ServicePriceInputSchema }) }
@@ -715,14 +692,7 @@ export const deleteServicePriceAction = createAction<{ id: string }, { id: strin
     if (!hasPermission(ctx.role, PERMISSION.MASTERDATA_VENDOR_MANAGE)) {
       throw new ActionError("Access denied", "FORBIDDEN");
     }
-    // H7 (2026-08-18): was `tx.workPrice.delete()` — a HARD delete that took
-    // `WorkPriceProjectRef` rows with it (`onDelete: Cascade`), erasing which
-    // past projects used this rate along with the row itself. `WorkPrice`
-    // already has `deleted_at` (added in the 2026-08-10 v2 rebaseline —
-    // `getServicePricesAction`/`getMaterialLaborPricesAction` already filter
-    // on it, they just never had anything setting it) so this needed no
-    // schema change, only matching `deleteMaterialPriceAction`'s soft-delete
-    // shape.
+    // Soft-delete keeps the current rate recoverable and auditable.
     const existing = await tx.workPrice.findFirst({ where: { id: input.id, kind: "LABOR_ONLY", deleted_at: null } });
     if (!existing) throw new ActionError("Price not found", "NOT_FOUND");
     await tx.workPrice.update({ where: { id: input.id }, data: { deleted_at: new Date(), updated_by_name: ctx.user.name ?? null } });
@@ -942,6 +912,33 @@ export const getSkuPricingViewerAction = createAction<
   { schema: z.object({ skuId: z.string().min(1) }), useTransaction: false }
 );
 
+/**
+ * Returns the PRODUCT-kind categories attached to a brand.
+ * Used by the pricing form to populate the category selector when a brand
+ * is picked, so the user can tag the SKU with the right categories.
+ */
+export const getBrandProductCategoriesAction = createAction<
+  { brandId: string },
+  { id: string; name: string }[]
+>(
+  async ({ input, ctx }) => {
+    if (!hasPermission(ctx.role, PERMISSION.MASTERDATA_PRICE_VIEW)) {
+      throw new ActionError("Access denied", "FORBIDDEN");
+    }
+    // No `kind` filter — older BrandCategory rows may have been created before
+    // `kind = "PRODUCT"` was enforced on the Category table; filtering by kind
+    // would silently hide them. All categories linked to a brand are product
+    // categories in this context anyway.
+    const rows = await db.brandCategory.findMany({
+      where: { brand_id: input.brandId },
+      select: { category: { select: { id: true, name: true } } },
+      orderBy: { category: { name: "asc" } },
+    });
+    return rows.map((r) => ({ id: r.category.id, name: r.category.name }));
+  },
+  { schema: z.object({ brandId: z.string().min(1) }), useTransaction: false }
+);
+
 export const createMaterialPriceAction = createAction<MaterialPriceInput, MaterialPriceData>(
   async ({ input, ctx, tx }) => {
     if (!hasPermission(ctx.role, PERMISSION.MASTERDATA_VENDOR_MANAGE)) {
@@ -973,6 +970,38 @@ export const createMaterialPriceAction = createAction<MaterialPriceInput, Materi
         "VALIDATION_FAILED"
       );
     }
+
+    // Simpan costing profile + dimensi + base_unit ke Sku.
+    const conversionNum = toNumberOrNull(input.conversion);
+    await tx.sku.update({
+      where: { id: input.sku_id },
+      data: {
+        ...(input.unit.trim() ? { purchase_unit: input.unit.trim(), base_unit: input.unit.trim() } : {}),
+        ...(input.usage_unit.trim() ? { usage_unit: input.usage_unit.trim() } : {}),
+        ...(conversionNum !== null && conversionNum > 0 ? { conversion: conversionNum } : {}),
+        ...(input.dim_display ? { dim_display: input.dim_display } : {}),
+      },
+    });
+
+    // Upsert SkuCategory dan propagasi ke BrandCategory.
+    const skuForCat = await tx.sku.findUnique({ where: { id: input.sku_id }, select: { brand_id: true } });
+    const actor = { id: ctx.userId, name: ctx.user.name ?? "" };
+    for (const [idx, catName] of (input.category_names ?? []).entries()) {
+      const cat = await resolveCategoryPath(tx, "PRODUCT", null, catName, actor);
+      await tx.skuCategory.upsert({
+        where: { sku_id_category_id: { sku_id: input.sku_id, category_id: cat.id } },
+        create: { sku_id: input.sku_id, category_id: cat.id, is_primary: idx === 0, sort_order: idx },
+        update: {},
+      });
+      if (skuForCat?.brand_id) {
+        await tx.brandCategory.upsert({
+          where: { brand_id_category_id: { brand_id: skuForCat.brand_id, category_id: cat.id } },
+          create: { brand_id: skuForCat.brand_id, category_id: cat.id },
+          update: {},
+        });
+      }
+    }
+
     return mapMaterialPrice(row);
   },
   { schema: MaterialPriceInputSchema }
@@ -1073,6 +1102,38 @@ export const updateMaterialPriceAction = createAction<
         "VALIDATION_FAILED"
       );
     }
+
+    // Sama seperti create — update costing profile + dimensi + base_unit ke Sku.
+    const conversionNum2 = toNumberOrNull(input.data.conversion);
+    await tx.sku.update({
+      where: { id: existing.sku_id },
+      data: {
+        ...(input.data.unit.trim() ? { purchase_unit: input.data.unit.trim(), base_unit: input.data.unit.trim() } : {}),
+        ...(input.data.usage_unit.trim() ? { usage_unit: input.data.usage_unit.trim() } : {}),
+        ...(conversionNum2 !== null && conversionNum2 > 0 ? { conversion: conversionNum2 } : {}),
+        ...(input.data.dim_display ? { dim_display: input.data.dim_display } : {}),
+      },
+    });
+
+    // Upsert SkuCategory dan propagasi ke BrandCategory.
+    const skuForCat = await tx.sku.findUnique({ where: { id: existing.sku_id }, select: { brand_id: true } });
+    const actor2 = { id: ctx.userId, name: ctx.user.name ?? "" };
+    for (const [idx, catName] of (input.data.category_names ?? []).entries()) {
+      const cat = await resolveCategoryPath(tx, "PRODUCT", null, catName, actor2);
+      await tx.skuCategory.upsert({
+        where: { sku_id_category_id: { sku_id: existing.sku_id, category_id: cat.id } },
+        create: { sku_id: existing.sku_id, category_id: cat.id, is_primary: idx === 0, sort_order: idx },
+        update: {},
+      });
+      if (skuForCat?.brand_id) {
+        await tx.brandCategory.upsert({
+          where: { brand_id_category_id: { brand_id: skuForCat.brand_id, category_id: cat.id } },
+          create: { brand_id: skuForCat.brand_id, category_id: cat.id },
+          update: {},
+        });
+      }
+    }
+
     return mapMaterialPrice(row);
   },
   { schema: z.object({ id: z.string(), data: MaterialPriceInputSchema, updatedByName: z.string() }) }
@@ -1194,7 +1255,6 @@ export const createMaterialLaborPriceAction = createAction<MaterialLaborPriceInp
         unit: input.unit.trim(),
         price: assertWorkPrice(input.price),
         kind: "MATERIAL_LABOR",
-        qty: toNumberOrNull(input.qty),
         spec: buildWorkSpec(input),
         dim_display: input.dimensions?.trim() || null,
         scope_note: input.scope_note?.trim() || null,
@@ -1204,7 +1264,6 @@ export const createMaterialLaborPriceAction = createAction<MaterialLaborPriceInp
       },
       include: WORK_PRICE_INCLUDE,
     });
-    await replaceProjectRefs(tx, row.id, input.project_refs);
     await recordAudit(tx, {
       entity: "WorkPrice",
       entity_id: row.id,
@@ -1237,7 +1296,6 @@ export const updateMaterialLaborPriceAction = createAction<
         category_id: category.id,
         unit: input.data.unit.trim(),
         price: assertWorkPrice(input.data.price),
-        qty: toNumberOrNull(input.data.qty),
         spec: buildWorkSpec(input.data),
         dim_display: input.data.dimensions?.trim() || null,
         scope_note: input.data.scope_note?.trim() || null,
@@ -1262,7 +1320,6 @@ export const updateMaterialLaborPriceAction = createAction<
         changes,
       });
     }
-    await replaceProjectRefs(tx, input.id, input.data.project_refs);
     return mapWorkPriceAsMaterialLabor(await refetchWorkPrice(tx, input.id));
   },
   { schema: z.object({ id: z.string(), data: MaterialLaborPriceInputSchema, updatedByName: z.string() }) }
@@ -1287,27 +1344,3 @@ export const deleteMaterialLaborPriceAction = createAction<{ id: string }, { id:
   }
 );
 
-/**
- * StudioFlow projects offered in the Project Reference picker (Excel Table 3/4).
- *
- * Reads `studioflow.Project` directly, which looks like it crosses the boundary
- * §Arah Strategis poin 2 draws — it does not. The boundary forbids StudioFlow
- * writing into `master_data` and forbids `master_data` DEPENDING on StudioFlow
- * (no FK, no join in a view). This is the Master Data app reading a list to
- * populate a dropdown, and what it stores is a snapshot of id and name.
- */
-export const getProjectOptionsAction = createAction<
-  undefined,
-  Array<{ id: string; name: string }>
->(
-  async ({ ctx }) => {
-    if (!hasPermission(ctx.role, PERMISSION.MASTERDATA_VIEW)) {
-      throw new ActionError("Access denied", "FORBIDDEN");
-    }
-    return db.project.findMany({
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    });
-  },
-  { useTransaction: false }
-);

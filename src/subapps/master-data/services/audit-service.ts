@@ -26,7 +26,7 @@ export type MasterDataEntity =
   | "Party" | "PartyRole" | "PartyContact" | "PartyLink"
   | "Brand" | "BrandLink" | "BrandSupplier" | "BrandCategory"
   | "Category" | "Sku" | "SkuCategory" | "SkuMedia" | "SkuPrice"
-  | "WorkPrice" | "WorkPriceProjectRef" | "Sample";
+  | "WorkPrice" | "Sample";
 
 type AuditAction = "CREATE" | "UPDATE" | "DELETE" | "RESTORE";
 

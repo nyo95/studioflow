@@ -129,9 +129,6 @@ function ObjectsTab({
                 {obj.code && (
                   <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}>{obj.code}</span>
                 )}
-                {obj.detailMode === "RINGKAS" && (
-                  <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}>summary</span>
-                )}
               </td>
               <td className={cn(UI_ENGINE_TYPE_META, "px-4 py-3 text-slate-500")}>{obj.unit}</td>
               <td className={cn(UI_ENGINE_TYPE_META, "px-4 py-3 text-slate-500")}>

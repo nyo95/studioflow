@@ -64,7 +64,9 @@ import { cn } from "@/lib/utils";
 import { formatIdr, formatPct, formatQty, type WasteSource } from "../lib/calc";
 import {
   addBqMaterialLineAction,
+  addBqLocalMaterialLineAction,
   addBqServiceLineAction,
+  addBqLocalServiceLineAction,
   createBqObjectAction,
   createBqSubObjectAction,
   deleteBqMaterialLineAction,
@@ -193,6 +195,44 @@ function NumberCell({
       />
       {suffix ? <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{suffix}</span> : null}
     </span>
+  );
+}
+
+function TextCell({
+  value,
+  onCommit,
+  disabled,
+  className,
+  placeholder,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  disabled?: boolean;
+  className?: string;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = React.useState(value);
+  React.useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    const next = draft.trim();
+    if (next && next !== value) onCommit(next);
+    else if (!next) setDraft(value);
+  };
+  return (
+    <Input
+      value={draft}
+      disabled={disabled}
+      placeholder={placeholder}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+      className={cn("h-7 text-xs", className)}
+    />
   );
 }
 
@@ -916,7 +956,15 @@ function LineTable({
                 return (
                   <tr key={line.lineId} className="border-b border-slate-50 last:border-0">
                     <td className="py-1.5 pr-3">
-                      <span className="font-sans text-xs text-slate-800">{line.name}</span>
+                      <TextCell
+                        value={line.name}
+                        disabled={!editable || pending}
+                        onCommit={(name) => void run(() => updateBqMaterialLineAction({ id: line.lineId, name }))}
+                        className="min-w-32"
+                      />
+                      <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}>
+                        {record.source === "PROJECT_LOCAL" ? "Local" : "Master"}
+                      </span>
                       {/* R4 — † badge for manually overridden snapshot price */}
                       {record.isManualOverride ? (
                         <span
@@ -936,7 +984,7 @@ function LineTable({
                     <td className="py-1.5 pr-2 text-right">
                       <NumberCell
                         value={line.qtyPerSub}
-                        suffix={line.usageUnit}
+                        suffix={line.usageUnit ?? undefined}
                         disabled={!editable || pending}
                         className="w-16"
                         onCommit={(next) =>
@@ -982,20 +1030,17 @@ function LineTable({
                     {/* R4 — editable price per usage unit */}
                     <td className="py-1.5 pr-3 text-right">
                       <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
-                        {formatQty(line.grossTotal)} {line.usageUnit} @{" "}
+                        {formatQty(line.grossTotal)}{line.usageUnit ? ` ${line.usageUnit}` : ""} @{" "}
                       </span>
                       <NumberCell
-                        value={line.pricePerUsageUnit}
+                        value={line.pricePerUsageUnit * (record.conversion ?? 1)}
                         disabled={!editable || pending}
                         className="w-24"
                         onCommit={(next) =>
                           next !== null &&
                           next >= 0 &&
                           void run(() =>
-                            overrideBqMaterialLineSnapshotAction({
-                              id: line.lineId,
-                              price: next,
-                            })
+                            updateBqMaterialLineAction({ id: line.lineId, price: next })
                           )
                         }
                       />
@@ -1056,7 +1101,15 @@ function LineTable({
                 return (
                   <tr key={line.lineId} className="border-b border-slate-50 last:border-0">
                     <td className="py-1.5 pr-3">
-                      <span className="font-sans text-xs text-slate-800">{line.name}</span>
+                      <TextCell
+                        value={line.name}
+                        disabled={!editable || pending}
+                        onCommit={(name) => void run(() => updateBqServiceLineAction({ id: line.lineId, name }))}
+                        className="min-w-32"
+                      />
+                      <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}>
+                        {record?.source === "PROJECT_LOCAL" ? "Local" : "Master"}
+                      </span>
                       {record?.hasMaterial ? (
                         <span
                           className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}
@@ -1099,8 +1152,17 @@ function LineTable({
                     <td className="py-1.5 pr-3 text-right">
                       <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
                         {formatQty(line.qtyTotal)} {line.rateUnit} @{" "}
-                        {formatIdr(line.pricePerRateUnit)}
                       </span>
+                      <NumberCell
+                        value={line.pricePerRateUnit}
+                        disabled={!editable || pending}
+                        className="w-24"
+                        onCommit={(next) =>
+                          next !== null &&
+                          next >= 0 &&
+                          void run(() => updateBqServiceLineAction({ id: line.lineId, price: next }))
+                        }
+                      />
                     </td>
 
                     <td className="py-1.5 text-right font-sans text-xs text-slate-800">
@@ -1144,6 +1206,18 @@ function LineTable({
               () =>
                 addBqServiceLineAction({ subObjectId: sub.id, workPriceId, qtyPerSub: qty }),
               "Service added."
+            )
+          }
+          onAddLocalMaterial={(input) =>
+            run(
+              () => addBqLocalMaterialLineAction({ subObjectId: sub.id, ...input, currency: "IDR" }),
+              "Custom material added."
+            )
+          }
+          onAddLocalService={(input) =>
+            run(
+              () => addBqLocalServiceLineAction({ subObjectId: sub.id, ...input, currency: "IDR" }),
+              "Custom service added."
             )
           }
         />

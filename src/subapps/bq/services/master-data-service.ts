@@ -54,7 +54,10 @@ import "server-only";
 
 import { prisma } from "@/core/platform/db";
 import { Prisma } from "@/generated/prisma";
+import type { PrismaTransaction } from "@/types/common";
 import { BQ_PICKER_PAGE_SIZE } from "../lib/constants";
+import { evaluateBqMaterialReadiness } from "@/subapps/master-data/lib/bq-readiness";
+import { PRICE_SOURCE_ROLES, WORK_VENDOR_ROLES } from "@/subapps/master-data/services/party-role-service";
 import type {
   BqMaterialCandidate,
   BqMaterialReadiness,
@@ -80,6 +83,8 @@ const SKU_SELECT = {
   id: true,
   code: true,
   name: true,
+  status: true,
+  deleted_at: true,
   base_unit: true,
   // BQ costing fields — sekarang duduk langsung di Sku (P1, 2026-08-19)
   usage_unit: true,
@@ -96,7 +101,21 @@ const SKU_SELECT = {
     take: 1,
   },
   prices: {
-    where: { is_current: true },
+    where: {
+      is_current: true,
+      OR: [
+        { supplier_party_id: null },
+        {
+          supplier: {
+            is: {
+              deleted_at: null,
+              is_active: true,
+              roles: { some: { role: { in: PRICE_SOURCE_ROLES } } },
+            },
+          },
+        },
+      ],
+    },
     orderBy: [{ valid_from: "desc" }] as const,
     select: {
       id: true,
@@ -142,23 +161,14 @@ function pickPrice(sku: SkuRow) {
  */
 function evaluateReadiness(sku: SkuRow): BqMaterialReadiness {
   const price = pickPrice(sku);
-  if (!price) {
-    return {
-      ok: false,
-      reason: "NO_PRICE",
-      detail: "No current price in Master Data. Ask Master Data staff to record one.",
-    };
-  }
-
-  if (sku.purchase_unit && price.unit !== sku.purchase_unit) {
-    return {
-      ok: false,
-      reason: "UNIT_MISMATCH",
-      detail: `This SKU is set to buy per "${sku.purchase_unit}", but the current price is quoted per "${price.unit}". Fix whichever one is wrong before using it.`,
-    };
-  }
-
-  return { ok: true };
+  return evaluateBqMaterialReadiness({
+    skuExists: true,
+      skuDeleted: sku.deleted_at !== null,
+    skuStatus: sku.status,
+    price,
+    purchaseUnit: sku.purchase_unit,
+    conversion: decToNumber(sku.conversion),
+  });
 }
 
 function toCandidate(sku: SkuRow): BqMaterialCandidate {
@@ -237,9 +247,12 @@ export async function searchMaterialCandidates(
 }
 
 /** Satu SKU, dengan seluruh konteks yang dibutuhkan untuk membekukan snapshot. */
-export async function loadMaterialCandidate(skuId: string): Promise<BqMaterialCandidate | null> {
-  const sku = await prisma.sku.findFirst({
-    where: { id: skuId, deleted_at: null },
+export async function loadMaterialCandidate(
+  skuId: string,
+  db: PrismaTransaction = prisma
+): Promise<BqMaterialCandidate | null> {
+  const sku = await db.sku.findFirst({
+    where: { id: skuId },
     select: SKU_SELECT,
   });
   if (!sku) return null;
@@ -261,7 +274,14 @@ const WORK_PRICE_SELECT = {
   kind: true,
   valid_from: true,
   vendor_party_id: true,
-  vendor: { select: { name: true } },
+  vendor: {
+    where: {
+      deleted_at: null,
+      is_active: true,
+      roles: { some: { role: { in: WORK_VENDOR_ROLES } } },
+    },
+    select: { name: true },
+  },
   category: { select: { name: true, path: true } },
 } satisfies Prisma.WorkPriceSelect;
 
@@ -306,7 +326,6 @@ export async function searchServiceCandidates(
     where: {
       deleted_at: null,
       is_active: true,
-      is_current: true,
       ...(trimmed
         ? {
             OR: [
@@ -326,10 +345,11 @@ export async function searchServiceCandidates(
 }
 
 export async function loadServiceCandidate(
-  workPriceId: string
+  workPriceId: string,
+  db: PrismaTransaction = prisma
 ): Promise<BqServiceCandidate | null> {
-  const row = await prisma.workPrice.findFirst({
-    where: { id: workPriceId, deleted_at: null },
+  const row = await db.workPrice.findFirst({
+    where: { id: workPriceId, deleted_at: null, is_active: true },
     select: WORK_PRICE_SELECT,
   });
   return row ? toServiceCandidate(row) : null;

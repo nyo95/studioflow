@@ -58,14 +58,10 @@ export type WorkPriceData = {
   unit: string;
   /** ONE price, as Excel has it. Replaced material_price + labor_price (E8). */
   price: number;
-  /** Excel "Qty (need curations)" — stored, never used. See X12 / E6. */
-  qty: number | null;
   specification_1: string;
   specification_2: string;
   /** Excel "Dimensions" — one free-text string, as the workbook writes it. */
   dimensions: string;
-  /** Excel "Project Reference". Snapshot, not a foreign key — see X14. */
-  project_refs: { project_id: string; project_name: string }[];
   scope_note: string | null;
   notes: string | null;
   service_vendor_id: string | null;
@@ -82,11 +78,9 @@ export type WorkPriceInput = {
   category: string;
   unit: string;
   price: number | string;
-  qty: number | string | null;
   specification_1: string;
   specification_2: string;
   dimensions: string;
-  project_refs: { project_id: string; project_name: string }[];
   scope_note: string;
   notes: string;
   service_vendor_id: string | null;
@@ -133,6 +127,13 @@ export type MaterialPriceData = {
   created_at: Date;
   updated_at: Date | null;
   deleted_at: Date | null;
+  /** Costing profile dari SKU yang terhubung. Null bila belum diisi. */
+  sku_usage_unit: string | null;
+  sku_conversion: number | null;
+  /** Dimensi tampilan (e.g. "1200 × 2400 mm"). Null bila belum diisi. */
+  sku_dim_display: string | null;
+  /** Kategori produk (PRODUCT kind) yang sudah terpasang pada SKU. */
+  sku_categories: string[];
 };
 
 /** Halaman harga material yang dibatasi di server agar direktori tidak
@@ -166,6 +167,14 @@ export type MaterialPriceInput = {
   price: number | string | null;
   valid_from: string | null;
   notes: string;
+  /** Satuan pakai di BQ (sqm, m', pcs). Disimpan ke Sku.usage_unit. */
+  usage_unit: string;
+  /** Berapa usage_unit dalam 1 purchase unit. Disimpan ke Sku.conversion. */
+  conversion: number | string | null;
+  /** Dimensi tampilan yang dihitung dari kalkulator dimensi. Disimpan ke Sku.dim_display. */
+  dim_display: string | null;
+  /** Nama kategori produk yang dipilih. Disimpan ke SkuCategory + propagasi ke BrandCategory. */
+  category_names: string[];
 };
 
 /** One row in the SKU pricing viewer. Current and retired offers share it. */

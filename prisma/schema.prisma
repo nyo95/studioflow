@@ -617,10 +617,6 @@ model SkuPrice {
 
   unit String
 
-  /// TIDAK DIPAKAI — keputusan owner 2026-08-10 (Q12). Lihat COMMENT kolom di
-  /// 03_invariants.sql. Jangan masukkan ke perhitungan apa pun.
-  qty Decimal? @db.Decimal(12, 3)
-
   valid_from DateTime  @default(now())
   valid_to   DateTime?
 
@@ -658,11 +654,6 @@ model WorkPrice {
 
   unit String
 
-  /// TIDAK DIPAKAI — sama seperti `SkuPrice.qty` (Q12/X12). Excel Table 3 dan 4
-  /// punya kolom `Qty` yang penulisnya sendiri tandai "(need curations)".
-  /// Disimpan apa adanya, dilarang masuk perhitungan. Lihat COMMENT kolomnya.
-  qty Decimal? @db.Decimal(12, 3)
-
   /// SATU harga, sesuai Excel Table 3 dan Table 4 yang keduanya hanya punya
   /// kolom `Price`. Menggantikan `material_price` + `labor_price` +
   /// `total_price` generated (E8, keputusan owner 2026-08-11).
@@ -686,24 +677,7 @@ model WorkPrice {
   scope_note String?
   notes      String?
 
-  /// TIDAK DIPAKAI sebagai riwayat multi-baris — keputusan owner 2026-08-19
-  /// (audit skema, SK1). Ketiga kolom di bawah terlihat identik dengan pola
-  /// `SkuPrice` (yang memang tabel riwayat, lihat AGENTS.md §3.3), tapi
-  /// `WorkPrice.code` di atas `@unique` GLOBAL — secara struktural mencegah
-  /// dua baris berbagi `code`, jadi tidak pernah ada "baris lama" +
-  /// "baris baru" yang bisa disupersede seperti `SkuPrice`.
-  /// `updateServicePriceAction`/`updateMaterialLaborPriceAction`
-  /// (`pricing-actions.ts`) memang mengedit baris ini DI TEMPAT; ketiga
-  /// kolom ini TIDAK PERNAH ditulis ulang sesudah `create`. Riwayat harga
-  /// jasa yang berubah hanya ada di `MasterDataAudit.changes` (JSON diff per
-  /// edit), bukan baris ber-struktur yang bisa di-query seperti `SkuPrice`.
-  /// JANGAN menganggap ketiganya berfungsi seperti pasangannya di
-  /// `SkuPrice` tanpa membangun `recordWorkPrice()`/`closeCurrentWorkPrice()`
-  /// setara DAN melepas `code` dari `@unique` global lebih dulu — itu
-  /// perubahan skema 🔒, butuh keputusan owner + migrasi baru.
   valid_from DateTime  @default(now())
-  valid_to   DateTime?
-  is_current Boolean   @default(true)
   is_active  Boolean   @default(true)
 
   created_at      DateTime  @default(now())
@@ -711,32 +685,10 @@ model WorkPrice {
   deleted_at      DateTime?
   updated_by_name String?
 
-  project_refs WorkPriceProjectRef[]
-
   @@index([category_id])
   @@index([vendor_party_id])
-  @@index([is_current, is_active])
   @@index([kind])
   @@index([deleted_at])
-  @@schema("master_data")
-}
-
-model WorkPriceProjectRef {
-  id            String @id @default(uuid())
-  work_price_id String
-
-  /// Kolom biasa, BUKAN FK ke studioflow.Project — master_data tidak boleh
-  /// bergantung ke studioflow.
-  project_id   String
-  project_name String
-
-  used_at DateTime?
-  notes   String?
-
-  work_price WorkPrice @relation(fields: [work_price_id], references: [id], onDelete: Cascade)
-
-  @@unique([work_price_id, project_id])
-  @@index([project_id])
   @@schema("master_data")
 }
 
@@ -1704,6 +1656,13 @@ enum BqProjectStatus {
   @@schema("bq")
 }
 
+enum BqLineSource {
+  MASTER_DATA
+  PROJECT_LOCAL
+
+  @@schema("bq")
+}
+
 /// Setelan global kantor. Satu baris, `id` dikunci ke `SETTINGS_ID`
 /// (`src/subapps/bq/lib/constants.ts`) — pola yang sama dengan
 /// `studioflow.SystemConfig`.
@@ -1727,10 +1686,6 @@ model BqSettings {
 /// Wadah project BQ. BERDIRI SENDIRI dari `studioflow.Project` (keputusan
 /// owner 2026-08-19, sejalan dengan PRD §0.1 "database proyek terpisah").
 ///
-/// `studioflow_project_id` adalah kolom biasa berisi snapshot id + nama —
-/// pola yang sama dengan `WorkPriceProjectRef` (AGENTS.md §8). Ini yang
-/// membuat estimator bisa menyusun BQ untuk tender yang belum jadi project
-/// StudioFlow, dan membuat BQ tidak ikut terhapus kalau project-nya batal.
 model BqProject {
   id String @id @default(uuid())
 
@@ -1738,9 +1693,6 @@ model BqProject {
   /// BQ boleh ada sebelum nomor project terbit.
   code String?
   name String
-
-  studioflow_project_id   String?
-  studioflow_project_name String?
 
   status BqProjectStatus @default(DRAFT)
   notes  String?
@@ -1756,7 +1708,6 @@ model BqProject {
   objects BqObject[]
 
   @@index([status, deleted_at])
-  @@index([studioflow_project_id])
   @@index([deleted_at])
   @@schema("bq")
 }
@@ -1872,6 +1823,7 @@ model BqMaterialLine {
   sku_id            String?
   sku_price_id      String?
   supplier_party_id String?
+  source            BqLineSource @default(MASTER_DATA)
 
   /// Kebutuhan untuk SATU sub-object, dalam `snapshot_usage_unit`.
   qty_per_sub Decimal @db.Decimal(18, 6)
@@ -1888,12 +1840,12 @@ model BqMaterialLine {
   snapshot_supplier_name String?
 
   // --- snapshot satuan & harga -------------------------------------------
-  snapshot_usage_unit    String
-  snapshot_purchase_unit String
+  snapshot_usage_unit    String?
+  snapshot_purchase_unit String?
 
   /// Konversi saat baris dibuat. Ikut dibekukan karena ia bagian dari
   /// MENDEFINISIKAN harga, bukan tingkat detail (PRD §4).
-  snapshot_conversion Decimal @db.Decimal(18, 6)
+  snapshot_conversion Decimal? @db.Decimal(18, 6)
 
   /// Harga per PURCHASE unit. Bukan per usage unit — pembagiannya terjadi di
   /// mesin hitung, bukan di simpanan, supaya asal angkanya tetap terlihat.
@@ -1944,6 +1896,7 @@ model BqServiceLine {
 
   work_price_id   String?
   vendor_party_id String?
+  source          BqLineSource @default(MASTER_DATA)
 
   /// Kebutuhan untuk SATU sub-object, dalam `snapshot_rate_unit`.
   qty_per_sub Decimal @db.Decimal(18, 6)
@@ -2066,9 +2019,23 @@ model BqLibraryMaterialLine {
   sub_object_id           String?
   sub_object              BqLibrarySubObject? @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
 
-  sku_id         String
+  source         BqLineSource @default(MASTER_DATA)
+  sku_id         String?
+  recipe_name    String?
+  recipe_code    String?
+  recipe_brand_name    String?
+  recipe_supplier_name String?
+  recipe_usage_unit    String?
+  recipe_purchase_unit String?
+  recipe_conversion    Decimal? @db.Decimal(18, 6)
+  recipe_price         Decimal? @db.Decimal(18, 4)
+  recipe_currency      String?
+  recipe_default_waste_pct Decimal? @db.Decimal(9, 6)
+  recipe_minimum_order Decimal? @db.Decimal(18, 6)
+  recipe_rounding_increment Decimal? @db.Decimal(18, 6)
   qty_per_sub    Decimal  @db.Decimal(18, 6)
   waste_override_pct Decimal? @db.Decimal(9, 6)
+  notes          String?
   sort_order     Int      @default(0)
 
   @@index([sub_object_of_object_id])
@@ -2085,9 +2052,19 @@ model BqLibraryServiceLine {
   sub_object_id           String?
   sub_object              BqLibrarySubObject? @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
 
-  work_price_id String
+  source        BqLineSource @default(MASTER_DATA)
+  work_price_id String?
+  recipe_name   String?
+  recipe_code   String?
+  recipe_vendor_name String?
+  recipe_rate_unit String?
+  recipe_price  Decimal? @db.Decimal(18, 4)
+  recipe_currency String?
+  recipe_scope_note String?
+  recipe_has_material Boolean?
   qty_per_sub   Decimal @db.Decimal(18, 6)
   sort_order    Int     @default(0)
+  notes         String?
 
   @@index([sub_object_of_object_id])
   @@index([sub_object_id])

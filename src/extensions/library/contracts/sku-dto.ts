@@ -113,7 +113,6 @@ type SkuPriceShape = {
   price_net: Decimal;
   currency: string;
   unit: string;
-  qty: Decimal | null;
   valid_from: Date;
   valid_to: Date | null;
   is_current: boolean;

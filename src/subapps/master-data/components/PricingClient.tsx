@@ -24,7 +24,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
-  Button, CreatableSearch, DashboardPageShell, Dialog, DialogContent, DialogFooter,
+  Button, CreatableChecklist, CreatableSearch, DashboardPageShell, Dialog, DialogContent, DialogFooter,
   DialogHeader, DialogTitle, Input, Label, PageHeader,
   TableCard, TableCardBody, TableCardCell, TableCardHead, TableCardHeader,
   TableCardRow,
@@ -53,6 +53,7 @@ import {
   createServicePriceAction,
   deleteMaterialLaborPriceAction, deleteMaterialPriceAction,
   deleteServicePriceAction,
+  getBrandProductCategoriesAction,
   getMaterialPricesAction,
   updateMaterialLaborPriceAction, updateMaterialPriceAction,
   updateServicePriceAction,
@@ -65,8 +66,6 @@ import type {
   WorkPriceData, WorkPriceInput,
 } from "../types/pricing";
 
-/** A StudioFlow project offered in the Project Reference picker (E4 / X14). */
-export type ProjectOption = { id: string; name: string };
 import { WorkVendorPicker } from "./WorkVendorPicker";
 import { SkuPicker } from "./SkuPicker";
 import { SkuDetailDrawer } from "./SkuDetailDrawer";
@@ -194,9 +193,8 @@ function EmptyState({ icon: Icon, message }: { icon: React.ElementType; message:
 
 const EMPTY_WORK_PRICE: WorkPriceInput = {
   name: "", vendor_category: "", category: "", unit: "",
-  price: "", qty: null,
+  price: "",
   specification_1: "", specification_2: "", dimensions: "",
-  project_refs: [],
   scope_note: "", notes: "", service_vendor_id: null,
 };
 
@@ -207,11 +205,9 @@ function workPriceToForm(row: WorkPriceData): WorkPriceInput {
     category: row.category,
     unit: row.unit,
     price: row.price,
-    qty: row.qty,
     specification_1: row.specification_1,
     specification_2: row.specification_2,
     dimensions: row.dimensions,
-    project_refs: row.project_refs,
     scope_note: row.scope_note ?? "",
     notes: row.notes ?? "",
     service_vendor_id: row.service_vendor_id,
@@ -227,13 +223,12 @@ function workPriceToForm(row: WorkPriceData): WorkPriceInput {
  * markup would drift the first time one of them gained a field.
  */
 function WorkPriceFields({
-  form, setForm, editable, vendors, projects, unitOptions, priceLabel, priceHint, dimensionsNote,
+  form, setForm, editable, vendors, unitOptions, priceLabel, priceHint, dimensionsNote,
 }: {
   form: WorkPriceInput;
   setForm: React.Dispatch<React.SetStateAction<WorkPriceInput>>;
   editable: boolean;
   vendors: ServiceVendorData[];
-  projects: ProjectOption[];
   /** Satuan yang pernah dipakai di seluruh halaman ini — lihat `collectUnits`. */
   unitOptions: string[];
   priceLabel: string;
@@ -411,31 +406,6 @@ function WorkPriceFields({
           <p className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>{dimensionsNote}</p>
         )}
       </div>
-      <div className="flex flex-col gap-1.5">
-        <Label className={UI_ENGINE_TYPE_META}>Qty</Label>
-        {editable ? <Input type="number" value={form.qty ?? ""} onChange={e => set("qty", e.target.value === "" ? null : e.target.value)} className={UI_ENGINE_RADIUS_CONTROL} />
-          : <ReadValue>{form.qty ?? ""}</ReadValue>}
-        {editable && (
-          <p className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>
-            Recorded only. Never enters any calculation — the price above is
-            always per one unit.
-          </p>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-1.5 md:col-span-2">
-        <Label className={UI_ENGINE_TYPE_META}>Project reference</Label>
-        {editable ? (
-          <ProjectRefPicker
-            projects={projects}
-            value={form.project_refs}
-            onChange={(refs) => set("project_refs", refs)}
-          />
-        ) : (
-          <ReadValue>{form.project_refs.map(r => r.project_name).join(", ")}</ReadValue>
-        )}
-      </div>
-
       <div className="flex flex-col gap-1.5 md:col-span-2">
         <Label className={UI_ENGINE_TYPE_META}>Scope — what the price includes</Label>
         {editable ? <textarea value={form.scope_note} onChange={e => set("scope_note", e.target.value)}
@@ -452,57 +422,6 @@ function WorkPriceFields({
   );
 }
 
-/**
- * Excel writes Project Reference as free text ("Sociolla SPZ, Sociolla GI,
- * dst"). Picked from the real project list instead, so "which projects used
- * this rate" can actually be answered — two spellings of one project would
- * otherwise be two projects. What is stored is a snapshot of id and name, not
- * a foreign key: `master_data` must not depend on `studioflow` (X14).
- */
-function ProjectRefPicker({
-  projects, value, onChange,
-}: {
-  projects: ProjectOption[];
-  value: { project_id: string; project_name: string }[];
-  onChange: (refs: { project_id: string; project_name: string }[]) => void;
-}) {
-  const chosen = new Set(value.map(v => v.project_id));
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {value.length === 0 && (
-          <span className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>No projects linked yet.</span>
-        )}
-        {value.map(ref => (
-          <button
-            key={ref.project_id}
-            type="button"
-            onClick={() => onChange(value.filter(v => v.project_id !== ref.project_id))}
-            className="flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 hover:border-red-300 hover:text-red-600"
-          >
-            {ref.project_name}
-            <span aria-hidden>×</span>
-          </button>
-        ))}
-      </div>
-      <select
-        value=""
-        onChange={(e) => {
-          const picked = projects.find(p => p.id === e.target.value);
-          if (!picked) return;
-          onChange([...value, { project_id: picked.id, project_name: picked.name }]);
-        }}
-        className={cn("border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--ui-border-focus)]", UI_ENGINE_RADIUS_CONTROL)}
-      >
-        <option value="">— Add a project —</option>
-        {projects.filter(p => !chosen.has(p.id)).map(p => (
-          <option key={p.id} value={p.id}>{p.name}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 // ===========================================================================
 // TAB 1 — Material Prices (MaterialPrice)
 // ===========================================================================
@@ -511,6 +430,8 @@ type MaterialPriceDialogState = { open: boolean; mode: "CREATE" | "EDIT"; row: M
 const EMPTY_MP: MaterialPriceInput = {
   brand_id: "", sku_id: null, supplier_party_id: null, item_description: "", unit: "",
   price: null, valid_from: null, notes: "",
+  usage_unit: "", conversion: null,
+  dim_display: null, category_names: [],
 };
 
 type SkuOption = { id: string; sku: string; productName: string; brandId: string | null; brandName: string | null };
@@ -551,6 +472,47 @@ function HargaMaterialTab({
   const [deleteTarget, setDeleteTarget] = React.useState<MaterialPriceData | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [viewerSkuId, setViewerSkuId] = React.useState<string | null>(null);
+
+  // ---------- Dimension calculator local state (UI-only, not sent to server) ----------
+  // TO_M: faktor konversi ke meter. Units: mm=0.001, cm=0.01, m=1.
+  const DIM_UNITS = ["mm", "cm", "m"] as const;
+  type DimUnit = typeof DIM_UNITS[number];
+  const TO_M: Record<DimUnit, number> = { mm: 0.001, cm: 0.01, m: 1 };
+
+  const [dimType, setDimType] = React.useState<"area" | "linear">("area");
+  const [dimUnit, setDimUnit] = React.useState<DimUnit>("mm");
+  const [dimW, setDimW] = React.useState("");
+  const [dimL, setDimL] = React.useState("");
+
+  /** Recalculate usage_unit, conversion, and dim_display whenever dim inputs change. */
+  React.useEffect(() => {
+    const factor = TO_M[dimUnit];
+    const l = parseFloat(dimL);
+    if (!dimL.trim() || isNaN(l) || l <= 0) return;
+    if (dimType === "linear") {
+      const conv = parseFloat((l * factor).toFixed(6));
+      const display = `${dimL} ${dimUnit}`;
+      setForm(p => ({ ...p, usage_unit: "m", conversion: conv, dim_display: display }));
+    } else {
+      const w = parseFloat(dimW);
+      if (!dimW.trim() || isNaN(w) || w <= 0) return;
+      const conv = parseFloat((w * factor * l * factor).toFixed(6));
+      const display = `${dimW} × ${dimL} ${dimUnit}`;
+      setForm(p => ({ ...p, usage_unit: "m2", conversion: conv, dim_display: display }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dimType, dimUnit, dimW, dimL]);
+
+  // ---------- Brand categories — fetched when brand changes ----------
+  const [brandCategories, setBrandCategories] = React.useState<{ id: string; name: string }[]>([]);
+  React.useEffect(() => {
+    if (!form.brand_id) { setBrandCategories([]); return; }
+    void getBrandProductCategoriesAction({ brandId: form.brand_id }).then((result) => {
+      if (result.success) setBrandCategories(result.data);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.brand_id]);
+  // ------------------------------------------------------------------
 
   React.useEffect(() => { onCountChange?.(allTotal); }, [allTotal, onCountChange]);
 
@@ -616,10 +578,16 @@ function HargaMaterialTab({
     label: "SKU",
   });
 
-  const skusForBrand = React.useMemo(
-    () => skuEntry.options.filter((s) => s.brandId === form.brand_id),
-    [skuEntry.options, form.brand_id]
-  );
+  // Show brand SKUs first, then all others — this way TH231AC (for example)
+  // is still findable even if it exists under a different brand or was created
+  // in a previous session before this page's server data was refreshed.
+  const skusForBrand = React.useMemo(() => {
+    const brandSkus = skuEntry.options.filter((s) => s.brandId === form.brand_id);
+    if (brandSkus.length > 0) return brandSkus;
+    // Fallback: show all SKUs when the selected brand has none yet,
+    // so existing codes typed by the user can still be found.
+    return skuEntry.options;
+  }, [skuEntry.options, form.brand_id]);
 
   /**
    * Sheet2 marks Supplier `**` — quick entry required.
@@ -661,9 +629,17 @@ function HargaMaterialTab({
    * sinkron tepat di titik ini, jadi inilah satu-satunya tempat yang punya
    * nilai barunya sebelum React sempat me-render ulang.
    */
+  function resetDimState() {
+    setDimType("area");
+    setDimUnit("mm");
+    setDimW("");
+    setDimL("");
+  }
+
   function openCreate() {
     setForm(EMPTY_MP);
     guard.markPristine(EMPTY_MP);
+    resetDimState();
     setDialog({ open: true, mode: "CREATE", row: null });
   }
   function openEdit(row: MaterialPriceData) {
@@ -673,9 +649,14 @@ function HargaMaterialTab({
       unit: row.unit ?? "", price: row.price,
       valid_from: row.valid_from ? new Date(row.valid_from).toISOString().slice(0, 10) : null,
       notes: row.notes ?? "",
+      usage_unit: row.sku_usage_unit ?? "",
+      conversion: row.sku_conversion ?? null,
+      dim_display: row.sku_dim_display ?? null,
+      category_names: row.sku_categories ?? [],
     };
     setForm(next);
     guard.markPristine(next);
+    resetDimState();
     setDialog({ open: true, mode: "EDIT", row });
   }
 
@@ -971,6 +952,33 @@ function HargaMaterialTab({
               {editable && form.brand_id && skusForBrand.length === 0 && !canManage && <p className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>This brand has no SKU in the material catalog yet.</p>}
             </div>
 
+            {/* Category tags — inherit from brand, creatable search, propagates back to brand */}
+            <div className="flex flex-col gap-1.5 md:col-span-2">
+              <Label className={UI_ENGINE_TYPE_META}>
+                Kategori produk
+                <span className={cn("ml-1 font-normal", UI_ENGINE_TYPE_META)}>(pilih satu atau lebih)</span>
+              </Label>
+              {editable ? (
+                <>
+                  <CreatableChecklist
+                    value={form.category_names}
+                    onChange={(next) => setForm(p => ({ ...p, category_names: next }))}
+                    options={brandCategories.map(c => c.name)}
+                    aria-label="Kategori produk"
+                    placeholder="Kategori baru…"
+                    addLabel="Tambah"
+                  />
+                  <p className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>
+                    Pilih dari kategori brand, atau ketik untuk tambah kategori baru. Kategori baru otomatis ditambahkan ke brand juga.
+                  </p>
+                </>
+              ) : (
+                <ReadValue>
+                  {form.category_names.length > 0 ? form.category_names.join(", ") : "—"}
+                </ReadValue>
+              )}
+            </div>
+
             <div className="flex flex-col gap-1.5 md:col-span-2">
               <Label className={UI_ENGINE_TYPE_META}>Item description / spec</Label>
               {editable ? <Input value={form.item_description} onChange={e => setForm(p => ({ ...p, item_description: e.target.value }))} placeholder="e.g. TACO HPL Marble Carrara 1.2mm" className={UI_ENGINE_RADIUS_CONTROL} />
@@ -982,6 +990,111 @@ function HargaMaterialTab({
               options={unitOptions}
               editable={editable}
             />
+            {/* Costing profile — dimension calculator.
+                Mengisi usage_unit & conversion ke Sku supaya BQ bisa konversi qty otomatis.
+                Input dimensi bersifat lokal (UI helper); hanya usage_unit & conversion yang disimpan. */}
+            <div className="md:col-span-2 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between">
+                <span className={cn("font-medium text-slate-600", UI_ENGINE_TYPE_META)}>
+                  Kalkulator dimensi
+                </span>
+                {editable && (
+                  <div className="flex gap-1">
+                    {(["area", "linear"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setDimType(t)}
+                        className={cn(
+                          "rounded px-2 py-0.5 text-xs font-medium transition-colors",
+                          dimType === t
+                            ? "bg-slate-700 text-white"
+                            : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-100"
+                        )}
+                      >
+                        {t === "area" ? "Area (W × L)" : "Linear (L)"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {editable ? (
+                <>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {dimType === "area" && (
+                      <>
+                        <Input
+                          type="number"
+                          value={dimW}
+                          onChange={e => setDimW(e.target.value)}
+                          placeholder="W"
+                          className={cn("w-24", UI_ENGINE_RADIUS_CONTROL)}
+                        />
+                        <span className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>×</span>
+                      </>
+                    )}
+                    <Input
+                      type="number"
+                      value={dimL}
+                      onChange={e => setDimL(e.target.value)}
+                      placeholder={dimType === "area" ? "L" : "Panjang"}
+                      className={cn("w-24", UI_ENGINE_RADIUS_CONTROL)}
+                    />
+                    <select
+                      value={dimUnit}
+                      onChange={e => setDimUnit(e.target.value as DimUnit)}
+                      className={cn(
+                        "h-9 rounded border border-slate-200 bg-white px-2 text-sm text-slate-700",
+                        UI_ENGINE_RADIUS_CONTROL
+                      )}
+                    >
+                      {DIM_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Auto-preview */}
+                  {form.conversion != null && (
+                    <p className="text-xs text-emerald-600 font-medium">
+                      → 1 {form.unit || "unit"} = {form.conversion} {form.usage_unit}
+                    </p>
+                  )}
+                  {!form.conversion && (
+                    <p className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>
+                      Isi dimensi di atas → usage unit &amp; konversi terisi otomatis.
+                    </p>
+                  )}
+                </>
+              ) : (
+                /* Read-only view */
+                <p className={cn("text-slate-600", UI_ENGINE_TYPE_META)}>
+                  {form.conversion != null
+                    ? `1 ${form.unit || "unit"} = ${form.conversion} ${form.usage_unit}`
+                    : "—"}
+                </p>
+              )}
+
+              {/* Result fields — auto-filled, always visible so user can see/verify */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>Usage unit</span>
+                  <span className={cn("text-slate-700", UI_ENGINE_TYPE_META)}>
+                    {form.usage_unit || "—"}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className={cn("text-slate-400", UI_ENGINE_TYPE_META)}>
+                    {form.unit ? `1 ${form.unit} =` : "Konversi"}
+                  </span>
+                  <span className={cn("text-slate-700", UI_ENGINE_TYPE_META)}>
+                    {form.conversion != null
+                      ? `${form.conversion} ${form.usage_unit || ""}`.trim()
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* valid_from removed per Sheet2: always auto-set to entry/update timestamp */}
             {/* Satu harga (item 8, 2026-08-14). Sebelumnya dua field — "list"
                 dan "net" — yang memaksa dua keputusan pada setiap entri padahal
@@ -1060,11 +1173,10 @@ function HargaMaterialTab({
 // ===========================================================================
 
 function HargaMaterialUpahTab({
-  rows: initial, vendors, projects, unitOptions, canManage, userName, onCountChange,
+  rows: initial, vendors, unitOptions, canManage, userName, onCountChange,
 }: {
   rows: MaterialLaborPriceData[];
   vendors: ServiceVendorData[];
-  projects: ProjectOption[];
   unitOptions: string[];
   canManage: boolean;
   userName: string;
@@ -1199,7 +1311,6 @@ function HargaMaterialUpahTab({
             setForm={setForm}
             editable={editable}
             vendors={vendors}
-            projects={projects}
             unitOptions={unitOptions}
             priceLabel="Price (material + labour)"
             priceHint="One figure covering both, as Excel Table 3 has it."
@@ -1241,11 +1352,10 @@ function HargaMaterialUpahTab({
 // ===========================================================================
 
 function HargaUpahTab({
-  prices: initialPrices, vendors, projects, unitOptions, canManage, onCountChange,
+  prices: initialPrices, vendors, unitOptions, canManage, onCountChange,
 }: {
   prices: ServicePriceData[];
   vendors: ServiceVendorData[];
-  projects: ProjectOption[];
   unitOptions: string[];
   canManage: boolean;
   /** See `HargaMaterialTab`'s `onCountChange` — same fix, same reason. */
@@ -1373,7 +1483,6 @@ function HargaUpahTab({
             setForm={setSpForm}
             editable={spEditable}
             vendors={vendors}
-            projects={projects}
             unitOptions={unitOptions}
             priceLabel="Price (labour only)"
             priceHint="Labour without material, as Excel Table 4 has it."
@@ -1412,14 +1521,13 @@ function HargaUpahTab({
 
 export function PricingClient({
   materialPrices, materialPriceUnits, materialLaborPrices, servicePrices, serviceVendors,
-  brands, skuOptions, suppliers, projects, canManage, userName,
+  brands, skuOptions, suppliers, canManage, userName,
 }: {
   materialPrices: MaterialPricePageData;
   materialPriceUnits: string[];
   materialLaborPrices: MaterialLaborPriceData[];
   servicePrices: ServicePriceData[];
   serviceVendors: ServiceVendorData[];
-  projects: ProjectOption[];
   brands: { id: string; brand_name: string }[];
   skuOptions: SkuOption[];
   suppliers: SupplierOption[];
@@ -1500,10 +1608,10 @@ export function PricingClient({
         <HargaMaterialTab initialPage={materialPrices} brands={brands} skuOptions={skuOptions} suppliers={suppliers} unitOptions={unitOptions} canManage={canManage} userName={userName} onCountChange={setMaterialCount} />
       </div>
       <div className={tab === "material-upah" ? undefined : "hidden"}>
-        <HargaMaterialUpahTab rows={materialLaborPrices} vendors={serviceVendors} projects={projects} unitOptions={unitOptions} canManage={canManage} userName={userName} onCountChange={setMaterialUpahCount} />
+        <HargaMaterialUpahTab rows={materialLaborPrices} vendors={serviceVendors} unitOptions={unitOptions} canManage={canManage} userName={userName} onCountChange={setMaterialUpahCount} />
       </div>
       <div className={tab === "upah" ? undefined : "hidden"}>
-        <HargaUpahTab prices={servicePrices} vendors={serviceVendors} projects={projects} unitOptions={unitOptions} canManage={canManage} onCountChange={setUpahCount} />
+        <HargaUpahTab prices={servicePrices} vendors={serviceVendors} unitOptions={unitOptions} canManage={canManage} onCountChange={setUpahCount} />
       </div>
     </DashboardPageShell>
   );

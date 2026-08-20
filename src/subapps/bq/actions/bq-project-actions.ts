@@ -160,12 +160,6 @@ export const createBqProjectAction = createAction(
         name: input.name.trim(),
         code: input.code?.trim() || null,
         notes: input.notes?.trim() || null,
-        // Kolom biasa berisi snapshot id + nama — BUKAN FK ke
-        // studioflow.Project (AGENTS.md §8, dan PRD §0.1 "database proyek
-        // terpisah"). Ini yang membuat BQ bisa disusun untuk tender yang
-        // belum jadi project StudioFlow.
-        studioflow_project_id: input.studioflowProjectId || null,
-        studioflow_project_name: input.studioflowProjectName?.trim() || null,
         created_by_id: ctx.userId,
         created_by_name: ctx.user.name ?? null,
       },
@@ -188,8 +182,6 @@ export const createBqProjectAction = createAction(
       name: z.string().min(1, "Project name is required."),
       code: z.string().optional(),
       notes: z.string().optional(),
-      studioflowProjectId: z.string().optional(),
-      studioflowProjectName: z.string().optional(),
     }),
   }
 );
@@ -577,8 +569,10 @@ export const addBqMaterialLineAction = createAction(
       throw new ActionError(candidate.readiness.detail, candidate.readiness.reason);
     }
 
-    // Non-null sesudah `readiness.ok` — keduanya justru yang membuatnya `ok`.
-    const profile = candidate.profile!;
+    // price pasti non-null (sudah jadi gate readiness.ok).
+    // profile bisa null kalau SKU tidak punya costing data — dalam kasus itu
+    // snapshot costing disimpan null dan calc pakai 1:1 fallback.
+    const profile = candidate.profile ?? null;
     const price = candidate.price!;
 
     const siblings = await tx.bqMaterialLine.findMany({
@@ -601,18 +595,18 @@ export const addBqMaterialLineAction = createAction(
         snapshot_brand_name: candidate.brandName,
         snapshot_category_path: candidate.categoryPath,
         snapshot_supplier_name: price.supplierName,
-        snapshot_usage_unit: profile.usageUnit,
-        snapshot_purchase_unit: profile.purchaseUnit,
-        snapshot_conversion: profile.conversion,
+        snapshot_usage_unit: profile?.usageUnit ?? null,
+        snapshot_purchase_unit: profile?.purchaseUnit ?? null,
+        snapshot_conversion: profile?.conversion ?? null,
         snapshot_price: price.price,
         snapshot_currency: price.currency,
         // Level 3 dan 4 disimpan TERPISAH, tidak dikerucutkan — kalau
         // digabung, mesin hitung tidak bisa lagi menjelaskan kenapa waste-nya
         // 10% dan AT-03 tidak bisa diuji.
-        snapshot_material_default_waste_pct: profile.defaultWastePct,
+        snapshot_material_default_waste_pct: profile?.defaultWastePct ?? null,
         snapshot_category_default_waste_pct: null,
-        snapshot_minimum_order: profile.minimumOrder,
-        snapshot_rounding_increment: profile.roundingIncrement,
+        snapshot_minimum_order: profile?.minimumOrder ?? null,
+        snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
         snapshot_price_valid_from: new Date(price.validFrom),
         snapshot_taken_at: new Date(),
 
@@ -643,6 +637,71 @@ export const addBqMaterialLineAction = createAction(
   }
 );
 
+export const addBqLocalMaterialLineAction = createAction(
+  async ({ input, ctx, tx }) => {
+    assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
+    await assertSubObjectEditable(tx, input.subObjectId);
+    await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+
+    const siblings = await tx.bqMaterialLine.findMany({
+      where: { sub_object_id: input.subObjectId },
+      select: { sort_order: true },
+    });
+    const line = await tx.bqMaterialLine.create({
+      data: {
+        sub_object_id: input.subObjectId,
+        source: "PROJECT_LOCAL",
+        qty_per_sub: input.qtyPerSub,
+        waste_override_pct: input.wasteOverridePct ?? null,
+        snapshot_name: input.name.trim(),
+        snapshot_code: input.code?.trim() || null,
+        snapshot_brand_name: input.brandName?.trim() || null,
+        snapshot_supplier_name: input.supplierName?.trim() || null,
+        snapshot_usage_unit: input.usageUnit?.trim() || null,
+        snapshot_purchase_unit: input.purchaseUnit?.trim() || null,
+        snapshot_conversion: input.conversion ?? null,
+        snapshot_price: input.price,
+        snapshot_currency: input.currency.trim() || "IDR",
+        snapshot_material_default_waste_pct: input.defaultWastePct ?? null,
+        snapshot_category_default_waste_pct: null,
+        snapshot_minimum_order: input.minimumOrder ?? null,
+        snapshot_rounding_increment: input.roundingIncrement ?? 1,
+        snapshot_taken_at: new Date(),
+        sort_order: await nextSortOrder(siblings),
+        notes: input.notes?.trim() || null,
+        updated_by_name: ctx.user.name ?? null,
+      },
+    });
+    const projectId = await projectIdOfSubObject(tx, input.subObjectId);
+    await insertAuditLog(tx, "CREATE", "BqMaterialLine", line.id, ctx.userId, {
+      bq_project_id: projectId,
+      source: "PROJECT_LOCAL",
+    });
+    revalidateProject(projectId);
+    return { id: line.id };
+  },
+  {
+    schema: z.object({
+      subObjectId: z.string().min(1),
+      name: z.string().min(1, "Material name is required."),
+      code: z.string().optional(),
+      brandName: z.string().optional(),
+      supplierName: z.string().optional(),
+      usageUnit: z.string().optional(),
+      purchaseUnit: z.string().optional(),
+      conversion: positive.nullable().default(null),
+      price: nonNegative,
+      currency: z.string().default("IDR"),
+      qtyPerSub: nonNegative,
+      wasteOverridePct: optionalPercent.optional(),
+      defaultWastePct: optionalPercent.optional(),
+      minimumOrder: nonNegative.nullable().optional(),
+      roundingIncrement: positive.nullable().optional(),
+      notes: z.string().optional(),
+    }),
+  }
+);
+
 export const updateBqMaterialLineAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
@@ -663,6 +722,11 @@ export const updateBqMaterialLineAction = createAction(
           ? { waste_override_pct: input.wasteOverridePct }
           : {}),
         ...(input.notes !== undefined ? { notes: input.notes.trim() || null } : {}),
+        ...(input.name !== undefined ? { snapshot_name: input.name.trim() } : {}),
+        ...(input.code !== undefined ? { snapshot_code: input.code.trim() || null } : {}),
+        ...(input.usageUnit !== undefined ? { snapshot_usage_unit: input.usageUnit.trim() || null } : {}),
+        ...(input.purchaseUnit !== undefined ? { snapshot_purchase_unit: input.purchaseUnit.trim() || null } : {}),
+        ...(input.price !== undefined ? { snapshot_price: input.price, is_manual_override: true } : {}),
         updated_by_name: ctx.user.name ?? null,
       },
     });
@@ -674,6 +738,11 @@ export const updateBqMaterialLineAction = createAction(
   {
     schema: z.object({
       id: z.string().min(1),
+      name: z.string().min(1).optional(),
+      code: z.string().optional(),
+      usageUnit: z.string().optional(),
+      purchaseUnit: z.string().optional(),
+      price: nonNegative.optional(),
       qtyPerSub: nonNegative.optional(),
       wasteOverridePct: optionalPercent.optional(),
       notes: z.string().optional(),
@@ -916,6 +985,62 @@ export const addBqServiceLineAction = createAction(
   }
 );
 
+export const addBqLocalServiceLineAction = createAction(
+  async ({ input, ctx, tx }) => {
+    assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
+    await assertSubObjectEditable(tx, input.subObjectId);
+    await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+
+    const siblings = await tx.bqServiceLine.findMany({
+      where: { sub_object_id: input.subObjectId },
+      select: { sort_order: true },
+    });
+    const line = await tx.bqServiceLine.create({
+      data: {
+        sub_object_id: input.subObjectId,
+        source: "PROJECT_LOCAL",
+        work_price_id: null,
+        vendor_party_id: null,
+        qty_per_sub: input.qtyPerSub,
+        snapshot_name: input.name.trim(),
+        snapshot_code: input.code?.trim() || null,
+        snapshot_vendor_name: input.vendorName?.trim() || null,
+        snapshot_rate_unit: input.rateUnit.trim(),
+        snapshot_price: input.price,
+        snapshot_currency: input.currency.trim() || "IDR",
+        snapshot_scope_note: input.scopeNote?.trim() || null,
+        snapshot_has_material: input.hasMaterial,
+        snapshot_taken_at: new Date(),
+        sort_order: await nextSortOrder(siblings),
+        notes: input.notes?.trim() || null,
+        updated_by_name: ctx.user.name ?? null,
+      },
+    });
+    const projectId = await projectIdOfSubObject(tx, input.subObjectId);
+    await insertAuditLog(tx, "CREATE", "BqServiceLine", line.id, ctx.userId, {
+      bq_project_id: projectId,
+      source: "PROJECT_LOCAL",
+    });
+    revalidateProject(projectId);
+    return { id: line.id };
+  },
+  {
+    schema: z.object({
+      subObjectId: z.string().min(1),
+      name: z.string().min(1, "Service name is required."),
+      code: z.string().optional(),
+      vendorName: z.string().optional(),
+      rateUnit: z.string().min(1, "Rate unit is required."),
+      price: nonNegative,
+      currency: z.string().default("IDR"),
+      qtyPerSub: nonNegative,
+      hasMaterial: z.boolean().default(false),
+      scopeNote: z.string().optional(),
+      notes: z.string().optional(),
+    }),
+  }
+);
+
 export const updateBqServiceLineAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
@@ -933,6 +1058,9 @@ export const updateBqServiceLineAction = createAction(
       data: {
         ...(input.qtyPerSub !== undefined ? { qty_per_sub: input.qtyPerSub } : {}),
         ...(input.notes !== undefined ? { notes: input.notes.trim() || null } : {}),
+        ...(input.name !== undefined ? { snapshot_name: input.name.trim() } : {}),
+        ...(input.code !== undefined ? { snapshot_code: input.code.trim() || null } : {}),
+        ...(input.rateUnit !== undefined ? { snapshot_rate_unit: input.rateUnit.trim() } : {}),
         ...(input.price !== undefined
           ? { snapshot_price: input.price, is_manual_override: true }
           : {}),
@@ -950,6 +1078,9 @@ export const updateBqServiceLineAction = createAction(
   {
     schema: z.object({
       id: z.string().min(1),
+      name: z.string().min(1).optional(),
+      code: z.string().optional(),
+      rateUnit: z.string().min(1).optional(),
       qtyPerSub: nonNegative.optional(),
       price: nonNegative.optional(),
       overrideNote: z.string().optional(),

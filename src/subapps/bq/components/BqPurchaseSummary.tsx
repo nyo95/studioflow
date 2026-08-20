@@ -53,9 +53,7 @@ export function BqPurchaseSummary({ summary }: { summary: PurchaseSummary }) {
         <div className="px-6 py-8 text-center">
           <p className="font-sans text-sm text-slate-600">Nothing to buy yet.</p>
           <p className={cn(UI_ENGINE_TYPE_META, "mt-1 text-slate-400")}>
-            {summary.skippedObjectCount > 0
-              ? "Every object in this breakdown is in summary mode, so none of them count towards purchasing."
-              : "Add material lines to a detailed object and they will appear here."}
+            Add material lines to an object and they will appear here.
           </p>
         </div>
       ) : (
@@ -77,7 +75,7 @@ export function BqPurchaseSummary({ summary }: { summary: PurchaseSummary }) {
                 <tr key={`${row.skuId}-${row.purchaseUnit}-${row.pricePerPurchaseUnit}`}>
                   <td className={TD}>{row.name}</td>
                   <td className={cn(TD, "text-right")}>
-                    {formatQty(row.projectGross)} {row.usageUnit}
+                    {formatQty(row.projectGross)}{row.usageUnit ? ` ${row.usageUnit}` : ""}
                   </td>
                   {/* Nilai sebelum dibulatkan. Ia ada di layar supaya
                       pembulatannya bisa diperiksa, bukan dipercaya. */}
@@ -85,7 +83,7 @@ export function BqPurchaseSummary({ summary }: { summary: PurchaseSummary }) {
                     {formatQty(row.purchaseRaw)}
                   </td>
                   <td className={cn(TD, "text-right font-medium")}>
-                    {formatQty(row.purchaseQty)} {row.purchaseUnit}
+                    {formatQty(row.purchaseQty)}{row.purchaseUnit ? ` ${row.purchaseUnit}` : ""}
                   </td>
                   <td className={cn(TD, "text-right")}>{formatIdr(row.pricePerPurchaseUnit)}</td>
                   <td className={cn(TD, "text-right font-medium")}>
@@ -124,16 +122,6 @@ export function BqPurchaseSummary({ summary }: { summary: PurchaseSummary }) {
       )}
 
       {/* AT-05c — dilewati, dihitung, dan disebut. */}
-      {summary.skippedObjectCount > 0 ? (
-        <div className="border-t border-slate-100 px-6 py-3">
-          <p className={cn(UI_ENGINE_TYPE_META, "text-amber-700")}>
-            {summary.skippedObjectCount}{" "}
-            {summary.skippedObjectCount === 1 ? "object is" : "objects are"} in summary mode and
-            left out of this list: {summary.skippedObjectNames.join(", ")}.
-          </p>
-        </div>
-      ) : null}
-
       {summary.unlinkedLineCount > 0 ? (
         <div className="border-t border-slate-100 px-6 py-3">
           <p className={cn(UI_ENGINE_TYPE_META, "text-amber-700")}>

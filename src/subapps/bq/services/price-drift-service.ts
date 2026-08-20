@@ -42,13 +42,13 @@ function differs(snapshot: number, current: number): boolean {
   return Math.abs(snapshot - current) / scale > BQ_DRIFT_EPSILON;
 }
 
-function hasMaterialDrift(line: { sku_id: string | null; is_manual_override: boolean; snapshot_price: Prisma.Decimal; snapshot_conversion: Prisma.Decimal; snapshot_purchase_unit: string; supplier_party_id: string | null }, sku: { purchase_unit: string | null; conversion: Prisma.Decimal | null; prices: { unit: string; price_net: Prisma.Decimal; supplier_party_id: string | null }[] } | undefined): boolean {
+function hasMaterialDrift(line: { sku_id: string | null; is_manual_override: boolean; snapshot_price: Prisma.Decimal; snapshot_conversion: Prisma.Decimal | null; snapshot_purchase_unit: string | null; supplier_party_id: string | null }, sku: { purchase_unit: string | null; conversion: Prisma.Decimal | null; prices: { unit: string; price_net: Prisma.Decimal; supplier_party_id: string | null }[] } | undefined): boolean {
   if (!sku) return true;
   if (!sku.purchase_unit || !sku.conversion) return true;
   const current = sku.prices.find((p) => p.supplier_party_id === line.supplier_party_id) ?? sku.prices[0] ?? null;
   if (!current) return true;
   if (current.unit !== line.snapshot_purchase_unit) return true;
-  if (differs(line.snapshot_conversion.toNumber(), sku.conversion.toNumber())) return true;
+  if (differs(line.snapshot_conversion?.toNumber() ?? 1, sku.conversion.toNumber())) return true;
   if (differs(line.snapshot_price.toNumber(), current.price_net.toNumber())) return true;
   return false;
 }

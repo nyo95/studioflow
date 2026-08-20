@@ -22,7 +22,6 @@ import {
   getServicePricesAction,
   getServiceVendorsAction,
   getSupplierOptionsAction,
-  getProjectOptionsAction,
 } from "@/subapps/master-data/actions/pricing-actions";
 import { getVendorsAction } from "@/extensions/library/actions/library-actions";
 import { getSampleSkuOptionsAction } from "@/subapps/master-data/actions/sample-actions";
@@ -39,7 +38,7 @@ export default async function MasterDataPricesPage() {
 
   const canManage = hasPermission(role, PERMISSION.MASTERDATA_VENDOR_MANAGE);
 
-  const [materialPrices, materialPriceUnits, materialLaborPrices, servicePrices, serviceVendors, brands, skuOptions, suppliers, projects] =
+  const [materialPrices, materialPriceUnits, materialLaborPrices, servicePrices, serviceVendors, brands, skuOptions, suppliers] =
     await Promise.all([
       getMaterialPricesAction({}).then(unwrapActionResult),
       getMaterialPriceUnitsAction(undefined).then(unwrapActionResult),
@@ -49,7 +48,6 @@ export default async function MasterDataPricesPage() {
       getVendorsAction(undefined).then(unwrapActionResult),
       getSampleSkuOptionsAction(undefined).then(unwrapActionResult),
       getSupplierOptionsAction(undefined).then(unwrapActionResult),
-      getProjectOptionsAction(undefined).then(unwrapActionResult),
     ]);
 
   return (
@@ -62,7 +60,6 @@ export default async function MasterDataPricesPage() {
       brands={brands.map((b) => ({ id: b.id, brand_name: b.name }))}
       skuOptions={skuOptions}
       suppliers={suppliers}
-      projects={projects}
       canManage={canManage}
       userName={user?.name ?? role}
     />

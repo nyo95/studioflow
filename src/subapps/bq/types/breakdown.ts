@@ -17,14 +17,15 @@ import type {
   PurchaseSummary,
   WasteSource,
 } from "../lib/calc";
+import type { BqMaterialReadiness as MasterDataBqMaterialReadiness } from "@/subapps/master-data/lib/bq-readiness";
+
+export type BqLineSource = "MASTER_DATA" | "PROJECT_LOCAL";
 
 export type BqProjectSummary = {
   id: string;
   code: string | null;
   name: string;
   status: "DRAFT" | "ACTIVE" | "ARCHIVED";
-  studioflowProjectId: string | null;
-  studioflowProjectName: string | null;
   notes: string | null;
   objectCount: number;
   createdAt: string;
@@ -40,6 +41,7 @@ export type BqMaterialLineRecord = {
   skuId: string | null;
   skuPriceId: string | null;
   supplierPartyId: string | null;
+  source: BqLineSource;
   qtyPerSub: number;
   wasteOverridePct: number | null;
   name: string;
@@ -47,9 +49,9 @@ export type BqMaterialLineRecord = {
   brandName: string | null;
   categoryPath: string | null;
   supplierName: string | null;
-  usageUnit: string;
-  purchaseUnit: string;
-  conversion: number;
+  usageUnit: string | null;
+  purchaseUnit: string | null;
+  conversion: number | null;
   price: number;
   currency: string;
   materialDefaultWastePct: number | null;
@@ -69,6 +71,7 @@ export type BqServiceLineRecord = {
   subObjectId: string;
   workPriceId: string | null;
   vendorPartyId: string | null;
+  source: BqLineSource;
   qtyPerSub: number;
   name: string;
   code: string | null;
@@ -93,8 +96,6 @@ export type BqObjectView = {
   wasteOverridePct: number | null;
   lockedAt: string | null;
   lockedByName: string | null;
-  detailModeSetByName: string | null;
-  detailModeSetAt: string | null;
   notes: string | null;
   sortOrder: number;
   subObjects: {
@@ -103,6 +104,7 @@ export type BqObjectView = {
     qty: number;
     sortOrder: number;
     notes: string | null;
+    librarySubObjectId: string | null;
     materials: BqMaterialLineRecord[];
     services: BqServiceLineRecord[];
   }[];
@@ -189,9 +191,7 @@ export type BqMaterialCandidate = {
   readiness: BqMaterialReadiness;
 };
 
-export type BqMaterialReadiness =
-  | { ok: true }
-  | { ok: false; reason: "NO_PRICE" | "UNIT_MISMATCH"; detail: string };
+export type BqMaterialReadiness = MasterDataBqMaterialReadiness;
 
 export type BqServiceCandidate = {
   workPriceId: string;

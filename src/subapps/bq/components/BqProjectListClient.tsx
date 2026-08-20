@@ -128,11 +128,6 @@ export function BqProjectListClient({
                 </span>
               </div>
 
-              {project.studioflowProjectName ? (
-                <p className={cn(UI_ENGINE_TYPE_META, "mt-2 truncate text-slate-400")}>
-                  Linked to {project.studioflowProjectName}
-                </p>
-              ) : null}
             </Link>
           ))}
         </div>

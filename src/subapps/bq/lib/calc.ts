@@ -56,12 +56,12 @@ export type MaterialLineInput = {
    *  barang yang sama. Lihat `buildPurchaseSummary`. */
   skuId: string | null;
   name: string;
-  /** Satuan pakai (sqm, m', pcs) — satuan `qtyPerSub`. */
-  usageUnit: string;
-  /** Satuan beli (lembar, roll, kg). */
-  purchaseUnit: string;
-  /** Berapa usage unit dalam 1 purchase unit. WAJIB > 0 (PRD §5.2). */
-  conversion: number;
+  /** Satuan pakai (sqm, m', pcs) — satuan `qtyPerSub`. `null` bila SKU tidak punya costing profile. */
+  usageUnit: string | null;
+  /** Satuan beli (lembar, roll, kg). `null` bila SKU tidak punya costing profile. */
+  purchaseUnit: string | null;
+  /** Berapa usage unit dalam 1 purchase unit. `null` = 1:1 fallback (SKU tanpa costing). */
+  conversion: number | null;
   /** Harga per PURCHASE unit, dari snapshot baris. Bukan per usage unit. */
   pricePerPurchaseUnit: number;
   /** Kebutuhan untuk SATU sub-object, dalam usage unit. */
@@ -118,8 +118,8 @@ export type MaterialLineResult = {
   lineId: string;
   skuId: string | null;
   name: string;
-  usageUnit: string;
-  purchaseUnit: string;
+  usageUnit: string | null;
+  purchaseUnit: string | null;
   qtyPerSub: number;
   /** Waste yang benar-benar dipakai setelah presedensi. */
   wastePct: number;
@@ -130,6 +130,7 @@ export type MaterialLineResult = {
   /** Sudah dikali `L2.qty`, BELUM dikali `L1.qty` (PRD §3.3). */
   grossTotal: number;
   pricePerUsageUnit: number;
+  pricePerPurchaseUnit: number;
   cost: number;
 };
 
@@ -240,16 +241,18 @@ export function computeMaterialLine(
   subObjectQty: number,
   objectWasteOverridePct: number | null
 ): MaterialLineResult {
-  if (!(line.conversion > 0)) {
+  // null → 1:1 fallback (SKU tanpa costing profile).
+  const conversion = line.conversion ?? 1;
+  if (!(conversion > 0)) {
     throw new Error(
-      `BQ: conversion must be greater than zero for line "${line.name}" (got ${line.conversion}).`
+      `BQ: conversion must be greater than zero for line "${line.name}" (got ${conversion}).`
     );
   }
 
   const waste = resolveWaste(line, objectWasteOverridePct);
   const grossPerSub = line.qtyPerSub * (1 + waste.pct);
   const grossTotal = grossPerSub * subObjectQty;
-  const pricePerUsageUnit = line.pricePerPurchaseUnit / line.conversion;
+  const pricePerUsageUnit = line.pricePerPurchaseUnit / conversion;
 
   return {
     lineId: line.id,
@@ -263,6 +266,7 @@ export function computeMaterialLine(
     grossPerSub,
     grossTotal,
     pricePerUsageUnit,
+    pricePerPurchaseUnit: line.pricePerPurchaseUnit,
     cost: grossTotal * pricePerUsageUnit,
   };
 }
@@ -370,9 +374,9 @@ export function computeProject(objects: ObjectInput[]): ProjectTotals {
 export type PurchaseRow = {
   skuId: string;
   name: string;
-  usageUnit: string;
-  purchaseUnit: string;
-  conversion: number;
+  usageUnit: string | null;
+  purchaseUnit: string | null;
+  conversion: number | null;
   pricePerPurchaseUnit: number;
   /** Σ(gross_per_sub x L2.qty x L1.qty) lintas seluruh object yang ikut. */
   projectGross: number;
@@ -473,7 +477,7 @@ export function buildPurchaseSummary(objects: ObjectInput[]): PurchaseSummary {
   const rows: PurchaseRow[] = [];
   for (const r of acc.values()) {
     const increment = r.roundingIncrement && r.roundingIncrement > 0 ? r.roundingIncrement : 1;
-    const purchaseRaw = r.projectGross / r.conversion;
+    const purchaseRaw = r.projectGross / (r.conversion ?? 1);
     const rounded = Math.ceil(purchaseRaw / increment) * increment;
     const purchaseQty = Math.max(rounded, r.minimumOrder ?? 0);
 

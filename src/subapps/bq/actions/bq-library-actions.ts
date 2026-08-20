@@ -10,6 +10,7 @@ import { createAction } from "@/lib/action-wrapper";
 import { ActionError } from "@/lib/error-types";
 import { hasPermission, PERMISSION } from "@/core/rbac/rbac";
 import type { Role } from "@/generated/prisma";
+import { loadMaterialCandidate, loadServiceCandidate } from "../services/master-data-service";
 
 function assertBqEditPerm(role: Role): void {
   if (!hasPermission(role, PERMISSION.BQ_BREAKDOWN_EDIT)) {
@@ -40,18 +41,6 @@ export const saveObjectToLibraryAction = createAction(
     });
     if (!object) throw new ActionError("Object not found.", "NOT_FOUND");
 
-    // Validate: no material lines with null sku_id
-    for (const sub of object.sub_objects) {
-      for (const line of sub.material_lines) {
-        if (!line.sku_id) {
-          throw new ActionError(
-            `Line "${line.snapshot_name}" cannot be saved to library: SKU no longer exists in Master Data.`,
-            "INVALID_LINE"
-          );
-        }
-      }
-    }
-
     // Create library object
     const libObject = await tx.bqLibraryObject.create({
       data: {
@@ -80,9 +69,23 @@ export const saveObjectToLibraryAction = createAction(
         await tx.bqLibraryMaterialLine.create({
           data: {
             sub_object_of_object_id: libSub.id,
-            sku_id: line.sku_id!,
+            source: line.source,
+            sku_id: line.sku_id,
+            recipe_name: line.source === "PROJECT_LOCAL" ? line.snapshot_name : null,
+            recipe_code: line.source === "PROJECT_LOCAL" ? line.snapshot_code : null,
+            recipe_brand_name: line.source === "PROJECT_LOCAL" ? line.snapshot_brand_name : null,
+            recipe_supplier_name: line.source === "PROJECT_LOCAL" ? line.snapshot_supplier_name : null,
+            recipe_usage_unit: line.source === "PROJECT_LOCAL" ? line.snapshot_usage_unit : null,
+            recipe_purchase_unit: line.source === "PROJECT_LOCAL" ? line.snapshot_purchase_unit : null,
+            recipe_conversion: line.source === "PROJECT_LOCAL" ? line.snapshot_conversion : null,
+            recipe_price: line.source === "PROJECT_LOCAL" ? line.snapshot_price : null,
+            recipe_currency: line.source === "PROJECT_LOCAL" ? line.snapshot_currency : null,
+            recipe_default_waste_pct: line.source === "PROJECT_LOCAL" ? line.snapshot_material_default_waste_pct : null,
+            recipe_minimum_order: line.source === "PROJECT_LOCAL" ? line.snapshot_minimum_order : null,
+            recipe_rounding_increment: line.source === "PROJECT_LOCAL" ? line.snapshot_rounding_increment : null,
             qty_per_sub: line.qty_per_sub,
             waste_override_pct: line.waste_override_pct,
+            notes: line.notes,
             sort_order: line.sort_order,
           },
         });
@@ -92,8 +95,18 @@ export const saveObjectToLibraryAction = createAction(
         await tx.bqLibraryServiceLine.create({
           data: {
             sub_object_of_object_id: libSub.id,
-            work_price_id: line.work_price_id!,
+            source: line.source,
+            work_price_id: line.work_price_id,
+            recipe_name: line.source === "PROJECT_LOCAL" ? line.snapshot_name : null,
+            recipe_code: line.source === "PROJECT_LOCAL" ? line.snapshot_code : null,
+            recipe_vendor_name: line.source === "PROJECT_LOCAL" ? line.snapshot_vendor_name : null,
+            recipe_rate_unit: line.source === "PROJECT_LOCAL" ? line.snapshot_rate_unit : null,
+            recipe_price: line.source === "PROJECT_LOCAL" ? line.snapshot_price : null,
+            recipe_currency: line.source === "PROJECT_LOCAL" ? line.snapshot_currency : null,
+            recipe_scope_note: line.source === "PROJECT_LOCAL" ? line.snapshot_scope_note : null,
+            recipe_has_material: line.source === "PROJECT_LOCAL" ? line.snapshot_has_material : null,
             qty_per_sub: line.qty_per_sub,
+            notes: line.notes,
             sort_order: line.sort_order,
           },
         });
@@ -128,15 +141,6 @@ export const saveSubObjectToLibraryAction = createAction(
     });
     if (!sub) throw new ActionError("Sub-object not found.", "NOT_FOUND");
 
-    for (const line of sub.material_lines) {
-      if (!line.sku_id) {
-        throw new ActionError(
-          `Line "${line.snapshot_name}" cannot be saved to library: SKU no longer exists.`,
-          "INVALID_LINE"
-        );
-      }
-    }
-
     const libSub = await tx.bqLibrarySubObject.create({
       data: {
         name: input.name || sub.name,
@@ -150,9 +154,23 @@ export const saveSubObjectToLibraryAction = createAction(
       await tx.bqLibraryMaterialLine.create({
         data: {
           sub_object_id: libSub.id,
-          sku_id: line.sku_id!,
+          source: line.source,
+          sku_id: line.sku_id,
+          recipe_name: line.source === "PROJECT_LOCAL" ? line.snapshot_name : null,
+          recipe_code: line.source === "PROJECT_LOCAL" ? line.snapshot_code : null,
+          recipe_brand_name: line.source === "PROJECT_LOCAL" ? line.snapshot_brand_name : null,
+          recipe_supplier_name: line.source === "PROJECT_LOCAL" ? line.snapshot_supplier_name : null,
+          recipe_usage_unit: line.source === "PROJECT_LOCAL" ? line.snapshot_usage_unit : null,
+          recipe_purchase_unit: line.source === "PROJECT_LOCAL" ? line.snapshot_purchase_unit : null,
+          recipe_conversion: line.source === "PROJECT_LOCAL" ? line.snapshot_conversion : null,
+          recipe_price: line.source === "PROJECT_LOCAL" ? line.snapshot_price : null,
+          recipe_currency: line.source === "PROJECT_LOCAL" ? line.snapshot_currency : null,
+          recipe_default_waste_pct: line.source === "PROJECT_LOCAL" ? line.snapshot_material_default_waste_pct : null,
+          recipe_minimum_order: line.source === "PROJECT_LOCAL" ? line.snapshot_minimum_order : null,
+          recipe_rounding_increment: line.source === "PROJECT_LOCAL" ? line.snapshot_rounding_increment : null,
           qty_per_sub: line.qty_per_sub,
           waste_override_pct: line.waste_override_pct,
+          notes: line.notes,
           sort_order: line.sort_order,
         },
       });
@@ -162,8 +180,18 @@ export const saveSubObjectToLibraryAction = createAction(
       await tx.bqLibraryServiceLine.create({
         data: {
           sub_object_id: libSub.id,
-          work_price_id: line.work_price_id!,
+          source: line.source,
+          work_price_id: line.work_price_id,
+          recipe_name: line.source === "PROJECT_LOCAL" ? line.snapshot_name : null,
+          recipe_code: line.source === "PROJECT_LOCAL" ? line.snapshot_code : null,
+          recipe_vendor_name: line.source === "PROJECT_LOCAL" ? line.snapshot_vendor_name : null,
+          recipe_rate_unit: line.source === "PROJECT_LOCAL" ? line.snapshot_rate_unit : null,
+          recipe_price: line.source === "PROJECT_LOCAL" ? line.snapshot_price : null,
+          recipe_currency: line.source === "PROJECT_LOCAL" ? line.snapshot_currency : null,
+          recipe_scope_note: line.source === "PROJECT_LOCAL" ? line.snapshot_scope_note : null,
+          recipe_has_material: line.source === "PROJECT_LOCAL" ? line.snapshot_has_material : null,
           qty_per_sub: line.qty_per_sub,
+          notes: line.notes,
           sort_order: line.sort_order,
         },
       });
@@ -213,39 +241,48 @@ export const loadFromLibraryObjectAction = createAction(
 
     // Pour material lines
     for (const m of libSub.materials) {
-      const sku = await tx.sku.findFirst({
-        where: { id: m.sku_id, deleted_at: null },
-        select: { id: true },
-      });
-      if (!sku) continue; // Skip lines with deleted SKUs
-
-      // Find current price for snapshot
-      const price = await tx.skuPrice.findFirst({
-        where: { sku_id: m.sku_id, is_current: true },
-        orderBy: [{ valid_from: "desc" }],
-        select: {
-          id: true, unit: true, price_net: true, currency: true,
-          valid_from: true, supplier_party_id: true,
-          supplier: { select: { name: true } },
-        },
-      });
-
-      // Read costing from Sku directly (P1)
-      const skuData = await tx.sku.findFirst({
-        where: { id: m.sku_id, deleted_at: null },
-        select: {
-          name: true, code: true, base_unit: true,
-          brand: { select: { name: true } },
-          categories: {
-            where: { is_primary: true },
-            select: { category: { select: { path: true } } },
-            take: 1,
+      if (m.source === "PROJECT_LOCAL") {
+        if (!m.recipe_name || m.recipe_price === null || !m.recipe_usage_unit) {
+          throw new ActionError("This local material recipe is incomplete.", "INVALID_LIBRARY");
+        }
+        const siblings = await tx.bqMaterialLine.findMany({ where: { sub_object_id: input.targetSubObjectId }, select: { sort_order: true } });
+        await tx.bqMaterialLine.create({
+          data: {
+            sub_object_id: input.targetSubObjectId,
+            source: "PROJECT_LOCAL",
+            sku_id: null,
+            sku_price_id: null,
+            supplier_party_id: null,
+            qty_per_sub: m.qty_per_sub,
+            waste_override_pct: m.waste_override_pct,
+            snapshot_name: m.recipe_name,
+            snapshot_code: m.recipe_code,
+            snapshot_brand_name: m.recipe_brand_name,
+            snapshot_supplier_name: m.recipe_supplier_name,
+            snapshot_usage_unit: m.recipe_usage_unit,
+            snapshot_purchase_unit: m.recipe_purchase_unit,
+            snapshot_conversion: m.recipe_conversion,
+            snapshot_price: m.recipe_price,
+            snapshot_currency: m.recipe_currency ?? "IDR",
+            snapshot_material_default_waste_pct: m.recipe_default_waste_pct,
+            snapshot_category_default_waste_pct: null,
+            snapshot_minimum_order: m.recipe_minimum_order,
+            snapshot_rounding_increment: m.recipe_rounding_increment ?? 1,
+            snapshot_taken_at: new Date(),
+            sort_order: siblings.reduce((max, row) => Math.max(max, row.sort_order), -1) + 1,
+            notes: m.notes,
+            updated_by_name: ctx.user.name ?? null,
           },
-          usage_unit: true, purchase_unit: true, conversion: true,
-          default_waste_pct: true, minimum_order: true, rounding_increment: true,
-        },
-      });
-      if (!skuData) continue;
+        });
+        continue;
+      }
+      if (!m.sku_id) throw new ActionError("This Master Data recipe has no SKU reference.", "INVALID_LIBRARY");
+      const candidate = await loadMaterialCandidate(m.sku_id, tx);
+      if (!candidate?.readiness.ok || !candidate.price) {
+        throw new ActionError("This Master Data material is no longer ready for BQ.", "INVALID_LIBRARY");
+      }
+      const profile = candidate.profile;
+      const price = candidate.price;
 
       const siblings = await tx.bqMaterialLine.findMany({
         where: { sub_object_id: input.targetSubObjectId },
@@ -256,26 +293,26 @@ export const loadFromLibraryObjectAction = createAction(
       await tx.bqMaterialLine.create({
         data: {
           sub_object_id: input.targetSubObjectId,
-          sku_id: m.sku_id,
-          sku_price_id: price?.id ?? null,
-          supplier_party_id: price?.supplier_party_id ?? null,
+          sku_id: candidate.skuId,
+          sku_price_id: price.skuPriceId,
+          supplier_party_id: price.supplierPartyId,
           qty_per_sub: m.qty_per_sub,
           waste_override_pct: m.waste_override_pct,
-          snapshot_name: skuData.name,
-          snapshot_code: skuData.code,
-          snapshot_brand_name: skuData.brand?.name ?? null,
-          snapshot_category_path: skuData.categories[0]?.category.path ?? null,
-          snapshot_supplier_name: price?.supplier?.name ?? null,
-          snapshot_usage_unit: skuData.usage_unit ?? skuData.base_unit,
-          snapshot_purchase_unit: skuData.purchase_unit ?? "",
-          snapshot_conversion: skuData.conversion ?? 1,
-          snapshot_price: price?.price_net ?? 0,
-          snapshot_currency: price?.currency ?? "IDR",
-          snapshot_material_default_waste_pct: skuData.default_waste_pct,
+          snapshot_name: candidate.name,
+          snapshot_code: candidate.code,
+          snapshot_brand_name: candidate.brandName,
+          snapshot_category_path: candidate.categoryPath,
+          snapshot_supplier_name: price.supplierName,
+          snapshot_usage_unit: profile?.usageUnit ?? null,
+          snapshot_purchase_unit: profile?.purchaseUnit ?? null,
+          snapshot_conversion: profile?.conversion ?? null,
+          snapshot_price: price.price,
+          snapshot_currency: price.currency,
+          snapshot_material_default_waste_pct: profile?.defaultWastePct ?? null,
           snapshot_category_default_waste_pct: null,
-          snapshot_minimum_order: skuData.minimum_order,
-          snapshot_rounding_increment: skuData.rounding_increment ?? 1,
-          snapshot_price_valid_from: price?.valid_from ?? null,
+          snapshot_minimum_order: profile?.minimumOrder ?? null,
+          snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
+          snapshot_price_valid_from: new Date(price.validFrom),
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,
@@ -286,16 +323,37 @@ export const loadFromLibraryObjectAction = createAction(
 
     // Pour service lines
     for (const s of libSub.services) {
-      const wp = await tx.workPrice.findFirst({
-        where: { id: s.work_price_id, deleted_at: null, is_active: true },
-        select: {
-          id: true, code: true, name: true, unit: true, price: true, currency: true,
-          scope_note: true, kind: true, valid_from: true,
-          vendor: { select: { name: true } },
-          category: { select: { path: true } },
-        },
-      });
-      if (!wp) continue;
+      if (s.source === "PROJECT_LOCAL") {
+        if (!s.recipe_name || !s.recipe_rate_unit || s.recipe_price === null) {
+          throw new ActionError("This local service recipe is incomplete.", "INVALID_LIBRARY");
+        }
+        const siblings = await tx.bqServiceLine.findMany({ where: { sub_object_id: input.targetSubObjectId }, select: { sort_order: true } });
+        await tx.bqServiceLine.create({
+          data: {
+            sub_object_id: input.targetSubObjectId,
+            source: "PROJECT_LOCAL",
+            work_price_id: null,
+            vendor_party_id: null,
+            qty_per_sub: s.qty_per_sub,
+            snapshot_name: s.recipe_name,
+            snapshot_code: s.recipe_code,
+            snapshot_vendor_name: s.recipe_vendor_name,
+            snapshot_rate_unit: s.recipe_rate_unit,
+            snapshot_price: s.recipe_price,
+            snapshot_currency: s.recipe_currency ?? "IDR",
+            snapshot_scope_note: s.recipe_scope_note,
+            snapshot_has_material: s.recipe_has_material ?? false,
+            snapshot_taken_at: new Date(),
+            sort_order: siblings.reduce((max, row) => Math.max(max, row.sort_order), -1) + 1,
+            notes: s.notes,
+            updated_by_name: ctx.user.name ?? null,
+          },
+        });
+        continue;
+      }
+      if (!s.work_price_id) throw new ActionError("This Master Data recipe has no service reference.", "INVALID_LIBRARY");
+      const candidate = await loadServiceCandidate(s.work_price_id, tx);
+      if (!candidate) throw new ActionError("This Master Data service is no longer active.", "INVALID_LIBRARY");
 
       const siblings = await tx.bqServiceLine.findMany({
         where: { sub_object_id: input.targetSubObjectId },
@@ -306,18 +364,18 @@ export const loadFromLibraryObjectAction = createAction(
       await tx.bqServiceLine.create({
         data: {
           sub_object_id: input.targetSubObjectId,
-          work_price_id: s.work_price_id,
+          work_price_id: candidate.workPriceId,
           qty_per_sub: s.qty_per_sub,
-          snapshot_name: wp.name,
-          snapshot_code: wp.code,
-          snapshot_category_path: wp.category?.path ?? null,
-          snapshot_vendor_name: wp.vendor?.name ?? null,
-          snapshot_rate_unit: wp.unit,
-          snapshot_price: wp.price,
-          snapshot_currency: wp.currency,
-          snapshot_scope_note: wp.scope_note,
-          snapshot_has_material: wp.kind === "MATERIAL_LABOR",
-          snapshot_price_valid_from: wp.valid_from,
+          snapshot_name: candidate.name,
+          snapshot_code: candidate.code,
+          snapshot_category_path: candidate.categoryPath,
+          snapshot_vendor_name: candidate.vendorName,
+          snapshot_rate_unit: candidate.rateUnit,
+          snapshot_price: candidate.price,
+          snapshot_currency: candidate.currency,
+          snapshot_scope_note: candidate.scopeNote,
+          snapshot_has_material: candidate.hasMaterial,
+          snapshot_price_valid_from: new Date(candidate.validFrom),
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,
@@ -361,37 +419,48 @@ export const loadFromLibrarySubObjectAction = createAction(
 
     // Pour material lines
     for (const m of libSub.materials) {
-      const sku = await tx.sku.findFirst({
-        where: { id: m.sku_id, deleted_at: null },
-        select: { id: true },
-      });
-      if (!sku) continue;
-
-      const price = await tx.skuPrice.findFirst({
-        where: { sku_id: m.sku_id, is_current: true },
-        orderBy: [{ valid_from: "desc" }],
-        select: {
-          id: true, unit: true, price_net: true, currency: true,
-          valid_from: true, supplier_party_id: true,
-          supplier: { select: { name: true } },
-        },
-      });
-
-      const skuData = await tx.sku.findFirst({
-        where: { id: m.sku_id, deleted_at: null },
-        select: {
-          name: true, code: true, base_unit: true,
-          brand: { select: { name: true } },
-          categories: {
-            where: { is_primary: true },
-            select: { category: { select: { path: true } } },
-            take: 1,
+      if (m.source === "PROJECT_LOCAL") {
+        if (!m.recipe_name || m.recipe_price === null || !m.recipe_usage_unit) {
+          throw new ActionError("This local material recipe is incomplete.", "INVALID_LIBRARY");
+        }
+        const siblings = await tx.bqMaterialLine.findMany({ where: { sub_object_id: input.targetSubObjectId }, select: { sort_order: true } });
+        await tx.bqMaterialLine.create({
+          data: {
+            sub_object_id: input.targetSubObjectId,
+            source: "PROJECT_LOCAL",
+            sku_id: null,
+            sku_price_id: null,
+            supplier_party_id: null,
+            qty_per_sub: m.qty_per_sub,
+            waste_override_pct: m.waste_override_pct,
+            snapshot_name: m.recipe_name,
+            snapshot_code: m.recipe_code,
+            snapshot_brand_name: m.recipe_brand_name,
+            snapshot_supplier_name: m.recipe_supplier_name,
+            snapshot_usage_unit: m.recipe_usage_unit,
+            snapshot_purchase_unit: m.recipe_purchase_unit,
+            snapshot_conversion: m.recipe_conversion,
+            snapshot_price: m.recipe_price,
+            snapshot_currency: m.recipe_currency ?? "IDR",
+            snapshot_material_default_waste_pct: m.recipe_default_waste_pct,
+            snapshot_category_default_waste_pct: null,
+            snapshot_minimum_order: m.recipe_minimum_order,
+            snapshot_rounding_increment: m.recipe_rounding_increment ?? 1,
+            snapshot_taken_at: new Date(),
+            sort_order: siblings.reduce((max, row) => Math.max(max, row.sort_order), -1) + 1,
+            notes: m.notes,
+            updated_by_name: ctx.user.name ?? null,
           },
-          usage_unit: true, purchase_unit: true, conversion: true,
-          default_waste_pct: true, minimum_order: true, rounding_increment: true,
-        },
-      });
-      if (!skuData) continue;
+        });
+        continue;
+      }
+      if (!m.sku_id) throw new ActionError("This Master Data recipe has no SKU reference.", "INVALID_LIBRARY");
+      const candidate = await loadMaterialCandidate(m.sku_id, tx);
+      if (!candidate?.readiness.ok || !candidate.price) {
+        throw new ActionError("This Master Data material is no longer ready for BQ.", "INVALID_LIBRARY");
+      }
+      const profile = candidate.profile;
+      const price = candidate.price;
 
       const siblings = await tx.bqMaterialLine.findMany({
         where: { sub_object_id: input.targetSubObjectId },
@@ -402,26 +471,26 @@ export const loadFromLibrarySubObjectAction = createAction(
       await tx.bqMaterialLine.create({
         data: {
           sub_object_id: input.targetSubObjectId,
-          sku_id: m.sku_id,
-          sku_price_id: price?.id ?? null,
-          supplier_party_id: price?.supplier_party_id ?? null,
+          sku_id: candidate.skuId,
+          sku_price_id: price.skuPriceId,
+          supplier_party_id: price.supplierPartyId,
           qty_per_sub: m.qty_per_sub,
           waste_override_pct: m.waste_override_pct,
-          snapshot_name: skuData.name,
-          snapshot_code: skuData.code,
-          snapshot_brand_name: skuData.brand?.name ?? null,
-          snapshot_category_path: skuData.categories[0]?.category.path ?? null,
-          snapshot_supplier_name: price?.supplier?.name ?? null,
-          snapshot_usage_unit: skuData.usage_unit ?? skuData.base_unit,
-          snapshot_purchase_unit: skuData.purchase_unit ?? "",
-          snapshot_conversion: skuData.conversion ?? 1,
-          snapshot_price: price?.price_net ?? 0,
-          snapshot_currency: price?.currency ?? "IDR",
-          snapshot_material_default_waste_pct: skuData.default_waste_pct,
+          snapshot_name: candidate.name,
+          snapshot_code: candidate.code,
+          snapshot_brand_name: candidate.brandName,
+          snapshot_category_path: candidate.categoryPath,
+          snapshot_supplier_name: price.supplierName,
+          snapshot_usage_unit: profile?.usageUnit ?? null,
+          snapshot_purchase_unit: profile?.purchaseUnit ?? null,
+          snapshot_conversion: profile?.conversion ?? null,
+          snapshot_price: price.price,
+          snapshot_currency: price.currency,
+          snapshot_material_default_waste_pct: profile?.defaultWastePct ?? null,
           snapshot_category_default_waste_pct: null,
-          snapshot_minimum_order: skuData.minimum_order,
-          snapshot_rounding_increment: skuData.rounding_increment ?? 1,
-          snapshot_price_valid_from: price?.valid_from ?? null,
+          snapshot_minimum_order: profile?.minimumOrder ?? null,
+          snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
+          snapshot_price_valid_from: new Date(price.validFrom),
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,
@@ -432,16 +501,37 @@ export const loadFromLibrarySubObjectAction = createAction(
 
     // Pour service lines
     for (const s of libSub.services) {
-      const wp = await tx.workPrice.findFirst({
-        where: { id: s.work_price_id, deleted_at: null, is_active: true },
-        select: {
-          id: true, code: true, name: true, unit: true, price: true, currency: true,
-          scope_note: true, kind: true, valid_from: true,
-          vendor: { select: { name: true } },
-          category: { select: { path: true } },
-        },
-      });
-      if (!wp) continue;
+      if (s.source === "PROJECT_LOCAL") {
+        if (!s.recipe_name || !s.recipe_rate_unit || s.recipe_price === null) {
+          throw new ActionError("This local service recipe is incomplete.", "INVALID_LIBRARY");
+        }
+        const siblings = await tx.bqServiceLine.findMany({ where: { sub_object_id: input.targetSubObjectId }, select: { sort_order: true } });
+        await tx.bqServiceLine.create({
+          data: {
+            sub_object_id: input.targetSubObjectId,
+            source: "PROJECT_LOCAL",
+            work_price_id: null,
+            vendor_party_id: null,
+            qty_per_sub: s.qty_per_sub,
+            snapshot_name: s.recipe_name,
+            snapshot_code: s.recipe_code,
+            snapshot_vendor_name: s.recipe_vendor_name,
+            snapshot_rate_unit: s.recipe_rate_unit,
+            snapshot_price: s.recipe_price,
+            snapshot_currency: s.recipe_currency ?? "IDR",
+            snapshot_scope_note: s.recipe_scope_note,
+            snapshot_has_material: s.recipe_has_material ?? false,
+            snapshot_taken_at: new Date(),
+            sort_order: siblings.reduce((max, row) => Math.max(max, row.sort_order), -1) + 1,
+            notes: s.notes,
+            updated_by_name: ctx.user.name ?? null,
+          },
+        });
+        continue;
+      }
+      if (!s.work_price_id) throw new ActionError("This Master Data recipe has no service reference.", "INVALID_LIBRARY");
+      const candidate = await loadServiceCandidate(s.work_price_id, tx);
+      if (!candidate) throw new ActionError("This Master Data service is no longer active.", "INVALID_LIBRARY");
 
       const siblings = await tx.bqServiceLine.findMany({
         where: { sub_object_id: input.targetSubObjectId },
@@ -452,18 +542,18 @@ export const loadFromLibrarySubObjectAction = createAction(
       await tx.bqServiceLine.create({
         data: {
           sub_object_id: input.targetSubObjectId,
-          work_price_id: s.work_price_id,
+          work_price_id: candidate.workPriceId,
           qty_per_sub: s.qty_per_sub,
-          snapshot_name: wp.name,
-          snapshot_code: wp.code,
-          snapshot_category_path: wp.category?.path ?? null,
-          snapshot_vendor_name: wp.vendor?.name ?? null,
-          snapshot_rate_unit: wp.unit,
-          snapshot_price: wp.price,
-          snapshot_currency: wp.currency,
-          snapshot_scope_note: wp.scope_note,
-          snapshot_has_material: wp.kind === "MATERIAL_LABOR",
-          snapshot_price_valid_from: wp.valid_from,
+          snapshot_name: candidate.name,
+          snapshot_code: candidate.code,
+          snapshot_category_path: candidate.categoryPath,
+          snapshot_vendor_name: candidate.vendorName,
+          snapshot_rate_unit: candidate.rateUnit,
+          snapshot_price: candidate.price,
+          snapshot_currency: candidate.currency,
+          snapshot_scope_note: candidate.scopeNote,
+          snapshot_has_material: candidate.hasMaterial,
+          snapshot_price_valid_from: new Date(candidate.validFrom),
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,

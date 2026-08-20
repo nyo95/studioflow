@@ -48,6 +48,7 @@ import type { ProductCatalogWithRelations, SkuWithRelations } from "@/extensions
 import { attachDerivedCatalogFields } from "@/extensions/library/types";
 import { isBrandComplete } from "@/subapps/master-data/lib/brand-view-rules";
 import { isSkuDataComplete } from "@/subapps/master-data/lib/sku-directory-rules";
+import { evaluateBqMaterialReadiness } from "@/subapps/master-data/lib/bq-readiness";
 
 export type MaterialSampleState =
   | "AVAILABLE"
@@ -235,6 +236,14 @@ function toLibrarySort(
 function toRow(material: ProductCatalogWithRelations): MaterialRow {
   const price = material.catalog_price;
   const priceUnit = material.catalog_price_unit;
+  const bqReadiness = evaluateBqMaterialReadiness({
+    skuExists: true,
+    skuDeleted: material.deleted_at !== null,
+    skuStatus: material.status,
+    price: material.prices[0] ? { unit: material.prices[0].unit } : null,
+    purchaseUnit: material.purchase_unit,
+    conversion: material.conversion == null ? null : Number(material.conversion),
+  });
   // "BQ ready" means BQ can price a line from this row. A net price and a
   // unit are what it needs; the list price is context for the discount, not
   // an input. Requiring it here marked rows incomplete whenever a supplier
@@ -270,7 +279,7 @@ function toRow(material: ProductCatalogWithRelations): MaterialRow {
       baseUnit: material.base_unit,
       categoryCount: material.catalog_tags.length,
     }),
-    bqReady: complete,
+    bqReady: bqReadiness.ok,
     status: material.catalog_status,
     sampleCount: liveSampleCount(material.samples),
     sampleState: sampleState(material.samples),

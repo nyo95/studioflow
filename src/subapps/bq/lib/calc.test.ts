@@ -33,6 +33,51 @@ const EDG = { skuId: "EDG-PVC", name: "Edging PVC 2mm", usageUnit: "m'", purchas
 const ENG = { skuId: "HDW-ENG", name: "Engsel Soft Close", usageUnit: "pcs", purchaseUnit: "pcs", conversion: 1, price: 38_000, waste: 0 };
 const SS = { skuId: "SS-HL", name: "Stainless Hairline 1.2mm", usageUnit: "sqm", purchaseUnit: "lembar", conversion: 2.9719, price: 1_450_000, waste: 0.12 };
 
+test("project-local material and service lines calculate without Master Data ids", () => {
+  const local: ObjectInput = {
+    id: "local-object",
+    name: "Custom fixture",
+    code: null,
+    qty: 2,
+    unit: "unit",
+    markupPct: 0.2,
+    wasteOverridePct: null,
+    subObjects: [{
+      id: "local-sub",
+      name: "Custom breakdown",
+      qty: 1,
+      materials: [{
+        id: "local-material",
+        skuId: null,
+        name: "Custom marble",
+        usageUnit: "sqm",
+        purchaseUnit: "sqm",
+        conversion: 1,
+        pricePerPurchaseUnit: 1_250_000,
+        qtyPerSub: 1,
+        wasteOverridePct: 0.15,
+        materialDefaultWastePct: null,
+        categoryDefaultWastePct: null,
+        minimumOrder: null,
+        roundingIncrement: 1,
+      }],
+      services: [{
+        id: "local-service",
+        workPriceId: null,
+        name: "Custom install",
+        rateUnit: "sqm",
+        pricePerRateUnit: 125_000,
+        qtyPerSub: 1,
+      }],
+    }],
+  };
+
+  const result = computeObject(local);
+  assert.equal(result.baseCostPerUnit, 1_562_500);
+  assert.equal(result.ratePerUnit, 1_875_000);
+  assert.equal(result.total, 3_750_000);
+});
+
 let seq = 0;
 function mat(
   m: typeof PLY,

@@ -4,11 +4,8 @@
  * BQ — pemilih bahan / jasa dari Master Data.
  *
  * ============================================================================
- * TIDAK ADA JALUR "BUAT BARIS SENDIRI"
- * ============================================================================
- * Itu keputusan, bukan fitur yang belum sempat dibuat. Owner 2026-08-19:
- * *"sifat master data = SSOT; semua harus ambil dari master data — kalau tidak
- * ada harus request staff update via Master Data dulu."*
+ * Master Data is preferred, but local project snapshots remain valid when the
+ * canonical catalogue is incomplete.
  *
  * Yang boleh dilakukan estimator adalah menyunting SNAPSHOT baris sesudah ia
  * ditambahkan (harga nego, sisa stok, konversi khusus). Suntingan itu hidup di
@@ -43,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatIdr } from "../lib/calc";
 import { searchBqMaterialsAction, searchBqServicesAction } from "../actions/bq-catalog-actions";
+import { addBqLocalMaterialLineAction, addBqLocalServiceLineAction } from "../actions/bq-project-actions";
 import { loadFromLibraryObjectAction, loadFromLibrarySubObjectAction, searchLibraryObjectsAction, searchLibrarySubObjectsAction } from "../actions/bq-library-actions";
 import type { BqMaterialCandidate, BqServiceCandidate } from "../types/breakdown";
 
@@ -52,10 +50,14 @@ export function BqLinePicker({
   subObjectId,
   onAddMaterial,
   onAddService,
+  onAddLocalMaterial,
+  onAddLocalService,
 }: {
   subObjectId: string;
   onAddMaterial: (skuId: string, qtyPerSub: number) => Promise<boolean>;
   onAddService: (workPriceId: string, qtyPerSub: number) => Promise<boolean>;
+  onAddLocalMaterial: (input: { name: string; usageUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
+  onAddLocalService: (input: { name: string; rateUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
 }) {
   const [mode, setMode] = React.useState<Mode | null>(null);
 
@@ -76,6 +78,8 @@ export function BqLinePicker({
         onClose={() => setMode(null)}
         onAddMaterial={onAddMaterial}
         onAddService={onAddService}
+        onAddLocalMaterial={onAddLocalMaterial}
+        onAddLocalService={onAddLocalService}
       />
     </div>
   );
@@ -86,11 +90,15 @@ function PickerDialog({
   onClose,
   onAddMaterial,
   onAddService,
+  onAddLocalMaterial,
+  onAddLocalService,
 }: {
   mode: Mode | null;
   onClose: () => void;
   onAddMaterial: (skuId: string, qtyPerSub: number) => Promise<boolean>;
   onAddService: (workPriceId: string, qtyPerSub: number) => Promise<boolean>;
+  onAddLocalMaterial: (input: { name: string; usageUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
+  onAddLocalService: (input: { name: string; rateUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
 }) {
   const [query, setQuery] = React.useState("");
   const [materials, setMaterials] = React.useState<BqMaterialCandidate[]>([]);
@@ -99,6 +107,10 @@ function PickerDialog({
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [qty, setQty] = React.useState("1");
   const [saving, setSaving] = React.useState(false);
+  const [custom, setCustom] = React.useState(false);
+  const [customName, setCustomName] = React.useState("");
+  const [customUnit, setCustomUnit] = React.useState("");
+  const [customPrice, setCustomPrice] = React.useState("");
 
   // Debounce: satu permintaan per jeda ketik, bukan satu per karakter. 250ms
   // cukup untuk mengetik "plywood" tanpa mengirim tujuh query.
@@ -124,18 +136,22 @@ function PickerDialog({
   }, [query, mode]);
 
   const handleAdd = React.useCallback(async () => {
-    if (!selectedId || !mode) return;
+    if (!mode) return;
     const parsed = Number(qty.replace(",", "."));
-    if (Number.isNaN(parsed) || parsed < 0) return;
+    const price = Number(customPrice.replace(",", "."));
+    if (custom ? (!customName.trim() || !customUnit.trim() || Number.isNaN(price) || price < 0) : (!selectedId || Number.isNaN(parsed) || parsed < 0)) return;
 
     setSaving(true);
-    const ok =
-      mode === "MATERIAL"
-        ? await onAddMaterial(selectedId, parsed)
-        : await onAddService(selectedId, parsed);
+    const ok = custom
+      ? mode === "MATERIAL"
+        ? await onAddLocalMaterial({ name: customName, usageUnit: customUnit, price, qtyPerSub: parsed })
+        : await onAddLocalService({ name: customName, rateUnit: customUnit, price, qtyPerSub: parsed })
+      : mode === "MATERIAL"
+        ? await onAddMaterial(selectedId!, parsed)
+        : await onAddService(selectedId!, parsed);
     setSaving(false);
     if (ok) onClose();
-  }, [selectedId, mode, qty, onAddMaterial, onAddService, onClose]);
+  }, [selectedId, mode, qty, custom, customName, customUnit, customPrice, onAddMaterial, onAddService, onAddLocalMaterial, onAddLocalService, onClose]);
 
   const selectedUnit =
     mode === "MATERIAL"
@@ -165,14 +181,16 @@ function PickerDialog({
           />
         </div>
 
-        <div className="max-h-80 space-y-1 overflow-y-auto">
+        {!custom ? <div className="max-h-80 space-y-1 overflow-y-auto">
           {loading ? (
             <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-400")}>Searching…</p>
           ) : mode === "MATERIAL" ? (
             materials.length === 0 ? (
               <EmptyResult mode={mode} />
             ) : (
-              materials.map((m) => (
+              materials
+              .filter((m) => m.readiness.ok || m.readiness.reason !== "NO_PRICE")
+              .map((m) => (
                 <MaterialRow
                   key={m.skuId}
                   candidate={m}
@@ -193,7 +211,19 @@ function PickerDialog({
               />
             ))
           )}
-        </div>
+        </div> : (
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={mode === "MATERIAL" ? "Custom material name" : "Custom service name"} />
+            <Input value={customUnit} onChange={(e) => setCustomUnit(e.target.value)} placeholder="Unit (e.g. m², lot)" />
+            <Input value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} placeholder="Unit price" inputMode="decimal" />
+          </div>
+        )}
+
+        {!custom ? (
+          <Button variant="outline" onClick={() => { setCustom(true); setSelectedId(null); }}>
+            <Plus className="mr-1.5 h-3 w-3" /> Add custom {mode === "MATERIAL" ? "material" : "service"}
+          </Button>
+        ) : null}
 
         <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
           <label className="flex items-center gap-2">
@@ -213,7 +243,7 @@ function PickerDialog({
           <Button variant="ghost" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleAdd} disabled={!selectedId || saving}>
+          <Button onClick={handleAdd} disabled={saving || (!custom && !selectedId)}>
             {saving ? "Adding…" : "Add"}
           </Button>
         </div>
@@ -238,6 +268,9 @@ function EmptyResult({ mode }: { mode: Mode | null }) {
 const READINESS_HINT: Record<string, string> = {
   NO_PRICE: "No price in Master Data",
   UNIT_MISMATCH: "Unit mismatch",
+  SKU_DISCONTINUED: "Discontinued in Master Data",
+  PURCHASE_UNIT_MISSING: "Purchase unit missing",
+  CONVERSION_INVALID: "Conversion missing",
 };
 
 function MaterialRow({

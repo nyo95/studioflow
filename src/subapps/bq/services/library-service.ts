@@ -20,7 +20,6 @@ export type BqLibraryObjectRow = {
   name: string;
   unit: string;
   markupPct: number;
-  detailMode: "DETAIL" | "RINGKAS";
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -63,7 +62,8 @@ export type BqLibrarySubObjectDetail = BqLibrarySubObjectRow & {
 
 export type BqLibraryMaterialLineDetail = {
   id: string;
-  skuId: string;
+  skuId: string | null;
+  source: "MASTER_DATA" | "PROJECT_LOCAL";
   skuName: string | null;
   skuCode: string | null;
   brandName: string | null;
@@ -74,7 +74,8 @@ export type BqLibraryMaterialLineDetail = {
 
 export type BqLibraryServiceLineDetail = {
   id: string;
-  workPriceId: string;
+  workPriceId: string | null;
+  source: "MASTER_DATA" | "PROJECT_LOCAL";
   workPriceName: string | null;
   workPriceCode: string | null;
   vendorName: string | null;
@@ -118,7 +119,6 @@ export async function listLibraryObjects(
     name: r.name,
     unit: r.unit,
     markupPct: decToNumberStrict(r.markup_pct),
-    detailMode: r.detail_mode,
     notes: r.notes,
     createdBy: r.created_by_name,
     createdAt: r.created_at.toISOString(),
@@ -156,7 +156,7 @@ export async function getLibraryObjectDetail(
 
   // Resolve SKU names for material lines
   const skuIds = row.sub_objects.flatMap((so) =>
-    so.materials.map((m) => m.sku_id)
+    so.materials.map((m) => m.sku_id).filter((id): id is string => id !== null)
   );
   const skus = skuIds.length > 0
     ? await prisma.sku.findMany({
@@ -168,7 +168,7 @@ export async function getLibraryObjectDetail(
 
   // Resolve WorkPrice names for service lines
   const wpIds = row.sub_objects.flatMap((so) =>
-    so.services.map((s) => s.work_price_id)
+    so.services.map((s) => s.work_price_id).filter((id): id is string => id !== null)
   );
   const workPrices = wpIds.length > 0
     ? await prisma.workPrice.findMany({
@@ -190,11 +190,12 @@ export async function getLibraryObjectDetail(
       notes: so.notes,
       sortOrder: so.sort_order,
       materials: so.materials.map((m) => {
-        const sku = skuMap.get(m.sku_id);
+        const sku = m.sku_id ? skuMap.get(m.sku_id) : undefined;
         return {
           id: m.id,
           skuId: m.sku_id,
-          skuName: sku?.name ?? null,
+          source: m.source,
+          skuName: sku?.name ?? m.recipe_name ?? null,
           skuCode: sku?.code ?? null,
           brandName: sku?.brand?.name ?? null,
           qtyPerSub: decToNumberStrict(m.qty_per_sub),
@@ -203,11 +204,12 @@ export async function getLibraryObjectDetail(
         };
       }),
       services: so.services.map((s) => {
-        const wp = wpMap.get(s.work_price_id);
+        const wp = s.work_price_id ? wpMap.get(s.work_price_id) : undefined;
         return {
           id: s.id,
           workPriceId: s.work_price_id,
-          workPriceName: wp?.name ?? null,
+          source: s.source,
+          workPriceName: wp?.name ?? s.recipe_name ?? null,
           workPriceCode: wp?.code ?? null,
           vendorName: wp?.vendor?.name ?? null,
           qtyPerSub: decToNumberStrict(s.qty_per_sub),
@@ -224,7 +226,6 @@ function baseObjectRow(r: {
   name: string;
   unit: string;
   markup_pct: import("@prisma/client/runtime/client").Decimal;
-  detail_mode: "DETAIL" | "RINGKAS";
   notes: string | null;
   created_by_name: string;
   created_at: Date;
@@ -236,7 +237,6 @@ function baseObjectRow(r: {
     name: r.name,
     unit: r.unit,
     markupPct: decToNumberStrict(r.markup_pct),
-    detailMode: r.detail_mode,
     notes: r.notes,
     createdBy: r.created_by_name,
     createdAt: r.created_at.toISOString(),
@@ -296,7 +296,7 @@ export async function getLibrarySubObjectDetail(
 
   if (!row) return null;
 
-  const skuIds = row.materials.map((m) => m.sku_id);
+  const skuIds = row.materials.map((m) => m.sku_id).filter((id): id is string => id !== null);
   const skus = skuIds.length > 0
     ? await prisma.sku.findMany({
         where: { id: { in: [...new Set(skuIds)] }, deleted_at: null },
@@ -305,7 +305,7 @@ export async function getLibrarySubObjectDetail(
     : [];
   const skuMap = new Map(skus.map((s) => [s.id, s]));
 
-  const wpIds = row.services.map((s) => s.work_price_id);
+  const wpIds = row.services.map((s) => s.work_price_id).filter((id): id is string => id !== null);
   const workPrices = wpIds.length > 0
     ? await prisma.workPrice.findMany({
         where: { id: { in: [...new Set(wpIds)] }, deleted_at: null },
@@ -325,11 +325,12 @@ export async function getLibrarySubObjectDetail(
     materialLineCount: row.materials.length,
     serviceLineCount: row.services.length,
     materials: row.materials.map((m) => {
-      const sku = skuMap.get(m.sku_id);
+      const sku = m.sku_id ? skuMap.get(m.sku_id) : undefined;
       return {
         id: m.id,
         skuId: m.sku_id,
-        skuName: sku?.name ?? null,
+        source: m.source,
+        skuName: sku?.name ?? m.recipe_name ?? null,
         skuCode: sku?.code ?? null,
         brandName: sku?.brand?.name ?? null,
         qtyPerSub: decToNumberStrict(m.qty_per_sub),
@@ -338,11 +339,12 @@ export async function getLibrarySubObjectDetail(
       };
     }),
     services: row.services.map((s) => {
-      const wp = wpMap.get(s.work_price_id);
+      const wp = s.work_price_id ? wpMap.get(s.work_price_id) : undefined;
       return {
         id: s.id,
         workPriceId: s.work_price_id,
-        workPriceName: wp?.name ?? null,
+        source: s.source,
+        workPriceName: wp?.name ?? s.recipe_name ?? null,
         workPriceCode: wp?.code ?? null,
         vendorName: wp?.vendor?.name ?? null,
         qtyPerSub: decToNumberStrict(s.qty_per_sub),
