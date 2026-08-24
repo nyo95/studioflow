@@ -4,6 +4,7 @@ import { PhaseStatus, RevisionStatus, Role } from "@/generated/prisma";
 import { isAdminLevel } from "@/core/rbac/rbac";
 import { AUDIT_ACTIONS } from "./types";
 import { buildAuditDetails, recordAudit } from "./record";
+import { findAuditLogByIdCompat } from "./compat";
 
 /**
  * Recovers the phase's PREVIOUS status timestamp from an audit log's details.
@@ -28,9 +29,10 @@ function restoredStatusChangedAt(details: Record<string, unknown>): Date | null 
 export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { logId: string; userId: string }) {
   const { logId, userId } = params;
 
-  const log = await tx.auditLog.findUniqueOrThrow({
-    where: { id: logId },
-  });
+  const log = await findAuditLogByIdCompat(logId, tx);
+  if (!log) {
+    throw new ActionError("Audit log not found.", "NOT_FOUND");
+  }
 
   if (log.reverted_at) {
     throw new ActionError("This action has already been reverted.", "ALREADY_REVERTED");

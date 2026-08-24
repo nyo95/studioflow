@@ -1,12 +1,12 @@
-import { prisma } from "@/core/platform/db";
 import { AUDIT_LOG_LIMIT } from "@/lib/constants";
-import { AuditFiltersInput, AuditLogWithUser, AUDIT_ACTIONS } from "./types";
-import { buildWhere, getPhaseIdFromReference } from "./query-builder";
+import { AuditFiltersInput, AUDIT_ACTIONS } from "./types";
+import { getPhaseIdFromReference } from "./query-builder";
 import { ActionError } from "@/lib/error-types";
-import { Prisma } from "@/generated/prisma";
 import { buildAuditDetails } from "./record";
+import { findAuditLogsCompat, findAuditReferencesCompat, type AuditCompatLog } from "./compat";
+import { prisma } from "@/core/platform/db";
 
-export function mapLog(log: AuditLogWithUser) {
+export function mapLog(log: AuditCompatLog) {
   const actorName = log.user?.name ?? log.actor_name ?? null;
   const actorId = log.user?.id ?? log.actor_id ?? undefined;
 
@@ -26,35 +26,12 @@ export function mapLog(log: AuditLogWithUser) {
 }
 
 async function getFilterReferenceData(
-  where: Prisma.AuditLogWhereInput,
+  filters: AuditFiltersInput,
   options?: { projectId?: string; fallbackEntityIds?: string[] }
 ) {
-  const scopedWhere: Prisma.AuditLogWhereInput = options?.projectId
-    ? {
-        AND: [
-          where,
-          {
-            OR: [
-              { project_id: options.projectId },
-              ...(options.fallbackEntityIds?.length
-                ? [{ entity_id: { in: options.fallbackEntityIds } }]
-                : []),
-            ],
-          },
-        ],
-      }
-    : where;
-
-  const references = await prisma.auditLog.findMany({
-    where: scopedWhere,
-    select: {
-      user_id: true,
-      actor_id: true,
-      phase_id: true,
-      entity_type: true,
-      entity_id: true,
-      metadata_json: true,
-    },
+  const references = await findAuditReferencesCompat(filters, {
+    projectId: options?.projectId,
+    fallbackEntityIds: options?.fallbackEntityIds,
   });
 
   const userIds = Array.from(
@@ -76,20 +53,11 @@ async function getFilterReferenceData(
 }
 
 export async function getGlobalActivityCenterData(filters: AuditFiltersInput = {}) {
-  const where = buildWhere(filters);
-
-  const logs = await prisma.auditLog.findMany({
-    where,
-    orderBy: { created_at: "desc" },
-    include: {
-      user: {
-        select: { id: true, name: true, role: true },
-      },
-    },
-    take: AUDIT_LOG_LIMIT,
+  const logs = await findAuditLogsCompat(filters, {
+    limit: AUDIT_LOG_LIMIT,
   });
 
-  const { userIds, phaseIds } = await getFilterReferenceData(where);
+  const { userIds, phaseIds } = await getFilterReferenceData(filters);
   const [users, phases] = await Promise.all([
     userIds.length > 0
       ? prisma.user.findMany({
@@ -143,28 +111,13 @@ export async function getProjectActivityCenterData(projectId: string, filters: A
   }
 
   const fallbackEntityIds = [projectId, ...project.phases.map((phase) => phase.id)];
-  const where = buildWhere(filters);
-  const logWhere: Prisma.AuditLogWhereInput = {
-    AND: [
-      where,
-      {
-        OR: [{ project_id: projectId }, { entity_id: { in: fallbackEntityIds } }],
-      },
-    ],
-  };
-
-  const logs = await prisma.auditLog.findMany({
-    where: logWhere,
-    orderBy: { created_at: "desc" },
-    include: {
-      user: {
-        select: { id: true, name: true, role: true },
-      },
-    },
-    take: AUDIT_LOG_LIMIT,
+  const logs = await findAuditLogsCompat(filters, {
+    projectId,
+    fallbackEntityIds,
+    limit: AUDIT_LOG_LIMIT,
   });
 
-  const { userIds, phaseIds } = await getFilterReferenceData(where, {
+  const { userIds, phaseIds } = await getFilterReferenceData(filters, {
     projectId,
     fallbackEntityIds,
   });

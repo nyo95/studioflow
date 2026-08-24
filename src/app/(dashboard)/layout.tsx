@@ -10,6 +10,7 @@ import { sanitizeUISettings, uiSettingsToStyle } from "@/lib/ui-settings";
 import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import type { UISettings } from "@/types/common";
 import { buildAuditDetails } from "@/core/platform/audit/record";
+import { findAuditLogsCompat } from "@/core/platform/audit/compat";
 
 export const dynamic = "force-dynamic";
 
@@ -53,18 +54,7 @@ export default async function DashboardLayout({
         name: "asc",
       },
     }),
-    prisma.auditLog.findMany({
-      orderBy: { created_at: "desc" },
-      take: 8,
-      include: {
-        user: {
-          select: { id: true, name: true },
-        },
-        project: {
-          select: { id: true, name: true },
-        },
-      },
-    }),
+    findAuditLogsCompat({}, { limit: 8 }),
   ]);
 
   const appTitle = systemConfig?.app_title || "StudioFlow";

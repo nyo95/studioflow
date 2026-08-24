@@ -1,4 +1,4 @@
-import { prisma } from "@/core/platform/db";
+import { findAuditLogsCompat } from "@/core/platform/audit/compat";
 
 export type LastChange = {
   actorName: string | null;
@@ -10,26 +10,22 @@ export async function lookupProductsLastChange(productIds: string[]): Promise<Re
   const ids = [...new Set(productIds ?? [])].filter(Boolean);
   if (ids.length === 0) return {};
 
-  const rows = await prisma.auditLog.findMany({
-    where: {
+  const rows = await findAuditLogsCompat(
+    {},
+    {
       domain: "MASTER_DATA",
-      entity_type: "Sku",
-      entity_id: { in: ids },
-    },
-    orderBy: { created_at: "desc" },
-    select: {
-      entity_id: true,
-      action: true,
-      created_at: true,
-      actor_name: true,
-    },
-  });
+      entityType: "Sku",
+      entityIds: ids,
+    }
+  );
+
+  rows.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
 
   const result: Record<string, LastChange> = {};
   for (const row of rows) {
     if (result[row.entity_id]) continue;
     result[row.entity_id] = {
-      actorName: row.actor_name || null,
+      actorName: row.actor_name || row.user?.name || null,
       at: row.created_at.toISOString(),
       action: row.action,
     };
