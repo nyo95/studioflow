@@ -15,7 +15,6 @@ export * from "./layout/app-rail";
 export * from "./navigation/page-back-link";
 export * from "./primitives/simple-card";
 export * from "./components/heading";
-export * from "./layout/shells/dashboard-page-shell";
 export * from "./layout/shells/settings-shell";
 export * from "./components/section-card";
 export * from "./components/table-card";
@@ -25,6 +24,8 @@ export * from "./components/action-sidebar";
 export * from "./components/status-badge";
 export * from "./patterns";
 export * from "./theme";
-export * from "./templates/contracts";
+// §42 R7: kontrak slot + implementasi ketujuh template (templates/index.ts
+// juga mengekspor ./contracts, jadi jangan diekspor dua kali di sini).
+export * from "./templates";
 export * from "./design-system.config";
 export * from "./tokens"; // Points to ./tokens/index.ts

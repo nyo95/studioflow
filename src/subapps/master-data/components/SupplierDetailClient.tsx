@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   Button,
-  DashboardPageShell,
+  DetailTemplate,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -87,22 +87,27 @@ export function SupplierDetailClient({
   canViewPrices: boolean;
 }) {
   return (
-    <DashboardPageShell>
-      <PageBackLink href="/masterdata/suppliers" label="Suppliers & Vendors" />
-      <PageHeader
-        eyebrow="Master Data"
-        title={party.name}
-        description={party.legal_name ?? undefined}
-      />
-
-      <SupplierDetailContent
-        party={party}
-        brands={brands}
-        contacts={initialContacts}
-        canManage={canManage}
-        canViewPrices={canViewPrices}
-      />
-    </DashboardPageShell>
+    <DetailTemplate
+      header={
+        <>
+          <PageBackLink href="/masterdata/suppliers" label="Suppliers & Vendors" />
+          <PageHeader
+            eyebrow="Master Data"
+            title={party.name}
+            description={party.legal_name ?? undefined}
+          />
+        </>
+      }
+      content={
+        <SupplierDetailContent
+          party={party}
+          brands={brands}
+          contacts={initialContacts}
+          canManage={canManage}
+          canViewPrices={canViewPrices}
+        />
+      }
+    />
   );
 }
 

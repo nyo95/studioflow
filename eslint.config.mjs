@@ -38,6 +38,64 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/ui_engine/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@/ui_engine",
+              importNames: ["DashboardPageShell"],
+              message:
+                "Use one of the template exports from '@/ui_engine' instead of DashboardPageShell directly.",
+            },
+            {
+              name: "@/ui_engine/layout/shells/dashboard-page-shell",
+              message:
+                "DashboardPageShell is internal to the template layer. Import a template from '@/ui_engine' instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/ui_engine/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/subapps/*", "@/extensions/*"],
+              message:
+                "UI Engine must stay domain-agnostic. Move domain wiring to the caller and pass plain slots/props into the engine.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/core/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/subapps/*", "@/extensions/*", "@/ui_engine/*", "@/ui_engine"],
+              message:
+                "Core must not depend on app domains or UI. Keep core modules reusable and domain-neutral.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     rules: {
       "no-restricted-syntax": [
         "error",

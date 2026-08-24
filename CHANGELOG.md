@@ -65,6 +65,136 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-24 — R8–R12 selesai: cleanup & consolidation
+
+### Hasil akhir
+
+Batch takeover lanjutan R8–R12 selesai. Fokusnya bukan feature baru, tetapi
+menutup jalur arsitektur lama yang masih hidup setelah R7:
+
+- **Master Data**: halaman aktif yang masih memakai `DashboardPageShell`
+  langsung (`Brands`, `Suppliers & Vendors`, `Pricing`, `Sample Library`,
+  `Settings`) dipindah ke template R7; copy Settings yang tersentuh
+  diselaraskan ke English sesuai aturan UI.
+- **BQ**: jalur drift/refresh snapshot dari Master Data dihapus total.
+  `price-drift-service.ts`, dua server action refresh snapshot, field/type
+  `drift` pada breakdown view, dan banner drift UI semuanya dibuang. BQ
+  kembali konsisten dengan kontrak snapshot immutable owner 2026-08-24.
+- **StudioFlow**: halaman dashboard/detail yang masih bypass template baru
+  dimigrasikan (`Activity`, `Library`, `Upcoming`, `Projects`, detail project
+  Activity/Deliverables/MOM/SketchUp, BQ list/library, `PageSkeleton`).
+- **Boundary enforcement**: lint rule baru menolak import
+  `DashboardPageShell` langsung di luar `src/ui_engine/**`, menahan engine agar
+  tidak mengimpor domain (`@/subapps/*`, `@/extensions/*`), dan menahan
+  `src/core/**` agar tetap bebas dari domain/UI.
+- **Legacy purge**: `@/ui_engine` tidak lagi mengekspor `DashboardPageShell`,
+  sehingga shell itu kini murni internal template layer. Tidak ada consumer app
+  hidup yang tersisa; pencarian hanya menyisakan definisi internal dan komentar
+  dokumentatif.
+
+Formatter waktu di permukaan activity/header juga mulai dipindah ke util inti
+`src/core/utilities/datetime.ts` (`formatDateTime()`), jadi cleanup util R10
+tidak berhenti di layer fondasi saja.
+
+### Verifikasi
+
+Yang benar-benar dijalankan pada batch ini:
+
+- `npm run typecheck` ✓
+- `npx eslint src` ✓ untuk rule baru R11 (tidak ada error/pelanggaran baru);
+  command gagal hanya karena **warning baseline lama repo** di area lain, bukan
+  karena perubahan R8–R12 ini
+
+Gate penuh pasca-batch juga dijalankan:
+
+- `npx prisma validate`
+- `npm test`
+- `npm run test:integration:docker`
+- `npm run build`
+
+### Area/berkas
+
+Sorotan utama:
+
+- Hapus: `src/subapps/bq/services/price-drift-service.ts`
+- Bersih drift BQ: `src/subapps/bq/{actions/bq-project-actions.ts,services/breakdown-service.ts,types/breakdown.ts,components/BqBreakdownClient.tsx}`
+- Migrasi template: halaman dashboard/detail di `src/app/(dashboard)/**`,
+  `src/subapps/bq/components/{BqProjectListClient,BqLibraryClient}.tsx`,
+  `src/subapps/master-data/components/{MasterDataMaterialsClient,SupplierClient,SupplierDetailClient,PricingClient,SampleLibraryClient,MasterDataSettingsClient}.tsx`
+- Boundary/purge: `eslint.config.mjs`, `src/ui_engine/index.ts`,
+  `src/components/shared/page-skeleton.tsx`
+
+### Risiko
+
+- `SettingsShell` masih dipakai langsung oleh halaman settings; itu **bukan**
+  bypass template, karena `SettingsShell` sendiri sekarang hanya adapter tipis
+  di atas `SettingsTemplate`. Ia sengaja dipertahankan sebagai wrapper domain
+  kecil untuk nav settings.
+- `npx eslint src --max-warnings=0` masih gagal pada warning lama repo yang
+  tersebar di area lain. R11 yang ditutup di batch ini adalah **nol error dan
+  nol pelanggaran boundary baru**, bukan pembersihan seluruh warning historis.
+
+## [Unreleased] - 2026-08-24 — R7 selesai: Template migration
+
+### Hasil akhir
+
+Fase R7 selesai sesuai PRD §42. **Nol perubahan visual** — vocabulary slot yang
+dibekukan di R5 kini dipakai oleh consumer nyata, satu per jenis template:
+
+- **DashboardTemplate** → `app/(dashboard)/page.tsx` (Tasks).
+- **DirectoryTemplate** → `subapps/master-data/components/SkuDirectoryClient.tsx`.
+- **DetailTemplate** → `subapps/master-data/components/BrandDetailClient.tsx`.
+- **WorkspaceTemplate** → `app/(dashboard)/projects/[id]/phases/[phaseId]/page.tsx`.
+- **ProjectTemplate** → `app/(dashboard)/projects/[id]/page.tsx`.
+- **SpreadsheetTemplate** → `subapps/bq/components/BqBreakdownClient.tsx`.
+- **SettingsTemplate** → `ui_engine/layout/shells/settings-shell.tsx`, sehingga
+  seluruh halaman settings yang sudah memakai `SettingsShell` ikut bermigrasi
+  tanpa mengubah isinya satu per satu.
+
+Implementasi template sungguhan hidup di `src/ui_engine/templates/*.tsx`, dan
+barrel `@/ui_engine` kini mengekspor template dari satu titik (`templates/index.ts`)
+alih-alih kontrak saja. `contracts.ts` ditambah `TemplateCanvasProps` serta slot
+`header` untuk Workspace/Spreadsheet supaya struktur halaman nyata bisa pindah
+tanpa wrapper domain baru di engine.
+
+Verifikasi lengkap (semuanya benar-benar dijalankan): prisma validate ✓,
+typecheck ✓, unit **205/205** (gate AT-01 tetap Rp5.653.559 / Rp4.711.299),
+integration docker **8/8** (46 migrasi ke DB disposable tmpfs, container dibuang),
+production build ✓.
+
+### Area/berkas
+
+Baru: `src/ui_engine/templates/{index,dashboard-template,directory-template,detail-template,workspace-template,project-template,spreadsheet-template,settings-template}.tsx`.
+Diubah: `src/ui_engine/index.ts`, `src/ui_engine/templates/contracts.ts`,
+`src/ui_engine/layout/shells/settings-shell.tsx`,
+`src/app/(dashboard)/page.tsx`, `src/app/(dashboard)/projects/[id]/page.tsx`,
+`src/app/(dashboard)/projects/[id]/phases/[phaseId]/page.tsx`,
+`src/subapps/master-data/components/BrandDetailClient.tsx`,
+`src/subapps/master-data/components/SkuDirectoryClient.tsx`,
+`src/subapps/bq/components/BqBreakdownClient.tsx`. Tidak ada perubahan schema/migrasi.
+
+### Risiko
+
+- Consumer lain masih ada yang memakai `DashboardPageShell` langsung. Itu bukan
+  regresi — memang sengaja dibiarkan sampai cleanup domain R8–R10 — tetapi
+  template belum jadi SSOT tunggal bila consumer baru masih menambah pola lama.
+- Spacing tetap "ikut slot", bukan diputuskan template. Ini menjaga parity,
+  tetapi consumer baru harus membawa margin/gap-nya sendiri; template sengaja
+  tidak mengarang ritme baru.
+- `SettingsTemplate`, `ProjectTemplate`, dan `WorkspaceTemplate` mengunci idiom
+  layout yang hidup hari ini (grid settings 260px, project two-column flex,
+  phase 12-column grid). Kalau struktur dasar salah satunya berubah kelak,
+  consumer yang belum termigrasi harus ikut dipindah sebelum primitive lama
+  dibuang di R12.
+
+### Pekerjaan terbuka
+
+- R8–R10: bulk migration consumer sisanya ke vocabulary template baru, dibarengi
+  cleanup domain masing-masing.
+- R11: boundary enforcement agar consumer baru tidak bypass template/shell
+  canon tanpa alasan arsitektural yang jelas.
+- Sisa R3 tetap: backfill/flip/drop `MasterDataAudit`.
+
 ## [Unreleased] - 2026-08-24 — R6 selesai: AppShell migration
 
 ### Hasil akhir
@@ -139,8 +269,6 @@ Baru: `ui_engine/layout/app-shell.tsx`, `app-rail.tsx`, `rail-active.ts`,
 
 ### Pekerjaan terbuka
 
-- R7 Template migration — Directory/Detail/Workspace/Project/Spreadsheet/
-  Settings/Dashboard (kontrak slot sudah ada sejak R5).
 - Keluarga variabel legacy `--ui-sidebar-*` (`ui-settings.ts`,
   `design-system.config.sidebar`, opsi "256px" di studio-settings-panel)
   tidak punya konsumen aktif — kandidat pembongkaran di fase cleanup

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
-import { DashboardPageShell, PageBackLink, PageHeader } from "@/ui_engine";
+import { DetailTemplate, PageBackLink, PageHeader } from "@/ui_engine";
 import { MomEditor } from "@/extensions/mom/components/mom-editor";
 
 export default async function ProjectMomEditorPage({
@@ -46,42 +46,48 @@ export default async function ProjectMomEditorPage({
   if (!document || document.project_id !== projectId) notFound();
 
   return (
-    <DashboardPageShell>
-      <PageBackLink />
-      <PageHeader
-        title={document.mom_topic}
-        description={`${document.project.name}${document.project.client?.name ? ` • ${document.project.client.name}` : ""}`}
-      />
-      <MomEditor
-        projectId={projectId}
-        projectName={document.project.name}
-        clientName={document.project.client?.name ?? null}
-        document={{
-          id: document.id,
-          mom_topic: document.mom_topic,
-          mom_date: document.mom_date.toISOString(),
-          mom_venue: document.mom_venue,
-          mom_attendees: document.mom_attendees,
-          mom_prepared_by_name: document.mom_prepared_by_name,
-          mom_items: document.mom_items.map((item) => ({
-            id: item.id,
-            sort_order: item.sort_order,
-            is_text_only: item.is_text_only,
-            list_style: item.list_style,
-            mom_points: item.mom_points.map((point) => ({
-              id: point.id,
-              sort_order: point.sort_order,
-              text: point.text,
-              style: point.style,
+    <DetailTemplate
+      header={
+        <>
+          <PageBackLink />
+          <PageHeader
+            title={document.mom_topic}
+            description={`${document.project.name}${document.project.client?.name ? ` • ${document.project.client.name}` : ""}`}
+          />
+        </>
+      }
+      content={
+        <MomEditor
+          projectId={projectId}
+          projectName={document.project.name}
+          clientName={document.project.client?.name ?? null}
+          document={{
+            id: document.id,
+            mom_topic: document.mom_topic,
+            mom_date: document.mom_date.toISOString(),
+            mom_venue: document.mom_venue,
+            mom_attendees: document.mom_attendees,
+            mom_prepared_by_name: document.mom_prepared_by_name,
+            mom_items: document.mom_items.map((item) => ({
+              id: item.id,
+              sort_order: item.sort_order,
+              is_text_only: item.is_text_only,
+              list_style: item.list_style,
+              mom_points: item.mom_points.map((point) => ({
+                id: point.id,
+                sort_order: point.sort_order,
+                text: point.text,
+                style: point.style,
+              })),
+              mom_images: item.mom_images.map((image) => ({
+                id: image.id,
+                sort_order: image.sort_order,
+                file_url: image.file_url,
+              })),
             })),
-            mom_images: item.mom_images.map((image) => ({
-              id: image.id,
-              sort_order: image.sort_order,
-              file_url: image.file_url,
-            })),
-          })),
-        }}
-      />
-    </DashboardPageShell>
+          }}
+        />
+      }
+    />
   );
 }

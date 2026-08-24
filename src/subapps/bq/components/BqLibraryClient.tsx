@@ -8,7 +8,7 @@ import * as React from "react";
 import { BookOpen, FolderOpen, Trash2 } from "lucide-react";
 import {
   Button,
-  DashboardPageShell,
+  DashboardTemplate,
   PageHeader,
   SectionCard,
 } from "@/ui_engine";
@@ -33,54 +33,59 @@ export function BqLibraryClient({
   const [tab, setTab] = React.useState<Tab>("OBJECTS");
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        eyebrow="BQ"
-        title="Library"
-        description="Saved fixture recipes. Call them from any BQ project."
-      />
+    <DashboardTemplate
+      header={
+        <PageHeader
+          eyebrow="BQ"
+          title="Library"
+          description="Saved fixture recipes. Call them from any BQ project."
+        />
+      }
+      content={
+        <>
+          <div className="flex gap-1 border-b border-slate-200 mb-4">
+            <button
+              type="button"
+              onClick={() => setTab("OBJECTS")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                tab === "OBJECTS"
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <FolderOpen className="h-4 w-4" />
+              Objects
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                {initialObjects.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("SUB_OBJECTS")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                tab === "SUB_OBJECTS"
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <BookOpen className="h-4 w-4" />
+              Sub-objects
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                {initialSubObjects.length}
+              </span>
+            </button>
+          </div>
 
-      <div className="flex gap-1 border-b border-slate-200 mb-4">
-        <button
-          type="button"
-          onClick={() => setTab("OBJECTS")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
-            tab === "OBJECTS"
-              ? "border-slate-900 text-slate-900"
-              : "border-transparent text-slate-500 hover:text-slate-700"
+          {tab === "OBJECTS" ? (
+            <ObjectsTab objects={initialObjects} canEdit={canEdit} />
+          ) : (
+            <SubObjectsTab subObjects={initialSubObjects} canEdit={canEdit} />
           )}
-        >
-          <FolderOpen className="h-4 w-4" />
-          Objects
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-            {initialObjects.length}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("SUB_OBJECTS")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
-            tab === "SUB_OBJECTS"
-              ? "border-slate-900 text-slate-900"
-              : "border-transparent text-slate-500 hover:text-slate-700"
-          )}
-        >
-          <BookOpen className="h-4 w-4" />
-          Sub-objects
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-            {initialSubObjects.length}
-          </span>
-        </button>
-      </div>
-
-      {tab === "OBJECTS" ? (
-        <ObjectsTab objects={initialObjects} canEdit={canEdit} />
-      ) : (
-        <SubObjectsTab subObjects={initialSubObjects} canEdit={canEdit} />
-      )}
-    </DashboardPageShell>
+        </>
+      }
+    />
   );
 }
 

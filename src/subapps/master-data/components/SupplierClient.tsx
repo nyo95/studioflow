@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   Button,
-  DashboardPageShell,
+  DashboardTemplate,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -220,58 +220,60 @@ export function SupplierClient({
   };
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        eyebrow="Master Data"
-        title="Suppliers & Vendors"
-        description={pageDescription}
-        action={
-          canManageCompanies ? (
-            <Button
-              type="button"
-              onClick={() => setPartyDialog({ open: true, mode: "CREATE", company: null })}
-              className={cn(
-                "bg-[var(--ui-action-bg)] text-[var(--ui-action-text)] hover:bg-[var(--ui-action-hover)]",
-                UI_ENGINE_RADIUS_ACTION
-              )}
-            >
-              <Plus className="size-[var(--ui-icon-size-sm)]" />
-              Add supplier / vendor
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {/* Unified search filter */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            aria-label="Search company"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search company or legal name…"
-            className={cn("pl-9", UI_ENGINE_RADIUS_CONTROL)}
+    <>
+      <DashboardTemplate
+        header={
+          <PageHeader
+            eyebrow="Master Data"
+            title="Suppliers & Vendors"
+            description={pageDescription}
+            action={
+              canManageCompanies ? (
+                <Button
+                  type="button"
+                  onClick={() => setPartyDialog({ open: true, mode: "CREATE", company: null })}
+                  className={cn(
+                    "bg-[var(--ui-action-bg)] text-[var(--ui-action-text)] hover:bg-[var(--ui-action-hover)]",
+                    UI_ENGINE_RADIUS_ACTION
+                  )}
+                >
+                  <Plus className="size-[var(--ui-icon-size-sm)]" />
+                  Add supplier / vendor
+                </Button>
+              ) : undefined
+            }
           />
-        </div>
-        <select
-          aria-label="Filter by category"
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
-          className={cn(
-            "h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300",
-            UI_ENGINE_RADIUS_CONTROL
-          )}
-        >
-          <option value="__all__">All categories</option>
-          {PARTY_ROLE_ORDER.map((role) => (
-            <option key={role} value={role}>{PARTY_ROLE_LABEL[role]}</option>
-          ))}
-        </select>
-      </div>
+        }
+        content={
+          <>
+            <div className="mb-5 flex flex-wrap items-center gap-3">
+              <div className="relative min-w-[220px] flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  aria-label="Search company"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search company or legal name…"
+                  className={cn("pl-9", UI_ENGINE_RADIUS_CONTROL)}
+                />
+              </div>
+              <select
+                aria-label="Filter by category"
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+                className={cn(
+                  "h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300",
+                  UI_ENGINE_RADIUS_CONTROL
+                )}
+              >
+                <option value="__all__">All categories</option>
+                {PARTY_ROLE_ORDER.map((role) => (
+                  <option key={role} value={role}>{PARTY_ROLE_LABEL[role]}</option>
+                ))}
+              </select>
+            </div>
 
-      {/* Unified table — companies as rows */}
-      <TableCard layout="fixed" minWidth="var(--ui-supplier-table-min-width)">
+            <TableCard layout="fixed" minWidth="var(--ui-supplier-table-min-width)">
         <TableCardHeader>
           <TableCardHead style={{ width: "var(--ui-supplier-table-col-company)" }}>Company</TableCardHead>
           <TableCardHead style={{ width: "var(--ui-supplier-table-col-roles)" }}>Roles</TableCardHead>
@@ -403,16 +405,19 @@ export function SupplierClient({
         </TableCardBody>
       </TableCard>
 
-      {visibleCompanies.length === 0 && (
-        <div className="flex flex-col items-center gap-2 py-14 text-center">
-          <Building2 className="size-8 text-slate-300" />
-          <p className="text-sm text-slate-400">
-            {query || roleFilter !== "__all__"
-              ? "No companies match these filters."
-              : "No suppliers yet. Use + Add supplier / vendor to start."}
-          </p>
-        </div>
-      )}
+            {visibleCompanies.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-14 text-center">
+                <Building2 className="size-8 text-slate-300" />
+                <p className="text-sm text-slate-400">
+                  {query || roleFilter !== "__all__"
+                    ? "No companies match these filters."
+                    : "No suppliers yet. Use + Add supplier / vendor to start."}
+                </p>
+              </div>
+            )}
+          </>
+        }
+      />
 
       <Dialog
         open={supplierDetail.open}
@@ -494,6 +499,6 @@ export function SupplierClient({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </DashboardPageShell>
+    </>
   );
 }

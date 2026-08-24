@@ -24,7 +24,6 @@ import {
   type ServiceLineInput,
 } from "../lib/calc";
 import { decToNumber, decToNumberStrict } from "./master-data-service";
-import { buildDriftReport } from "./price-drift-service";
 import type {
   BqMaterialLineRecord,
   BqObjectView,
@@ -217,8 +216,7 @@ export async function listProjects(): Promise<BqProjectSummary[]> {
 }
 
 /**
- * Satu project, lengkap: object terhitung, total, purchase summary, dan
- * laporan drift.
+ * Satu project, lengkap: object terhitung, total, dan purchase summary.
  *
  * Purchase summary dibangun dari `ObjectInput[]` yang SAMA dengan yang dipakai
  * menghitung rate, bukan dari query agregasi terpisah. Kalau keduanya dipisah,
@@ -257,7 +255,6 @@ export async function loadProjectView(projectId: string): Promise<BqProjectView 
     objects: project.objects.map(toObjectView),
     totals: computeProject(inputs),
     purchase: buildPurchaseSummary(inputs),
-    drift: await buildDriftReport(project.objects),
   };
 }
 

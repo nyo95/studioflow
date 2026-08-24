@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  Button, DashboardPageShell, Dialog, DialogContent, DialogFooter, DialogHeader,
+  Button, DashboardTemplate, Dialog, DialogContent, DialogFooter, DialogHeader,
   DialogTitle, Input, Label, PageHeader, SectionCard,
   TableCard, TableCardBody, TableCardCell, TableCardHead, TableCardHeader, TableCardRow,
   UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_ACTION, UI_ENGINE_RADIUS_CARD,
@@ -315,28 +315,32 @@ export function SampleLibraryClient({
   const selectedSku = skuOptions.find((o) => o.id === form.skuId);
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        eyebrow="Master Data"
-        title="Sample Library"
-        description="Physical samples held in the office, with their rack and box position. Linked to materials by SKU."
-        action={
-          canManage ? (
-            <Button
-              onClick={openCreate}
-              className={cn(
-                "bg-[var(--ui-action-bg)] text-[var(--ui-action-text)] hover:bg-[var(--ui-action-hover)]",
-                UI_ENGINE_RADIUS_ACTION
-              )}
-            >
-              <Plus className="size-[var(--ui-icon-size-sm)]" />
-              Add Sample
-            </Button>
-          ) : undefined
+    <>
+      <DashboardTemplate
+        header={
+          <PageHeader
+            eyebrow="Master Data"
+            title="Sample Library"
+            description="Physical samples held in the office, with their rack and box position. Linked to materials by SKU."
+            action={
+              canManage ? (
+                <Button
+                  onClick={openCreate}
+                  className={cn(
+                    "bg-[var(--ui-action-bg)] text-[var(--ui-action-text)] hover:bg-[var(--ui-action-hover)]",
+                    UI_ENGINE_RADIUS_ACTION
+                  )}
+                >
+                  <Plus className="size-[var(--ui-icon-size-sm)]" />
+                  Add Sample
+                </Button>
+              ) : undefined
+            }
+          />
         }
-      />
-
-      <SectionCard padding="md" className="mb-6">
+        content={
+          <>
+            <SectionCard padding="md" className="mb-6">
         <div className="flex flex-wrap gap-8">
           <Stat label="Total samples" value={summary.total} />
           <Stat label="Available" value={summary.available} />
@@ -347,8 +351,7 @@ export function SampleLibraryClient({
         </div>
       </SectionCard>
 
-      {/* Toolbar */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex gap-1">
           {([
             ["rack", "By rack", Layers],
@@ -401,8 +404,7 @@ export function SampleLibraryClient({
         </span>
       </div>
 
-      {/* Empty */}
-      {visible.length === 0 ? (
+            {visible.length === 0 ? (
         <SectionCard padding="lg">
           <div className="flex flex-col items-center gap-2 py-12 text-center">
             <Package className="size-8 text-slate-300" />
@@ -491,7 +493,6 @@ export function SampleLibraryClient({
           ))}
         </div>
       ) : (
-        /* ---- Flat table ---- */
         <TableCard layout="auto" minWidth="var(--ui-sample-library-table-min-width)">
           <TableCardHeader>
             <TableCardHead style={{ width: "9%" }}>Rack</TableCardHead>
@@ -542,8 +543,10 @@ export function SampleLibraryClient({
           </TableCardBody>
         </TableCard>
       )}
+          </>
+        }
+      />
 
-      {/* ---- Add / edit dialog ---- */}
       <Dialog open={dialog.open} onOpenChange={editGuard.handleOpenChange}>
         <DialogContent
           className={cn(
@@ -810,6 +813,6 @@ export function SampleLibraryClient({
 
       <UnsavedChangesPrompt guard={editGuard} description="The sample location or notes have not been saved. Discard these changes?" />
       <UnsavedChangesPrompt guard={statusGuard} description="The sample status has not been saved. Discard these changes?" />
-    </DashboardPageShell>
+    </>
   );
 }

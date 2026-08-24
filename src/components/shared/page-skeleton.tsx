@@ -1,7 +1,6 @@
 import * as React from "react";
-import { Skeleton } from "@/ui_engine";
+import { DashboardTemplate, Skeleton } from "@/ui_engine";
 import { cn } from "@/lib/utils";
-import { DashboardPageShell } from "@/ui_engine";
 
 interface PageSkeletonProps {
   type?: "list" | "grid" | "form" | "dashboard";
@@ -10,8 +9,10 @@ interface PageSkeletonProps {
 
 export function PageSkeleton({ type = "dashboard", className }: PageSkeletonProps) {
   return (
-    <DashboardPageShell className={cn("animate-in fade-in duration-500", className)}>
-      <div className="space-y-10">
+    <DashboardTemplate
+      className={cn("animate-in fade-in duration-500", className)}
+      content={
+        <div className="space-y-10">
         {/* Header Skeleton */}
         <div className="space-y-4">
           <Skeleton className="h-4 w-32" />
@@ -61,7 +62,8 @@ export function PageSkeleton({ type = "dashboard", className }: PageSkeletonProp
             </div>
           </div>
         )}
-      </div>
-    </DashboardPageShell>
+        </div>
+      }
+    />
   );
 }

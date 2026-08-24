@@ -3,7 +3,7 @@ import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { ProjectListClient } from "@/components/project-list-client";
 import { getSession } from "@/lib/auth";
 import { eligibleDesigners, eligibleDrafters } from "@/core/rbac/project-pic";
-import { DashboardPageShell, PageHeader } from "@/ui_engine";
+import { DashboardTemplate, PageHeader } from "@/ui_engine";
 import { DEFAULT_PAGINATION_LIMIT } from "@/lib/constants";
 import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import { isAdminLevel } from "@/core/rbac/rbac";
@@ -118,27 +118,30 @@ export default async function ProjectsPage() {
   const drafters = eligibleDrafters(users);
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        title="Projects"
-        description="Monitor and manage all studio projects in one place."
-        action={
-          isAdminLevel(role) ? (
-            <CreateProjectDialog
-              designers={designers}
-              drafters={drafters}
-              clients={allClients}
-              isAutoNamingEnabled={systemConfig?.is_auto_naming_enabled ?? true}
-            />
-          ) : null
-        }
-      />
-
-      <ProjectListClient
-        initialProjects={projectsWithLatestRevision}
-        userId={userId}
-        userRole={role}
-      />
-    </DashboardPageShell>
+    <DashboardTemplate
+      header={
+        <PageHeader
+          title="Projects"
+          description="Monitor and manage all studio projects in one place."
+          action={
+            isAdminLevel(role) ? (
+              <CreateProjectDialog
+                designers={designers}
+                drafters={drafters}
+                clients={allClients}
+                isAutoNamingEnabled={systemConfig?.is_auto_naming_enabled ?? true}
+              />
+            ) : null
+          }
+        />
+      }
+      content={
+        <ProjectListClient
+          initialProjects={projectsWithLatestRevision}
+          userId={userId}
+          userRole={role}
+        />
+      }
+    />
   );
 }

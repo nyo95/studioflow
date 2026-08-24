@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
-import { DashboardPageShell, PageBackLink, PageHeader } from "@/ui_engine";
+import { DetailTemplate, PageBackLink, PageHeader } from "@/ui_engine";
 import { MomDocumentList } from "@/extensions/mom/components/mom-document-list";
 
 export default async function ProjectMomPage({
@@ -48,22 +48,28 @@ export default async function ProjectMomPage({
   });
 
   return (
-    <DashboardPageShell>
-      <PageBackLink />
-      <PageHeader
-        title="MOM Reports"
-        description={`${project.name}${project.client?.name ? ` - ${project.client.name}` : ""}`}
-      />
-      <MomDocumentList
-        projectId={project.id}
-        documents={momDocuments.map((document) => ({
-          id: document.id,
-          mom_topic: document.mom_topic,
-          mom_date: document.mom_date.toISOString(),
-          mom_venue: document.mom_venue,
-          updated_at: document.updated_at.toISOString(),
-        }))}
-      />
-    </DashboardPageShell>
+    <DetailTemplate
+      header={
+        <>
+          <PageBackLink />
+          <PageHeader
+            title="MOM Reports"
+            description={`${project.name}${project.client?.name ? ` - ${project.client.name}` : ""}`}
+          />
+        </>
+      }
+      content={
+        <MomDocumentList
+          projectId={project.id}
+          documents={momDocuments.map((document) => ({
+            id: document.id,
+            mom_topic: document.mom_topic,
+            mom_date: document.mom_date.toISOString(),
+            mom_venue: document.mom_venue,
+            updated_at: document.updated_at.toISOString(),
+          }))}
+        />
+      }
+    />
   );
 }

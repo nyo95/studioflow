@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { hasPermission } from "@/core/rbac/guards";
 import { PERMISSION } from "@/core/rbac/constants";
-import { DashboardPageShell, PageHeader } from "@/ui_engine";
+import { DashboardTemplate, PageHeader } from "@/ui_engine";
 import { BrandLibraryExplorer } from "@/extensions/library/components/BrandLibraryExplorer";
 
 /**
@@ -16,12 +16,14 @@ export default async function LibraryBrandPage() {
   if (!hasPermission(role, PERMISSION.LIBRARY_VIEW)) notFound();
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        title="Library"
-        description='Search a material category — "terrazzo", say — then browse the brands that supply it.'
-      />
-      <BrandLibraryExplorer />
-    </DashboardPageShell>
+    <DashboardTemplate
+      header={
+        <PageHeader
+          title="Library"
+          description='Search a material category — "terrazzo", say — then browse the brands that supply it.'
+        />
+      }
+      content={<BrandLibraryExplorer />}
+    />
   );
 }

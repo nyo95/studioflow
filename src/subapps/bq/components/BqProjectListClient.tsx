@@ -18,7 +18,7 @@ import { Plus, FolderOpen, Layers } from "lucide-react";
 import { toast } from "sonner";
 import {
   Button,
-  DashboardPageShell,
+  DashboardTemplate,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -72,67 +72,71 @@ export function BqProjectListClient({
   }, [name, code, router]);
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        eyebrow="BQ"
-        title="Fixture Breakdowns"
-        description="Break one fixture down to raw materials and services, and get a reusable rate per unit."
-        action={
-          canManageProjects ? (
-            <Button onClick={() => setOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New breakdown
-            </Button>
-          ) : null
+    <>
+      <DashboardTemplate
+        header={
+          <PageHeader
+            eyebrow="BQ"
+            title="Fixture Breakdowns"
+            description="Break one fixture down to raw materials and services, and get a reusable rate per unit."
+            action={
+              canManageProjects ? (
+                <Button onClick={() => setOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New breakdown
+                </Button>
+              ) : null
+            }
+          />
+        }
+        content={
+          projects.length === 0 ? (
+            <SectionCard>
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <FolderOpen className="h-8 w-8 text-slate-300" />
+                <p className="font-sans text-sm font-medium text-slate-700">No breakdowns yet</p>
+                <p className={cn(UI_ENGINE_TYPE_META, "max-w-sm text-slate-500")}>
+                  {canManageProjects
+                    ? "Create one to start costing a fixture down to plywood, edging and labour."
+                    : "An estimator has not created any breakdown yet."}
+                </p>
+              </div>
+            </SectionCard>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {projects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/bq/${project.id}`}
+                  className={cn(
+                    "group block border border-slate-200 bg-white p-5 transition-colors hover:bg-slate-50",
+                    UI_ENGINE_RADIUS_CONTROL
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      {project.code ? (
+                        <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{project.code}</p>
+                      ) : null}
+                      <p className="truncate font-serif text-lg font-semibold text-slate-900">
+                        {project.name}
+                      </p>
+                    </div>
+                    <StatusBadge status={project.status} tone={statusToTone(project.status)} />
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-2 text-slate-500">
+                    <Layers className="h-3.5 w-3.5" />
+                    <span className={UI_ENGINE_TYPE_META}>
+                      {project.objectCount} {project.objectCount === 1 ? "object" : "objects"}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )
         }
       />
-
-      {projects.length === 0 ? (
-        <SectionCard>
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <FolderOpen className="h-8 w-8 text-slate-300" />
-            <p className="font-sans text-sm font-medium text-slate-700">No breakdowns yet</p>
-            <p className={cn(UI_ENGINE_TYPE_META, "max-w-sm text-slate-500")}>
-              {canManageProjects
-                ? "Create one to start costing a fixture down to plywood, edging and labour."
-                : "An estimator has not created any breakdown yet."}
-            </p>
-          </div>
-        </SectionCard>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {projects.map((project) => (
-            <Link
-              key={project.id}
-              href={`/bq/${project.id}`}
-              className={cn(
-                "group block border border-slate-200 bg-white p-5 transition-colors hover:bg-slate-50",
-                UI_ENGINE_RADIUS_CONTROL
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  {project.code ? (
-                    <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{project.code}</p>
-                  ) : null}
-                  <p className="truncate font-serif text-lg font-semibold text-slate-900">
-                    {project.name}
-                  </p>
-                </div>
-                <StatusBadge status={project.status} tone={statusToTone(project.status)} />
-              </div>
-
-              <div className="mt-4 flex items-center gap-2 text-slate-500">
-                <Layers className="h-3.5 w-3.5" />
-                <span className={UI_ENGINE_TYPE_META}>
-                  {project.objectCount} {project.objectCount === 1 ? "object" : "objects"}
-                </span>
-              </div>
-
-            </Link>
-          ))}
-        </div>
-      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -172,6 +176,6 @@ export function BqProjectListClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardPageShell>
+    </>
   );
 }

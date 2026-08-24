@@ -115,40 +115,6 @@ export type BqProjectView = {
   objects: BqObjectView[];
   totals: ProjectTotals;
   purchase: PurchaseSummary;
-  /** Baris yang snapshot-nya berbeda dari master data saat ini. Object yang
-   *  sudah dikunci TIDAK pernah masuk daftar ini (PRD §5.4). */
-  drift: BqDriftReport;
-};
-
-// ---------------------------------------------------------------------------
-// Drift — banner "N harga berubah"
-// ---------------------------------------------------------------------------
-
-/**
- * Perbandingan snapshot terhadap master data SAAT INI. Ini satu-satunya tempat
- * BQ membaca ulang master data untuk baris yang sudah ada, dan hasilnya TIDAK
- * PERNAH ditulis balik tanpa konfirmasi (PRD §5.4 — larangan silent update).
- *
- * Bentuk disederhanakan (P2-D4): per baris cukup `hasDrift: boolean`, per
- * object cukup jumlah baris yang drift. Detail "apa yang berubah" tidak lagi
- * dikirim ke klien — estimator cukup tahu ada yang berubah dan bisa refresh
- * per baris.
- */
-export type BqLineDrift = {
-  lineId: string;
-  lineKind: "MATERIAL" | "SERVICE";
-};
-
-export type BqObjectDrift = {
-  objectId: string;
-  objectName: string;
-  driftedLines: BqLineDrift[];
-};
-
-export type BqDriftReport = {
-  objects: BqObjectDrift[];
-  /** Object terkunci dilewati seluruhnya — banner pun tidak muncul untuknya. */
-  skippedLockedObjectCount: number;
 };
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,16 @@ import type { ReactNode } from "react";
 export type TemplateSlot = ReactNode;
 
 /**
+ * Props kanvas yang setiap template teruskan ke DashboardPageShell (R7).
+ * Spacing antar-slot tidak ditentukan template — margin bepergian dengan node
+ * slotnya, supaya migrasi halaman bisa nol perubahan visual.
+ */
+export interface TemplateCanvasProps {
+  className?: string;
+  as?: "div" | "main" | "section";
+}
+
+/**
  * Kontrak slot per jenis halaman (§42). Semua slot opsional — template yang
  * sudah dirender memutuskan sendiri bagaimana slot kosong ditata.
  */
@@ -43,6 +53,12 @@ export interface DetailTemplateSlots {
 
 export interface WorkspaceTemplateSlots {
   navigation?: TemplateSlot;
+  /**
+   * Region di atas kolom utama (back link, judul halaman, banner). Aditif R7:
+   * kontrak R5 tidak menyediakannya padahal workspace nyata selalu punya
+   * header sebelum pemisahan kolom.
+   */
+  header?: TemplateSlot;
   /** Konten utama workspace. */
   primary: TemplateSlot;
   /** Panel sekunder (inspector, catatan). */
@@ -51,6 +67,11 @@ export interface WorkspaceTemplateSlots {
 }
 
 export interface SpreadsheetTemplateSlots {
+  /**
+   * Region di atas grid (judul halaman, kartu rekap total). Aditif R7, alasan
+   * sama dengan WorkspaceTemplateSlots.header.
+   */
+  header?: TemplateSlot;
   toolbar?: TemplateSlot;
   grid: TemplateSlot;
   inspector?: TemplateSlot;

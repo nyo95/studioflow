@@ -1,5 +1,5 @@
 import { UpcomingView } from "@/components/upcoming-view";
-import { DashboardPageShell, PageHeader } from "@/ui_engine";
+import { DashboardTemplate, PageHeader } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { getTaskFeed } from "@/lib/services/task-feed-query";
 
@@ -19,14 +19,15 @@ export default async function UpcomingPage() {
   // their own dates and belong in their own buckets, not under a parent that
   // may sit in a different day entirely.
   return (
-    <DashboardPageShell>
-      <PageHeader
-        eyebrow="Daily Pulse"
-        title="Upcoming"
-        description="What's due today, and what's coming after."
-      />
-
-      <UpcomingView tasks={tasks} currentUserId={userId} />
-    </DashboardPageShell>
+    <DashboardTemplate
+      header={
+        <PageHeader
+          eyebrow="Daily Pulse"
+          title="Upcoming"
+          description="What's due today, and what's coming after."
+        />
+      }
+      content={<UpcomingView tasks={tasks} currentUserId={userId} />}
+    />
   );
 }

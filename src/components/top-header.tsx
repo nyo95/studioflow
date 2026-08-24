@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { logout } from "@/actions/user-actions";
+import { formatDateTime } from "@/core/utilities/datetime";
 import { Avatar, AvatarFallback } from "@/ui_engine";
 import { Button } from "@/ui_engine";
 import {
@@ -70,12 +71,7 @@ type HeaderSubappLink = {
 
 function NotificationTime({ value }: { value: string }) {
   const relative = useRelativeTime(value, true);
-  const absolute = new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  const absolute = formatDateTime(value);
 
   return <span title={absolute}>{relative || absolute}</span>;
 }

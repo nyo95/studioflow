@@ -24,7 +24,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
-  Button, CreatableChecklist, CreatableSearch, DashboardPageShell, Dialog, DialogContent, DialogFooter,
+  Button, CreatableChecklist, CreatableSearch, DashboardTemplate, Dialog, DialogContent, DialogFooter,
   DialogHeader, DialogTitle, Input, Label, PageHeader,
   TableCard, TableCardBody, TableCardCell, TableCardHead, TableCardHeader,
   TableCardRow,
@@ -1568,51 +1568,42 @@ export function PricingClient({
   ];
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        eyebrow="Master Data"
-        title="Pricing"
-        description="Three pricing schemes for BQ: material per supplier, supply-and-install packages, and labour-only rates. Manage trades and vendors on the Suppliers page."
-      />
+    <DashboardTemplate
+      header={
+        <PageHeader
+          eyebrow="Master Data"
+          title="Pricing"
+          description="Three pricing schemes for BQ: material per supplier, supply-and-install packages, and labour-only rates. Manage trades and vendors on the Suppliers page."
+        />
+      }
+      content={
+        <>
+          <div className="mb-6 flex gap-1 border-b border-[var(--ui-border-subtle)]">
+            {TABS.map(({ key, label, count }) => (
+              <button key={key} type="button" onClick={() => setTab(key)}
+                className={cn(
+                  "flex items-center gap-2 px-5 py-3 font-sans text-sm font-medium transition-colors",
+                  tab === key ? "border-b-2 border-slate-900 text-slate-900" : "text-slate-400 hover:text-slate-600"
+                )}>
+                {label}
+                <span className={cn("tabular-nums text-xs", tab === key ? "text-slate-600" : "text-slate-300")}>
+                  {count}
+                </span>
+              </button>
+            ))}
+          </div>
 
-      {/* Tab bar */}
-      <div className="mb-6 flex gap-1 border-b border-[var(--ui-border-subtle)]">
-        {TABS.map(({ key, label, count }) => (
-          <button key={key} type="button" onClick={() => setTab(key)}
-            className={cn(
-              "flex items-center gap-2 px-5 py-3 font-sans text-sm font-medium transition-colors",
-              tab === key ? "border-b-2 border-slate-900 text-slate-900" : "text-slate-400 hover:text-slate-600"
-            )}>
-            {label}
-            <span className={cn("tabular-nums text-xs", tab === key ? "text-slate-600" : "text-slate-300")}>
-              {count}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/*
-       * Ketiga tab dirender sekaligus dan disembunyikan lewat CSS (bukan
-       * `tab === key && (...)`) sejak 2026-08-18 (owner feedback item 4).
-       *
-       * Mounting kondisional membongkar tab yang tidak aktif — begitu
-       * `HargaMaterialTab` di-unmount, `useState(initial)`-nya ikut hilang.
-       * Hapus satu harga lalu pindah tab dan kembali, dan baris yang tadi
-       * dihapus muncul lagi (state-nya dibuat ulang dari prop awal yang belum
-       * tahu ada penghapusan) — persis keluhan "harus refresh dulu baru
-       * hilang", hanya saja pemicunya pindah tab, bukan reload halaman.
-       * `hidden` mempertahankan instance-nya, jadi state hasil edit/hapus
-       * bertahan selama halaman ini terbuka.
-       */}
-      <div className={tab === "material" ? undefined : "hidden"}>
-        <HargaMaterialTab initialPage={materialPrices} brands={brands} skuOptions={skuOptions} suppliers={suppliers} unitOptions={unitOptions} canManage={canManage} userName={userName} onCountChange={setMaterialCount} />
-      </div>
-      <div className={tab === "material-upah" ? undefined : "hidden"}>
-        <HargaMaterialUpahTab rows={materialLaborPrices} vendors={serviceVendors} unitOptions={unitOptions} canManage={canManage} userName={userName} onCountChange={setMaterialUpahCount} />
-      </div>
-      <div className={tab === "upah" ? undefined : "hidden"}>
-        <HargaUpahTab prices={servicePrices} vendors={serviceVendors} unitOptions={unitOptions} canManage={canManage} onCountChange={setUpahCount} />
-      </div>
-    </DashboardPageShell>
+          <div className={tab === "material" ? undefined : "hidden"}>
+            <HargaMaterialTab initialPage={materialPrices} brands={brands} skuOptions={skuOptions} suppliers={suppliers} unitOptions={unitOptions} canManage={canManage} userName={userName} onCountChange={setMaterialCount} />
+          </div>
+          <div className={tab === "material-upah" ? undefined : "hidden"}>
+            <HargaMaterialUpahTab rows={materialLaborPrices} vendors={serviceVendors} unitOptions={unitOptions} canManage={canManage} userName={userName} onCountChange={setMaterialUpahCount} />
+          </div>
+          <div className={tab === "upah" ? undefined : "hidden"}>
+            <HargaUpahTab prices={servicePrices} vendors={serviceVendors} unitOptions={unitOptions} canManage={canManage} onCountChange={setUpahCount} />
+          </div>
+        </>
+      }
+    />
   );
 }

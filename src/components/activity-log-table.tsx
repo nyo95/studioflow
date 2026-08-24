@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Eye, EyeOff, RefreshCcw, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/ui_engine";
+import { formatDateTime } from "@/core/utilities/datetime";
 import { cn } from "@/lib/utils";
 import { ActivityFilters, type ActivityFilterOption, type ActivityFilterState } from "@/components/activity-filters";
 import { ActivityTimeline } from "@/components/activity-timeline";
@@ -61,13 +62,7 @@ function detailsToText(details: Record<string, unknown>) {
 
 function RelativeTime({ value }: { value: Date | string }) {
   const relative = useRelativeTime(value, true);
-  const absolute = new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  const absolute = formatDateTime(value);
   return <span title={absolute}>{relative || absolute}</span>;
 }
 

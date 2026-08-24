@@ -22,9 +22,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Button,
-  DashboardPageShell,
   PageHeader,
   SectionCard,
+  SettingsTemplate,
   UI_ENGINE_RADIUS_ACTION,
 } from "@/ui_engine";
 import { cn } from "@/lib/utils";
@@ -63,13 +63,13 @@ export function MasterDataSettingsClient() {
           priceResults: { row: number; status: string; message?: string }[];
         };
         if (!res.ok) {
-          toast.error("Import gagal.");
+          toast.error("Import failed.");
           return;
         }
         const { created, updated, errors } = result.summary;
         const errorLines = [...result.skuResults, ...result.priceResults]
           .filter((r) => r.status === "error")
-          .map((r) => `Baris ${r.row}: ${r.message ?? "error"}`);
+          .map((r) => `Row ${r.row}: ${r.message ?? "error"}`);
         setImportResults({
           created,
           updated,
@@ -79,13 +79,13 @@ export function MasterDataSettingsClient() {
         });
         setShowErrors(false);
         if (errors > 0) {
-          toast.warning(`Import selesai dengan ${errors} error.`);
+          toast.warning(`Import finished with ${errors} error${errors === 1 ? "" : "s"}.`);
         } else {
-          toast.success(`Import selesai: ${created} dibuat, ${updated} diperbarui.`);
+          toast.success(`Import finished: ${created} created, ${updated} updated.`);
         }
         router.refresh();
       } catch {
-        toast.error("Import gagal — koneksi atau format file tidak dikenali.");
+        toast.error("Import failed. Check the connection or file format and try again.");
       } finally {
         setImporting(false);
         if (importInputRef.current) importInputRef.current.value = "";
@@ -95,7 +95,16 @@ export function MasterDataSettingsClient() {
   );
 
   return (
-    <DashboardPageShell>
+    <SettingsTemplate
+      header={
+        <PageHeader
+          eyebrow="Master Data"
+          title="Settings"
+          description="Master Data administration for bulk SKU and pricing export or import."
+        />
+      }
+      content={
+        <>
       {/* Hidden file input for Excel import */}
       <input
         ref={importInputRef}
@@ -108,20 +117,14 @@ export function MasterDataSettingsClient() {
         }}
       />
 
-      <PageHeader
-        eyebrow="Master Data"
-        title="Pengaturan"
-        description="Administrasi data Master Data: export dan import bulk SKU + harga."
-      />
-
       <SectionCard padding="md">
         <div className="space-y-1 mb-6">
           <h2 className={cn("text-slate-900 font-semibold", UI_ENGINE_TYPE_BODY)}>
-            Data Excel
+            Excel data
           </h2>
           <p className={cn("text-slate-500", UI_ENGINE_TYPE_META)}>
-            Export menghasilkan satu file .xlsx dengan seluruh SKU dan harga aktif.
-            Import melakukan upsert — baris yang sudah ada diperbarui, baris baru ditambahkan.
+            Export creates one `.xlsx` file with every SKU and current price.
+            Import runs as an upsert: existing rows are updated and new rows are created.
           </p>
         </div>
 
@@ -131,10 +134,10 @@ export function MasterDataSettingsClient() {
             variant="outline"
             onClick={handleExport}
             className={UI_ENGINE_RADIUS_ACTION}
-            title="Export semua SKU + harga ke Excel"
+            title="Export all SKUs and current prices to Excel"
           >
             <FileDown className="size-[var(--ui-icon-size-sm)]" />
-            Export ke Excel
+            Export to Excel
           </Button>
 
           <Button
@@ -143,15 +146,15 @@ export function MasterDataSettingsClient() {
             disabled={importing}
             onClick={() => importInputRef.current?.click()}
             className={UI_ENGINE_RADIUS_ACTION}
-            title="Import SKU + harga dari Excel (upsert)"
+            title="Import SKUs and prices from Excel"
           >
             <FileUp className="size-[var(--ui-icon-size-sm)]" />
-            {importing ? "Mengimpor…" : "Import dari Excel"}
+            {importing ? "Importing…" : "Import from Excel"}
           </Button>
         </div>
 
         <p className={cn("mt-4 text-slate-400", UI_ENGINE_TYPE_META)}>
-          Format: gunakan template yang dihasilkan dari Export. Kolom wajib: SKU, Brand, Kategori.
+          Use the export file as the template. Required columns: SKU, Brand, Category.
         </p>
       </SectionCard>
 
@@ -159,7 +162,7 @@ export function MasterDataSettingsClient() {
       {importResults && (
         <div className="mt-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold text-slate-900">Import Selesai</h3>
+            <h3 className="font-semibold text-slate-900">Import summary</h3>
             <button
               type="button"
               onClick={() => setImportResults(null)}
@@ -170,15 +173,15 @@ export function MasterDataSettingsClient() {
           </div>
           <div className="divide-y divide-slate-100">
             <div className="flex items-center justify-between py-1.5">
-              <span className="text-sm text-slate-600">✓ Dibuat</span>
+              <span className="text-sm text-slate-600">Created</span>
               <span className="tabular-nums font-semibold text-emerald-700">{importResults.created}</span>
             </div>
             <div className="flex items-center justify-between py-1.5">
-              <span className="text-sm text-slate-600">↻ Diperbarui</span>
+              <span className="text-sm text-slate-600">Updated</span>
               <span className="tabular-nums font-semibold text-sky-700">{importResults.updated}</span>
             </div>
             <div className="flex items-center justify-between py-1.5">
-              <span className="text-sm text-slate-600">✗ Error</span>
+              <span className="text-sm text-slate-600">Errors</span>
               <span className="tabular-nums font-semibold text-red-600">{importResults.errors}</span>
             </div>
             <div className="flex items-center justify-between py-1.5 font-semibold">
@@ -194,7 +197,7 @@ export function MasterDataSettingsClient() {
                 className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800"
               >
                 {showErrors ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-                {showErrors ? "Sembunyikan" : "Lihat"} error detail
+                {showErrors ? "Hide" : "Show"} error details
               </button>
               {showErrors && (
                 <ul className="mt-2 max-h-40 overflow-y-auto rounded bg-slate-50 p-2 text-xs text-red-600">
@@ -213,11 +216,13 @@ export function MasterDataSettingsClient() {
               onClick={() => setImportResults(null)}
               className={UI_ENGINE_RADIUS_ACTION}
             >
-              Tutup
+              Close
             </Button>
           </div>
         </div>
       )}
-    </DashboardPageShell>
+        </>
+      }
+    />
   );
 }

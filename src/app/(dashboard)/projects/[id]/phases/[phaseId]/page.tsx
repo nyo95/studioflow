@@ -6,10 +6,16 @@ import { PhaseActions } from "@/components/phase-actions";
 import { ActivityManager } from "@/components/activity-manager";
 import { CDListTable } from "@/components/cd-list-table";
 import { PhaseChecklist } from "@/components/phase-checklist";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/ui_engine";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/ui_engine";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui_engine";
 import {
-  DashboardPageShell,
+  WorkspaceTemplate,
   PageBackLink,
   PageHeader,
   Heading,
@@ -17,21 +23,25 @@ import {
   ActionSidebarSection,
 } from "@/ui_engine";
 import { PhaseLiveProvider } from "@/components/phase-live-provider";
-import {
-  PhaseReadingLine,
-  PhaseProgressBar,
-} from "@/components/phase-reading";
+import { PhaseReadingLine, PhaseProgressBar } from "@/components/phase-reading";
 import {
   PhaseLockNotice,
   PhaseRunningAheadBadge,
 } from "@/components/phase-lock-notice";
-import { readPhase, readPhaseProgress, formatPhaseLabel } from "@/lib/domain/phase-presenter";
+import {
+  readPhase,
+  readPhaseProgress,
+  formatPhaseLabel,
+} from "@/lib/domain/phase-presenter";
 import { explainPhaseLock } from "@/lib/domain/phase-lock";
 import { getSession } from "@/lib/auth";
 import { PhaseName, Role } from "@/generated/prisma";
 
 import { getPhaseHeartbeatSnapshot } from "@/lib/phase-heartbeat";
-import { CHECKLIST_TASK_ORDER_BY, CHECKLIST_TASK_SELECT } from "@/lib/services/checklist-task";
+import {
+  CHECKLIST_TASK_ORDER_BY,
+  CHECKLIST_TASK_SELECT,
+} from "@/lib/services/checklist-task";
 import { PROJECT_MEMBER_FETCH_LIMIT } from "@/lib/constants";
 import { HydrationGuard } from "@/ui_engine/components/HydrationGuard";
 import { AdminRevisionOverride } from "@/components/admin-revision-override";
@@ -47,7 +57,7 @@ export const generateStaticParams = async () => {
 export default async function PhaseDetailPage({
   params,
 }: {
-  params: Promise<{ id: string; phaseId: string }>
+  params: Promise<{ id: string; phaseId: string }>;
 }) {
   const { id: projectId, phaseId } = await params;
   const { userId, role } = await getSession();
@@ -62,8 +72,8 @@ export default async function PhaseDetailPage({
       status_progress: true,
       client: {
         select: {
-          name: true
-        }
+          name: true,
+        },
       },
       phases: {
         select: {
@@ -72,10 +82,10 @@ export default async function PhaseDetailPage({
           // name_enum + status_changed_at feed explainPhaseLock, which names the
           // blocking phase and reports how long it has been where it is.
           name_enum: true,
-          status_changed_at: true
+          status_changed_at: true,
         },
-        orderBy: { order_index: "asc" }
-      }
+        orderBy: { order_index: "asc" },
+      },
     },
   });
 
@@ -93,11 +103,7 @@ export default async function PhaseDetailPage({
           },
           files: true,
         },
-        orderBy: [
-          { created_at: "desc" },
-          { major: "desc" },
-          { minor: "desc" },
-        ],
+        orderBy: [{ created_at: "desc" }, { major: "desc" }, { minor: "desc" }],
       },
       // Ordering comes from checklist-task.ts so this and the heartbeat poll
       // agree. Previously `{ id: "asc" }` over a UUID — no order at all, and
@@ -136,17 +142,20 @@ export default async function PhaseDetailPage({
   const canManagePhase =
     isAdminLevel(role) ||
     (role === Role.DIC && userId === project.pic_designer_id) ||
-    (phase.name_enum === "CD" && role === Role.DRIC && userId === project.pic_drafter_id);
-  
+    (phase.name_enum === "CD" &&
+      role === Role.DRIC &&
+      userId === project.pic_drafter_id);
+
   const canMutateContent =
     isAdminLevel(role) ||
     (phase.name_enum === "CD"
-      ? (userId === project.pic_drafter_id || userId === project.pic_designer_id)
+      ? userId === project.pic_drafter_id || userId === project.pic_designer_id
       : role === Role.DIC && userId === project.pic_designer_id);
 
   const canOverride =
-    isAdminLevel(role) || (role === Role.DIC && userId === project.pic_designer_id);
-  
+    isAdminLevel(role) ||
+    (role === Role.DIC && userId === project.pic_designer_id);
+
   const initialSnapshot = await getPhaseHeartbeatSnapshot(phaseId);
   const session = await getSession();
   const currentUserName = session.user?.name || "User";
@@ -175,9 +184,14 @@ export default async function PhaseDetailPage({
       ? userId === project.pic_drafter_id
       : userId === project.pic_designer_id);
 
-  const activeRevision = phase.revisions.find((revision) => revision.status_enum === "ACTIVE") || phase.revisions[0];
-  const archivedRevisions = phase.revisions.filter((revision) => revision.id !== activeRevision?.id);
-  const hasOngoingTasks = activeRevision?.activities?.some((a) => a.status === "OPEN") ?? false;
+  const activeRevision =
+    phase.revisions.find((revision) => revision.status_enum === "ACTIVE") ||
+    phase.revisions[0];
+  const archivedRevisions = phase.revisions.filter(
+    (revision) => revision.id !== activeRevision?.id,
+  );
+  const hasOngoingTasks =
+    activeRevision?.activities?.some((a) => a.status === "OPEN") ?? false;
 
   // One clock for the whole render. Reading it per component would let two
   // durations on the same page disagree by a few milliseconds across a day
@@ -193,12 +207,17 @@ export default async function PhaseDetailPage({
     activities: [...(activeRevision?.activities ?? []), ...deferredActivities],
   });
 
-  const previousPhase = project.phases.find((p) => p.order_index === phase.order_index - 1) ?? null;
+  const previousPhase =
+    project.phases.find((p) => p.order_index === phase.order_index - 1) ?? null;
   const lockExplanation = explainPhaseLock(phase, previousPhase, now);
 
   const reviewPanel = (
     <section className="space-y-8">
-      <Heading variant="uiMeta" level={2} className="mb-6 flex items-center gap-4">
+      <Heading
+        variant="uiMeta"
+        level={2}
+        className="mb-6 flex items-center gap-4"
+      >
         Active Iteration Review
         <div className="h-px flex-1 bg-zinc-100" />
       </Heading>
@@ -208,7 +227,9 @@ export default async function PhaseDetailPage({
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
             <ActivityManager
               revisionId={activeRevision.id}
-              isLocked={phase.is_locked || activeRevision.status_enum !== "ACTIVE"}
+              isLocked={
+                phase.is_locked || activeRevision.status_enum !== "ACTIVE"
+              }
               phaseStatus={phase.status_enum}
               phaseName={phase.name_enum as PhaseName}
               userId={userId}
@@ -219,7 +240,9 @@ export default async function PhaseDetailPage({
         ) : (
           <div className="rounded-2xl border-2 border-dashed border-zinc-100 bg-zinc-50/10 py-20 text-center font-sans text-slate-400">
             <Clock className="mx-auto mb-4 h-10 w-10 opacity-20" />
-            <p className="text-sm font-light">No iterations created for this phase yet.</p>
+            <p className="text-sm font-light">
+              No iterations created for this phase yet.
+            </p>
           </div>
         )}
       </HydrationGuard>
@@ -227,109 +250,142 @@ export default async function PhaseDetailPage({
   );
 
   return (
-    <DashboardPageShell>
-      <PhaseLiveProvider phaseId={phaseId} initialSnapshot={initialSnapshot}>
-        <PageBackLink />
+    <PhaseLiveProvider phaseId={phaseId} initialSnapshot={initialSnapshot}>
+      <WorkspaceTemplate
+        header={
+          <>
+            <PageBackLink />
 
-        <PageHeader
-          title={formatPhaseLabel(phase.name_enum)}
-          description={`${project.client?.name || "No Client Assigned"}`}
-          divider={false}
-          className="mb-6"
-          /* Replaces the raw `<StatusBadge status={phase.status_enum} />` and the
-             bare "LOCKED" chip that used to sit in the action row. Both stated
-             machine state without answering the two questions people actually
-             have — whose court the phase is in, and for how long. The lock is
-             now explained in full by PhaseLockNotice below rather than asserted
-             here in three uppercase letters. */
-          meta={
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <PhaseReadingLine
-                reading={phaseReading}
-                progress={phaseProgress}
-                /* "v6.0", matching the Rev column in the project page matrix.
-                   Two notations for one number is the same class of confusion
-                   this pass exists to remove. */
-                revisionLabel={activeRevision ? `v${activeRevision.major}.${activeRevision.minor}` : null}
-              />
-              {lockExplanation.isRunningAhead ? <PhaseRunningAheadBadge /> : null}
-            </div>
-          }
-          action={
-            <div className="flex flex-wrap items-center gap-3">
-              {archivedRevisions.length > 0 && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex h-8 items-center justify-center rounded-[var(--ui-radius-action)] border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:bg-zinc-100 hover:text-slate-900 focus-visible:outline-none cursor-pointer"
-                    >
-                      <Clock className="mr-2 h-3.5 w-3.5" strokeWidth={1.5} />
-                      History ({archivedRevisions.length})
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md border-slate-200 bg-white rounded-[var(--ui-radius-card)]">
-                    <DialogHeader>
-                      <DialogTitle className="border-b border-slate-100 pb-4 font-serif text-xl font-bold text-black">Revision History</DialogTitle>
-                    </DialogHeader>
-                    <div className="mt-4 flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-2">
-                      {archivedRevisions.map((revision) => (
-                        <div key={revision.id} className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50/50 p-4 transition-colors hover:bg-zinc-50">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900 font-sans">Revision {revision.major}.{revision.minor}</p>
-                            <p className="mt-1 text-xs text-slate-500 font-sans">{revision.activities.length} Activities, {revision.files.length} Files</p>
-                          </div>
-                          <Badge variant="secondary" className="bg-zinc-200/50 text-zinc-600 hover:bg-zinc-200/50 rounded-[var(--ui-radius-action)]">ARCHIVED</Badge>
+            <PageHeader
+              title={formatPhaseLabel(phase.name_enum)}
+              description={`${project.client?.name || "No Client Assigned"}`}
+              divider={false}
+              className="mb-6"
+              /* Replaces the raw `<StatusBadge status={phase.status_enum} />` and the
+                 bare "LOCKED" chip that used to sit in the action row. Both stated
+                 machine state without answering the two questions people actually
+                 have — whose court the phase is in, and for how long. The lock is
+                 now explained in full by PhaseLockNotice below rather than asserted
+                 here in three uppercase letters. */
+              meta={
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <PhaseReadingLine
+                    reading={phaseReading}
+                    progress={phaseProgress}
+                    /* "v6.0", matching the Rev column in the project page matrix.
+                       Two notations for one number is the same class of confusion
+                       this pass exists to remove. */
+                    revisionLabel={
+                      activeRevision
+                        ? `v${activeRevision.major}.${activeRevision.minor}`
+                        : null
+                    }
+                  />
+                  {lockExplanation.isRunningAhead ? (
+                    <PhaseRunningAheadBadge />
+                  ) : null}
+                </div>
+              }
+              action={
+                <div className="flex flex-wrap items-center gap-3">
+                  {archivedRevisions.length > 0 && (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 cursor-pointer items-center justify-center rounded-[var(--ui-radius-action)] border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:bg-zinc-100 hover:text-slate-900 focus-visible:outline-none"
+                        >
+                          <Clock
+                            className="mr-2 h-3.5 w-3.5"
+                            strokeWidth={1.5}
+                          />
+                          History ({archivedRevisions.length})
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-md rounded-[var(--ui-radius-card)] border-slate-200 bg-white">
+                        <DialogHeader>
+                          <DialogTitle className="border-b border-slate-100 pb-4 font-serif text-xl font-bold text-black">
+                            Revision History
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="mt-4 flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-2">
+                          {archivedRevisions.map((revision) => (
+                            <div
+                              key={revision.id}
+                              className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50/50 p-4 transition-colors hover:bg-zinc-50"
+                            >
+                              <div>
+                                <p className="font-sans text-sm font-semibold text-slate-900">
+                                  Revision {revision.major}.{revision.minor}
+                                </p>
+                                <p className="mt-1 font-sans text-xs text-slate-500">
+                                  {revision.activities.length} Activities,{" "}
+                                  {revision.files.length} Files
+                                </p>
+                              </div>
+                              <Badge
+                                variant="secondary"
+                                className="rounded-[var(--ui-radius-action)] bg-zinc-200/50 text-zinc-600 hover:bg-zinc-200/50"
+                              >
+                                ARCHIVED
+                              </Badge>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-              
-              {canOverride && activeRevision && activeRevision.activities.length === 0 && (
-                <AdminRevisionOverride 
-                  phaseId={phase.id}
-                  currentVersion={{
-                    major: activeRevision.major,
-                    minor: activeRevision.minor,
-                  }}
-                />
-              )}
-              
-              <PhaseActions
-                phaseId={phase.id}
-                status={phase.status_enum}
-                isLocked={phase.is_locked}
-                nameEnum={phase.name_enum}
-                userId={userId}
-                userRole={role as Role}
-                canMutate={canManagePhase}
-                isReadyToStart={isReadyToStart}
-                hasHistory={phase.revisions.length > 0}
-                hasOngoingTasks={hasOngoingTasks}
-              />
-            </div>
-          }
-        />
+                      </DialogContent>
+                    </Dialog>
+                  )}
 
-        {/* Sits ABOVE the content, never in place of it. A locked phase stays
-            fully readable — most people opening one only want to look. */}
-        {lockExplanation.isBlocked ? (
-          <PhaseLockNotice explanation={lockExplanation} className="mb-8" />
-        ) : null}
+                  {canOverride &&
+                  activeRevision &&
+                  activeRevision.activities.length === 0 ? (
+                    <AdminRevisionOverride
+                      phaseId={phase.id}
+                      currentVersion={{
+                        major: activeRevision.major,
+                        minor: activeRevision.minor,
+                      }}
+                    />
+                  ) : null}
 
-        <div className="grid grid-cols-1 gap-10 xl:grid-cols-12">
-          <div className="space-y-8 xl:col-span-8">
+                  <PhaseActions
+                    phaseId={phase.id}
+                    status={phase.status_enum}
+                    isLocked={phase.is_locked}
+                    nameEnum={phase.name_enum}
+                    userId={userId}
+                    userRole={role as Role}
+                    canMutate={canManagePhase}
+                    isReadyToStart={isReadyToStart}
+                    hasHistory={phase.revisions.length > 0}
+                    hasOngoingTasks={hasOngoingTasks}
+                  />
+                </div>
+              }
+            />
 
-
+            {/* Sits ABOVE the content, never in place of it. A locked phase stays
+                fully readable — most people opening one only want to look. */}
+            {lockExplanation.isBlocked ? (
+              <PhaseLockNotice explanation={lockExplanation} className="mb-8" />
+            ) : null}
+          </>
+        }
+        primary={
+          <>
             {phase.name_enum === "CD" ? (
               <Tabs defaultValue="review" className="w-full">
                 <TabsList className="grid h-auto w-full grid-cols-2 border border-slate-200 bg-slate-50 p-1 mb-8">
-                  <TabsTrigger value="review" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
+                  <TabsTrigger
+                    value="review"
+                    className="py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+                  >
                     Active Review
                   </TabsTrigger>
-                  <TabsTrigger value="cd-list" className="py-2 text-xs font-semibold uppercase tracking-[0.18em]">
+                  <TabsTrigger
+                    value="cd-list"
+                    className="py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+                  >
                     CD List
                   </TabsTrigger>
                 </TabsList>
@@ -350,10 +406,14 @@ export default async function PhaseDetailPage({
             ) : (
               reviewPanel
             )}
-          </div>
-
+          </>
+        }
+        secondary={
           <ActionSidebar className="xl:col-span-4">
-            <ActionSidebarSection title="Phase Requirements" subtitle="Checklist items">
+            <ActionSidebarSection
+              title="Phase Requirements"
+              subtitle="Checklist items"
+            >
               {/* Same numbers as the header line, drawn. Counts checklist items
                   and open tasks together because approval is gated on both. */}
               <PhaseProgressBar progress={phaseProgress} className="mb-4" />
@@ -370,15 +430,17 @@ export default async function PhaseDetailPage({
                 />
               </HydrationGuard>
             </ActionSidebarSection>
-            
+
             <ActionSidebarSection title="Internal Notes" subtitle="Guidelines">
               <p className="font-sans text-xs font-light leading-relaxed text-slate-500 italic">
-                &quot;Ensure all checklist items above are resolved before submitting for formal internal review. Formal client approval will lock the phase.&quot;
+                &quot;Ensure all checklist items above are resolved before
+                submitting for formal internal review. Formal client approval
+                will lock the phase.&quot;
               </p>
             </ActionSidebarSection>
           </ActionSidebar>
-        </div>
-      </PhaseLiveProvider>
-    </DashboardPageShell>
+        }
+      />
+    </PhaseLiveProvider>
   );
 }

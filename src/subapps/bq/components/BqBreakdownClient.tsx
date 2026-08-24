@@ -37,7 +37,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle,
   BookOpen,
   ChevronDown,
   ChevronRight,
@@ -46,16 +45,15 @@ import {
   LockOpen,
   Package,
   Plus,
-  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Button,
-  DashboardPageShell,
   Input,
   PageHeader,
   SectionCard,
+  SpreadsheetTemplate,
   StatusBadge,
   UI_ENGINE_RADIUS_CONTROL,
 } from "@/ui_engine";
@@ -74,9 +72,6 @@ import {
   deleteBqObjectAction,
   deleteBqServiceLineAction,
   deleteBqSubObjectAction,
-  overrideBqMaterialLineSnapshotAction,
-  refreshBqMaterialLineSnapshotAction,
-  refreshBqServiceLineSnapshotAction,
   setBqObjectLockAction,
   updateBqMaterialLineAction,
   updateBqObjectAction,
@@ -118,7 +113,7 @@ function useMutate() {
       void router.refresh();
       return true;
     },
-    [router]
+    [router],
   );
 
   return { run, pending };
@@ -194,7 +189,11 @@ function NumberCell({
         className={cn("h-7 w-20 px-2 text-right font-sans text-xs", className)}
         inputMode="decimal"
       />
-      {suffix ? <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{suffix}</span> : null}
+      {suffix ? (
+        <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+          {suffix}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -257,7 +256,9 @@ export function BqBreakdownClient({
   // dalam keadaan terbuka, dan "default tertutup" berhenti berlaku persis
   // saat estimator paling butuh pandangan klien.
   const [openObjects, setOpenObjects] = React.useState<Set<string>>(new Set());
-  const [openSubObjects, setOpenSubObjects] = React.useState<Set<string>>(new Set());
+  const [openSubObjects, setOpenSubObjects] = React.useState<Set<string>>(
+    new Set(),
+  );
   const [newObjectName, setNewObjectName] = React.useState("");
 
   const toggle = React.useCallback(
@@ -269,29 +270,32 @@ export function BqBreakdownClient({
         return next;
       });
     },
-    []
+    [],
   );
 
   /** FR-EXP-04 — per object, bukan global. Expand All global pada project
    *  berisi 30 object menghasilkan ratusan baris sekaligus, dan tidak ada
    *  requirement yang memintanya. */
-  const expandObject = React.useCallback((object: BqObjectView, expand: boolean) => {
-    const subIds = object.subObjects.map((s) => s.id);
-    setOpenObjects((prev) => {
-      const next = new Set(prev);
-      if (expand) next.add(object.computed.objectId);
-      else next.delete(object.computed.objectId);
-      return next;
-    });
-    setOpenSubObjects((prev) => {
-      const next = new Set(prev);
-      for (const id of subIds) {
-        if (expand) next.add(id);
-        else next.delete(id);
-      }
-      return next;
-    });
-  }, []);
+  const expandObject = React.useCallback(
+    (object: BqObjectView, expand: boolean) => {
+      const subIds = object.subObjects.map((s) => s.id);
+      setOpenObjects((prev) => {
+        const next = new Set(prev);
+        if (expand) next.add(object.computed.objectId);
+        else next.delete(object.computed.objectId);
+        return next;
+      });
+      setOpenSubObjects((prev) => {
+        const next = new Set(prev);
+        for (const id of subIds) {
+          if (expand) next.add(id);
+          else next.delete(id);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const handleAddObject = React.useCallback(async () => {
     if (!newObjectName.trim()) {
@@ -299,209 +303,133 @@ export function BqBreakdownClient({
       return;
     }
     const ok = await run(
-      () => createBqObjectAction({ projectId: view.project.id, name: newObjectName }),
-      "Object added."
+      () =>
+        createBqObjectAction({
+          projectId: view.project.id,
+          name: newObjectName,
+        }),
+      "Object added.",
     );
     if (ok) setNewObjectName("");
   }, [newObjectName, run, view.project.id]);
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        eyebrow={view.project.code ? `BQ · ${view.project.code}` : "BQ"}
-        title={view.project.name}
-        description="Closed rows read like a client BQ. Open them to see how each rate was reached."
-        meta={
-          <>
-            <StatusBadge status={view.project.status} tone={statusToTone(view.project.status)} />
-            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
-              {view.objects.length} {view.objects.length === 1 ? "object" : "objects"}
-            </span>
-          </>
-        }
-      />
+    <SpreadsheetTemplate
+      header={
+        <PageHeader
+          eyebrow={view.project.code ? `BQ · ${view.project.code}` : "BQ"}
+          title={view.project.name}
+          description="Closed rows read like a client BQ. Open them to see how each rate was reached."
+          meta={
+            <>
+              <StatusBadge
+                status={view.project.status}
+                tone={statusToTone(view.project.status)}
+              />
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
+                {view.objects.length}{" "}
+                {view.objects.length === 1 ? "object" : "objects"}
+              </span>
+            </>
+          }
+        />
+      }
+      grid={
+        <>
+          {/* ------------------------------------------------------------------ */}
+          {/* Grand total — pandangan klien                                      */}
+          {/* ------------------------------------------------------------------ */}
+          <SectionCard className="mb-4" padding="md">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                  Grand total
+                </p>
+                <p className="font-serif text-3xl font-semibold text-slate-900">
+                  {formatIdr(view.totals.grandTotal)}
+                </p>
+              </div>
+              {/* Biaya pokok dan markup TIDAK PERNAH tercetak ke klien (PRD §3.4)
+                  — ia muncul di sini karena layar ini internal, dan disembunyikan
+                  dari siapa pun yang tidak memegang izin markup. */}
+              {canEditMarkup ? (
+                <div className="flex gap-6">
+                  <div>
+                    <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                      Base cost
+                    </p>
+                    <p className="font-sans text-sm font-medium text-slate-700">
+                      {formatIdr(view.totals.baseCost)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                      Markup
+                    </p>
+                    <p className="font-sans text-sm font-medium text-slate-700">
+                      {formatIdr(view.totals.markupAmount)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </SectionCard>
 
-      {view.drift.objects.length > 0 ? <DriftBanner view={view} canEdit={canEdit} run={run} /> : null}
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Grand total — pandangan klien                                      */}
-      {/* ------------------------------------------------------------------ */}
-      <SectionCard className="mb-4" padding="md">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Grand total</p>
-            <p className="font-serif text-3xl font-semibold text-slate-900">
-              {formatIdr(view.totals.grandTotal)}
-            </p>
+          {/* ------------------------------------------------------------------ */}
+          {/* L1                                                                  */}
+          {/* ------------------------------------------------------------------ */}
+          <div className="space-y-3">
+            {view.objects.map((object) => (
+              <ObjectRow
+                key={object.computed.objectId}
+                object={object}
+                isOpen={openObjects.has(object.computed.objectId)}
+                openSubObjects={openSubObjects}
+                onToggle={() =>
+                  toggle(setOpenObjects, object.computed.objectId)
+                }
+                onToggleSub={(id) => toggle(setOpenSubObjects, id)}
+                onExpandAll={(expand) => expandObject(object, expand)}
+                canEdit={canEdit}
+                canEditMarkup={canEditMarkup}
+                run={run}
+                pending={pending}
+              />
+            ))}
           </div>
-          {/* Biaya pokok dan markup TIDAK PERNAH tercetak ke klien (PRD §3.4)
-              — ia muncul di sini karena layar ini internal, dan disembunyikan
-              dari siapa pun yang tidak memegang izin markup. */}
-          {canEditMarkup ? (
-            <div className="flex gap-6">
-              <div>
-                <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Base cost</p>
-                <p className="font-sans text-sm font-medium text-slate-700">
-                  {formatIdr(view.totals.baseCost)}
-                </p>
-              </div>
-              <div>
-                <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Markup</p>
-                <p className="font-sans text-sm font-medium text-slate-700">
-                  {formatIdr(view.totals.markupAmount)}
-                </p>
-              </div>
+
+          {canEdit ? (
+            <div className="mt-4 flex items-center gap-2">
+              <Input
+                value={newObjectName}
+                onChange={(e) => setNewObjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleAddObject();
+                  }
+                }}
+                placeholder="New object — e.g. Counter Cabinet CC-1"
+                className="max-w-sm"
+              />
+              <Button
+                variant="outline"
+                onClick={handleAddObject}
+                disabled={pending}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add object
+              </Button>
             </div>
           ) : null}
+        </>
+      }
+      summary={
+        <div className="mt-8">
+          <BqPurchaseSummary summary={view.purchase} />
         </div>
-      </SectionCard>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* L1                                                                  */}
-      {/* ------------------------------------------------------------------ */}
-      <div className="space-y-3">
-        {view.objects.map((object) => (
-          <ObjectRow
-            key={object.computed.objectId}
-            object={object}
-            isOpen={openObjects.has(object.computed.objectId)}
-            openSubObjects={openSubObjects}
-            onToggle={() => toggle(setOpenObjects, object.computed.objectId)}
-            onToggleSub={(id) => toggle(setOpenSubObjects, id)}
-            onExpandAll={(expand) => expandObject(object, expand)}
-            canEdit={canEdit}
-            canEditMarkup={canEditMarkup}
-            run={run}
-            pending={pending}
-          />
-        ))}
-      </div>
-
-      {canEdit ? (
-        <div className="mt-4 flex items-center gap-2">
-          <Input
-            value={newObjectName}
-            onChange={(e) => setNewObjectName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void handleAddObject();
-              }
-            }}
-            placeholder="New object — e.g. Counter Cabinet CC-1"
-            className="max-w-sm"
-          />
-          <Button variant="outline" onClick={handleAddObject} disabled={pending}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add object
-          </Button>
-        </div>
-      ) : null}
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Purchase Summary                                                    */}
-      {/* ------------------------------------------------------------------ */}
-      <div className="mt-8">
-        <BqPurchaseSummary summary={view.purchase} />
-      </div>
-
-    </DashboardPageShell>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Banner drift — PRD §5.4
-// ---------------------------------------------------------------------------
-
-/**
- * *"Harga master berubah → banner, bukan angka yang berubah sendiri."*
- *
- * Tombol Review ada PER BARIS, tidak ada "apply all". PRD §5.4 meminta
- * perubahan *"boleh diterapkan sebagian"*, dan sebuah tombol massal adalah
- * tombol yang ditekan orang tanpa membaca — sesudah itu larangan silent update
- * cuma tinggal namanya.
- */
-function DriftBanner({
-  view,
-  canEdit,
-  run,
-}: {
-  view: BqProjectView;
-  canEdit: boolean;
-  run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const totalCount = view.drift.objects.reduce((sum, o) => sum + o.driftedLines.length, 0);
-
-  return (
-    <div
-      className={cn(
-        "mb-4 border border-amber-200 bg-amber-50 px-4 py-3",
-        UI_ENGINE_RADIUS_CONTROL
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 text-left"
-      >
-        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-        <span className="font-sans text-sm font-medium text-amber-900">
-          {totalCount} {totalCount === 1 ? "line differs" : "lines differ"} from Master Data
-        </span>
-        <span className={cn(UI_ENGINE_TYPE_META, "text-amber-700")}>
-          Review and apply per line.
-        </span>
-        {open ? (
-          <ChevronDown className="ml-auto h-4 w-4 text-amber-600" />
-        ) : (
-          <ChevronRight className="ml-auto h-4 w-4 text-amber-600" />
-        )}
-      </button>
-
-      {view.drift.skippedLockedObjectCount > 0 ? (
-        <p className={cn(UI_ENGINE_TYPE_META, "mt-1 pl-6 text-amber-700")}>
-          {view.drift.skippedLockedObjectCount} locked{" "}
-          {view.drift.skippedLockedObjectCount === 1 ? "object is" : "objects are"} not checked.
-        </p>
-      ) : null}
-
-      {open ? (
-        <ul className="mt-3 space-y-2 border-t border-amber-200 pt-3">
-          {view.drift.objects.map((obj) => (
-            <li key={obj.objectId} className="space-y-1">
-              <p className="font-sans text-xs font-semibold text-amber-900">{obj.objectName}</p>
-              {obj.driftedLines.map((dl) => (
-                <div key={dl.lineId} className="flex items-center gap-2 pl-4">
-                  <span className={cn(UI_ENGINE_TYPE_META, "text-amber-800")}>
-                    {dl.lineKind === "MATERIAL" ? "Material" : "Service"} line drifted
-                  </span>
-                  {canEdit ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="ml-auto h-7"
-                      onClick={() =>
-                        run(
-                          () =>
-                            dl.lineKind === "MATERIAL"
-                              ? refreshBqMaterialLineSnapshotAction({ id: dl.lineId })
-                              : refreshBqServiceLineSnapshotAction({ id: dl.lineId }),
-                          "Line updated from Master Data."
-                        )
-                      }
-                    >
-                      <RefreshCw className="mr-1.5 h-3 w-3" />
-                      Apply
-                    </Button>
-                  ) : null}
-                </div>
-              ))}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+      }
+    />
   );
 }
 
@@ -538,7 +466,12 @@ function ObjectRow({
   const [newSubName, setNewSubName] = React.useState("");
 
   return (
-    <div className={cn("border border-slate-200 bg-white", UI_ENGINE_RADIUS_CONTROL)}>
+    <div
+      className={cn(
+        "border border-slate-200 bg-white",
+        UI_ENGINE_RADIUS_CONTROL,
+      )}
+    >
       {/* ---- FR-EXP-01: baris tertutup = satu baris BQ ------------------- */}
       <div className="flex flex-wrap items-center gap-3 px-4 py-3">
         <button
@@ -554,10 +487,16 @@ function ObjectRow({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               {c.code ? (
-                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{c.code}</span>
+                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                  {c.code}
+                </span>
               ) : null}
-              <span className="truncate font-sans text-sm font-medium text-slate-900">{c.name}</span>
-              {locked ? <Lock className="h-3 w-3 shrink-0 text-slate-400" /> : null}
+              <span className="truncate font-sans text-sm font-medium text-slate-900">
+                {c.name}
+              </span>
+              {locked ? (
+                <Lock className="h-3 w-3 shrink-0 text-slate-400" />
+              ) : null}
             </div>
             {/* FR-EXP-08 — tertutup pun tetap tahu isinya. */}
             <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
@@ -574,7 +513,9 @@ function ObjectRow({
             </p>
           </div>
           <div>
-            <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Rate / unit</p>
+            <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+              Rate / unit
+            </p>
             <p className="font-sans text-sm font-medium text-slate-900">
               {formatIdr(c.ratePerUnit)}
             </p>
@@ -594,53 +535,80 @@ function ObjectRow({
           {/* Kontrol object */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-slate-50/60 px-4 py-2.5">
             <label className="flex items-center gap-2">
-              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>Qty</span>
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
+                Qty
+              </span>
               <NumberCell
                 value={c.qty}
                 disabled={!editable || pending}
                 onCommit={(next) =>
                   next !== null &&
                   next > 0 &&
-                  void run(() => updateBqObjectAction({ id: c.objectId, qty: next }))
+                  void run(() =>
+                    updateBqObjectAction({ id: c.objectId, qty: next }),
+                  )
                 }
               />
             </label>
 
             {canEditMarkup ? (
               <label className="flex items-center gap-2">
-                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>Markup</span>
+                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
+                  Markup
+                </span>
                 <NumberCell
                   value={c.markupPct * 100}
                   suffix="%"
                   disabled={!editable || pending}
                   onCommit={(next) =>
                     next !== null &&
-                    void run(() => updateBqObjectAction({ id: c.objectId, markupPct: next }))
+                    void run(() =>
+                      updateBqObjectAction({ id: c.objectId, markupPct: next }),
+                    )
                   }
                 />
               </label>
             ) : null}
 
             <label className="flex items-center gap-2">
-              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>Waste override</span>
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
+                Waste override
+              </span>
               <NumberCell
-                value={object.wasteOverridePct === null ? null : object.wasteOverridePct * 100}
+                value={
+                  object.wasteOverridePct === null
+                    ? null
+                    : object.wasteOverridePct * 100
+                }
                 suffix="%"
                 placeholder="—"
                 disabled={!editable || pending}
                 onCommit={(next) =>
                   void run(() =>
-                    updateBqObjectAction({ id: c.objectId, wasteOverridePct: next })
+                    updateBqObjectAction({
+                      id: c.objectId,
+                      wasteOverridePct: next,
+                    }),
                   )
                 }
               />
             </label>
 
             <div className="ml-auto flex items-center gap-2">
-              <Button size="sm" variant="ghost" className="h-7" onClick={() => onExpandAll(true)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7"
+                onClick={() => onExpandAll(true)}
+              >
                 Expand all
               </Button>
-              <Button size="sm" variant="ghost" className="h-7" onClick={() => onExpandAll(false)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7"
+                onClick={() => onExpandAll(false)}
+              >
                 Collapse all
               </Button>
               {canEdit ? (
@@ -651,12 +619,20 @@ function ObjectRow({
                   disabled={pending}
                   onClick={() =>
                     void run(
-                      () => setBqObjectLockAction({ id: c.objectId, locked: !locked }),
-                      locked ? "Object unlocked." : "Object locked."
+                      () =>
+                        setBqObjectLockAction({
+                          id: c.objectId,
+                          locked: !locked,
+                        }),
+                      locked ? "Object unlocked." : "Object locked.",
                     )
                   }
                 >
-                  {locked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                  {locked ? (
+                    <LockOpen className="h-3.5 w-3.5" />
+                  ) : (
+                    <Lock className="h-3.5 w-3.5" />
+                  )}
                 </Button>
               ) : null}
               {editable ? (
@@ -666,7 +642,10 @@ function ObjectRow({
                   className="h-7 text-red-600 hover:text-red-700"
                   disabled={pending}
                   onClick={() =>
-                    void run(() => deleteBqObjectAction({ id: c.objectId }), "Object removed.")
+                    void run(
+                      () => deleteBqObjectAction({ id: c.objectId }),
+                      "Object removed.",
+                    )
                   }
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -678,7 +657,9 @@ function ObjectRow({
           {/* ---- FR-EXP-02: L2 -------------------------------------------- */}
           <div className="divide-y divide-slate-100">
             {object.subObjects.map((sub) => {
-              const computedSub = c.subObjects.find((s) => s.subObjectId === sub.id);
+              const computedSub = c.subObjects.find(
+                (s) => s.subObjectId === sub.id,
+              );
               if (!computedSub) return null;
               return (
                 <SubObjectRow
@@ -704,8 +685,12 @@ function ObjectRow({
                   if (e.key === "Enter" && newSubName.trim()) {
                     e.preventDefault();
                     void run(
-                      () => createBqSubObjectAction({ objectId: c.objectId, name: newSubName }),
-                      "Sub-object added."
+                      () =>
+                        createBqSubObjectAction({
+                          objectId: c.objectId,
+                          name: newSubName,
+                        }),
+                      "Sub-object added.",
                     ).then((ok) => ok && setNewSubName(""));
                   }
                 }}
@@ -719,8 +704,12 @@ function ObjectRow({
                 disabled={pending || !newSubName.trim()}
                 onClick={() =>
                   void run(
-                    () => createBqSubObjectAction({ objectId: c.objectId, name: newSubName }),
-                    "Sub-object added."
+                    () =>
+                      createBqSubObjectAction({
+                        objectId: c.objectId,
+                        name: newSubName,
+                      }),
+                    "Sub-object added.",
                   ).then((ok) => ok && setNewSubName(""))
                 }
               >
@@ -765,7 +754,11 @@ function SubObjectRow({
     // FR-EXP-07: kedalaman ditandai indentasi + garis kiri + warna latar.
     <div className="pl-6">
       <div className="flex flex-wrap items-center gap-3 border-l-2 border-slate-200 py-2 pl-4 pr-4">
-        <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
           {isOpen ? (
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           ) : (
@@ -773,12 +766,22 @@ function SubObjectRow({
           )}
           {/* R2 — ⧉ indicates linked instance, ◇ indicates standalone */}
           <span
-            className={cn(UI_ENGINE_TYPE_META, "shrink-0", isLinked ? "text-indigo-500" : "text-slate-300")}
-            title={isLinked ? `Linked to library template` : "Standalone — not linked to library"}
+            className={cn(
+              UI_ENGINE_TYPE_META,
+              "shrink-0",
+              isLinked ? "text-indigo-500" : "text-slate-300",
+            )}
+            title={
+              isLinked
+                ? `Linked to library template`
+                : "Standalone — not linked to library"
+            }
           >
             {isLinked ? "⧉" : "◇"}
           </span>
-          <span className="truncate font-sans text-sm text-slate-800">{sub.name}</span>
+          <span className="truncate font-sans text-sm text-slate-800">
+            {sub.name}
+          </span>
           <span className={cn(UI_ENGINE_TYPE_META, "shrink-0 text-slate-400")}>
             {computed.lineCount} {computed.lineCount === 1 ? "line" : "lines"}
           </span>
@@ -806,7 +809,10 @@ function SubObjectRow({
             className="h-7 text-slate-500"
             disabled={pending}
             title="Save to library and link (⧉)"
-            onClick={() => { setLibName(sub.name); setShowSaveToLib(true); }}
+            onClick={() => {
+              setLibName(sub.name);
+              setShowSaveToLib(true);
+            }}
           >
             <span className={cn(UI_ENGINE_TYPE_META)}>+⧉</span>
           </Button>
@@ -842,7 +848,10 @@ function SubObjectRow({
             className="h-7 text-red-600 hover:text-red-700"
             disabled={pending}
             onClick={() =>
-              void run(() => deleteBqSubObjectAction({ id: sub.id }), "Sub-object removed.")
+              void run(
+                () => deleteBqSubObjectAction({ id: sub.id }),
+                "Sub-object removed.",
+              )
             }
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -853,7 +862,9 @@ function SubObjectRow({
       {/* R3 — inline "save to library" form */}
       {showSaveToLib ? (
         <div className="ml-4 flex items-center gap-2 border-l-2 border-indigo-100 py-2 pl-4">
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>Save as:</span>
+          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
+            Save as:
+          </span>
           <Input
             value={libName}
             onChange={(e) => setLibName(e.target.value)}
@@ -870,14 +881,23 @@ function SubObjectRow({
             disabled={!libName.trim() || pending}
             onClick={() =>
               void run(
-                () => saveSubObjectToLibraryAndLinkAction({ subObjectId: sub.id, name: libName.trim() }),
-                "Saved to library and linked ⧉"
+                () =>
+                  saveSubObjectToLibraryAndLinkAction({
+                    subObjectId: sub.id,
+                    name: libName.trim(),
+                  }),
+                "Saved to library and linked ⧉",
               ).then((ok) => ok && setShowSaveToLib(false))
             }
           >
             Save ⧉
           </Button>
-          <Button size="sm" variant="ghost" className="h-7" onClick={() => setShowSaveToLib(false)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7"
+            onClick={() => setShowSaveToLib(false)}
+          >
             Cancel
           </Button>
         </div>
@@ -931,22 +951,68 @@ function LineTable({
       <div>
         <div className="mb-1 flex items-center gap-1.5">
           <Package className="h-3 w-3 text-slate-400" />
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Materials</span>
+          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+            Materials
+          </span>
         </div>
 
         {computed.materials.length === 0 ? (
-          <p className={cn(UI_ENGINE_TYPE_META, "py-1 text-slate-400")}>None yet.</p>
+          <p className={cn(UI_ENGINE_TYPE_META, "py-1 text-slate-400")}>
+            None yet.
+          </p>
         ) : (
           <table className="w-full">
             {/* R5 — column headers for BQ table (Indonesian convention) */}
             <thead>
               <tr className="border-b border-slate-100">
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-left font-normal text-slate-400")}>Uraian Pekerjaan</th>
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-2 text-right font-normal text-slate-400")}>Vol · Koef</th>
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-2 text-right font-normal text-slate-400")}>Susut</th>
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-2 text-right font-normal text-slate-400")}>Susut line</th>
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-right font-normal text-slate-400")}>Harga Satuan</th>
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 text-right font-normal text-slate-400")}>Jumlah</th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 pr-3 text-left font-normal text-slate-400",
+                  )}
+                >
+                  Uraian Pekerjaan
+                </th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 pr-2 text-right font-normal text-slate-400",
+                  )}
+                >
+                  Vol · Koef
+                </th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 pr-2 text-right font-normal text-slate-400",
+                  )}
+                >
+                  Susut
+                </th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 pr-2 text-right font-normal text-slate-400",
+                  )}
+                >
+                  Susut line
+                </th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 pr-3 text-right font-normal text-slate-400",
+                  )}
+                >
+                  Harga Satuan
+                </th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 text-right font-normal text-slate-400",
+                  )}
+                >
+                  Jumlah
+                </th>
                 {editable ? <th /> : null}
               </tr>
             </thead>
@@ -955,28 +1021,53 @@ function LineTable({
                 const record = sub.materials.find((m) => m.id === line.lineId);
                 if (!record) return null;
                 return (
-                  <tr key={line.lineId} className="border-b border-slate-50 last:border-0">
+                  <tr
+                    key={line.lineId}
+                    className="border-b border-slate-50 last:border-0"
+                  >
                     <td className="py-1.5 pr-3">
                       <TextCell
                         value={line.name}
                         disabled={!editable || pending}
-                        onCommit={(name) => void run(() => updateBqMaterialLineAction({ id: line.lineId, name }))}
+                        onCommit={(name) =>
+                          void run(() =>
+                            updateBqMaterialLineAction({
+                              id: line.lineId,
+                              name,
+                            }),
+                          )
+                        }
                         className="min-w-32"
                       />
-                      <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}>
+                      <span
+                        className={cn(
+                          UI_ENGINE_TYPE_META,
+                          "ml-2 text-slate-400",
+                        )}
+                      >
                         {record.source === "PROJECT_LOCAL" ? "Local" : "Master"}
                       </span>
                       {/* R4 — † badge for manually overridden snapshot price */}
                       {record.isManualOverride ? (
                         <span
-                          className={cn(UI_ENGINE_TYPE_META, "ml-1 text-amber-600")}
-                          title={record.overrideNote ?? "Price edited inside BQ"}
+                          className={cn(
+                            UI_ENGINE_TYPE_META,
+                            "ml-1 text-amber-600",
+                          )}
+                          title={
+                            record.overrideNote ?? "Price edited inside BQ"
+                          }
                         >
                           †
                         </span>
                       ) : null}
                       {record.brandName ? (
-                        <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}>
+                        <span
+                          className={cn(
+                            UI_ENGINE_TYPE_META,
+                            "ml-2 text-slate-400",
+                          )}
+                        >
                           {record.brandName}
                         </span>
                       ) : null}
@@ -991,7 +1082,10 @@ function LineTable({
                         onCommit={(next) =>
                           next !== null &&
                           void run(() =>
-                            updateBqMaterialLineAction({ id: line.lineId, qtyPerSub: next })
+                            updateBqMaterialLineAction({
+                              id: line.lineId,
+                              qtyPerSub: next,
+                            }),
                           )
                         }
                       />
@@ -1011,7 +1105,9 @@ function LineTable({
                     <td className="py-1.5 pr-2 text-right">
                       <NumberCell
                         value={
-                          record.wasteOverridePct === null ? null : record.wasteOverridePct * 100
+                          record.wasteOverridePct === null
+                            ? null
+                            : record.wasteOverridePct * 100
                         }
                         suffix="%"
                         placeholder="—"
@@ -1022,7 +1118,7 @@ function LineTable({
                             updateBqMaterialLineAction({
                               id: line.lineId,
                               wasteOverridePct: next,
-                            })
+                            }),
                           )
                         }
                       />
@@ -1030,18 +1126,26 @@ function LineTable({
 
                     {/* R4 — editable price per usage unit */}
                     <td className="py-1.5 pr-3 text-right">
-                      <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
-                        {formatQty(line.grossTotal)}{line.usageUnit ? ` ${line.usageUnit}` : ""} @{" "}
+                      <span
+                        className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}
+                      >
+                        {formatQty(line.grossTotal)}
+                        {line.usageUnit ? ` ${line.usageUnit}` : ""} @{" "}
                       </span>
                       <NumberCell
-                        value={line.pricePerUsageUnit * (record.conversion ?? 1)}
+                        value={
+                          line.pricePerUsageUnit * (record.conversion ?? 1)
+                        }
                         disabled={!editable || pending}
                         className="w-24"
                         onCommit={(next) =>
                           next !== null &&
                           next >= 0 &&
                           void run(() =>
-                            updateBqMaterialLineAction({ id: line.lineId, price: next })
+                            updateBqMaterialLineAction({
+                              id: line.lineId,
+                              price: next,
+                            }),
                           )
                         }
                       />
@@ -1057,7 +1161,9 @@ function LineTable({
                           type="button"
                           disabled={pending}
                           onClick={() =>
-                            void run(() => deleteBqMaterialLineAction({ id: line.lineId }))
+                            void run(() =>
+                              deleteBqMaterialLineAction({ id: line.lineId }),
+                            )
                           }
                           className="text-slate-300 transition-colors hover:text-red-600"
                           aria-label={`Remove ${line.name}`}
@@ -1078,21 +1184,53 @@ function LineTable({
       <div>
         <div className="mb-1 flex items-center gap-1.5">
           <Hammer className="h-3 w-3 text-slate-400" />
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Services</span>
+          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+            Services
+          </span>
         </div>
 
         {computed.services.length === 0 ? (
-          <p className={cn(UI_ENGINE_TYPE_META, "py-1 text-slate-400")}>None yet.</p>
+          <p className={cn(UI_ENGINE_TYPE_META, "py-1 text-slate-400")}>
+            None yet.
+          </p>
         ) : (
           <table className="w-full">
             {/* R5 — column headers */}
             <thead>
               <tr className="border-b border-slate-100">
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-left font-normal text-slate-400")}>Uraian Pekerjaan</th>
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-2 text-right font-normal text-slate-400")}>Vol · Koef</th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 pr-3 text-left font-normal text-slate-400",
+                  )}
+                >
+                  Uraian Pekerjaan
+                </th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 pr-2 text-right font-normal text-slate-400",
+                  )}
+                >
+                  Vol · Koef
+                </th>
                 <th className="py-1 pr-2" colSpan={2} />
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-right font-normal text-slate-400")}>Harga Satuan</th>
-                <th className={cn(UI_ENGINE_TYPE_META, "py-1 text-right font-normal text-slate-400")}>Jumlah</th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 pr-3 text-right font-normal text-slate-400",
+                  )}
+                >
+                  Harga Satuan
+                </th>
+                <th
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "py-1 text-right font-normal text-slate-400",
+                  )}
+                >
+                  Jumlah
+                </th>
                 {editable ? <th /> : null}
               </tr>
             </thead>
@@ -1100,20 +1238,40 @@ function LineTable({
               {computed.services.map((line) => {
                 const record = sub.services.find((s) => s.id === line.lineId);
                 return (
-                  <tr key={line.lineId} className="border-b border-slate-50 last:border-0">
+                  <tr
+                    key={line.lineId}
+                    className="border-b border-slate-50 last:border-0"
+                  >
                     <td className="py-1.5 pr-3">
                       <TextCell
                         value={line.name}
                         disabled={!editable || pending}
-                        onCommit={(name) => void run(() => updateBqServiceLineAction({ id: line.lineId, name }))}
+                        onCommit={(name) =>
+                          void run(() =>
+                            updateBqServiceLineAction({
+                              id: line.lineId,
+                              name,
+                            }),
+                          )
+                        }
                         className="min-w-32"
                       />
-                      <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}>
-                        {record?.source === "PROJECT_LOCAL" ? "Local" : "Master"}
+                      <span
+                        className={cn(
+                          UI_ENGINE_TYPE_META,
+                          "ml-2 text-slate-400",
+                        )}
+                      >
+                        {record?.source === "PROJECT_LOCAL"
+                          ? "Local"
+                          : "Master"}
                       </span>
                       {record?.hasMaterial ? (
                         <span
-                          className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}
+                          className={cn(
+                            UI_ENGINE_TYPE_META,
+                            "ml-2 text-slate-400",
+                          )}
                           title="Supply and install — the rate already includes material"
                         >
                           incl. material
@@ -1121,7 +1279,10 @@ function LineTable({
                       ) : null}
                       {record?.scopeNote ? (
                         <span
-                          className={cn(UI_ENGINE_TYPE_META, "ml-2 truncate text-slate-400")}
+                          className={cn(
+                            UI_ENGINE_TYPE_META,
+                            "ml-2 truncate text-slate-400",
+                          )}
                           title={record.scopeNote}
                         >
                           {record.scopeNote}
@@ -1138,7 +1299,10 @@ function LineTable({
                         onCommit={(next) =>
                           next !== null &&
                           void run(() =>
-                            updateBqServiceLineAction({ id: line.lineId, qtyPerSub: next })
+                            updateBqServiceLineAction({
+                              id: line.lineId,
+                              qtyPerSub: next,
+                            }),
                           )
                         }
                       />
@@ -1151,7 +1315,9 @@ function LineTable({
                     <td className="py-1.5 pr-2" />
 
                     <td className="py-1.5 pr-3 text-right">
-                      <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
+                      <span
+                        className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}
+                      >
                         {formatQty(line.qtyTotal)} {line.rateUnit} @{" "}
                       </span>
                       <NumberCell
@@ -1161,7 +1327,12 @@ function LineTable({
                         onCommit={(next) =>
                           next !== null &&
                           next >= 0 &&
-                          void run(() => updateBqServiceLineAction({ id: line.lineId, price: next }))
+                          void run(() =>
+                            updateBqServiceLineAction({
+                              id: line.lineId,
+                              price: next,
+                            }),
+                          )
                         }
                       />
                     </td>
@@ -1176,7 +1347,9 @@ function LineTable({
                           type="button"
                           disabled={pending}
                           onClick={() =>
-                            void run(() => deleteBqServiceLineAction({ id: line.lineId }))
+                            void run(() =>
+                              deleteBqServiceLineAction({ id: line.lineId }),
+                            )
                           }
                           className="text-slate-300 transition-colors hover:text-red-600"
                           aria-label={`Remove ${line.name}`}
@@ -1198,27 +1371,46 @@ function LineTable({
           subObjectId={sub.id}
           onAddMaterial={(skuId, qty) =>
             run(
-              () => addBqMaterialLineAction({ subObjectId: sub.id, skuId, qtyPerSub: qty }),
-              "Material added."
+              () =>
+                addBqMaterialLineAction({
+                  subObjectId: sub.id,
+                  skuId,
+                  qtyPerSub: qty,
+                }),
+              "Material added.",
             )
           }
           onAddService={(workPriceId, qty) =>
             run(
               () =>
-                addBqServiceLineAction({ subObjectId: sub.id, workPriceId, qtyPerSub: qty }),
-              "Service added."
+                addBqServiceLineAction({
+                  subObjectId: sub.id,
+                  workPriceId,
+                  qtyPerSub: qty,
+                }),
+              "Service added.",
             )
           }
           onAddLocalMaterial={(input) =>
             run(
-              () => addBqLocalMaterialLineAction({ subObjectId: sub.id, ...input, currency: "IDR" }),
-              "Custom material added."
+              () =>
+                addBqLocalMaterialLineAction({
+                  subObjectId: sub.id,
+                  ...input,
+                  currency: "IDR",
+                }),
+              "Custom material added.",
             )
           }
           onAddLocalService={(input) =>
             run(
-              () => addBqLocalServiceLineAction({ subObjectId: sub.id, ...input, currency: "IDR" }),
-              "Custom service added."
+              () =>
+                addBqLocalServiceLineAction({
+                  subObjectId: sub.id,
+                  ...input,
+                  currency: "IDR",
+                }),
+              "Custom service added.",
             )
           }
         />
@@ -1226,5 +1418,3 @@ function LineTable({
     </div>
   );
 }
-
-

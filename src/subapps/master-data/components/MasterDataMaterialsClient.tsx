@@ -12,7 +12,7 @@ import {
 import { isBrandComplete, isBrandLandingView } from "@/subapps/master-data/lib/brand-view-rules";
 import { unwrapActionResult } from "@/lib/result";
 import type { BrandLinkInput, ProductCatalogWithRelations } from "@/extensions/library/types";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, DashboardPageShell, PageHeader, TableCard, TableCardBody, TableCardCell, TableCardHead, TableCardHeader, TableCardRow, UI_ENGINE_RADIUS_ACTION, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META } from "@/ui_engine";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, Button, DashboardTemplate, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, PageHeader, TableCard, TableCardBody, TableCardCell, TableCardHead, TableCardHeader, TableCardRow, UI_ENGINE_RADIUS_ACTION, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META } from "@/ui_engine";
 import type {
   BrandCategoryCoverage,
   LibraryAccess,
@@ -419,54 +419,50 @@ export function MasterDataMaterialsClient({
   };
 
   return (
-    <DashboardPageShell>
-      <PageHeader
-        eyebrow="Master Data"
-        title="Brands"
-        description={summaryDescription}
-        /* "Data Tools ↗" dihapus 2026-08-14 (feedback item 1): pintu yang sama
-           sudah ada di nav Master Data → Settings. Dua jalan menuju satu
-           halaman hanya menambah lebar header tanpa menambah kemampuan. */
-        action={
-          <div className="flex items-center gap-2">
-            {access.canCreate ? (
-              showBrandLanding ? (
-                <Button
-                  type="button"
-                  onClick={() => setBrandDialog({ open: true, mode: "CREATE", vendor: null })}
-                  className={cn(
-                    "bg-[var(--ui-action-bg)] text-[var(--ui-action-text)] hover:bg-[var(--ui-action-hover)]",
-                    UI_ENGINE_RADIUS_ACTION
-                  )}
-                >
-                  <Plus className="size-[var(--ui-icon-size-sm)]" />
-                  Add Brand
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  onClick={() =>
-                    setDialog({ open: true, mode: "CREATE", row: null })
-                  }
-                  className={cn(
-                    "bg-[var(--ui-action-bg)] text-[var(--ui-action-text)] hover:bg-[var(--ui-action-hover)]",
-                    UI_ENGINE_RADIUS_ACTION
-                  )}
-                >
-                  <Plus className="size-[var(--ui-icon-size-sm)]" />
-                  Add Material
-                </Button>
-              )
-            ) : null}
-          </div>
+    <>
+      <DashboardTemplate
+        header={
+          <PageHeader
+            eyebrow="Master Data"
+            title="Brands"
+            description={summaryDescription}
+            action={
+              <div className="flex items-center gap-2">
+                {access.canCreate ? (
+                  showBrandLanding ? (
+                    <Button
+                      type="button"
+                      onClick={() => setBrandDialog({ open: true, mode: "CREATE", vendor: null })}
+                      className={cn(
+                        "bg-[var(--ui-action-bg)] text-[var(--ui-action-text)] hover:bg-[var(--ui-action-hover)]",
+                        UI_ENGINE_RADIUS_ACTION
+                      )}
+                    >
+                      <Plus className="size-[var(--ui-icon-size-sm)]" />
+                      Add Brand
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        setDialog({ open: true, mode: "CREATE", row: null })
+                      }
+                      className={cn(
+                        "bg-[var(--ui-action-bg)] text-[var(--ui-action-text)] hover:bg-[var(--ui-action-hover)]",
+                        UI_ENGINE_RADIUS_ACTION
+                      )}
+                    >
+                      <Plus className="size-[var(--ui-icon-size-sm)]" />
+                      Add Material
+                    </Button>
+                  )
+                ) : null}
+              </div>
+            }
+          />
         }
-      />
-
-      {/* ── Brand landing ────────────────────────────────────────────────────
-          Show when no vendor/category/price filter is active. The default state
-          of the page is "choose a brand" not "see all SKUs". Search stays here
-          and narrows the brand list; only the SKU-grain filters break out. */}
-      {showBrandLanding ? (
+        content={
+          showBrandLanding ? (
         <div>
           {/* Brand search + sort. Both stay at brand grain: search matches the
               brand name, its owner, its categories, or a SKU it carries, and
@@ -1041,9 +1037,10 @@ export function MasterDataMaterialsClient({
           ) : null}
         </div>
       ) : null}
-
         </>
-      )}
+        )
+        }
+      />
 
       <Dialog open={brandLinksOpen} onOpenChange={brandLinksGuard.handleOpenChange}>
         <DialogContent className="max-h-[var(--ui-dialog-max-height)] overflow-y-auto sm:max-w-[var(--ui-dialog-width-full)]">
@@ -1219,6 +1216,6 @@ export function MasterDataMaterialsClient({
           setDialog((current) => ({ ...current, open }))
         }
       />
-    </DashboardPageShell>
+    </>
   );
 }

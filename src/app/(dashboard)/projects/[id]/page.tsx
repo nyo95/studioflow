@@ -16,7 +16,7 @@ import {
   toChecklistTask,
 } from "@/lib/services/checklist-task";
 import {
-  DashboardPageShell,
+  ProjectTemplate,
   PageBackLink,
   PageHeader,
   StatusBadge,
@@ -126,8 +126,8 @@ export default async function ProjectOverviewPage({
           status: true,
           mode: true,
           phase_id: true,
-          deferred_from_version: true
-        }
+          deferred_from_version: true,
+        },
       },
       // Ordering and shape come from checklist-task.ts, the one place that
       // decides both. `phase` used to be included here and never read.
@@ -150,8 +150,12 @@ export default async function ProjectOverviewPage({
     select: { id: true, name: true, color: true },
     orderBy: { name: "asc" },
   });
-  const deferredActivities = project.activities.filter((act) => act.phase_id !== null);
-  const projectTodoActivities = project.activities.filter((act) => act.phase_id === null);
+  const deferredActivities = project.activities.filter(
+    (act) => act.phase_id !== null,
+  );
+  const projectTodoActivities = project.activities.filter(
+    (act) => act.phase_id === null,
+  );
 
   const users = await prisma.user.findMany({
     where: { deleted_at: null },
@@ -185,9 +189,16 @@ export default async function ProjectOverviewPage({
   // Assignee candidates. Deliberately the same roster the project already
   // offers for designer/drafter — an assignee who cannot open the project would
   // be a dead end, and the RBAC check in `updateTask` would reject it anyway.
-  const projectMembers = users.map((user) => ({ id: user.id, name: user.name }));
+  const projectMembers = users.map((user) => ({
+    id: user.id,
+    name: user.name,
+  }));
 
-  const canEdit = canEditProjectMetadata(role as Role, userId, project.pic_designer_id);
+  const canEdit = canEditProjectMetadata(
+    role as Role,
+    userId,
+    project.pic_designer_id,
+  );
   const openingDateDisplay = project.opening_date
     ? new Intl.DateTimeFormat("id-ID", {
         day: "numeric",
@@ -206,172 +217,195 @@ export default async function ProjectOverviewPage({
   const projectProgress = getProjectProgress(project.phases);
 
   return (
-    <DashboardPageShell>
-      <PageBackLink />
-      {/* TIER 1 — IDENTITY. Which project is this.
-          The `description` prop used to read "<client> — <area> SQM" and the
-          `meta` row repeated the opening date. All three facts are fields in
-          the identity strip immediately below, so the header now carries only
-          the name and the lifecycle status. */}
-      <PageHeader
-        title={project.name}
-        divider={false}
-        meta={<StatusBadge status={project.status_progress} tone={statusToTone(project.status_progress)} />}
-      />
+    <ProjectTemplate
+      navigation={<PageBackLink />}
+      header={
+        <>
+          {/* TIER 1 — IDENTITY. Which project is this.
+              The `description` prop used to read "<client> — <area> SQM" and the
+              `meta` row repeated the opening date. All three facts are fields in
+              the identity strip immediately below, so the header now carries only
+              the name and the lifecycle status. */}
+          <PageHeader
+            title={project.name}
+            divider={false}
+            meta={
+              <StatusBadge
+                status={project.status_progress}
+                tone={statusToTone(project.status_progress)}
+              />
+            }
+          />
 
-      <ProjectIdentityStrip
-        project={{
-          id: project.id,
-          name: project.name,
-          client: project.client,
-          area: project.area,
-          opening_date: project.opening_date,
-          opening_date_display: openingDateDisplay,
-          opening_date_input_value: openingDateInputValue,
-          pic_designer_id: project.pic_designer_id,
-          pic_drafter_id: project.pic_drafter_id,
-          designer_name: project.designer.name,
-          drafter_name: project.drafter.name,
-        }}
-        designers={designers}
-        drafters={drafters}
-        clients={clients}
-        role={role as Role}
-        canEdit={canEdit}
-      />
+          <ProjectIdentityStrip
+            project={{
+              id: project.id,
+              name: project.name,
+              client: project.client,
+              area: project.area,
+              opening_date: project.opening_date,
+              opening_date_display: openingDateDisplay,
+              opening_date_input_value: openingDateInputValue,
+              pic_designer_id: project.pic_designer_id,
+              pic_drafter_id: project.pic_drafter_id,
+              designer_name: project.designer.name,
+              drafter_name: project.drafter.name,
+            }}
+            designers={designers}
+            drafters={drafters}
+            clients={clients}
+            role={role as Role}
+            canEdit={canEdit}
+          />
 
-      {/* Project-level call to action. Deliberately NOT per-phase: the matrix
-          below owns that. This says only what the matrix cannot — the project
-          as a whole is finished, or nothing is running and something should be
-          started. Silent while work is in progress. */}
-      {projectProgress.type !== "IN_PROGRESS" && projectProgress.type !== "NO_PHASES" && (
-        <div className="mb-8 flex flex-wrap items-center gap-3">
-          {projectProgress.type === "PROJECT_DONE" ? (
-            <Heading level={3} className="text-emerald-600">
-              Project completed
-            </Heading>
-          ) : (
-            <>
-              <Heading level={3} className="text-amber-600">
-                Ready for {formatPhaseLabel(projectProgress.nextPhaseName)}
-              </Heading>
-              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-sans text-[10px] font-bold uppercase leading-none tracking-[0.14em] text-amber-700">
-                Action required
-              </span>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* TWO COLUMNS. Left = the work (phases, then tasks). Right = the
-          references (checklist, admin). The identity strip above spans both.
-
-          No "Phases" heading above the table: the first column header already
-          reads PHASE, and a label directly above an identical label is chrome,
-          not information. */}
-      <div className="flex flex-col gap-8 lg:flex-row">
-        <div className="min-w-0 flex-1 space-y-8">
-
-      {/* PHASE MATRIX — the per-phase detail table. Four columns, one row per
-          phase, no summary of any kind.
-          =====================================================================
-          WHAT THIS DELIBERATELY DOES NOT SHOW, AND WHY
-          =====================================================================
-          * No progress bar, completion count or percentage. Those belong to the
-            Overview card below and appearing twice was the original complaint.
-          * No FLOW column. An earlier draft had one carrying "Frozen" and
-            "Waiting" alongside PARALLEL — but `is_locked` is set by the very
-            action that writes READY_FOR_NEXT, so "Frozen" only ever restated
-            "Approved", and "Waiting" is fully derivable from "Not started" plus
-            an unapproved predecessor. Only the parallel override said anything
-            new, so only it survived, as a badge on the phase name.
-          * No duration inside the Status cell. PhaseReadingLine would print it
-            there AND the Time column would print it again; the parts are used
-            individually here for exactly that reason.
-          The lock is still explained — via the row's title attribute, and in
-          full on the phase page. */}
+          {/* Project-level call to action. Deliberately NOT per-phase: the matrix
+              below owns that. This says only what the matrix cannot — the project
+              as a whole is finished, or nothing is running and something should be
+              started. Silent while work is in progress. */}
+          {projectProgress.type !== "IN_PROGRESS" &&
+            projectProgress.type !== "NO_PHASES" && (
+              <div className="mb-8 flex flex-wrap items-center gap-3">
+                {projectProgress.type === "PROJECT_DONE" ? (
+                  <Heading level={3} className="text-emerald-600">
+                    Project completed
+                  </Heading>
+                ) : (
+                  <>
+                    <Heading level={3} className="text-amber-600">
+                      Ready for{" "}
+                      {formatPhaseLabel(projectProgress.nextPhaseName)}
+                    </Heading>
+                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-sans text-[10px] font-bold uppercase leading-none tracking-[0.14em] text-amber-700">
+                      Action required
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+        </>
+      }
+      content={
+        <>
+          {/* PHASE MATRIX — the per-phase detail table. Four columns, one row per
+              phase, no summary of any kind.
+              =====================================================================
+              WHAT THIS DELIBERATELY DOES NOT SHOW, AND WHY
+              =====================================================================
+              * No progress bar, completion count or percentage. Those belong to the
+                Overview card below and appearing twice was the original complaint.
+              * No FLOW column. An earlier draft had one carrying "Frozen" and
+                "Waiting" alongside PARALLEL — but `is_locked` is set by the very
+                action that writes READY_FOR_NEXT, so "Frozen" only ever restated
+                "Approved", and "Waiting" is fully derivable from "Not started" plus
+                an unapproved predecessor. Only the parallel override said anything
+                new, so only it survived, as a badge on the phase name.
+              * No duration inside the Status cell. PhaseReadingLine would print it
+                there AND the Time column would print it again; the parts are used
+                individually here for exactly that reason.
+              The lock is still explained — via the row's title attribute, and in
+              full on the phase page. */}
           <SectionCard padding="none">
             <table className="w-full table-fixed">
-          <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/50 text-left">
-              <Th className="w-[34%]">Phase</Th>
-              <Th className="w-[30%]">Status / Owner</Th>
-              <Th className="w-[16%]">Rev</Th>
-              <Th className="w-[20%]">Time</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {project.phases.map((phase, index) => {
-              const reading = readPhase(phase, pipelineNow);
-              const lock = explainPhaseLock(phase, project.phases[index - 1] ?? null, pipelineNow);
-              const revision = phase.revisions[0];
-
-              return (
-                <tr
-                  key={phase.id}
-                  className="group transition-colors hover:bg-slate-50"
-                  title={
-                    lock.isBlocked
-                      ? [lock.reason, lock.prerequisite].filter(Boolean).join(" ")
-                      : undefined
-                  }
-                >
-                  <Td>
-                    {/* The whole row is a navigation target, but only an anchor
-                        can be one accessibly, so the link fills the first cell
-                        and the rest of the row is hover feedback. */}
-                    <Link
-                      href={`/projects/${project.id}/phases/${phase.id}`}
-                      className="flex items-center gap-2.5 font-sans text-sm font-medium text-slate-900 hover:underline"
-                    >
-                      {lock.isBlocked ? (
-                        <Lock className="h-3 w-3 shrink-0 text-slate-300" aria-hidden />
-                      ) : null}
-                      <span className="truncate">{formatPhaseLabel(phase.name_enum)}</span>
-                      {lock.isRunningAhead ? <PhaseRunningAheadBadge /> : null}
-                    </Link>
-                  </Td>
-
-                  <Td>
-                    <span className="flex flex-wrap items-center gap-2">
-                      <PhaseStatusPill reading={reading} />
-                      <PhaseOwner reading={reading} />
-                    </span>
-                  </Td>
-
-                  {/* Revision version lives here now, not in the Overview card.
-                      It used to be printed there as "LAYOUT v6.0 / DESIGN 3D
-                      v5.0", which re-announced which phases were active — a
-                      fact this table already states, one row per phase. */}
-                  <Td>
-                    <span className="font-sans text-xs text-slate-500">
-                      {revision ? `v${revision.major}.${revision.minor}` : "—"}
-                    </span>
-                  </Td>
-
-                  <Td>
-                    <PhaseDuration reading={reading} />
-                  </Td>
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50 text-left">
+                  <Th className="w-[34%]">Phase</Th>
+                  <Th className="w-[30%]">Status / Owner</Th>
+                  <Th className="w-[16%]">Rev</Th>
+                  <Th className="w-[20%]">Time</Th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {project.phases.map((phase, index) => {
+                  const reading = readPhase(phase, pipelineNow);
+                  const lock = explainPhaseLock(
+                    phase,
+                    project.phases[index - 1] ?? null,
+                    pipelineNow,
+                  );
+                  const revision = phase.revisions[0];
+
+                  return (
+                    <tr
+                      key={phase.id}
+                      className="group transition-colors hover:bg-slate-50"
+                      title={
+                        lock.isBlocked
+                          ? [lock.reason, lock.prerequisite]
+                              .filter(Boolean)
+                              .join(" ")
+                          : undefined
+                      }
+                    >
+                      <Td>
+                        {/* The whole row is a navigation target, but only an anchor
+                            can be one accessibly, so the link fills the first cell
+                            and the rest of the row is hover feedback. */}
+                        <Link
+                          href={`/projects/${project.id}/phases/${phase.id}`}
+                          className="flex items-center gap-2.5 font-sans text-sm font-medium text-slate-900 hover:underline"
+                        >
+                          {lock.isBlocked ? (
+                            <Lock
+                              className="h-3 w-3 shrink-0 text-slate-300"
+                              aria-hidden
+                            />
+                          ) : null}
+                          <span className="truncate">
+                            {formatPhaseLabel(phase.name_enum)}
+                          </span>
+                          {lock.isRunningAhead ? (
+                            <PhaseRunningAheadBadge />
+                          ) : null}
+                        </Link>
+                      </Td>
+
+                      <Td>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <PhaseStatusPill reading={reading} />
+                          <PhaseOwner reading={reading} />
+                        </span>
+                      </Td>
+
+                      {/* Revision version lives here now, not in the Overview card.
+                          It used to be printed there as "LAYOUT v6.0 / DESIGN 3D
+                          v5.0", which re-announced which phases were active — a
+                          fact this table already states, one row per phase. */}
+                      <Td>
+                        <span className="font-sans text-xs text-slate-500">
+                          {revision
+                            ? `v${revision.major}.${revision.minor}`
+                            : "—"}
+                        </span>
+                      </Td>
+
+                      <Td>
+                        <PhaseDuration reading={reading} />
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </SectionCard>
 
           <ProjectTasksCard
             projectId={project.id}
             canEdit={canEdit}
             phases={project.phases}
-            deferredActivities={deferredActivities as React.ComponentProps<typeof ProjectTasksCard>["deferredActivities"]}
-            projectTodoActivities={projectTodoActivities as React.ComponentProps<typeof ProjectTasksCard>["projectTodoActivities"]}
+            deferredActivities={
+              deferredActivities as React.ComponentProps<
+                typeof ProjectTasksCard
+              >["deferredActivities"]
+            }
+            projectTodoActivities={
+              projectTodoActivities as React.ComponentProps<
+                typeof ProjectTasksCard
+              >["projectTodoActivities"]
+            }
           />
-        </div>
-
-        {/* Right column. `Admin` last: it holds the rarest and most destructive
-            control on the page and used to sit at the top of this column.
-            Subtitles dropped — "Cross-phase tasks" and "Admin Diagnostics"
-            restated their own titles. */}
+        </>
+      }
+      aside={
         <ActionSidebar>
           <ActionSidebarSection title="Global Checklist">
             <ProjectChecklistOverview
@@ -395,8 +429,8 @@ export default async function ProjectOverviewPage({
             </ActionSidebarSection>
           )}
         </ActionSidebar>
-      </div>
-    </DashboardPageShell>
+      }
+    />
   );
 }
 
@@ -406,14 +440,20 @@ export default async function ProjectOverviewPage({
  * built from a single example usually encodes that example's accidents.
  * Promote them when a second caller appears.
  */
-function Th({ children, className }: { children: React.ReactNode; className?: string }) {
+function Th({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <th
       scope="col"
       className={cn(
         "px-[var(--ui-section-px,1.5rem)] py-3",
         "font-sans text-[10px] font-bold uppercase leading-none tracking-[0.14em] text-slate-400",
-        className
+        className,
       )}
     >
       {children}
@@ -422,5 +462,9 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
 }
 
 function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-[var(--ui-section-px,1.5rem)] py-3.5 align-middle">{children}</td>;
+  return (
+    <td className="px-[var(--ui-section-px,1.5rem)] py-3.5 align-middle">
+      {children}
+    </td>
+  );
 }

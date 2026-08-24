@@ -4,8 +4,8 @@ import { Building2, Database, Settings2, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageBackLink } from "@/ui_engine/navigation/page-back-link";
 import { PageHeader } from "@/ui_engine/layout/page-header";
-import { DashboardPageShell } from "@/ui_engine/layout/shells/dashboard-page-shell";
 import { Heading } from "@/ui_engine/components/heading";
+import { SettingsTemplate } from "@/ui_engine/templates/settings-template";
 
 type SettingsShellProps = {
   activeTab: "profile" | "studio" | "clients" | "database";
@@ -55,16 +55,20 @@ export function SettingsShell({
   const visibleTabs = tabs.filter((tab) => !tab.adminOnly || isAdmin);
 
   return (
-    <DashboardPageShell className="space-y-8">
-      <PageBackLink />
-      <PageHeader
-        eyebrow="Settings"
-        title="Studio Settings"
-        description={description}
-        divider={false}
-      />
-
-      <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
+    <SettingsTemplate
+      className="space-y-8"
+      header={
+        <>
+          <PageBackLink />
+          <PageHeader
+            eyebrow="Settings"
+            title="Studio Settings"
+            description={description}
+            divider={false}
+          />
+        </>
+      }
+      navigation={
         <aside className="rounded-[var(--ui-radius-card,1.5rem)] border border-slate-200 bg-white p-2 shadow-[var(--ui-surface-shadow)]">
           <div className="mb-2 px-3 py-3">
             <Heading level={6} variant="uiMeta">
@@ -84,7 +88,7 @@ export function SettingsShell({
                     "inline-flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-colors",
                     isActive
                       ? "bg-slate-900 text-white"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -94,17 +98,16 @@ export function SettingsShell({
             })}
           </nav>
         </aside>
-
-        <section className="space-y-6">
+      }
+      content={
+        <>
           <div className="space-y-1">
-            <Heading level={2}>
-              {title}
-            </Heading>
+            <Heading level={2}>{title}</Heading>
           </div>
 
           {children}
-        </section>
-      </div>
-    </DashboardPageShell>
+        </>
+      }
+    />
   );
 }

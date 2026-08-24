@@ -3,7 +3,7 @@ import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { isAdminLevel } from "@/core/rbac/rbac";
 import { DeliverablesTable, type DeliverablePhaseRow } from "@/components/deliverables-table";
-import { DashboardPageShell, PageBackLink, PageHeader } from "@/ui_engine";
+import { DetailTemplate, PageBackLink, PageHeader } from "@/ui_engine";
 
 export default async function DeliverablesTrackingPage({
   params,
@@ -102,18 +102,24 @@ export default async function DeliverablesTrackingPage({
   });
 
   return (
-    <DashboardPageShell>
-        <PageBackLink />
-        <PageHeader
-          title="Deliverables"
-          description={`Compliance dashboard for ${project.name}`}
-        />
+    <DetailTemplate
+      header={
+        <>
+          <PageBackLink />
+          <PageHeader
+            title="Deliverables"
+            description={`Compliance dashboard for ${project.name}`}
+          />
+        </>
+      }
+      content={
         <DeliverablesTable
           projectId={project.id}
           rows={rows}
           userId={session.userId}
           userRole={session.role}
         />
-    </DashboardPageShell>
+      }
+    />
   );
 }
