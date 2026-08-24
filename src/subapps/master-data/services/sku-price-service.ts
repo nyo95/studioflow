@@ -3,13 +3,19 @@ import "server-only";
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { recordAudit } from "./audit-service";
-import { resolvePrice } from "./sku-price-rules";
+import { checkPriceUnit, resolveEffectivePriceUnit, resolvePrice } from "./sku-price-rules";
 
 // The pricing JUDGEMENTS live in `./sku-price-rules`, which imports nothing —
 // that is what lets `npm test` reach them (roadmap §Perkakas: test files may
 // only import modules that never touch Prisma or `server-only`). This file
 // keeps the part that talks to the database.
-export { resolvePrice, hasPriceContent, isOfferChange } from "./sku-price-rules";
+export {
+  checkPriceUnit,
+  resolveEffectivePriceUnit,
+  resolvePrice,
+  hasPriceContent,
+  isOfferChange,
+} from "./sku-price-rules";
 
 /**
  * MASTER DATA — the single write path for `SkuPrice`.
@@ -74,6 +80,11 @@ export type SkuPriceWriteInput = {
    * lagi dua field yang bisa tertukar.
    */
   price: number | null;
+  /**
+   * Wajib sama dengan `purchase_unit` SKU (keputusan U2, R4). Kosong berarti
+   * mewarisi `purchase_unit`; berbeda berarti ditolak. Pemanggil yang mengubah
+   * satuan memperbarui `Sku.purchase_unit` lebih dulu di transaksi yang sama.
+   */
   unit: string | null;
   currency?: string;
   valid_from?: Date | null;
@@ -151,6 +162,24 @@ export async function recordSkuPrice(
 
   assertPriceSane(price);
 
+  // Keputusan owner U2 (R4, 2026-08-24): satuan harga wajib cocok dengan
+  // `purchase_unit` SKU. Diperiksa DI SINI — satu-satunya jalur tulis — bukan
+  // di masing-masing action, supaya tidak ada jalur yang bisa lolos. Pemanggil
+  // yang sengaja mengubah satuan (dialog Pricing) memperbarui
+  // `Sku.purchase_unit` lebih dulu, sehingga pemeriksaan ini melihat nilai
+  // yang baru.
+  const sku = await tx.sku.findUnique({
+    where: { id: input.sku_id },
+    select: { purchase_unit: true },
+  });
+  const unitCheck = checkPriceUnit(input.unit, sku?.purchase_unit ?? null);
+  if (!unitCheck.ok) {
+    throw new ActionError(
+      `Price unit "${unitCheck.unit}" must match the SKU's purchase unit "${unitCheck.purchaseUnit}". Fix whichever one is wrong before saving.`,
+      "VALIDATION_FAILED"
+    );
+  }
+
   const now = new Date();
   const validFrom = input.valid_from ?? now;
 
@@ -161,11 +190,12 @@ export async function recordSkuPrice(
       sku_id: input.sku_id,
       supplier_party_id: input.supplier_party_id,
       price_net: price,
-      unit: input.unit?.trim() || "pcs",
+      unit: resolveEffectivePriceUnit(input.unit, sku?.purchase_unit ?? null),
       currency: input.currency?.trim() || "IDR",
       valid_from: validFrom,
       notes: input.notes?.trim() || null,
       updated_by_name: input.updated_by_name?.trim() || null,
+      updated_by_id: actor?.id ?? null,
       is_current: true,
     },
     include: SKU_PRICE_INCLUDE,

@@ -23,6 +23,7 @@ import ExcelJS from "exceljs";
 import { z } from "zod";
 import { prisma } from "@/core/platform/db";
 import { recordAudit } from "./audit-service";
+import { checkPriceUnit, resolveEffectivePriceUnit } from "./sku-price-rules";
 import { createSkuCore } from "./sku-core-service";
 
 // ---------------------------------------------------------------------------
@@ -535,6 +536,23 @@ export async function importMasterDataExcel(
         continue;
       }
 
+      // R4 (keputusan owner U2): satuan harga wajib cocok dengan
+      // `purchase_unit` SKU — aturan yang sama dengan `recordSkuPrice`.
+      // Impor tidak boleh menjadi pintu belakang baris yang readiness BQ
+      // nanti tolak karena `UNIT_MISMATCH`.
+      const purchaseUnit = (
+        await prisma.sku.findUnique({ where: { id: skuId }, select: { purchase_unit: true } })
+      )?.purchase_unit ?? null;
+      const unitCheck = checkPriceUnit(data.unit, purchaseUnit);
+      if (!unitCheck.ok) {
+        priceResults.push({
+          row: rowNum,
+          status: "error",
+          message: `Unit "${unitCheck.unit}" does not match the SKU's purchase unit "${unitCheck.purchaseUnit}"`,
+        });
+        continue;
+      }
+
       // Skip placeholder rows (exported Sku rows that have no price yet)
       const priceNet = data.price_net;
       if (priceNet === null || priceNet === undefined) {
@@ -557,8 +575,9 @@ export async function importMasterDataExcel(
             sku_id: skuId!,
             supplier_party_id: supplierPartyId,
             price_net: priceNet,
-            unit: data.unit,
+            unit: resolveEffectivePriceUnit(data.unit, purchaseUnit),
             currency: data.currency,
+            updated_by_id: actor.id ?? null,
             is_current: true,
           },
         });

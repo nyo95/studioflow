@@ -955,6 +955,22 @@ export const createMaterialPriceAction = createAction<MaterialPriceInput, Materi
 
     const supplierId = await assertPriceSourceParty(tx, input.supplier_party_id);
 
+    // Simpan costing profile + dimensi + base_unit ke Sku SEBELUM menulis
+    // harga (R4): `recordSkuPrice` memvalidasi satuan harga terhadap
+    // `purchase_unit`, dan dialog ini sengaja boleh mengubahnya — jadi nilai
+    // barunya harus sudah ada saat validasi berjalan. Transaksi yang sama,
+    // jadi harga kosong yang ditolak di bawah tetap menggulirkan ini balik.
+    const conversionNum = toNumberOrNull(input.conversion);
+    await tx.sku.update({
+      where: { id: input.sku_id },
+      data: {
+        ...(input.unit.trim() ? { purchase_unit: input.unit.trim(), base_unit: input.unit.trim() } : {}),
+        ...(input.usage_unit.trim() ? { usage_unit: input.usage_unit.trim() } : {}),
+        ...(conversionNum !== null && conversionNum > 0 ? { conversion: conversionNum } : {}),
+        ...(input.dim_display ? { dim_display: input.dim_display } : {}),
+      },
+    });
+
     const row = await recordSkuPrice(tx, {
       sku_id: input.sku_id,
       supplier_party_id: supplierId,
@@ -970,18 +986,6 @@ export const createMaterialPriceAction = createAction<MaterialPriceInput, Materi
         "VALIDATION_FAILED"
       );
     }
-
-    // Simpan costing profile + dimensi + base_unit ke Sku.
-    const conversionNum = toNumberOrNull(input.conversion);
-    await tx.sku.update({
-      where: { id: input.sku_id },
-      data: {
-        ...(input.unit.trim() ? { purchase_unit: input.unit.trim(), base_unit: input.unit.trim() } : {}),
-        ...(input.usage_unit.trim() ? { usage_unit: input.usage_unit.trim() } : {}),
-        ...(conversionNum !== null && conversionNum > 0 ? { conversion: conversionNum } : {}),
-        ...(input.dim_display ? { dim_display: input.dim_display } : {}),
-      },
-    });
 
     // Upsert SkuCategory dan propagasi ke BrandCategory.
     const skuForCat = await tx.sku.findUnique({ where: { id: input.sku_id }, select: { brand_id: true } });
@@ -1053,6 +1057,7 @@ export const updateMaterialPriceAction = createAction<
         data: {
           notes: input.data.notes?.trim() || null,
           updated_by_name: actor,
+          updated_by_id: ctx.userId,
         },
         include: SKU_PRICE_INCLUDE,
       });
@@ -1087,6 +1092,19 @@ export const updateMaterialPriceAction = createAction<
       });
     }
 
+    // Sama seperti create — costing profile + dimensi + base_unit ke Sku lebih
+    // dulu (R4), supaya validasi satuan di `recordSkuPrice` melihat nilai baru.
+    const conversionNum2 = toNumberOrNull(input.data.conversion);
+    await tx.sku.update({
+      where: { id: existing.sku_id },
+      data: {
+        ...(input.data.unit.trim() ? { purchase_unit: input.data.unit.trim(), base_unit: input.data.unit.trim() } : {}),
+        ...(input.data.usage_unit.trim() ? { usage_unit: input.data.usage_unit.trim() } : {}),
+        ...(conversionNum2 !== null && conversionNum2 > 0 ? { conversion: conversionNum2 } : {}),
+        ...(input.data.dim_display ? { dim_display: input.data.dim_display } : {}),
+      },
+    });
+
     const row = await recordSkuPrice(tx, {
       sku_id: existing.sku_id,
       supplier_party_id: supplierId,
@@ -1102,18 +1120,6 @@ export const updateMaterialPriceAction = createAction<
         "VALIDATION_FAILED"
       );
     }
-
-    // Sama seperti create — update costing profile + dimensi + base_unit ke Sku.
-    const conversionNum2 = toNumberOrNull(input.data.conversion);
-    await tx.sku.update({
-      where: { id: existing.sku_id },
-      data: {
-        ...(input.data.unit.trim() ? { purchase_unit: input.data.unit.trim(), base_unit: input.data.unit.trim() } : {}),
-        ...(input.data.usage_unit.trim() ? { usage_unit: input.data.usage_unit.trim() } : {}),
-        ...(conversionNum2 !== null && conversionNum2 > 0 ? { conversion: conversionNum2 } : {}),
-        ...(input.data.dim_display ? { dim_display: input.data.dim_display } : {}),
-      },
-    });
 
     // Upsert SkuCategory dan propagasi ke BrandCategory.
     const skuForCat = await tx.sku.findUnique({ where: { id: existing.sku_id }, select: { brand_id: true } });

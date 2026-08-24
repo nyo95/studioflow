@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  checkPriceUnit,
   checkWorkPrice,
   hasPriceContent,
   isOfferChange,
+  resolveEffectivePriceUnit,
   resolvePrice,
 } from "./sku-price-rules";
 import { canBePriceSource } from "./party-role-rules";
@@ -223,6 +225,50 @@ test("level-1 lists are unique after slugging, or the picker offers one node twi
     const slugs = list.map(categorySlug);
     assert.equal(new Set(slugs).size, slugs.length);
   }
+});
+
+// ---------------------------------------------------------------------------
+// checkPriceUnit / resolveEffectivePriceUnit — keputusan owner U2 (R4, 2026-08-24)
+// ---------------------------------------------------------------------------
+//
+// Satuan harga wajib = `purchase_unit` SKU saat tulis. Perbandingannya harus
+// identik dengan `evaluateBqMaterialReadiness` (trim + persis): validasi tulis
+// yang berbeda dari readiness berarti menyetujui baris yang BQ tolak, atau
+// sebaliknya.
+
+test("checkPriceUnit menolak satuan harga yang berbeda dari purchase unit", () => {
+  const result = checkPriceUnit("pcs", "lembar");
+  assert.equal(result.ok, false);
+  assert.equal(result.ok === false && result.issue, "PRICE_UNIT_MISMATCH");
+  assert.equal(result.ok === false && result.unit, "pcs");
+  assert.equal(result.ok === false && result.purchaseUnit, "lembar");
+});
+
+test("checkPriceUnit menerima satuan yang sama setelah trim", () => {
+  assert.deepEqual(checkPriceUnit(" lembar ", "lembar"), { ok: true, unit: "lembar" });
+  // Persis seperti readiness: perbandingan case-sensitive. "Lembar" ≠ "lembar"
+  // adalah ketidakcocokan yang harus diperbaiki manusia, bukan disamarkan.
+  const cased = checkPriceUnit("Lembar", "lembar");
+  assert.equal(cased.ok, false);
+});
+
+test("checkPriceUnit lolos bila salah satu sisi belum ditetapkan", () => {
+  // SKU tanpa costing profile belum bisa dibandingkan — readiness akan
+  // melaporkan PURCHASE_UNIT_MISSING, bukan UNIT_MISMATCH. Mengisinya lewat
+  // jalur harga adalah cara yang benar, bukan memblokirnya.
+  assert.equal(checkPriceUnit("pcs", null).ok, true);
+  assert.equal(checkPriceUnit(null, "lembar").ok, true);
+  assert.equal(checkPriceUnit(null, null).ok, true);
+});
+
+test("satuan kosong mewarisi purchase unit, bukan mengarang pcs", () => {
+  // Default "pcs" polos menghasilkan baris bersatuan karangan — persis data
+  // yang readiness nanti tolak. Mewarisi `purchase_unit` menjaga baris baru
+  // konsisten secara konstruksi.
+  assert.equal(resolveEffectivePriceUnit("", "lembar"), "lembar");
+  assert.equal(resolveEffectivePriceUnit("   ", "m2"), "m2");
+  assert.equal(resolveEffectivePriceUnit("box", "lembar"), "box", "yang diisi eksplisit menang");
+  assert.equal(resolveEffectivePriceUnit(null, null), "pcs", "fallback terakhir tetap pcs");
 });
 
 // ---------------------------------------------------------------------------

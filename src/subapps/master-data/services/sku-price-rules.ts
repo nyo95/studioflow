@@ -93,6 +93,64 @@ export const WORK_PRICE_ISSUE_MESSAGE: Record<WorkPriceIssue, string> = {
 };
 
 /**
+ * Keputusan owner U2 (R4, 2026-08-24): `unit` harga wajib sama dengan
+ * `sku.purchase_unit` saat tulis. Ini versi murni dari pemeriksaan itu —
+ * modul ini tidak boleh meng-import apa pun, jadi ia MENGEMBALIKAN hasil,
+ * bukan melempar; `sku-price-service.ts` yang menerjemahkannya jadi
+ * `ActionError`.
+ *
+ * Perbandingannya sengaja identik dengan `evaluateBqMaterialReadiness`
+ * (`bq-readiness.ts`): trim lalu bandingkan persis. Validasi tulis yang lebih
+ * longgar dari readiness berarti menyetujui baris yang BQ nanti tolak;
+ * yang lebih ketat berarti memblokir baris yang BQ terima. Keduanya cacat.
+ */
+export type PriceUnitCheck =
+  | { ok: true; unit: string }
+  | {
+      ok: false;
+      issue: "PRICE_UNIT_MISMATCH";
+      /** Satuan yang dikirim form, sudah di-trim. */
+      unit: string;
+      /** `purchase_unit` milik SKU, sudah di-trim. */
+      purchaseUnit: string;
+    };
+
+export function checkPriceUnit(
+  unit: string | null | undefined,
+  purchaseUnit: string | null | undefined
+): PriceUnitCheck {
+  const trimmedUnit = unit?.trim() ?? "";
+  const trimmedPurchase = purchaseUnit?.trim() ?? "";
+
+  if (!trimmedUnit || !trimmedPurchase) {
+    // Salah satu sisi belum ditetapkan — tidak ada yang bisa dibandingkan.
+    // Satuan kosong akan mewarisi `purchase_unit` (lihat
+    // `resolveEffectivePriceUnit`), sehingga barisnya tetap konsisten.
+    return { ok: true, unit: resolveEffectivePriceUnit(unit, purchaseUnit) };
+  }
+
+  if (trimmedUnit !== trimmedPurchase) {
+    return { ok: false, issue: "PRICE_UNIT_MISMATCH", unit: trimmedUnit, purchaseUnit: trimmedPurchase };
+  }
+
+  return { ok: true, unit: trimmedUnit };
+}
+
+/**
+ * Satuan efektif untuk baris harga baru. Menggantikan default `"pcs"` polos
+ * yang dulu dipakai langsung di `recordSkuPrice`: field satuan yang kosong
+ * sekarang mewarisi `purchase_unit` SKU alih-alih mengarang `"pcs"` — satu
+ * baris harga bersatuan karangan persis jenis data yang readiness BQ tolak
+ * (`UNIT_MISMATCH`).
+ */
+export function resolveEffectivePriceUnit(
+  unit: string | null | undefined,
+  purchaseUnit: string | null | undefined
+): string {
+  return unit?.trim() || purchaseUnit?.trim() || "pcs";
+}
+
+/**
  * Fields whose change means "this is a different offer" rather than "the last
  * entry had a typo in its annotation".
  *

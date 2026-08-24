@@ -304,23 +304,36 @@ menulis lookup baru pakai `findFirst({ where: { kind, slug, is_active: true } })
 4. **`WorkPrice.kind` dinyatakan, bukan disimpulkan.** `MATERIAL_LABOR` (Excel
    Table 3) vs `LABOR_ONLY` (Table 4). Jangan menyimpulkannya dari kolom mana
    yang terisi — itu justru cacat yang migrasi `20260811120000` buang.
-5. **Kolom `qty` pada `SkuPrice` dan `WorkPrice` TIDAK DIPAKAI** (keputusan
-   owner Q12/X12). Disimpan apa adanya karena Excel punya kolomnya, tanpa arti
-   yang ditetapkan — penulisnya sendiri menandai "(need curations)". **Jangan
-   masukkan ke perhitungan apa pun dan jangan ekspos ke view BQ.** `price`
+5. **Kolom `qty` SUDAH DIHAPUS** dari `SkuPrice` dan `WorkPrice` (migrasi
+   `20260820202000`; sebelumnya disimpan tanpa arti karena Excel punya
+   kolomnya — keputusan owner Q12/X12). **Jangan menghidupkannya kembali, dan
+   jangan menambahkan kolom kuantitas apa pun ke tabel harga.** `price`
    selalu berarti harga per satu unit.
 6. BQ boleh memakai harga material hanya bila harga DAN satuan keduanya ada.
-7. **`WorkPrice` BUKAN tabel riwayat — beda dengan `SkuPrice` di poin 3.**
+7. **Satuan harga wajib = `sku.purchase_unit` saat tulis** (keputusan owner
+   U2, R4 2026-08-24). Divalidasi app-layer di `recordSkuPrice()` lewat
+   `checkPriceUnit()` — perbandingannya identik dengan readiness BQ
+   (`bq-readiness.ts`), jadi baris yang lolos tulis tidak mungkin ditolak
+   readiness. Satuan kosong mewarisi `purchase_unit`, bukan default `"pcs"`
+   polos. Jalur yang sengaja mengubah satuan (dialog Pricing) memperbarui
+   `Sku.purchase_unit` lebih dulu di transaksi yang sama. Impor Excel tunduk
+   pada aturan yang sama.
+8. **`SkuPrice.updated_by_id` adalah plain column** (keputusan owner U4, R4,
+   migrasi `20260824120000`) — tanpa FK lintas schema, pola
+   `SampleMovement.actor_id`. Diisi dari actor pada setiap tulis lewat
+   `recordSkuPrice()`.
+9. **`WorkPrice` BUKAN tabel riwayat — beda dengan `SkuPrice` di poin 3.**
    Keputusan owner 2026-08-19 (audit skema, SK1): `WorkPrice` sengaja
-   satu-baris-per-`code`. `valid_from`/`valid_to`/`is_current` ada di kolom
-   tapi TIDAK DIPAKAI (lihat komentar di `schema.prisma` dan migrasi
-   `20260819140000`) — `updateServicePriceAction`/
-   `updateMaterialLaborPriceAction` mengedit baris di tempat, dan `code`
-   `@unique` global secara struktural mencegah pola supersede ala `SkuPrice`.
+   satu-baris-per-`code`. Kolom lifecycle-nya (`qty`/`valid_to`/`is_current`)
+   **sudah DIHAPUS** oleh migrasi `20260820202000` — bukan sekadar "ada di
+   kolom tapi tidak dipakai"; `valid_from` tinggal metadata pembuatan baris.
+   `updateServicePriceAction`/`updateMaterialLaborPriceAction` mengedit baris
+   di tempat, dan `code` `@unique` global secara struktural mencegah pola
+   supersede ala `SkuPrice`.
    Riwayat perubahan harga jasa hanya ada di `MasterDataAudit.changes`.
    **Jangan** membangun `recordWorkPrice()`/`closeCurrentWorkPrice()` tanpa
    keputusan owner baru — itu perubahan arah, bukan bug yang perlu ditambal.
-7. **Soft-delete SKU tidak menghapus riwayat harga.** Menghapus sebuah SKU hanya
+10. **Soft-delete SKU tidak menghapus riwayat harga.** Menghapus sebuah SKU hanya
    mengisi `Sku.deleted_at`; seluruh `SkuPrice` (baris berlaku maupun yang sudah
    ditutup) dipertahankan apa adanya untuk audit. Pembaca aktif mengecualikan
    SKU melalui `Sku.deleted_at`, bukan dengan menghapus atau mendemosi harga.

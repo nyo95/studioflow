@@ -65,6 +65,70 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-24 — R4 selesai: validasi satuan harga + `updated_by_id`
+
+### Hasil akhir
+
+Fase R4 (skop menyusut pasca keputusan multi-supplier) selesai penuh:
+
+- **Validasi satuan harga (U2).** Helper murni baru `checkPriceUnit()` +
+  `resolveEffectivePriceUnit()` di `sku-price-rules.ts`. Perbandingannya
+  **identik dengan readiness BQ** (`bq-readiness.ts`): trim lalu bandingkan
+  persis (case-sensitive), sehingga baris yang lolos tulis tidak mungkin
+  ditolak readiness sebagai `UNIT_MISMATCH`. Ditegakkan di:
+  - `recordSkuPrice()` — satu-satunya jalur tulis; satuan berbeda ditolak
+    dengan pesan Inggris yang bisa ditindaklanjuti (`VALIDATION_FAILED`);
+  - **impor Excel** (`excel-service.ts`) — baris tidak cocok jadi row-error,
+    bukan pintu belakang data yang readiness nanti tolak.
+- **Satuan kosong mewarisi `purchase_unit`**, menggantikan default `"pcs"`
+  polos — baris baru konsisten secara konstruksi, bukan bersatuan karangan.
+- **Dialog Pricing tetap boleh mengubah satuan**: `createMaterialPriceAction`
+  dan `updateMaterialPriceAction` kini memperbarui `Sku.purchase_unit`
+  (costing profile) **sebelum** memanggil `recordSkuPrice`, dalam transaksi
+  yang sama, supaya validasi melihat nilai baru.
+- **Kolom `updated_by_id` (U4)**: plain column di `SkuPrice`, migrasi kecil
+  `20260824120000_skuprice_updated_by_id` (tanpa FK lintas schema, pola
+  `SampleMovement.actor_id`). Diisi dari actor oleh `recordSkuPrice()`,
+  amend notes-only di `updateMaterialPriceAction`, dan impor Excel.
+- **Dokumentasi kontrak dikoreksi** (drift yang dicatat entri R1): AGENTS.md
+  §3 poin 5 kini menyatakan kolom `qty` SUDAH DIHAPUS migrasi
+  `20260820202000` (bukan "disimpan apa adanya"); poin 7 (kini 9) kini
+  menyatakan kolom lifecycle WorkPrice DIHAPUS, bukan "ada tapi tidak
+  dipakai"; aturan satuan + `updated_by_id` ditulis sebagai poin 7–8;
+  penomoran ganda "7" dirapikan.
+
+Verifikasi lengkap (semuanya benar-benar dijalankan sesi ini): prisma
+validate ✓, generate ✓, typecheck ✓, unit **198/198** (+4 test baru untuk
+helper satuan; gate AT-01 tetap Rp5.653.559 tanpa toleransi), integration
+docker **8/8** (**46** migrasi termasuk dua migrasi 2026-08-24 diterapkan ke
+DB disposable tmpfs, container dibuang), production build ✓.
+
+### Area/berkas
+
+`src/subapps/master-data/services/sku-price-rules.ts`,
+`sku-price-service.ts`, `excel-service.ts`, `actions/pricing-actions.ts`,
+`services/sku-price.test.ts`, `prisma/schema.prisma`, migrasi baru
+`20260824120000_skuprice_updated_by_id/`, `AGENTS.md`, `roadmap.md`.
+
+### Risiko
+
+- **Migrasi belum diterapkan ke deployment** — wajib `prisma migrate deploy`
+  sebelum kode live (kolom `updated_by_id` belum ada di DB lama).
+- Perilaku berubah: harga dengan satuan ≠ `purchase_unit` kini DITOLAK di
+  semua jalur tulis, termasuk kutipan vendor dari Sample Request
+  (`syncSkuPrice`) dan dialog Library. Sebelumnya barisnya lolos lalu
+  diblok readiness BQ saat dipakai — menolak lebih awal memang inti U2, tapi
+  user yang dulu terbiasa menyimpan dulu akan melihat error baru.
+- Data historis mismatch TIDAK disentuh (add-first); ia tetap tampil sebagai
+  `UNIT_MISMATCH` di readiness sampai diperbaiki manual.
+
+### Pekerjaan terbuka
+
+- R5 UI Engine v2 foundation (theme/tokens/primitives/patterns/layout/
+  templates) — fase berikutnya.
+- Sisa R3 tetap: backfill/flip/drop `MasterDataAudit`, error mapping,
+  pagination contract, soft-delete helper.
+
 ## [Unreleased] - 2026-08-24 — R3 fase 1: konsolidasi fisik audit selesai
 
 ### Hasil akhir

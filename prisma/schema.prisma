@@ -647,6 +647,10 @@ model SkuPrice {
   created_at      DateTime  @default(now())
   updated_at      DateTime? @updatedAt
   updated_by_name String?
+  /// Keputusan owner U4 (R4, 2026-08-24): plain column, tanpa FK — pola sama
+  /// dengan `SampleMovement.actor_id`. Aktor hidup di schema `studioflow`;
+  /// snapshot harus selamat dari apa pun yang terjadi di sana.
+  updated_by_id   String?
 
   @@index([sku_id, is_current])
   @@index([supplier_party_id])
