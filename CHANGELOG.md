@@ -65,6 +65,88 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-24 — R6 selesai: AppShell migration
+
+### Hasil akhir
+
+Fase R6 selesai sesuai PRD §41. **Nol perubahan visual** — markup shell
+direproduksi apa adanya, hanya berpindah pemilik:
+
+- **§41 — `AppShell` satu shell untuk tiga permukaan.** Komponen baru
+  `ui_engine/layout/app-shell.tsx` (server-compatible, tanpa state) memikul
+  canvas + SidebarProvider + offset header/rail di main; sub-app menyusun slot
+  `header`/`navigation`/`footer` dan **tetap memikul otorisasi** — gerbang
+  sesi/role tidak berpindah dari layout masing-masing. Ketiga layout
+  (`(dashboard)`, `masterdata`, `bq`) kini me-render `<AppShell>`; struktur DOM
+  lama dipertahankan persis (termasuk wrapper `<div class="flex w-full flex-1
+  flex-col">` yang hanya ada bila footer disediakan).
+- **`AppRail` — implementasi rail yang tadinya diduplikasi 3× digabung.**
+  `ui_engine/layout/app-rail.tsx` memikul aside ikon fixed desktop + backdrop +
+  drawer mobile (markup verbatim dari ketiga nav lama); adapter tipis
+  (`nav-outer.tsx`, `MasterDataNavOuter.tsx`, `BqNavOuter.tsx`) tinggal memilikI
+  daftar item + eyebrow/judul drawer. Divider Master Data dirender engine
+  sebagai group kedua; item disabled/gembok extension registry ikut pindah ke
+  engine sebagai perilaku generik.
+- **Aturan aktif nav jadi murni & teruji.** Logika custom BQ ("/bq" aktif untuk
+  `/bq` dan `/bq/[id]`, bukan `/bq/library`) terbukti tercakup aturan generik
+  `resolveActiveRailHref()` (exact match menang, lalu prefix terpanjang) —
+  dikunci 7 unit test baru di `rail-active.test.ts` yang meniru skenario
+  ketiga aplikasi. Semua test lama lulus tanpa diubah.
+- **Konsumen geometri hardcoded bermigrasi ke token theme §37**: `top-14` →
+  `top-[var(--ui-header-height)]` / `pt-[var(--ui-header-height)]`;
+  `w-[78px]`/`left-[78px]`/`lg:pl-[78px]` → token `--ui-rail-width-collapsed`;
+  toggle 78px↔256px project-layout-shell → token collapsed/expanded via inline
+  style. Selector print product-catalog `.pt-14` ikut menarget class token
+  baru agar export PDF tetap full-bleed. Sisa angka hanya di definisi token,
+  fallback config tak terpakai (`DESIGN_SYSTEM_CONFIG.sidebar`,
+  `--ui-sidebar-rail-width`), dan komentar.
+- Duplikasi shell lama dibuang SETELAH parity terbukti (typecheck+build+test
+  dalam commit kerja yang sama): isi visual NavOuter/MasterDataNavOuter/
+  BqNavOuter dihapus; prop mati `userRole` pada NavOuter ikut dibuang;
+  SidebarProvider keluar dari ketiga layout (kini milik AppShell);
+  variabel `footerTheme` mati di dashboard layout dihapus.
+
+Verifikasi lengkap (semuanya benar-benar dijalankan): prisma validate ✓,
+typecheck ✓, unit **205/205** (+7 rail-active; gate AT-01 tetap Rp5.653.559 /
+Rp4.711.299), integration docker **8/8** (46 migrasi diterapkan ke DB disposable
+tmpfs, container dibuang), production build ✓, eslint pada seluruh berkas yang
+disentuh bersih (satu warning baseline `footerTheme` ikut dihapus).
+
+### Area/berkas
+
+Baru: `ui_engine/layout/app-shell.tsx`, `app-rail.tsx`, `rail-active.ts`,
+`rail-active.test.ts`. Diubah: `ui_engine/index.ts` (ekspor baru),
+`components/nav-outer.tsx` + `subapps/master-data/components/MasterDataNavOuter.tsx`
++ `subapps/bq/components/BqNavOuter.tsx` (rewrite jadi adapter tipis),
+`components/top-header.tsx` + `components/project-layout-shell.tsx` (token),
+`app/(dashboard)/layout.tsx`, `app/masterdata/layout.tsx`, `app/bq/layout.tsx`
+(AppShell), `app/(dashboard)/projects/[id]/extensions/product-catalog/page.tsx`
+(selector print). Tidak ada perubahan schema/migrasi.
+
+### Risiko
+
+- Class utilitas Tailwind arbitrer baru (`pt-[var(--ui-header-height)]` dll.)
+  bergantung pada deteksi class Tailwind JIT; build produksi sudah membuktikan
+  semuanya terkompilasi, tapi halaman yang merender shell lewat jalur lain
+  harus tetap memakai konstanta `APP_*_CLASS` dari `@/ui_engine/theme`, bukan
+  menulis angka lagi.
+- Aturan aktif prefix memakai `startsWith` polos tanpa cek batas segmen
+  (pathname fiktif `/masterdataxyz` akan mengaktifkan `/masterdata`) — itu
+  salinan setia perilaku lama, sengaja dipertahankan demi parity; kalau mau
+  diperketat, itu keputusan owner terpisah.
+- Print CSS product-catalog kini menarget selector token; kalau nanti token
+  `--ui-header-height` diubah namanya, selector itu harus ikut.
+
+### Pekerjaan terbuka
+
+- R7 Template migration — Directory/Detail/Workspace/Project/Spreadsheet/
+  Settings/Dashboard (kontrak slot sudah ada sejak R5).
+- Keluarga variabel legacy `--ui-sidebar-*` (`ui-settings.ts`,
+  `design-system.config.sidebar`, opsi "256px" di studio-settings-panel)
+  tidak punya konsumen aktif — kandidat pembongkaran di fase cleanup
+  (R8–R10), bukan bagian R6.
+- Sisa R3 tetap: backfill/flip/drop `MasterDataAudit`.
+
 ## [Unreleased] - 2026-08-24 — R5 selesai: UI Engine v2 foundation
 
 ### Hasil akhir

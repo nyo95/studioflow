@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/ui_engine";
 import { useSidebar } from "@/context/sidebar-context";
+import { APP_HEADER_HEIGHT_CLASS } from "@/ui_engine/theme";
 import type { Role } from "@/generated/prisma";
 import { useLocalStorage, useRelativeTime } from "@/hooks/use-hydration";
 import { buildActivitySentence, formatActionLabel } from "@/lib/activity-copy";
@@ -210,15 +211,16 @@ export function TopHeader({
   }
 
   return (
-    <header 
+    <header
       className={cn(
-        "fixed top-0 left-0 right-0 z-50 flex h-14 flex-shrink-0 items-center border-b transition-colors duration-300",
-        isDark 
-          ? "border-slate-800 bg-slate-950" 
+        "fixed top-0 left-0 right-0 z-50 flex flex-shrink-0 items-center border-b transition-colors duration-300",
+        APP_HEADER_HEIGHT_CLASS,
+        isDark
+          ? "border-slate-800 bg-slate-950"
           : "border-[var(--ui-border-subtle)] bg-[var(--ui-surface-bg)]"
       )}
     >
-      <div className="w-full px-6 lg:pl-[78px] lg:pr-6">
+      <div className="w-full px-6 lg:pl-[var(--ui-rail-width-collapsed)] lg:pr-6">
         <div className="flex w-full items-center justify-between">
         <div className="flex min-w-0 items-center gap-4">
           <Button

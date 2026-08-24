@@ -8,6 +8,10 @@ export * from "./primitives";
 // `@/components` in R5 — import them from there, never re-add them to this
 // barrel.
 export * from "./layout/page-header";
+// §41 AppShell — satu shell untuk semua sub-app; rail-active murni (diuji unit).
+export * from "./layout/rail-active";
+export * from "./layout/app-shell";
+export * from "./layout/app-rail";
 export * from "./navigation/page-back-link";
 export * from "./primitives/simple-card";
 export * from "./components/heading";

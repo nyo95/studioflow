@@ -76,23 +76,29 @@ export function ProjectLayoutShell({
           =====================================================================
           GEOMETRY — this reproduces the previous layout exactly
           =====================================================================
-          `left-[78px]` is the width of the fixed NavOuter rail in
-          src/app/(dashboard)/layout.tsx, which also pads `main` by the same
-          `lg:pl-[78px]`. `top-14` clears the fixed 3.5rem TopHeader.
-          The sibling spacer below keeps the flex row's first column, so page
-          content still starts to the right of the panel instead of sliding
-          underneath it.
-          If the rail width changes, both numbers move together. */}
+          The rail offsets read the theme tokens (§37): `left-[var(--ui-rail-
+          width-collapsed)]` matches the fixed NavOuter/AppRail rail in
+          src/app/(dashboard)/layout.tsx, which pads `main` via
+          `lg:pl-[var(--ui-rail-width-collapsed)]`; `top-[var(--ui-header-
+          height)]` clears the fixed TopHeader. Collapsed/expanded widths are
+          the same tokens.
+          If a token changes, all of these move together. */}
       <div
         className="hidden shrink-0 lg:block"
-        style={{ width: isCollapsedDesktop ? "78px" : "256px" }}
         aria-hidden
+        style={{
+          width: isCollapsedDesktop
+            ? "var(--ui-rail-width-collapsed)"
+            : "var(--ui-rail-width-expanded)",
+        }}
       />
 
       <aside
-        className="hidden lg:fixed lg:left-[78px] lg:top-14 lg:bottom-0 lg:z-20 lg:flex lg:flex-col"
+        className="hidden lg:fixed lg:left-[var(--ui-rail-width-collapsed)] lg:top-[var(--ui-header-height)] lg:bottom-0 lg:z-20 lg:flex lg:flex-col"
         style={{
-          width: isCollapsedDesktop ? "78px" : "256px",
+          width: isCollapsedDesktop
+            ? "var(--ui-rail-width-collapsed)"
+            : "var(--ui-rail-width-expanded)",
         }}
       >
         <NavInner

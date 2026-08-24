@@ -94,7 +94,9 @@ export default async function ProductCatalogPage({
             .min-h-0 { min-height: 0 !important; }
             .overflow-hidden { overflow: visible !important; }
             .overflow-y-auto, .overflow-auto { overflow: visible !important; }
-            .pt-14 { padding-top: 0 !important; }
+            /* R6: shell padding-top now uses the header-height token
+               (pt-[var(--ui-header-height)]) instead of the old pt-14 utility. */
+            .pt-14, .pt-\[var\(--ui-header-height\)\] { padding-top: 0 !important; }
             main { padding: 0 !important; overflow: visible !important; background: #fff !important; }
 
             /* Full-bleed cover = whole first page. */

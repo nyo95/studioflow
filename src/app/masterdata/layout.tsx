@@ -31,17 +31,15 @@
  */
 
 import { redirect } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/core/platform/db";
 import { APP, canEnterApp, landingRouteFor } from "@/core/rbac/app-access";
 import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import { sanitizeUISettings, uiSettingsToStyle } from "@/lib/ui-settings";
 import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
-import { UI_ENGINE_CANVAS_CLASS } from "@/ui_engine/tokens";
+import { AppShell } from "@/ui_engine";
 import { TopHeader } from "@/components/top-header";
 import { MasterDataNavOuter } from "@/subapps/master-data/components/MasterDataNavOuter";
-import { SidebarProvider } from "@/context/sidebar-context";
 import type { UISettings } from "@/types/common";
 
 export const dynamic = "force-dynamic";
@@ -82,11 +80,9 @@ export default async function MasterDataLayout({
   ] as const;
 
   return (
-    <SidebarProvider>
-      <div
-        className={cn("flex h-screen w-full flex-col overflow-hidden", UI_ENGINE_CANVAS_CLASS)}
-        style={uiStyle}
-      >
+    <AppShell
+      style={uiStyle}
+      header={
         <TopHeader
           userName={user?.name ?? "Guest"}
           userInitials={userInitials}
@@ -97,16 +93,10 @@ export default async function MasterDataLayout({
           showSearch={false}
           subappLinks={subappLinks}
         />
-
-        <div className="relative flex flex-1 min-h-0 pt-14">
-          <MasterDataNavOuter />
-
-          {/* Same padding offset as StudioFlow's (dashboard)/layout.tsx */}
-          <main className={cn("flex flex-1 flex-col overflow-y-auto lg:pl-[78px] lg:pr-6", UI_ENGINE_CANVAS_CLASS)}>
-            {children}
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
+      }
+      navigation={<MasterDataNavOuter />}
+    >
+      {children}
+    </AppShell>
   );
 }

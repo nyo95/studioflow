@@ -1,9 +1,9 @@
 /**
  * BQ SUBAPP — layout + authorisation gate.
  *
- * Disalin bentuknya dari `src/app/masterdata/layout.tsx` dengan sengaja: tiga
- * permukaan (StudioFlow, Master Data, BQ) berbagi satu chrome supaya terasa
- * satu produk, dan menyalin polanya lebih baik daripada mengarang yang ketiga.
+ * Sejak R6 (PRD Architecture Cleanup v2 §41) chrome visual dirender `AppShell`
+ * dari engine; layout ini menyusun slot header/navigation dan memikul gerbang
+ * otorisasi.
  *
  * ---------------------------------------------------------------------------
  * KENAPA GERBANGNYA DI SINI, PADAHAL PROXY SUDAH MENJAGA
@@ -20,16 +20,14 @@
  */
 
 import { redirect } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/core/platform/db";
 import { APP, canEnterApp, landingRouteFor } from "@/core/rbac/app-access";
 import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import { sanitizeUISettings, uiSettingsToStyle } from "@/lib/ui-settings";
 import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
-import { UI_ENGINE_CANVAS_CLASS } from "@/ui_engine/tokens";
+import { AppShell } from "@/ui_engine";
 import { TopHeader } from "@/components/top-header";
-import { SidebarProvider } from "@/context/sidebar-context";
 import { BqNavOuter } from "@/subapps/bq/components/BqNavOuter";
 import type { UISettings } from "@/types/common";
 
@@ -65,11 +63,9 @@ export default async function BqLayout({ children }: { children: React.ReactNode
   ] as const;
 
   return (
-    <SidebarProvider>
-      <div
-        className={cn("flex h-screen w-full flex-col overflow-hidden", UI_ENGINE_CANVAS_CLASS)}
-        style={uiStyle}
-      >
+    <AppShell
+      style={uiStyle}
+      header={
         <TopHeader
           userName={user?.name ?? "Guest"}
           userInitials={userInitials}
@@ -80,23 +76,10 @@ export default async function BqLayout({ children }: { children: React.ReactNode
           showSearch={false}
           subappLinks={subappLinks}
         />
-
-        <div className="relative flex flex-1 min-h-0 pt-14">
-          <BqNavOuter />
-
-          {/* Offset padding yang sama dengan (dashboard)/layout.tsx dan
-              masterdata/layout.tsx — kalau berbeda, berpindah antar subapp
-              menggeser konten satu langkah dan terlihat seperti bug. */}
-          <main
-            className={cn(
-              "flex flex-1 flex-col overflow-y-auto lg:pl-[78px] lg:pr-6",
-              UI_ENGINE_CANVAS_CLASS
-            )}
-          >
-            {children}
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
+      }
+      navigation={<BqNavOuter />}
+    >
+      {children}
+    </AppShell>
   );
 }

@@ -1,12 +1,10 @@
 import { redirect } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { APP, canEnterApp, landingRouteFor, subappLinksFor } from "@/core/rbac/app-access";
 import { NavOuter } from "@/components/nav-outer";
 import { TopHeader } from "@/components/top-header";
-import { SidebarProvider } from "@/context/sidebar-context";
+import { AppShell } from "@/ui_engine";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/core/platform/db";
-import { UI_ENGINE_CANVAS_CLASS } from "@/ui_engine/tokens";
 import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 import { sanitizeUISettings, uiSettingsToStyle } from "@/lib/ui-settings";
 import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
@@ -96,20 +94,20 @@ export default async function DashboardLayout({
   });
 
   const topBarTheme = DESIGN_SYSTEM_CONFIG.ui.topBar.theme;
-  const footerTheme = DESIGN_SYSTEM_CONFIG.ui.footer.theme;
 
   return (
-    <SidebarProvider>
-      <div
-        className={cn("flex h-screen w-full flex-col overflow-hidden", UI_ENGINE_CANVAS_CLASS)}
-        style={uiStyle}
-      >
-        {/* userRole previously fell back to "STAFF" here. With STAFF owning
+    // R6 (PRD Architecture Cleanup v2 §41): chrome dirender AppShell dari
+    // engine; layout ini menyusun slot header/navigation/footer dan memikul
+    // gerbang otorisasi StudioFlow.
+    <AppShell
+      style={uiStyle}
+      header={
+        /* userRole previously fell back to "STAFF" here. With STAFF owning
             Master Data that default rendered a privileged nav for a session
             with no role claim. `role` from getSession() is already resolved
             against LEAST_PRIVILEGE_ROLE, so pass it straight through.
             subappLinks is non-empty only for ADMIN/DEVELOPER — see
-            src/core/rbac/app-access.ts#subappLinksFor. */}
+            src/core/rbac/app-access.ts#subappLinksFor. */
         <TopHeader
           userName={user?.name || "Guest"}
           userInitials={userInitials}
@@ -121,23 +119,17 @@ export default async function DashboardLayout({
           activityNotifications={recentActivity}
           subappLinks={subappLinksFor(role)}
         />
-
-        <div className="flex flex-1 pt-14 min-h-0 relative">
-          <NavOuter appTitle={appTitle} userRole={role} />
-
-          <main className={cn("flex flex-1 flex-col overflow-y-auto lg:pl-[78px] lg:pr-6", UI_ENGINE_CANVAS_CLASS)}>
-            <div className="flex flex-1 flex-col w-full">
-              {children}
-            </div>
-            
-            <footer className="mt-auto flex justify-center py-4 border-t border-[var(--ui-border-subtle,rgb(241_245_249))] text-slate-400">
-              <p className="select-none font-sans text-[10px] font-medium uppercase tracking-[0.2em]">
-                {appTitle} by BK (c)2026
-              </p>
-            </footer>
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
+      }
+      navigation={<NavOuter appTitle={appTitle} />}
+      footer={
+        <footer className="mt-auto flex justify-center border-t border-[var(--ui-border-subtle,rgb(241_245_249))] py-4 text-slate-400">
+          <p className="select-none font-sans text-[10px] font-medium uppercase tracking-[0.2em]">
+            {appTitle} by BK (c)2026
+          </p>
+        </footer>
+      }
+    >
+      {children}
+    </AppShell>
   );
 }
