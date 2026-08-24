@@ -182,6 +182,12 @@ function compileIntegrationTest() {
   // Passing source files directly to `tsc` makes TypeScript ignore tsconfig,
   // including the `@/*` path map. A tiny generated project keeps production
   // compiler options while emitting only the integration test dependency tree.
+  const integrationTests = walk(join(ROOT, "tests", "integration"), (f) =>
+    f.endsWith(".integration.test.ts")
+  );
+  if (integrationTests.length === 0) {
+    throw new Error("No *.integration.test.ts found under tests/integration.");
+  }
   writeFileSync(
     INTEGRATION_TSCONFIG,
     `${JSON.stringify(
@@ -199,7 +205,7 @@ function compileIntegrationTest() {
         },
         files: [
           "../src/types/next-auth.d.ts",
-          "../tests/integration/material-view-service.integration.test.ts",
+          ...integrationTests.map((f) => relative(join(ROOT, "tmp"), f)),
         ],
         include: [],
       },
@@ -230,8 +236,7 @@ function compileIntegrationTest() {
   }
   if (!existsSync(COMPILED_TEST)) {
     throw new Error("TypeScript did not emit the compiled integration test.");
-  }
-  // Prisma Client v7 is generated as JavaScript + declarations, so tsc uses
+  }  // Prisma Client v7 is generated as JavaScript + declarations, so tsc uses
   // its types but does not copy its runtime. Mirror that generated package into
   // the disposable output before resolving aliases.
   cpSync(
@@ -279,7 +284,12 @@ try {
 
   run("npx", ["prisma", "migrate", "deploy"], { env: testEnv });
   compileIntegrationTest();
-  run("node", ["--test", relative(ROOT, COMPILED_TEST)], { env: testEnv });
+  const compiledIntegrationTests = walk(join(OUT, "tests", "integration"), (f) =>
+    f.endsWith(".integration.test.js")
+  );
+  run("node", ["--test", ...compiledIntegrationTests.map((f) => relative(ROOT, f))], {
+    env: testEnv,
+  });
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;

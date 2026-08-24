@@ -55,6 +55,46 @@ kalau memang perlu, tanya dulu.
 
 ---
 
+# ═══ PROGRAM: Architecture Cleanup & Consolidation v2 ═══
+
+> **Baru — diratifikasi owner 2026-08-24.** Sumber kebenaran program:
+> [`PRD-Architecture-Cleanup-v2.md`](PRD-Architecture-Cleanup-v2.md) (otoritas
+> tertinggi requirement produk). Fase-fase di bawah adalah kerangka eksekusi;
+> detail tiap fase ditulis sebagai work order terpisah saat fase itu dibuka.
+> **Tidak ada fase yang dimulai sebelum R0 selesai** dan baseline
+> typecheck/test/build tercatat.
+
+| Fase | Isi | Status |
+|---|---|---|
+| **R0** | Baseline freeze — capture schema, jalankan typecheck/tests/integration/build, catat acceptance cases BQ | ✅ **selesai 2026-08-24** — typecheck bersih, test 158/158, integration docker 5/5, build sukses, skema 64 model/30 enum pada `6377ac0`; lihat changelog |
+| **R1** | Schema & ownership audit → migration map disetujui owner | ✅ **disetujui 2026-08-24 (amandemen pricing = multi-supplier final)** — [`AUDIT-R1-SCHEMA-2026-08-24.md`](AUDIT-R1-SCHEMA-2026-08-24.md); U2/U4/U5/U6 disetujui; R4 menyusut |
+| **R2** | Shared Core SSOT — Unit Dictionary, Measurement, Currency/Money, Date/time, Normalization, Provenance | ✅ **selesai 2026-08-24** — `src/core/reference/{units,provenance}.ts`, `src/core/utilities/{measurement,money,datetime,normalize,round}.ts` + 36 test baru (194/194); konsumen lama bermigrasi di R8–R10 sesuai jadwal |
+| **R3** | Platform consolidation — audit fisik satu `AuditLog` generic, action errors, pagination, soft-delete | 🔶 **fase 1 selesai 2026-08-24** — migrasi `20260824090000` + shared `recordAudit()` + dual-write Master Data + domain BQ otomatis + integration runner multi-file; sisa: backfill/flip/drop `MasterDataAudit`, error mapping, pagination contract |
+| **R4** | Pricing (skop menyusut, keputusan final multi-supplier): validasi `unit` harga = `purchase_unit` saat tulis + kolom `updated_by_id` + perbaikan dokumentasi kontrak; **tanpa konsolidasi data, tanpa perubahan `SkuPrice_current_uniq`** | ⏳ 🔒 migrasi kecil |
+| **R5** | UI Engine v2 foundation — theme/tokens/primitives/patterns/layout/templates tanpa knowledge domain | ⏳ |
+| **R6** | AppShell migration — Master Data → BQ → StudioFlow | ⏳ |
+| **R7** | Template migration — Directory/Detail/Workspace/Project/Spreadsheet/Settings/Dashboard | ⏳ |
+| **R8** | Master Data cleanup — integrasi unit kanonik, price simplification, picker & formatter consolidation | ⏳ |
+| **R9** | BQ cleanup — Project Cost Database, lifecycle guard, provenance, ordering; **hapus `price-drift-service.ts`** (snapshot tidak pernah refresh — keputusan owner 2026-08-24); hasil kalkulasi tidak boleh berubah | ⏳ |
+| **R10** | StudioFlow cleanup — date utils, templates, mapping presentasi phase | ⏳ |
+| **R11** | Boundary enforcement — lint/import guards, nol pelanggaran | ⏳ |
+| **R12** | Legacy purge — hanya setelah semua consumer termigrasi | ⏳ |
+
+**Aturan selama program berjalan:**
+
+1. No feature expansion (aturan utama PRD). Item feature di bagian bawah
+   roadmap ini hanya dikerjakan kalau tidak menyentuh area fase aktif, atau
+   dengan persetujuan owner eksplisit.
+2. ~~Item lama pola riwayat-per-supplier tertahan~~ **dicabut 2026-08-24** —
+   keputusan final owner: multi-supplier TETAP; viewer harga lintas supplier,
+   demosi per supplier, dsb. adalah perilaku kanonik, bukan kerja bongkar.
+3. Jangan menambah mekanisme refresh/drift BQ apa pun (lihat kontrak BQ §3,
+   penegasan 2026-08-24).
+4. Setiap fase wajib lolos gerbang regresi PRD §49 sebelum fase berikutnya
+   dibuka.
+
+---
+
 # ═══ MASTER DATA ═══
 
 ## Gelombang 1 — kepatuhan kontrak (paling bernilai)

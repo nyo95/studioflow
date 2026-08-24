@@ -17,6 +17,7 @@
 
 import { Prisma } from "@/generated/prisma";
 import type { PrismaTransaction } from "@/types/common";
+import { recordAudit as recordCoreAudit } from "@/core/platform/audit/record";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,6 +94,22 @@ export async function recordAudit(
       actor_name: args.actor.name,
       changes: changesJson,
     },
+  });
+
+  // R3 dual-write (PRD Architecture Cleanup v2 §20): baris kanonik baru
+  // ditulis ke satu tabel AuditLog generic di transaksi yang sama. Tabel
+  // master_data.MasterDataAudit tetap sumber baca sampai backfill historis
+  // selesai dan parity terverifikasi, lalu di-drop.
+  await recordCoreAudit(tx, {
+    domain: "MASTER_DATA",
+    entityType: args.entity,
+    entityId: args.entity_id,
+    action: args.action,
+    actorId: args.actor.id ?? null,
+    actorName: args.actor.name,
+    metadata: args.changes
+      ? ({ changes: JSON.parse(JSON.stringify(changesJson)) } as Record<string, unknown>)
+      : undefined,
   });
 }
 

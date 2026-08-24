@@ -47,6 +47,13 @@ export async function insertAuditLog(
 
   await tx.auditLog.create({
     data: {
+      // PRD Architecture Cleanup v2 §20: satu tabel audit lintas domain.
+      // BQ menulis lewat jalur ini dengan kunci `bq_project_id` (kontrak BQ
+      // §11) — barisnya ditandai domain BQ, bukan STUDIOFLOW.
+      domain:
+        detailsObj && typeof detailsObj.bq_project_id === "string"
+          ? "BQ"
+          : "STUDIOFLOW",
       action,
       entity_type: entityType,
       entity_id: entityId,

@@ -168,19 +168,36 @@ model File {
 }
 
 model AuditLog {
-  id          String    @id @default(uuid())
+  id      String      @id @default(uuid())
+  /// PRD Architecture Cleanup v2 §20 (keputusan owner 2026-08-24): satu tabel
+  /// audit generic lintas domain. Baris lama di-backfill 'STUDIOFLOW' oleh
+  /// migrasi; MasterDataAudit digabung lewat dual-write + backfill terjadwal.
+  domain     AuditDomain @default(STUDIOFLOW)
   action      String
   entity_type String
   entity_id   String
-  user_id     String
+  /// Actor StudioFlow (FK). NULL untuk domain MASTER_DATA/BQ yang actornya
+  /// disimpan sebagai plain column actor_id/actor_name (batas schema §8).
+  user_id     String?
   project_id  String?
   phase_id    String?
+  actor_id    String?
+  actor_name  String?
   details     Json?
   created_at  DateTime  @default(now())
   reverted_at DateTime?
   phase       Phase?    @relation(fields: [phase_id], references: [id], onDelete: SetNull)
   project     Project?  @relation(fields: [project_id], references: [id], onDelete: SetNull)
-  user        User      @relation(fields: [user_id], references: [id])
+  user        User?     @relation(fields: [user_id], references: [id])
+
+  @@index([domain, entity_type, entity_id, created_at])
+  @@schema("studioflow")
+}
+
+enum AuditDomain {
+  STUDIOFLOW
+  MASTER_DATA
+  BQ
 
   @@schema("studioflow")
 }

@@ -163,7 +163,9 @@ export type AuditLogWithUser = Prisma.AuditLogGetPayload<{
 }>;
 
 export type AuditReferenceRecord = {
-  user_id: string;
+  /// Nullable sejak AuditLog generic (R3): baris MASTER_DATA/BQ tidak punya
+  /// user StudioFlow.
+  user_id: string | null;
   phase_id: string | null;
   entity_type: string;
   entity_id: string;

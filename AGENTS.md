@@ -272,6 +272,19 @@ menulis lookup baru pakai `findFirst({ where: { kind, slug, is_active: true } })
 
 ### 3. Harga
 
+> **✅ KEPUTUSAN FINAL OWNER 2026-08-24 (sesi takeover, menjawab ❓U1/U3):**
+> arah pricing adalah **MULTI-SUPPLIER** — setiap SKU boleh punya beberapa
+> harga berlaku, satu per supplier (`SkuPrice_current_uniq` per SKU ×
+> supplier TETAP berlaku). Ini mencabut ratifikasi pagi hari atas PRD §15–§18
+> ("satu harga kanonik per SKU"); bagian itu tidak dieksekusi dan tidak akan
+> dieksekusi. Kontrak poin 3 di bawah (SkuPrice tabel riwayat,
+> `recordSkuPrice()`/`closeCurrentSkuPrice()`) tetap mengikat penuh.
+> Sisa pekerjaan pricing yang disetujui owner dari audit R1:
+> (a) validasi app-layer `unit` harga wajib = `sku.purchase_unit` saat tulis;
+> (b) tambah kolom `updated_by_id` (plain column); (c) perbaikan komentar/
+> dokumentasi. BQ tetap memilih supplier-price saat penarikan dan membekunya
+> sebagai snapshot immutable.
+
 1. **Satu harga, bukan sepasang.** `SkuPrice.price_net` dan `WorkPrice.price`
    masing-masing satu kolom. Pasangan sebelum/sesudah diskon dihapus 2026-08-14,
    dan `material_price`/`labor_price` dihapus 2026-08-11 — yang dicatat studio
@@ -351,6 +364,15 @@ Engsel, Lampu).
    tidak bisa `DROP VALUE` untuk memperbaikinya.
 
 ### 6. Audit
+
+> **⚠️ KEPUTUSAN OWNER 2026-08-24 (PRD Architecture Cleanup v2 §20):** audit
+> akan **dikonsolidasikan secara fisik** menjadi satu tabel `AuditLog` generic
+> lintas domain (`STUDIOFLOW`, `MASTER_DATA`, `BQ`) plus satu shared interface
+> `recordAudit({ domain, entityType, entityId, action, actorId, before, after,
+> metadata })`. Penggabungan `master_data.MasterDataAudit` ke dalamnya adalah
+> migrasi terjadwal (fase R3 roadmap) — sampai migrasi itu merge, aturan di
+> bawah tetap mengikat kode yang hidup. Jangan menambah tabel audit baru mana
+> pun sejak sekarang.
 
 Setiap tulis ke tabel `master_data` WAJIB lewat `recordAudit(tx, …)` →
 `master_data.MasterDataAudit`, **di dalam transaksi yang sama** dengan tulisan
@@ -497,12 +519,31 @@ breakdown** (PRD §5.4 — aturan yang paling tidak boleh dilanggar).
 - Object terkunci (`locked_at`) tidak menerima refresh apa pun, banner pun tidak
   muncul.
 
+> **⚠️ PENEGASAN OWNER 2026-08-24 (PRD Architecture Cleanup v2, menjawab
+> pertanyaan eksplisit):** BQ snapshot **TIDAK PERNAH** refresh dari Master
+> Data — bukan "refresh all", bukan "refresh selected", tidak ada banner
+> "update available". Harga current Master Data diambil **satu kali, saat baris
+> ditarik dari Master Data ke project BQ**; setelah itu snapshot yang ada tidak
+> disentuh oleh siapa pun. Konsekuensinya: `price-drift-service.ts` dan seluruh
+> mekanisme lapor-drift menjadi kerja yang dibongkar di fase R9 — jangan
+> memperluasnya. Suntingan manual `is_manual_override` tetap satu-satunya cara
+> mengubah nilai baris yang sudah ada.
+
 ### 4. Master data adalah SSOT (keputusan owner 2026-08-19)
+
+> **DIPERBARUI 2026-08-24 (PRD Architecture Cleanup v2 §28).** Paragraf "tidak
+> ada jalur baris custom di picker" di bawah ini TIDAK BERLAKU lagi. Owner
+> mengesahkan project-local entry: estimator BOLEH membuat Project Material /
+> Project Service dengan source `PROJECT_LOCAL` langsung dari BQ picker bila
+> Master Data belum punya itemnya. Ia tidak menulis ke `master_data` dan bisa
+> kelak dipromosikan lewat workflow eksplisit. Kode picker sudah berjalan begini
+> sejak 2026-08-20; kontrak lama tertinggal. Larangan menulis ke tabel
+> `master_data` dari `src/subapps/bq/` tetap berlaku penuh.
 
 Tidak ada berkas di `src/subapps/bq/` yang boleh **menulis** ke tabel
 `master_data`. Bahan atau jasa yang belum ada diminta ke staff lewat Master Data
-lebih dulu. Tidak ada jalur "baris custom" di picker, dan itu keputusan, bukan
-fitur yang belum sempat dibuat.
+lebih dulu. ~~Tidak ada jalur "baris custom" di picker, dan itu keputusan, bukan
+fitur yang belum sempat dibuat.~~ *(dicabut 2026-08-24, lihat catatan di atas)*
 
 Yang BOLEH: menyunting nilai **snapshot** sebuah baris di dalam BQ (harga nego,
 sisa stok, konversi khusus). Suntingan itu ditandai `is_manual_override`, hidup
@@ -629,6 +670,14 @@ Diperbarui pada perapihan 2026-08-18. Baca urutan ini, jangan yang lain:
 Kode yang berjalan mengalahkan dokumen yang menjelaskannya; kalau keduanya
 berbeda, yang salah adalah dokumennya — perbaiki dokumennya, jangan diam-diam
 mengubah kodenya supaya cocok.
+
+> **⚠️ KLARIFIKASI OWNER 2026-08-24:** AGENTS.md hanya mengatur **bagaimana
+> AI/agent bekerja** — ia bukan source of truth requirement produk. Untuk
+> requirement produk, otoritas tertinggi adalah **Product PRD**; saat ini PRD
+> yang berlaku adalah *PRD Architecture Cleanup & Consolidation v2*
+> (`PRD-Architecture-Cleanup-v2.md`). Konflik antara kontrak agent di sini dan
+> PRD produk diselesaikan dengan memperbarui kontrak agar mengikuti PRD, bukan
+> sebaliknya — dan setiap pembaruan seperti itu wajib dicatat di changelog.
 
 ## 👑 AI Main Lead Governance (Lead Agent Protocol)
 

@@ -65,6 +65,334 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-24 — R3 fase 1: konsolidasi fisik audit selesai
+
+### Hasil akhir
+
+Konsolidasi fisik audit (keputusan owner 2026-08-24) diimplementasikan pola
+add-first sesuai PRD §47:
+
+- **Migrasi `20260824090000_audit_log_generic_domain`**: enum `AuditDomain`
+  (`STUDIOFLOW`/`MASTER_DATA`/`BQ`) + kolom `domain` (default STUDIOFLOW,
+  baris lama otomatis ter-backfill), kolom plain `actor_id`/`actor_name`,
+  `user_id` dibuat nullable, index `(domain, entity_type, entity_id,
+  created_at)`.
+- **Shared interface** `src/core/platform/audit/record.ts`:
+  `recordAudit({ domain, entityType, entityId, action, actorId, actorName,
+  before, after, metadata })` — bentuk yang diminta PRD §20.
+- **Dual-write Master Data**: `master-data/services/audit-service.ts` tetap
+  menulis `MasterDataAudit` DAN menulis baris kanonik baru ke `AuditLog` di
+  transaksi yang sama — audit yang selamat dari rollback tetap kebohongan,
+  untuk kedua tabel sekaligus.
+- **Domain BQ otomatis**: `insertAuditLog` menandai baris ber-kunci
+  `bq_project_id` sebagai domain BQ tanpa menyentuh satu pun call site BQ.
+- **Integration runner digeneralisasi**: menjalankan semua
+  `tests/integration/*.integration.test.ts` (sebelumnya hardcoded satu file).
+- Tiga test integration baru: dual-write parity per-field, rollback membuang
+  KEDUA baris, dan default domain STUDIOFLOW untuk jalur tulis lama.
+- Dua type drift ditambal: `AuditReferenceRecord.user_id` nullable +
+  filter userIds null di read-models.
+
+Verifikasi dijalankan penuh: prisma validate ✓, generate ✓, typecheck ✓,
+unit 194/194 ✓, integration docker **8/8** (44+1 migrasi diterapkan ke DB
+disposable, container dibuang), production build ✓.
+
+### Area/berkas
+
+`prisma/schema.prisma`, migrasi baru, `src/core/platform/audit/{record.ts
+ baru, read-models.ts, types.ts}`, `src/actions/_shared.ts`,
+`src/subapps/master-data/services/audit-service.ts`,
+`scripts/run-integration-tests.mjs`,
+`tests/integration/audit-dual-write.integration.test.ts` (baru).
+
+### Verifikasi
+
+Kelima gerbang PRD §49 benar-benar dijalankan di sesi ini (rincian di atas).
+Satu iterasi perbaikan runner (path tsconfig relatif thd `tmp/`) dan satu
+test yang premisnya salah pada DB kosong diperbaiki sebelum lulus.
+
+### Risiko
+
+- **Tabel `MasterDataAudit` masih sumber baca.** Backfill historis + flip
+  reads + drop tabel adalah langkah lanjutan setelah dual-write terbukti di
+  produksi — jangan drop lebih awal.
+- Migrasi belum diterapkan ke deployment; `prisma migrate deploy` wajib
+  dijalankan sebelum kode ini live (kolom `domain` tidak ada di DB lama).
+- Kontrak AGENTS.md §6 masih mendeskripsikan aturan pra-konsolidasi;
+  pembaruannya mengikuti setelah backfill dieksekusi (jangan dobel narasi).
+
+### Pekerjaan terbuka
+
+- Sisa R3: backfill `MasterDataAudit`→`AuditLog`, flip reads, drop tabel lama;
+  canonical error mapping; pagination contract; soft-delete helper.
+- Fase berikutnya: R5 UI Engine v2 foundation (R4 skop kecil bisa diselipkan).
+
+## [Unreleased] - 2026-08-24 — R2 Shared Core SSOT selesai
+
+### Hasil akhir
+
+Ketujuh modul Shared Core kanonik dibangun murni aditif (tidak ada konsumen
+lama yang disentuh — migrasinya memang jadwal R8–R10, bukan R2):
+
+- `src/core/reference/units.ts` — Unit Dictionary: 12 unit kanonik
+  (PCS/SET/SHEET/ROLL/M/CM/MM/M2/M3/LS/HOUR/DAY) dengan alias
+  (`lembar/sht/sheet`→SHEET, `sqm/m²/m2`→M2), dimensi, presisi;
+  `normalizeUnit` melewatkan unit tak dikenal apa adanya (uppercase), tidak
+  pernah null untuk input non-kosong.
+- `src/core/utilities/measurement.ts` — konversi mm↔cm↔m, area, volume;
+  cross-dimension dan unit tak dikenal **melempar** (`DIMENSION_MISMATCH`,
+  `UNSUPPORTED_UNIT`), konversi ≤0 melempar (`CONVERSION_NOT_POSITIVE`) —
+  pola anti-`|| 1`.
+- `src/core/utilities/money.ts` + `round.ts` — formatter IDR/SGD/USD
+  **deterministik** (tanpa Intl, kebal variasi ICU antar-node), `parseMoney`
+  paham `Rp370.000` / `S$1,234.56`, aturan pemisah desimal eksplisit.
+- `src/core/utilities/datetime.ts` — policy final U5: simpan UTC, tampil
+  fixed `Asia/Jakarta`; `formatDate/formatDateTime/formatRelativeDate`
+  meng-bucket hari kalender WIB (bukan device-local).
+- `src/core/utilities/normalize.ts` — trimOrNull/emptyToNull/normalizeName/
+  normalizeCode/normalizeSearchText (NFKC+lowercase).
+- `src/core/reference/provenance.ts` — vocabulary kanonik MASTER_DATA /
+  PROJECT_LOCAL / SNAPSHOT / MANUAL_OVERRIDE / LIBRARY.
+
+Verifikasi benar-benar dijalankan: `npm test` **194/194** (158 lama + 36 baru,
+nol regresi — gerbang AT-01 BQ tetap Rp5.653.559), `npm run typecheck` bersih,
+`npm run build` sukses. Tiga bug ditemukan & diperbaiki selama pengujian:
+error-unit uppercase (`UNSUPPORTED_UNIT:FT`), import runtime `@/` tidak
+ter-resolve oleh runner test (ganti relatif — runner compile CLI mengabaikan
+tsconfig paths), dan formatter Intl tidak deterministik antar ICU.
+
+### Area/berkas
+
+Baru: 7 modul + 5 file test di `src/core/reference/` & `src/core/utilities/`.
+Tidak ada berkas lama yang diubah.
+
+### Verifikasi
+
+`npm test` (194/194), `npm run typecheck`, `npm run build` — semua hijau di
+sesi ini. Integration test tidak wajib (nol perubahan skema/query).
+
+### Risiko
+
+- Dua implementasi format uang hidup berdampingan sampai fase migrasi konsumen
+  (calc.ts BQ sengaja tidak disentuh — ia terkunci regresi). Drift antar keduanya
+  mungkin terlihat user pada kasus tepi; itu biaya transisi yang sudah dijadwalkan.
+- `graphify update .` gagal di environment ini (uv trampoline) — graph
+  knowledge basi terhadap kode baru sampai tooling diperbaiki.
+- Test runner hanya mendukung import relatif antar-modul yang diuji runtime;
+  modul core baru harus tetap pakai import relatif (sudah demikian).
+
+### Pekerjaan terbuka
+
+- R3 Platform Consolidation (audit fisik satu tabel, action errors, pagination,
+  soft-delete convention) dimulai berikutnya.
+
+## [Unreleased] - 2026-08-24 — R1 disetujui; keputusan final pricing = MULTI-SUPPLIER (mencabut ratifikasi #1)
+
+### Hasil akhir
+
+Owner menjawab gerbang ❓U1–U6 audit R1. Jawaban ❓U1/U3 bertentangan dengan
+ratifikasi pagi hari atas PRD §15–§18; dikonfirmasi lewat pertanyaan tegas,
+hasilnya: **arah pricing FINAL adalah multi-supplier** — setiap SKU boleh punya
+beberapa harga berlaku satu per supplier (`SkuPrice_current_uniq` tetap),
+BQ memilih supplier saat penarikan dan snapshot immutable. Ratifikasi #1
+("satu harga kanonik per SKU") **dicabut dan tidak akan dieksekusi**.
+Konsekuensi: R4 menyusut jadi validasi unit + `updated_by_id` + dokumentasi;
+viewer harga lintas supplier (#52/#53/#61) menjadi perilaku kanonik, bukan
+kerja bongkar.
+
+Keputusan lain yang disetujui: U2 (unit harga wajib = `sku.purchase_unit`,
+validasi app-layer), U4 (`updated_by_id` plain column), U5 (**simpan UTC,
+tampil default Asia/Jakarta**, device-local bukan sumber kebenaran), U6
+(**drop `ProjectTimeline`** — terbukti write-only). Masih terbuka: U7
+(PromotionRequest, tidak menggerbangkan), R9-1 (library recipe resolve).
+R1 exit gate terpenuhi; fase berikutnya eksekusi R2.
+
+### Area/berkas
+
+- `AGENTS.md` — blok override §3 Harga diganti keputusan final multi-supplier.
+- `PRD-Architecture-Cleanup-v2.md` — §15–§18 ditandai dicabut; ratifikasi #1
+  dicoret + 4 keputusan tambahan; acceptance criteria Pricing diganti.
+- `AUDIT-R1-SCHEMA-2026-08-24.md` — status jadi DISETUJUI (amandemen di atas).
+- `roadmap.md` — R1 ✅, R4 skop baru, aturan program #2 dicabut.
+
+### Verifikasi
+
+Semua perubahan murni dokumen; tidak ada kode/schema yang disentuh sehingga
+tidak ada test yang wajib dijalankan untuk entri ini (baseline R0 tetap valid).
+
+### Risiko
+
+- Dua arah pricing berlawanan sempat tercatat sebagai "mengikat" di hari yang
+  sama; entri ini + blok final di AGENTS.md/PRD adalah satu-satunya penanda
+  mana yang menang. Agent berikutnya yang membaca versi lama dokumen harus
+  melihat catatan pencabutan ini.
+- Komentar kontrak AGENTS.md §3 poin 5/7 soal kolom `qty`/lifecycle WorkPrice
+  masih basi terhadap skema (dibuang migrasi 2026-08-20) — diperbaiki di R4.
+
+### Pekerjaan terbuka
+
+- Eksekusi R2 Shared Core (units, measurement, money, datetime WIB, normalize,
+  provenance) dimulai berikutnya.
+- U7 & R9-1 ditagihkan saat fase masing-masing dibuka (R12 / R9).
+
+## [Unreleased] - 2026-08-24 — R1 migration map siap, menunggu persetujuan owner
+
+*(Entri ini tertulis sebelum amandemen pricing; keputusan akhir ada di entri
+di atas — "MULTI-SUPPLIER" yang menang. Dipertahankan sebagai riwayat.)*
+
+### Hasil akhir
+
+Audit skema & ownership penuh selesai dan ditulis ke
+`AUDIT-R1-SCHEMA-2026-08-24.md`: seluruh 64 model diklasifikasi
+(KEEP 55 · NORMALIZE 5 · MERGE 1 (`MasterDataAudit`) · REMOVE 1
+(`ProjectTimeline`, terbukti **write-only** — nol pembaca di `src/`).
+Fokus khusus pricing dipetakan jadi langkah migrasi add-first dengan tabel
+shadow arsip untuk recoverability. Delapan keputusan owner diformalkan sebagai
+❓U1–U7 + ❓R9-1; enam di antaranya menggerbangkan exit R1.
+
+Temuan penting: `minimum_order` & `rounding_increment` (PRD §14) ternyata
+**sudah ada** di `Sku` — pertanyaan ambigu review awal PRD terjawab sendiri;
+kolom lifecycle WorkPrice yang masih disebut kontrak AGENTS.md sudah dibuang
+migrasi 2026-08-20 (drift kontrak lain yang ikut dirapikan saat R3/R4).
+
+### Area/berkas
+
+`AUDIT-R1-SCHEMA-2026-08-24.md` (baru), `roadmap.md` (status R1).
+
+### Verifikasi
+
+Klasifikasi REMOVE/KEEP didukung `git grep` atas pemakaian runtime
+(`ProjectTimeline` hanya create/delete di `project-service.ts:170/:533`;
+`PromotionRequest` tertutup `FEATURE_PROMOTION_QUEUE_ENABLED = false`;
+`TimelineTemplate`/`ChecklistLabel`/`TemporaryAttachment` aktif dipakai).
+Tidak ada kode berubah.
+
+### Risiko
+
+- Map belum disetujui → tidak ada eksekusi skema; risiko saat ini cuma dokumen.
+- Komentar AGENTS.md §3 soal kolom `qty`/lifecycle kini basi terhadap skema —
+  diperbaiki bersama work order R4, bukan diam-diam sekarang.
+
+### Pekerjaan terbuka
+
+- Jawaban owner untuk ❓U1–U6 (gerbang exit R1), lalu work order R2.
+
+## [Unreleased] - 2026-08-24 — R0 Baseline Freeze selesai
+
+### Hasil akhir
+
+Baseline known-good tercatat untuk program Architecture Cleanup v2. Owner
+memberi amanat takeover penuh eksekusi di sesi ini (keadaan #3 §Pembagian
+Peran: permintaan langsung owner). Semua gerbang regresi PRD §49 lulus pada
+kondisi repo `6377ac0` + perubahan dokumen sesi ini (belum dikomit):
+
+- `npx prisma validate` — valid.
+- `npm run typecheck` — bersih.
+- `npm test` — **158/158 lulus**, termasuk gerbang angka BQ: AT-01
+  rate Rp5.653.559 / pokok Rp4.711.299, AT-06 pembulatan agregat, AT-12
+  packaging variance, CoW/OVR snapshot isolation.
+- `npm run test:integration:docker` — **5/5 lulus**; 44 migrasi diterapkan ke
+  DB disposable (`studioflow-db-test-1`, tmpfs loopback) dan container dibuang
+  setelah suite.
+- `npm run build` — production build sukses (Next 16.2.1 Turbopack).
+- Skema saat baseline: `prisma/schema.prisma` 2.073 baris, **64 model**,
+  **30 enum**, 3 schema (`bq`, `master_data`, `studioflow`).
+
+Acceptance cases kritis BQ terkunci oleh `calc.test.ts` (angka Bab 7 persis,
+tanpa toleransi) — tidak ada file test yang diubah.
+
+### Area/berkas
+
+Tidak ada kode/schema/migrasi yang berubah. Hanya `roadmap.md`
+(status R0 → selesai).
+
+### Verifikasi
+
+Kelima perintah di atas benar-benar dijalankan di sesi ini; output lengkapnya
+ada di transkrip. Docker 29.3.1 tersedia.
+
+### Risiko
+
+- Baseline belum dikomit ke git — freeze-nya logis (HEAD + entri ini), bukan
+  tag/komit. Komit menunggu perintah owner.
+- Prisma update available 7.5.0 → 7.9.1 sengaja diabaikan (bukan bagian
+  program).
+
+### Pekerjaan terbuka
+
+- R1 Schema & Ownership Audit dimulai berikutnya; exit-nya migration map yang
+  wajib disetujui owner sebelum fase lanjutan menyentuh skema.
+
+## [Unreleased] - 2026-08-24 — Ratifikasi PRD Architecture Cleanup & Consolidation v2
+
+### Konteks
+
+Owner meratifikasi *PRD Architecture Cleanup & Consolidation v2* sebagai
+otoritas requirement produk tertinggi. Review awal menemukan empat konflik
+dengan kontrak berlaku; keempatnya diajukan ke owner dan dijawab eksplisit
+di sesi ini. Tidak ada kode yang diubah — sesi ini murni dokumentasi keputusan.
+
+### Keputusan owner (mengikat)
+
+1. **Pricing (override kontrak Master Data §3):** satu SKU = satu harga
+   kanonik saat ini; `SkuPrice` berhenti menjadi tabel riwayat per-supplier;
+   tanpa lifecycle `is_current`/`valid_to`; riwayat pindah ke audit.
+   Eksekusi di fase **R4** — sampai migrasi merge, aturan lama tetap mengikat
+   kode hidup, dan fitur baru di atas pola lama dilarang.
+2. **BQ snapshot (menggantikan PRD §29):** snapshot TIDAK PERNAH refresh dari
+   Master Data — tidak ada banner/refresh selected/refresh all. Harga current
+   diambil sekali saat baris ditarik; existing snapshot tidak disentuh.
+   `price-drift-service.ts` menjadi kerja bongkar di fase **R9**.
+3. **Audit (konsolidasi fisik, PRD §20):** satu tabel `AuditLog` generic lintas
+   domain (`STUDIOFLOW`/`MASTER_DATA`/`BQ`) plus shared interface
+   `recordAudit(...)`; penggabungan `MasterDataAudit` terjadwal di fase **R3**.
+   Dilarang menambah tabel audit baru sejak sekarang.
+4. **Otoritas dokumen:** AGENTS.md hanya aturan kerja agent; Product PRD
+   adalah otoritas requirement produk tertinggi. Kontrak agent diperbarui
+   mengikuti PRD, tidak sebaliknya.
+
+### Area/berkas
+
+- **`PRD-Architecture-Cleanup-v2.md` (baru)** — teks PRD final + bagian
+  Ratifikasi 2026-08-24 di ekor berkas (termasuk pencabutan §29 dan catatan
+  pada acceptance criteria BQ).
+- **`AGENTS.md`** — blok OVERRIDE OWNER 2026-08-24 pada §🧱 Master Data
+  Contract §3 (Harga) dan §6 (Audit); penegasan snapshot-tanpa-refresh +
+  pencabutan larangan baris custom di §🧾 BQ Contract §3–§4; klarifikasi
+  otoritas dokumen di §📚 Peta dokumen.
+- **`roadmap.md`** — program baru "Architecture Cleanup & Consolidation v2"
+  berisi fase R0–R12 (semua ⏳, belum ada yang dibuka), aturan beku feature,
+  dan penahanan item lama yang bergantung pola harga per-supplier.
+
+### Verifikasi
+
+- Grep memastikan setiap blok keputusan hanya muncul sekali per berkas
+  (tidak ada duplikasi edit).
+- Tidak ada perubahan kode/schema/migrasi → tidak ada test/typecheck/build
+  yang wajib dijalankan untuk entri ini. Baseline R0 belum diambil.
+
+### Risiko
+
+- Kontrak kini **berjalan di depan kode**: pembaca yang melompat langsung ke
+  poin 3 §Harga bisa mengira `SkuPrice` sudah satu-harga-per-SKU padahal
+  migrasi R4 belum ada. Blok override menyatakan ini secara eksplisit, tapi
+  agent yang membaca separuh berkas tetap berisiko salah asumsi.
+- Fitur viewer harga lintas supplier + riwayat (#52/#53/#61) yang baru dibuat
+  akan tersentuh pembongkaran R4 — pekerjaan yang baru selesai berubah nasib
+  oleh keputusan ini.
+- Roadmap lama masih memuat item yang bergantung pola harga lama; penahanannya
+  baru dinyatakan sebagai catatan program, belum diaudit satu per satu.
+
+### Pekerjaan terbuka
+
+- **R0 Baseline Freeze** — belum dimulai; prasyarat semua fase lain.
+- Menulis work order per fase untuk Codex (mulai dari R0/R1).
+- Audit item roadmap lama terhadap keputusan pricing baru (aturan 2 program).
+- Keputusan lanjutan owner yang ditunda: apakah §26 "Project Cost Database"
+  berarti tabel baru atau normalisasi state project-local yang sudah ada
+  (ditagihkan saat R1).
+
+
 ## [Unreleased] - 2026-08-20 — Master Data + BQ domain cleanup
 
 - **Hasil akhir:** BQ project berdiri sendiri; referensi identitas StudioFlow dihapus. WorkPrice tidak lagi menyimpan project reference, qty, atau field lifecycle history yang tidak dipakai. BQ material/work reads menegakkan eligibility Party yang aktif dan ber-role sah. BQ kini menerima project-local material/service snapshots dan library recipes dari kedua sumber.

@@ -51,7 +51,13 @@ async function getFilterReferenceData(
     },
   });
 
-  const userIds = Array.from(new Set(references.map((reference) => reference.user_id)));
+  const userIds = Array.from(
+    new Set(
+      references
+        .map((reference) => reference.user_id)
+        .filter((userId): userId is string => Boolean(userId))
+    )
+  );
   const phaseIds = Array.from(
     new Set(
       references
