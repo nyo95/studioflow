@@ -50,6 +50,7 @@ import type {
 import { ProductType } from "@/generated/prisma";
 import { LibraryItemStatus } from "@/extensions/library/types";
 import { unwrapActionResult } from "@/lib/result";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import {
   UnsavedChangesPrompt,
   useUnsavedChangesGuard,
@@ -619,8 +620,8 @@ export function MasterDataProductDialog({
                 )}
                 {selectedVendor &&
                   form.catalog_brand.trim() &&
-                  form.catalog_brand.trim().toLocaleLowerCase("id-ID") !==
-                    selectedVendor.name.trim().toLocaleLowerCase("id-ID") ? (
+                  normalizeSearchText(form.catalog_brand) !==
+                    normalizeSearchText(selectedVendor.name) ? (
                   <p className="text-xs text-amber-700">
                     Previously stored brand: &ldquo;{form.catalog_brand}&rdquo;.
                     Saving will align it with &ldquo;{selectedVendor.name}&rdquo;.

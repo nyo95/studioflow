@@ -15,6 +15,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import { Badge, Button, Input } from "@/ui_engine";
 import { cn } from "@/lib/utils";
 import { unwrapActionResult } from "@/lib/result";
@@ -64,7 +65,7 @@ function startOfDay(date: Date) {
 function formatExactDue(iso: string, now: Date) {
   const due = startOfDay(new Date(iso));
   const sameYear = due.getFullYear() === now.getFullYear();
-  return due.toLocaleDateString("en-GB", {
+  return formatDateWithOptions(due, {
     weekday: "short",
     day: "numeric",
     month: "short",

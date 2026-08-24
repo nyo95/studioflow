@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AlertTriangle, ExternalLink, FileText, Link as LinkIcon } from "lucide-react";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import { Role } from "@/generated/prisma";
 import { DeliverableUploadDialog } from "@/components/deliverable-upload-dialog";
 import { Badge } from "@/ui_engine";
@@ -60,14 +61,14 @@ function formatRevisionLabel(version: string | null) {
 function formatUploadedDate(date: Date | null) {
   if (!date) return "-";
 
-  return new Intl.DateTimeFormat("id-ID", {
+  return formatDateWithOptions(date, {
+    locale: "id-ID",
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Asia/Jakarta",
-  }).format(date);
+  });
 }
 
 export function DeliverablesTable({

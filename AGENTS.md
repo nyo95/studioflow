@@ -6,6 +6,12 @@
 > dipegang Codex.** Aturan di bawah mengikat setiap sesi Claude dan wajib dibaca
 > sebelum menyentuh berkas apa pun. Ringkasan keadaan repo + daftar keputusan
 > yang tidak boleh dimundurkan ada di **`HANDOFF-CODEX.md`**.
+>
+> **Catatan owner 2026-08-24:** requirement produk hidup di
+> **`PRD-Architecture-Cleanup-v2.md`**. Jika ada bagian product/business di
+> `AGENTS.md` yang masih tertinggal dan bertentangan dengan PRD, **PRD yang
+> menang**. `AGENTS.md` memegang aturan kerja agent; cleanup isi legacy di
+> dalamnya berlangsung bertahap.
 
 ### Claude — peran utama: product specialist & reviewer
 

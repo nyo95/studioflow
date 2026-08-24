@@ -44,6 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/ui_engine";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { getProjectProgress, formatPhaseName } from "@/lib/project-progress";
 import { ClientBranding } from "@/components/client-branding";
 import { updateProjectPriority, deleteProject } from "@/actions/project-actions";
@@ -138,12 +139,13 @@ export function ProjectListClient({ initialProjects, userId, userRole }: Project
   }, [initialProjects]);
 
   const filteredProjects = useMemo(() => {
+    const normalizedSearch = normalizeSearchText(search);
+
     return initialProjects.filter((project) => {
-      const normalizedSearch = search.trim().toLowerCase();
       const matchesSearch =
         normalizedSearch.length === 0 ||
-        project.name.toLowerCase().includes(normalizedSearch) ||
-        (project.client?.name || "").toLowerCase().includes(normalizedSearch);
+        normalizeSearchText(project.name).includes(normalizedSearch) ||
+        normalizeSearchText(project.client?.name).includes(normalizedSearch);
 
       const isOwner = userId !== "" && (
         project.pic_designer_id === userId || project.pic_drafter_id === userId

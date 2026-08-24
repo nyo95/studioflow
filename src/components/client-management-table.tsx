@@ -35,6 +35,7 @@ import {
   TableCardRow,
   TableCardCell,
 } from "@/ui_engine";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 
 interface ManagedClient {
   id: string;
@@ -48,11 +49,6 @@ interface ManagedClient {
 interface ClientManagementTableProps {
   clients: ManagedClient[];
 }
-
-const clientDateFormatter = new Intl.DateTimeFormat("id-ID", {
-  dateStyle: "medium",
-  timeZone: "Asia/Jakarta",
-});
 
 export function ClientManagementTable({ clients }: ClientManagementTableProps) {
   const router = useRouter();
@@ -195,7 +191,10 @@ export function ClientManagementTable({ clients }: ClientManagementTableProps) {
                           </div>
                         )}
                         <p className="text-xs text-slate-400">
-                          Updated {clientDateFormatter.format(client.updated_at)}
+                          Updated {formatDateWithOptions(client.updated_at, {
+                            locale: "id-ID",
+                            dateStyle: "medium",
+                          })}
                         </p>
                       </div>
                     </TableCardCell>

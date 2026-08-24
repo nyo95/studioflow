@@ -25,6 +25,7 @@
  */
 
 import { z } from "zod";
+import { trimOrNull } from "@/core/utilities/normalize";
 import { createAction } from "@/lib/action-wrapper";
 import { PERMISSION } from "@/core/rbac/constants";
 import { hasPermission } from "@/core/rbac/guards";
@@ -116,11 +117,6 @@ type BrandContext = {
   owner: { name: string } | null;
   scoped_contacts: { person_name: string; job_title: string | null; phone: string | null; email: string | null }[];
 };
-
-function trimOrNull(value: string | null | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-}
 
 /** Batch-resolves the Brand/Sku/User context a set of requests reference — no Prisma relation exists for these anymore (M5). */
 async function loadRequestContext(tx: PrismaTransaction, requests: RawRequest[]) {

@@ -36,6 +36,7 @@
 
 import * as React from "react";
 import { Check, Plus, X } from "lucide-react";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { cn } from "@/lib/utils";
 import { Input } from "./input";
 import { ScrollArea } from "./scroll-area";
@@ -61,7 +62,7 @@ export interface CreatableTagInputProps {
 
 /** Case- and whitespace-insensitive identity, so "HPL " and "hpl" are one tag. */
 function sameTag(a: string, b: string) {
-  return a.trim().toLocaleLowerCase("id-ID") === b.trim().toLocaleLowerCase("id-ID");
+  return normalizeSearchText(a) === normalizeSearchText(b);
 }
 
 export function CreatableTagInput({
@@ -91,20 +92,20 @@ export function CreatableTagInput({
     for (const raw of suggestions) {
       const tag = raw.trim();
       if (!tag) continue;
-      const key = tag.toLocaleLowerCase("id-ID");
+      const key = normalizeSearchText(tag);
       if (seen.has(key)) continue;
       seen.add(key);
       if (value.some((v) => sameTag(v, tag))) continue;
       pool.push(tag);
     }
-    const q = query.trim().toLocaleLowerCase("id-ID");
+    const q = normalizeSearchText(query);
     if (!q) return pool.slice(0, 50);
     return pool
-      .filter((tag) => tag.toLocaleLowerCase("id-ID").includes(q))
+      .filter((tag) => normalizeSearchText(tag).includes(q))
       // Prefix matches first — typing "h" should put "HPL" above "Finishing HPL".
       .sort((a, b) => {
-        const aStarts = a.toLocaleLowerCase("id-ID").startsWith(q) ? 0 : 1;
-        const bStarts = b.toLocaleLowerCase("id-ID").startsWith(q) ? 0 : 1;
+        const aStarts = normalizeSearchText(a).startsWith(q) ? 0 : 1;
+        const bStarts = normalizeSearchText(b).startsWith(q) ? 0 : 1;
         return aStarts - bStarts || a.localeCompare(b, "id-ID");
       })
       .slice(0, 50);

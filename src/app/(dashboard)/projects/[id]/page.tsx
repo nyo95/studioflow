@@ -1,6 +1,7 @@
 import * as React from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import { prisma } from "@/core/platform/db";
 import { getSession } from "@/lib/auth";
 import { Role } from "@/generated/prisma";
@@ -53,7 +54,7 @@ export default async function ProjectOverviewPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { id: projectId } = await params;
-  const { tab: activeTab } = await searchParams;
+  await searchParams;
   const { userId, role } = await getSession();
 
   const project = await prisma.project.findUnique({
@@ -200,11 +201,12 @@ export default async function ProjectOverviewPage({
     project.pic_designer_id,
   );
   const openingDateDisplay = project.opening_date
-    ? new Intl.DateTimeFormat("id-ID", {
+    ? formatDateWithOptions(project.opening_date, {
+        locale: "id-ID",
         day: "numeric",
         month: "long",
         year: "numeric",
-      }).format(project.opening_date)
+      })
     : "-";
   const openingDateInputValue = project.opening_date
     ? project.opening_date.toISOString().slice(0, 10)

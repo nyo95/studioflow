@@ -7,6 +7,7 @@ import { Plus, Settings2, Trash2, MoreHorizontal, BookMarked, ArrowLeftRight, Ch
 import { createScheduleTemplateItemFromEntryAction } from "@/extensions/schedule/actions/schedule-template-item-actions";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/ui_engine";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import { getCroppedImg } from "@/lib/utils/image-utils";
 import { cn } from "@/lib/utils";
 import { TEXT_SIZE_BADGE, UI_ENGINE_TYPE_BODY, UI_ENGINE_TYPE_META } from "@/ui_engine/tokens/typography";
@@ -1527,7 +1528,8 @@ export function CatalogBoard({
                     </p>
                   ) : (
                     reuseItems.map((item) => {
-                      const lastUsed = new Date(item.lastUsedAt).toLocaleDateString(undefined, {
+                      const lastUsed = formatDateWithOptions(item.lastUsedAt, {
+                        locale: "en-GB",
                         year: "numeric",
                         month: "short",
                         day: "numeric",

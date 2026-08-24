@@ -35,6 +35,7 @@ import {
   recordVendorFollowUpAction,
   reopenSampleRequestAction,
 } from "../actions/sample-request-actions";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import type { SampleRequestData } from "../types/sample-request";
 
 const STATUS_META: Record<
@@ -49,7 +50,8 @@ const STATUS_META: Record<
 
 function fmtDate(value: Date | string | null | undefined) {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString("id-ID", {
+  return formatDateWithOptions(value, {
+    locale: "id-ID",
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -134,6 +136,7 @@ export function SampleRequestDialog({
     value: { contactedAt, quotedPrice, quotedUnit, vendorNotes, syncPrice, sku, productName, color, motif, finishing, rack, box, qty, locationNote, reason, showReceive, showUnavailable },
     onOpenChange,
   });
+  const markPristine = guard.markPristine;
 
   // Re-seed the forms whenever a different request is opened, so one request's
   // half-typed notes never leak into the next.
@@ -155,7 +158,7 @@ export function SampleRequestDialog({
     setProductName(request.skuProductName ?? request.itemName ?? "");
     setColor(""); setMotif(""); setFinishing("");
     setRack(""); setBox(""); setQty("1"); setLocationNote("");
-    guard.markPristine({
+    markPristine({
       contactedAt: request.vendorContactedAt
         ? new Date(request.vendorContactedAt).toISOString().slice(0, 10)
         : new Date().toISOString().slice(0, 10),
@@ -171,7 +174,7 @@ export function SampleRequestDialog({
       showReceive: false,
       showUnavailable: false,
     });
-  }, [request]);
+  }, [markPristine, request]);
 
   if (!request) return null;
 

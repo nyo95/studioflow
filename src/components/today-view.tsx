@@ -16,6 +16,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import {
   Badge,
   Button,
@@ -121,7 +122,7 @@ function formatDue(iso: string, now: Date) {
   if (days <= 7) return { text: `in ${days} days`, tone: "soon" as const };
 
   return {
-    text: due.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    text: formatDateWithOptions(due, { day: "numeric", month: "short" }),
     tone: "later" as const,
   };
 }

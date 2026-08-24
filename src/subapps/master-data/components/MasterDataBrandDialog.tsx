@@ -44,6 +44,7 @@ import { PartyPicker } from "./PartyPicker";
 import { useQuickEntry } from "../hooks/use-quick-entry";
 import { quickCreatePartyAction } from "../actions/quick-entry-actions";
 import type { PartyRoleKind } from "@/generated/prisma";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 
 type VendorDialogMode = "CREATE" | "EDIT";
 
@@ -94,7 +95,7 @@ function mergeOptionNames(...groups: string[][]) {
 
   for (const raw of groups.flat()) {
     const name = raw.trim();
-    const key = name.toLocaleLowerCase("id-ID");
+    const key = normalizeSearchText(name);
     if (!name || seen.has(key)) continue;
     seen.add(key);
     merged.push(name);

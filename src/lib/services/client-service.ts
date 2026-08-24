@@ -1,6 +1,7 @@
 import type { PrismaTransaction } from "@/types/common";
+import { trimOrNull } from "@/core/utilities/normalize";
 import { ActionError } from "@/lib/error-types";
-import { insertAuditLog, normalizeOptionalString } from "@/actions/_shared";
+import { insertAuditLog } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/core/platform/audit";
 
 /**
@@ -102,8 +103,8 @@ export const clientService = {
   ) {
     const { clientId, address, logo_url, userId } = params;
 
-    const normalizedAddress = normalizeOptionalString(address);
-    const normalizedLogoUrl = normalizeOptionalString(logo_url);
+    const normalizedAddress = trimOrNull(address);
+    const normalizedLogoUrl = trimOrNull(logo_url);
 
     const client = await tx.client.update({
       where: { id: clientId },

@@ -39,6 +39,7 @@ import {
   UI_ENGINE_TYPE_H3,
   UI_ENGINE_TYPE_META,
 } from "@/ui_engine";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { cn } from "@/lib/utils";
 import { unwrapActionResult } from "@/lib/result";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -623,11 +624,11 @@ function SuppliersTab({
   const assignedIds = new Set(rows.map((r) => r.partyId));
   const filteredCompanies = companies.filter((c) => {
     if (assignedIds.has(c.id)) return false;
-    if (!assignSearch.trim()) return true;
-    const q = assignSearch.toLowerCase();
+    const q = normalizeSearchText(assignSearch);
+    if (!q) return true;
     return (
-      c.name.toLowerCase().includes(q) ||
-      (c.legal_name ?? "").toLowerCase().includes(q)
+      normalizeSearchText(c.name).includes(q) ||
+      normalizeSearchText(c.legal_name).includes(q)
     );
   });
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { CalendarDays, FilePlus2, Printer, Trash2 } from "lucide-react";
+import { formatDate, formatDateWithOptions } from "@/core/utilities/datetime";
 import { toast } from "sonner";
 import { Button, Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/ui_engine";
 import { createMomDocument, deleteMomDocument } from "../actions/mom-actions";
@@ -87,21 +88,17 @@ export function MomDocumentList({ projectId, documents }: MomDocumentListProps) 
                   <CardDescription className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                     <span className="inline-flex items-center gap-1">
                       <CalendarDays className="h-3.5 w-3.5" />
-                      {new Intl.DateTimeFormat("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      }).format(new Date(document.mom_date))}
+                      {formatDate(document.mom_date)}
                     </span>
                     <span>{document.mom_venue || "Venue not set"}</span>
                     <span>
                       Updated{" "}
-                      {new Intl.DateTimeFormat("en-GB", {
+                      {formatDateWithOptions(document.updated_at, {
                         day: "2-digit",
                         month: "short",
                         hour: "2-digit",
                         minute: "2-digit",
-                      }).format(new Date(document.updated_at))}
+                      })}
                     </span>
                   </CardDescription>
                 </div>

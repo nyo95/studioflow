@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import * as React from "react";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 
 type MomListStyle = "decimal" | "disc" | "dash" | "none";
 
@@ -56,11 +57,12 @@ export function MomPrintView({ projectName, clientName, document }: MomPrintView
         <div className="text-right">
           <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Date</p>
           <p className="mt-1 font-sans text-sm font-semibold">
-            {new Intl.DateTimeFormat("id-ID", {
+            {formatDateWithOptions(document.mom_date, {
+              locale: "id-ID",
               day: "2-digit",
               month: "long",
               year: "numeric",
-            }).format(new Date(document.mom_date))}
+            })}
           </p>
         </div>
       </div>

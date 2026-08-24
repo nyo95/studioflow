@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import { ProductRequestStatus } from "@/generated/prisma";
 import type { LucideIcon } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Button, Badge, UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/ui_engine";
@@ -200,13 +200,19 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1.5 text-slate-700 font-sans font-semibold text-xs">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5 text-slate-700 font-sans font-semibold text-xs">
                        <UserIcon className="h-3 w-3 text-slate-300" />
                        {req.requested_by.name}
                     </div>
                     <span className="text-[9px] text-slate-400 font-sans">
-                      {new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(req.created_at))}
+                      {formatDateWithOptions(req.created_at, {
+                        locale: "id-ID",
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </span>
                   </div>
                 </TableCell>
@@ -227,12 +233,13 @@ export function ProductRequestTable({ requests, userRole, onRefresh }: ProductRe
                         Master Data so there is one place that owns the field. */}
                     {req.vendor_contacted_by && (
                       <span className="ml-1 font-sans text-[9px] text-slate-400">
-                        Vendor dihubungi {req.vendor_contacted_by}
+                        Vendor contacted {req.vendor_contacted_by}
                         {req.vendor_contacted_at
-                          ? ` · ${new Intl.DateTimeFormat("id-ID", {
+                          ? ` · ${formatDateWithOptions(req.vendor_contacted_at, {
+                              locale: "id-ID",
                               day: "2-digit",
                               month: "short",
-                            }).format(new Date(req.vendor_contacted_at))}`
+                            })}`
                           : ""}
                       </span>
                     )}

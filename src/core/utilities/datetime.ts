@@ -1,6 +1,9 @@
 export const DISPLAY_TIME_ZONE = "Asia/Jakarta";
 
 type DateInput = Date | string | number;
+type DateFormatOptions = Intl.DateTimeFormatOptions & {
+  locale?: Intl.LocalesArgument;
+};
 
 function toDate(input: DateInput): Date {
   const d = input instanceof Date ? input : new Date(input);
@@ -8,25 +11,42 @@ function toDate(input: DateInput): Date {
   return d;
 }
 
-export function formatDate(input: DateInput): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: DISPLAY_TIME_ZONE,
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
+export function formatDateWithOptions(
+  input: DateInput,
+  options: DateFormatOptions
+): string {
+  const { locale = "en-GB", timeZone = DISPLAY_TIME_ZONE, ...formatOptions } = options;
+  return new Intl.DateTimeFormat(locale, {
+    timeZone,
+    ...formatOptions,
   }).format(toDate(input));
 }
 
+export function formatDate(input: DateInput): string {
+  return formatDateWithOptions(input, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export function formatDateTime(input: DateInput): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: DISPLAY_TIME_ZONE,
+  return formatDateWithOptions(input, {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-  }).format(toDate(input));
+  });
+}
+
+export function toJakartaDateBoundary(
+  dateStr: string,
+  endOfDay: boolean
+): Date {
+  const time = endOfDay ? "T23:59:59.999" : "T00:00:00.000";
+  return toDate(`${dateStr}${time}+07:00`);
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

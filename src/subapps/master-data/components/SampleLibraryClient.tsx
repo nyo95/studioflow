@@ -29,6 +29,7 @@ import {
 } from "@/ui_engine";
 import { cn } from "@/lib/utils";
 import { unwrapActionResult } from "@/lib/result";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { useUnsavedChangesGuard, UnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-guard";
 import {
   createSampleAction, deleteSampleAction, updateSampleAction, updateSampleStatusAction,
@@ -166,7 +167,7 @@ export function SampleLibraryClient({
   );
 
   const visible = React.useMemo(() => {
-    const q = query.trim().toLocaleLowerCase("id-ID");
+    const q = normalizeSearchText(query);
     return samples.filter((s) => {
       if (statusFilter !== "ALL" && s.status !== statusFilter) return false;
       if (!q) return true;
@@ -175,7 +176,7 @@ export function SampleLibraryClient({
         s.rackNumber, s.boxNumber, s.borrowerName,
       ]
         .filter(Boolean)
-        .some((v) => v!.toLocaleLowerCase("id-ID").includes(q));
+        .some((v) => normalizeSearchText(v).includes(q));
     });
   }, [samples, query, statusFilter]);
 

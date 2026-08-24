@@ -11,6 +11,8 @@
 
 import * as React from "react";
 import { Inbox, Search } from "lucide-react";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import {
   Input, SectionCard,
   TableCard, TableCardBody, TableCardCell, TableCardHead, TableCardHeader, TableCardRow,
@@ -36,7 +38,7 @@ function daysWaiting(from: Date | string) {
 
 function fmtDate(value: Date | string | null | undefined) {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return formatDateWithOptions(value, { day: "numeric", month: "short" });
 }
 
 export function SampleRequestPanel({
@@ -58,12 +60,12 @@ export function SampleRequestPanel({
   const source = tab === "open" ? openRequests : closedRequests;
 
   const visible = React.useMemo(() => {
-    const q = query.trim().toLocaleLowerCase("id-ID");
+    const q = normalizeSearchText(query);
     if (!q) return source;
     return source.filter((r) =>
       [r.itemName, r.brandName, r.projectName, r.requestedByName]
         .filter(Boolean)
-        .some((v) => v!.toLocaleLowerCase("id-ID").includes(q))
+        .some((value) => normalizeSearchText(value).includes(q))
     );
   }, [source, query]);
 

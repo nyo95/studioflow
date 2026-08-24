@@ -38,6 +38,7 @@
 
 import * as React from "react";
 import { Check, Plus, Search, X } from "lucide-react";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { cn } from "@/lib/utils";
 import { Input } from "./input";
 import { ScrollArea } from "./scroll-area";
@@ -168,11 +169,11 @@ export function CreatableSearch({
   }, [value, allOptions, allowFreeText]);
 
   const filterOptions = React.useCallback((opts: Option[]) => {
-    const normalized = search.trim().toLowerCase();
+    const normalized = normalizeSearchText(search);
     if (!normalized) return opts;
     return opts.filter((o) =>
-      o.name.toLowerCase().includes(normalized) ||
-      (o.subText && o.subText.toLowerCase().includes(normalized))
+      normalizeSearchText(o.name).includes(normalized) ||
+      normalizeSearchText(o.subText).includes(normalized)
     );
   }, [search]);
 
@@ -190,8 +191,9 @@ export function CreatableSearch({
     const normalized = search.trim();
     if (!normalized) return false;
     if (alwaysOfferCreate) return true;
+    const normalizedSearch = normalizeSearchText(normalized);
     const exactMatch = allOptions.some(
-      (o) => o.name.toLowerCase() === normalized.toLowerCase()
+      (o) => normalizeSearchText(o.name) === normalizedSearch
     );
     return !exactMatch;
   }, [search, allOptions, onCreate, allowFreeText, alwaysOfferCreate]);
@@ -201,8 +203,9 @@ export function CreatableSearch({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && search.trim()) {
       e.preventDefault();
+      const normalizedSearch = normalizeSearchText(search);
       const exactMatch = allOptions.find(
-        (o) => o.name.toLowerCase() === search.trim().toLowerCase()
+        (o) => normalizeSearchText(o.name) === normalizedSearch
       );
       if (exactMatch) {
         handleSelect(exactMatch);

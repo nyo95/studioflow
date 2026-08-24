@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { Loader2 } from "lucide-react";
+import { formatDate } from "@/core/utilities/datetime";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -45,13 +46,11 @@ function money(value: number, currency: string) {
 
 function dateLabel(value: Date | string | null) {
   if (!value) return "—";
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(parsed);
+  try {
+    return formatDate(value);
+  } catch {
+    return "—";
+  }
 }
 
 function priceLabel(price: SkuPricingViewerPrice) {

@@ -65,6 +65,291 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-24 — R2 WO-R2-05: konsolidasi final Shared Core normalization
+
+### Hasil akhir
+
+WO-R2-05 menutup sisa pekerjaan R2 yang murni normalization. Dua helper lokal
+trim-to-null yang duplikat (`normalizeOptionalString` di `_shared` dan
+`LibraryService.normalizeOptional`) dihapus dan seluruh caller-nya dipindah ke
+`trimOrNull()` dari Shared Core.
+
+Jalur search/equality generik yang sebelumnya masih menyimpan implementasi
+sendiri (`trim + lowercase`, beberapa dedupe case-insensitive, dan beberapa
+compare display-only) juga dipindah ke `normalizeSearchText()` pada surface
+lintas domain yang setara secara semantik: list/search StudioFlow, picker UI,
+Schedule reuse query, serta beberapa filter/dedupe Master Data dan Library.
+
+Yang sengaja TIDAK dipusatkan:
+
+- normalisasi email login/user (`auth.ts`, `user-service.ts`) karena itu
+  identitas akun, bukan search generic;
+- unit alias resolution di `core/reference/units.ts` karena itu kontrak kamus
+  unit, bukan normalisasi string umum;
+- host guessing di `brand-links-editor.tsx` karena itu heuristik URL;
+- heuristik fuzzy Library `normalizeTerm()` karena ia sengaja mereduksi huruf
+  ganda dan non-alfanumerik untuk pencarian brand-first;
+- compare kategori `"general"` dan identity compare scheduler karena melekat ke
+  aturan domain Schedule.
+
+Dengan itu, sisa hit normalisasi manual di repo sudah terkategori jelas sebagai
+domain-owned atau intentionally deferred, bukan duplikasi generic yang
+terlewat.
+
+### Verifikasi
+
+Yang benar-benar dijalankan pada state akhir task ini:
+
+- `npm run typecheck` ✓
+- `npx eslint src/actions/_shared.ts src/lib/services/client-service.ts src/extensions/library/services/library-service.ts src/components/project-list-client.tsx src/components/top-header.tsx src/components/ui/creatable-search.tsx src/extensions/schedule/services/schedule-service.ts src/subapps/master-data/components/SampleLibraryClient.tsx src/subapps/master-data/components/SupplierClient.tsx src/subapps/master-data/components/SkuPicker.tsx src/components/ui/creatable-tag-input.tsx src/components/ui/creatable-checklist.tsx src/app/masterdata/materials/page.tsx src/subapps/master-data/components/MasterDataBrandDialog.tsx src/subapps/master-data/components/MasterDataMaterialsClient.tsx src/subapps/master-data/components/MasterDataProductDialog.tsx src/subapps/master-data/components/BrandDetailClient.tsx` ✓ (2 warning lama di `schedule-service.ts`, tanpa error)
+- `npm test` ✓ (**209/209** pass)
+- `npm run build` ✓
+
+### Area/berkas
+
+- `src/actions/_shared.ts`
+- `src/lib/services/client-service.ts`
+- `src/extensions/library/services/library-service.ts`
+- `src/components/project-list-client.tsx`
+- `src/components/top-header.tsx`
+- `src/components/ui/creatable-search.tsx`
+- `src/components/ui/creatable-tag-input.tsx`
+- `src/components/ui/creatable-checklist.tsx`
+- `src/extensions/schedule/services/schedule-service.ts`
+- `src/app/masterdata/materials/page.tsx`
+- `src/subapps/master-data/components/BrandDetailClient.tsx`
+- `src/subapps/master-data/components/MasterDataBrandDialog.tsx`
+- `src/subapps/master-data/components/MasterDataMaterialsClient.tsx`
+- `src/subapps/master-data/components/MasterDataProductDialog.tsx`
+- `src/subapps/master-data/components/SampleLibraryClient.tsx`
+- `src/subapps/master-data/components/SkuPicker.tsx`
+- `src/subapps/master-data/components/SupplierClient.tsx`
+
+## [Unreleased] - 2026-08-24 — R2 WO-R2-03: migrasi formatter tanggal tampilan generik
+
+### Hasil akhir
+
+WO-R2-03 memindahkan sisa formatter tanggal/waktu absolut yang masih inline di
+permukaan UI generik ke Shared Core `src/core/utilities/datetime.ts`.
+Formatter baru tetap lewat `formatDateWithOptions()`, `formatDate()`, atau
+`formatDateTime()` dengan timezone default WIB (`Asia/Jakarta`), tetapi pola
+tampil setiap layar dipertahankan: ada yang tetap `id-ID`, ada yang tetap
+`en-GB`, ada yang tetap hanya tanggal, dan ada yang tetap tanggal+jam.
+
+Surface yang dipindah pada WO ini: `client-management-table`,
+`deliverables-table`, `activity-timeline`, `cd-list-table`, daftar/detail MOM,
+tabel request/library, `SampleRequestDialog`, `SkuDetailDrawer`,
+`SupplierDetailClient`, dan pembacaan tanggal buka proyek di halaman overview.
+
+Yang sengaja TIDAK dipindah:
+
+- relative wording (`useRelativeTime`, `Today` / `Tomorrow` / `in N days`);
+- kalkulasi waiting days di dialog sample request;
+- serialisasi `<input type="date">` berbasis `toISOString().slice(0, 10)`;
+- formatter angka/mata uang;
+- formatter `CatalogBoard` SketchUp yang masih bergantung pada locale browser
+  (`toLocaleDateString(undefined, …)`). WO ini menahannya sebagai kasus
+  terpisah supaya tidak mengubah presentasi ambigu secara diam-diam tanpa
+  kontrak locale yang eksplisit.
+
+Satu copy permukaan yang kebetulan tersentuh ikut diselaraskan ke Inggris:
+`Vendor contacted …` pada tabel Library request.
+
+### Verifikasi
+
+Yang benar-benar dijalankan pada state akhir task ini:
+
+- `npm run typecheck` ✓
+- `npx eslint src/components/activity-timeline.tsx src/components/cd-list-table.tsx src/components/client-management-table.tsx src/components/deliverables-table.tsx src/extensions/library/components/ProductRequestTable.tsx src/extensions/library/components/catalog/ProductTableView.tsx src/extensions/mom/components/mom-document-list.tsx src/extensions/mom/components/mom-print-view.tsx src/subapps/master-data/components/SampleRequestDialog.tsx src/subapps/master-data/components/SkuDetailDrawer.tsx src/subapps/master-data/components/SupplierDetailClient.tsx src/app/(dashboard)/projects/[id]/page.tsx` ✓
+- `npm test` ✓ (**209/209** pass)
+- `npm run build` ✓
+
+### Area/berkas
+
+- `src/components/activity-timeline.tsx`
+- `src/components/cd-list-table.tsx`
+- `src/components/client-management-table.tsx`
+- `src/components/deliverables-table.tsx`
+- `src/extensions/library/components/ProductRequestTable.tsx`
+- `src/extensions/library/components/catalog/ProductTableView.tsx`
+- `src/extensions/mom/components/mom-document-list.tsx`
+- `src/extensions/mom/components/mom-print-view.tsx`
+- `src/subapps/master-data/components/SampleRequestDialog.tsx`
+- `src/subapps/master-data/components/SkuDetailDrawer.tsx`
+- `src/subapps/master-data/components/SupplierDetailClient.tsx`
+- `src/app/(dashboard)/projects/[id]/page.tsx`
+
+## [Unreleased] - 2026-08-24 — R2 WO-R2-04: tutup pelanggaran formatter tanggal generik terakhir
+
+### Hasil akhir
+
+WO-R2-04 menutup sisa pelanggaran executable formatter tanggal generik di
+`src/extensions/sketchup/components/CatalogBoard.tsx`. Label `lastUsedAt`
+reuse-picker yang sebelumnya memakai `toLocaleDateString(undefined, …)` kini
+dipindah ke Shared Core `formatDateWithOptions()` dengan locale Inggris yang
+eksplisit (`en-GB`) dan timezone default WIB, sehingga tidak lagi bergantung
+pada locale browser/device pengguna.
+
+Semantik bisnis, sorting, filter, dan alur SketchUp tidak berubah; yang
+berubah hanya sumber formatter tampilannya.
+
+### Verifikasi
+
+Yang benar-benar dijalankan pada state akhir task ini:
+
+- `npm run typecheck` ✓
+- `npx eslint src/extensions/sketchup/components/CatalogBoard.tsx` ✓
+- `npm test` ✓ (**209/209** pass)
+- `npm run build` ✓
+
+### Area/berkas
+
+- `src/extensions/sketchup/components/CatalogBoard.tsx`
+
+## [Unreleased] - 2026-08-24 — R2 WO-R2-02: formatter generik & normalisasi dipusatkan
+
+### Hasil akhir
+
+WO-R2-02 melanjutkan cleanup R2 tanpa mengubah aturan bisnis domain. Shared
+Core `src/core/utilities/datetime.ts` sekarang punya
+`formatDateWithOptions()`: satu pintu formatter tanggal/waktu generik dengan
+timezone default `Asia/Jakarta`, sementara pola presentasi (locale, weekday,
+day/month/year, dst.) tetap bisa dipilih consumer.
+
+Consumer generik yang tadinya membuat formatter `Intl.DateTimeFormat` sendiri
+dipindah ke helper itu pada beberapa layar lintas domain yang seragam:
+absolute-date fallback di task views (`task-list`, `today-view`,
+`upcoming-view`) serta formatter tanggal ringan di Master Data
+(`SampleRequestPanel`, `PricingClient`).
+
+Untuk normalisasi, dua helper lokal `trimOrNull()` di action Sample dan Sample
+Request dihapus dan diganti util inti `src/core/utilities/normalize.ts`.
+Pencarian lokal di `SampleRequestPanel` dan pencarian/dedupe unit di
+`PricingClient` juga dialihkan ke `normalizeSearchText()` agar trim, collapse
+whitespace, lowercase, dan NFKC tidak hidup dalam implementasi ad-hoc masing-
+masing layar.
+
+Yang sengaja TIDAK dipindah pada WO ini: kalkulasi relative due wording
+(`Today` / `Tomorrow` / `in N days`), `toDateInputValue()` untuk kontrol input
+tanggal, kalkulasi waiting-days, serta formatter angka/mata uang. Semua itu
+tetap lokal karena membawa perilaku presentasi atau kontrol yang belum layak
+dipukul rata dalam WO kecil ini.
+
+### Verifikasi
+
+Yang benar-benar dijalankan pada state akhir task ini:
+
+- `npm run typecheck` ✓
+- `npx eslint src/core/utilities/datetime.ts src/core/utilities/datetime.test.ts src/subapps/master-data/actions/sample-actions.ts src/subapps/master-data/actions/sample-request-actions.ts src/components/task-list.tsx src/components/today-view.tsx src/components/upcoming-view.tsx src/subapps/master-data/components/SampleRequestPanel.tsx src/subapps/master-data/components/PricingClient.tsx` ✓
+- `npm test` ✓ (**209/209** pass)
+- `npm run build` ✓
+
+Catatan: satu percobaan `typecheck` sempat gagal ketika dijalankan paralel
+dengan proses build yang sedang me-regenerate Prisma Client; setelah build
+selesai, `typecheck` diulang dan lulus pada state kode final.
+
+### Area/berkas
+
+- `src/core/utilities/datetime.ts`
+- `src/core/utilities/datetime.test.ts`
+- `src/subapps/master-data/actions/sample-actions.ts`
+- `src/subapps/master-data/actions/sample-request-actions.ts`
+- `src/components/task-list.tsx`
+- `src/components/today-view.tsx`
+- `src/components/upcoming-view.tsx`
+- `src/subapps/master-data/components/SampleRequestPanel.tsx`
+- `src/subapps/master-data/components/PricingClient.tsx`
+
+### Risiko
+
+- Formatter tanggal generik masih tersebar di area lain (`library`, `mom`,
+  beberapa table/dashboard component). Mereka belum disentuh sengaja supaya WO
+  ini tetap kecil dan migration-safe; sisa itu masih pekerjaan R2 lanjutan.
+- Normalisasi search/display di beberapa layar lain juga masih lokal. Setelah
+  WO ini, pola yang dipakai sudah lebih jelas, tetapi R2 belum sepenuhnya nol
+  duplikasi.
+
+## [Unreleased] - 2026-08-24 — R2 WO-R2-01: boundary tanggal/waktu dipersempit
+
+### Hasil akhir
+
+WO-R2-01 selesai tanpa mengubah perilaku bisnis. `src/core/utilities/datetime.ts`
+tetap menjadi rumah utilitas tanggal/waktu generik, lalu ditambah helper
+`toJakartaDateBoundary()` agar parsing batas hari WIB tidak hidup sendiri di
+layer audit.
+
+Sebaliknya, aturan yang memang milik domain proyek dipisahkan keluar dari util
+generik: `calculateBackwardTimeline()` dan kalender libur 2026 dipindah dari
+`src/lib/date-utils.ts` ke modul baru
+`src/lib/services/project-timeline.ts`. Dengan begitu Shared Core memegang
+infrastruktur UTC/WIB, sementara logika bootstrap timeline proyek tetap tinggal
+di domain StudioFlow.
+
+Tidak ada perubahan schema, migrasi, atau hasil hitung timeline. Perubahan ini
+khusus merapikan ownership boundary dan menambah test agar jalur yang dipindah
+tetap terkunci.
+
+### Verifikasi
+
+Yang benar-benar dijalankan pada task ini:
+
+- `npm run typecheck` ✓
+- `npx eslint src/core/utilities/datetime.ts src/core/utilities/datetime.test.ts src/core/platform/audit/query-builder.ts src/lib/services/project-service.ts src/lib/services/project-timeline.ts src/lib/services/project-timeline.test.ts` ✓
+- `npm test` ✓ (**208/208** pass)
+- `npm run build` ✓
+
+### Area/berkas
+
+- `src/core/utilities/datetime.ts`
+- `src/core/utilities/datetime.test.ts`
+- `src/core/platform/audit/query-builder.ts`
+- `src/lib/services/project-service.ts`
+- `src/lib/services/project-timeline.ts`
+- `src/lib/services/project-timeline.test.ts`
+- hapus `src/lib/date-utils.ts`
+
+### Risiko
+
+- Formatter tanggal generik di beberapa komponen masih tersebar dan belum
+  dipusatkan ke helper core. Itu sengaja ditahan agar WO ini tetap kecil;
+  migrasi pemakai yang lebih luas tetap pekerjaan R2 berikutnya, bukan efek
+  samping dari pemisahan boundary ini.
+
+## [Unreleased] - 2026-08-24 — PRD final rebuild jadi dokumen kanonik
+
+### Hasil akhir
+
+Dokumen kanonik `PRD-Architecture-Cleanup-v2.md` diganti agar sama dengan PRD
+final **StudioFlow Rebuild / Architecture & Product Simplification** yang
+dipaste owner pada 2026-08-24. Ini menggantikan naskah cleanup lama yang sudah
+tidak lagi mewakili arah produk terbaru.
+
+`roadmap.md` ikut diselaraskan agar menunjuk program dengan nama baru dan tetap
+merujuk file PRD yang sama sebagai otoritas requirement produk. `AGENTS.md`
+kini memuat catatan eksplisit bahwa requirement produk mengikuti PRD, sementara
+AGENTS tetap memegang governance agent.
+
+Tidak ada perubahan runtime, schema, atau perilaku aplikasi pada task ini.
+
+### Verifikasi
+
+- Diff manual ditinjau untuk `PRD-Architecture-Cleanup-v2.md`, `roadmap.md`,
+  `AGENTS.md`, dan `changelog.md`.
+- Tidak ada test/build dijalankan karena perubahan hanya dokumentasi.
+
+### Area/berkas
+
+- `PRD-Architecture-Cleanup-v2.md`
+- `roadmap.md`
+- `AGENTS.md`
+- `changelog.md`
+
+### Risiko
+
+- Isi product/domain lama belum seluruhnya diekstrak dari `AGENTS.md`; catatan
+  authority baru mencegah konflik pembacaan, tetapi cleanup tekstual penuh
+  masih pekerjaan terpisah.
+
 ## [Unreleased] - 2026-08-24 — R8–R12 selesai: cleanup & consolidation
 
 ### Hasil akhir

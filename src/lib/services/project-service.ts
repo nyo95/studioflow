@@ -2,7 +2,7 @@ import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { isGlobalChecklistTemplate } from "@/core/rbac/permissions";
 import { insertAuditLog, getSystemConfigTx, upsertClientByName } from "@/actions/_shared";
-import { calculateBackwardTimeline } from "@/lib/date-utils";
+import { calculateBackwardTimeline } from "@/lib/services/project-timeline";
 import { PhaseName, ProjectPriority, ProjectStatus, TimelineStatus, PhaseStatus, ActivityStatus, Role } from "@/generated/prisma";
 import { AUDIT_ACTIONS } from "@/core/platform/audit";
 import { projectNamingPolicy } from "@/core/domain-shared/project-naming";

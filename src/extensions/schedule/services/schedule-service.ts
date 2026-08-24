@@ -3,6 +3,7 @@ import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
 import { insertAuditLog } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/core/platform/audit/types";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 
 
 import { LibraryService } from "@/extensions/library/services/library-service";
@@ -1605,7 +1606,7 @@ export class ScheduleService {
       sample_option_id: string;
     }>
   > {
-    const trimmed = query.trim().toLowerCase();
+    const trimmed = normalizeSearchText(query);
     if (trimmed.length < 2) return [];
 
     const options = await tx.projectScheduleOption.findMany({

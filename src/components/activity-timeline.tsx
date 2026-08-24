@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import { useRelativeTime } from "@/hooks/use-hydration";
 import { buildActivitySentence, formatActionLabel } from "@/lib/activity-copy";
 
@@ -15,12 +16,13 @@ interface ActivityTimelineEntry {
 
 function RelativeTime({ value }: { value: Date | string }) {
   const relative = useRelativeTime(value, true);
-  const absolute = new Intl.DateTimeFormat("id-ID", {
+  const absolute = formatDateWithOptions(value, {
+    locale: "id-ID",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  });
   return <span title={absolute}>{relative || absolute}</span>;
 }
 

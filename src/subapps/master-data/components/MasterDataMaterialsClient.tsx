@@ -39,6 +39,7 @@ import {
   BrandLinksEditor,
   BrandLinksReadView,
 } from "@/components/shared/brand-links-editor";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 
 type BrandLinksDraft = {
   brandId: string;
@@ -116,8 +117,8 @@ function skuProductLabel(sku: string, productName: string) {
   const skuTrimmed = sku.trim();
   const nameTrimmed = productName.trim();
   if (skuTrimmed && nameTrimmed) {
-    return skuTrimmed.toLocaleLowerCase("id-ID") ===
-      nameTrimmed.toLocaleLowerCase("id-ID")
+    return normalizeSearchText(skuTrimmed) ===
+      normalizeSearchText(nameTrimmed)
       ? skuTrimmed
       : `${skuTrimmed} ${nameTrimmed}`;
   }
@@ -916,8 +917,8 @@ export function MasterDataMaterialsClient({
                       dialog Material akan menyelaraskannya otomatis. */}
                   {row.brand &&
                   row.vendorName &&
-                  row.brand.trim().toLocaleLowerCase("id-ID") !==
-                    row.vendorName.trim().toLocaleLowerCase("id-ID") ? (
+                  normalizeSearchText(row.brand) !==
+                    normalizeSearchText(row.vendorName) ? (
                     <span
                       className="text-amber-700"
                       title={`The brand name stored on this material ("${row.brand}") differs from its related Brand ("${row.vendorName}"). Open and save to bring them back in line.`}

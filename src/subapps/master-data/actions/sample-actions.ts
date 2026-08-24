@@ -15,6 +15,7 @@
 
 import { z } from "zod";
 import { SampleAction, SampleStatus } from "@/generated/prisma";
+import { trimOrNull } from "@/core/utilities/normalize";
 import { createAction } from "@/lib/action-wrapper";
 import { PERMISSION } from "@/core/rbac/constants";
 import { hasPermission } from "@/core/rbac/guards";
@@ -73,11 +74,6 @@ const SAMPLE_INCLUDE = {
     },
   },
 } as const;
-
-function trimOrNull(value: string | null | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-}
 
 /**
  * DIHAPUS 2026-08-18 — `toLegacySampleStatus` / `toV2SampleStatus`.

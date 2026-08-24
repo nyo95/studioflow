@@ -23,6 +23,7 @@
 
 import * as React from "react";
 import { Plus } from "lucide-react";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "./checkbox";
 import { Input } from "./input";
@@ -44,7 +45,7 @@ export interface CreatableChecklistProps {
 
 /** Case- and whitespace-insensitive identity — matches `CreatableTagInput`. */
 function sameTag(a: string, b: string) {
-  return a.trim().toLocaleLowerCase("id-ID") === b.trim().toLocaleLowerCase("id-ID");
+  return normalizeSearchText(a) === normalizeSearchText(b);
 }
 
 export function CreatableChecklist({
@@ -70,7 +71,7 @@ export function CreatableChecklist({
     for (const raw of [...options, ...createdLocally, ...value]) {
       const tag = raw.trim();
       if (!tag) continue;
-      const key = tag.toLocaleLowerCase("id-ID");
+      const key = normalizeSearchText(tag);
       if (seen.has(key)) continue;
       seen.add(key);
       pool.push(tag);

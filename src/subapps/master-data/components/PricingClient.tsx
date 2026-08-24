@@ -20,6 +20,8 @@
 import * as React from "react";
 import { Loader2, Pencil, Plus, Receipt, Search, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -91,9 +93,11 @@ function fmt(value: number | null | undefined) {
  */
 function fmtDate(value: Date | string | null | undefined) {
   if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+  return formatDateWithOptions(value, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 /**
@@ -110,9 +114,9 @@ function collectUnits(...lists: { unit: string | null }[][]): string[] {
   const seen = new Map<string, string>();
   for (const list of lists) {
     for (const row of list) {
-      const unit = (row.unit ?? "").trim();
+      const unit = row.unit?.trim() ?? "";
       if (!unit) continue;
-      const key = unit.toLocaleLowerCase("id-ID");
+      const key = normalizeSearchText(unit);
       if (!seen.has(key)) seen.set(key, unit);
     }
   }
@@ -434,6 +438,10 @@ const EMPTY_MP: MaterialPriceInput = {
   dim_display: null, category_names: [],
 };
 
+const DIM_UNITS = ["mm", "cm", "m"] as const;
+type DimUnit = typeof DIM_UNITS[number];
+const TO_M: Record<DimUnit, number> = { mm: 0.001, cm: 0.01, m: 1 };
+
 type SkuOption = { id: string; sku: string; productName: string; brandId: string | null; brandName: string | null };
 type SupplierOption = { id: string; name: string };
 
@@ -474,11 +482,6 @@ function HargaMaterialTab({
   const [viewerSkuId, setViewerSkuId] = React.useState<string | null>(null);
 
   // ---------- Dimension calculator local state (UI-only, not sent to server) ----------
-  // TO_M: faktor konversi ke meter. Units: mm=0.001, cm=0.01, m=1.
-  const DIM_UNITS = ["mm", "cm", "m"] as const;
-  type DimUnit = typeof DIM_UNITS[number];
-  const TO_M: Record<DimUnit, number> = { mm: 0.001, cm: 0.01, m: 1 };
-
   const [dimType, setDimType] = React.useState<"area" | "linear">("area");
   const [dimUnit, setDimUnit] = React.useState<DimUnit>("mm");
   const [dimW, setDimW] = React.useState("");
@@ -500,7 +503,6 @@ function HargaMaterialTab({
       const display = `${dimW} × ${dimL} ${dimUnit}`;
       setForm(p => ({ ...p, usage_unit: "m2", conversion: conv, dim_display: display }));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dimType, dimUnit, dimW, dimL]);
 
   // ---------- Brand categories — fetched when brand changes ----------
@@ -510,7 +512,6 @@ function HargaMaterialTab({
     void getBrandProductCategoriesAction({ brandId: form.brand_id }).then((result) => {
       if (result.success) setBrandCategories(result.data);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.brand_id]);
   // ------------------------------------------------------------------
 
@@ -1194,8 +1195,12 @@ function HargaMaterialUpahTab({
 
   const visible = React.useMemo(() => {
     if (!query.trim()) return rows;
-    const q = query.toLowerCase();
-    return rows.filter(r => r.name.toLowerCase().includes(q) || r.code.toLowerCase().includes(q) || r.category.toLowerCase().includes(q));
+    const q = normalizeSearchText(query);
+    return rows.filter((r) =>
+      [r.name, r.code, r.category].some((value) =>
+        normalizeSearchText(value).includes(q)
+      )
+    );
   }, [rows, query]);
 
   function openCreate() {
@@ -1373,8 +1378,12 @@ function HargaUpahTab({
 
   const visiblePrices = React.useMemo(() => {
     if (!query.trim()) return prices;
-    const q = query.toLowerCase();
-    return prices.filter(p => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
+    const q = normalizeSearchText(query);
+    return prices.filter((p) =>
+      [p.name, p.code, p.category].some((value) =>
+        normalizeSearchText(value).includes(q)
+      )
+    );
   }, [prices, query]);
 
   async function saveSp() {

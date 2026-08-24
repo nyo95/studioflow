@@ -55,6 +55,7 @@ import { deleteCompanyAction } from "../actions/party-actions";
 import { getPartyContactsAction, type PartyContactRow } from "../actions/party-actions";
 import { getPartyBrandsAction, type PartyBrandRow } from "../actions/masterdata-actions";
 import { unwrapActionResult } from "@/lib/result";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { cn } from "@/lib/utils";
 import type { PartyData } from "../types/party";
 import { PARTY_ROLE_LABEL, PARTY_ROLE_ORDER } from "../types/party";
@@ -158,13 +159,13 @@ export function SupplierClient({
 
   // Unified companies table — filters for the new unified view
   const visibleCompanies = React.useMemo(() => {
-    const q = query.trim().toLocaleLowerCase("id-ID");
+    const q = normalizeSearchText(query);
     let rows = companies;
     if (q) {
       rows = rows.filter((c) =>
         [c.name, c.legal_name]
           .filter(Boolean)
-          .some((s) => s!.toLocaleLowerCase("id-ID").includes(q))
+          .some((s) => normalizeSearchText(s).includes(q))
       );
     }
     if (roleFilter !== "__all__") {

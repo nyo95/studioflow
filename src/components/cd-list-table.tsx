@@ -8,8 +8,9 @@ import {
   updateCDStatus,
   deleteCDItem
 } from "@/actions/phase-actions";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Button, Input, SectionCard, TableCard, TableCardHeader, TableCardHead, TableCardBody, TableCardRow, TableCardCell, Heading } from "@/ui_engine";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Button, Input, SectionCard, TableCardHeader, TableCardHead, TableCardBody, TableCardRow, TableCardCell, Heading } from "@/ui_engine";
 import { ArrowDownAZ, ArrowUpAZ, Loader2, Plus, Trash2 } from "lucide-react";
+import { formatDateTime } from "@/core/utilities/datetime";
 import { Role } from "@/generated/prisma";
 import { unwrapActionResult } from "@/lib/result";
 import { useAppConfirm } from "@/hooks/use-app-confirm";
@@ -114,13 +115,7 @@ function buildGroupedRows(items: CDItem[]) {
 }
 
 function formatAddedDate(date: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(date));
+  return formatDateTime(date);
 }
 
 export function CDListTable({

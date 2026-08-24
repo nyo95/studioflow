@@ -25,6 +25,7 @@ import { getSupplierOptionsAction } from "@/subapps/master-data/actions/pricing-
 import { getCompaniesAction } from "@/subapps/master-data/actions/party-actions";
 import { MasterDataMaterialsClient } from "@/subapps/master-data/components/MasterDataMaterialsClient";
 import defaultBrandCatalogCategories from "@/subapps/master-data/config/brand-catalog-categories.json";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ function mergeBrandCategoryOptions(existing: string[]) {
     ...existing,
   ]) {
     const name = raw.trim();
-    const key = name.toLocaleLowerCase("id-ID");
+    const key = normalizeSearchText(name);
     if (!name || seen.has(key)) continue;
     seen.add(key);
     options.push(name);

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 import { Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, UI_ENGINE_BG_SUBTLE, UI_ENGINE_BORDER_SUBTLE, UI_ENGINE_RADIUS_CARD, UI_ENGINE_RADIUS_ACTION, UI_ENGINE_TYPE_META } from "@/ui_engine";
 import {
   ExternalLink,
@@ -83,7 +84,7 @@ function formatUpdated(product: ProductCatalogWithRelations) {
   const updated = product.updated_at;
   if (updated) {
     return {
-      text: new Date(updated).toLocaleDateString("en-GB", {
+      text: formatDateWithOptions(updated, {
         day: "2-digit",
         month: "short",
         year: "2-digit",
@@ -92,7 +93,7 @@ function formatUpdated(product: ProductCatalogWithRelations) {
     };
   }
   return {
-    text: new Date(product.created_at).toLocaleDateString("en-GB", {
+    text: formatDateWithOptions(product.created_at, {
       day: "2-digit",
       month: "short",
       year: "2-digit",

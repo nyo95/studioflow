@@ -85,6 +85,7 @@ import {
   Unlink,
   User as UserIcon,
 } from "lucide-react";
+import { formatDateWithOptions } from "@/core/utilities/datetime";
 
 // ---------------------------------------------------------------------------
 // Presentation helpers
@@ -145,7 +146,7 @@ function formatDue(iso: string, now: Date): { text: string; tone: "overdue" | "t
   if (days <= 7) return { text: `in ${days} days`, tone: "soon" };
 
   return {
-    text: due.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    text: formatDateWithOptions(due, { day: "numeric", month: "short" }),
     tone: "later",
   };
 }

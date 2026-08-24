@@ -1,4 +1,5 @@
 import { TxClient, SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
+import { trimOrNull } from "@/core/utilities/normalize";
 import { throwActionError } from "@/lib/error-types";
 import type { Prisma } from "@/generated/prisma";
 
@@ -89,23 +90,18 @@ export async function getActiveRevisionWithActivities(
   });
 }
 
-export function normalizeOptionalString(value?: string | null) {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
-
 export async function upsertClientByName(
   tx: TxClient,
   clientName?: string,
   defaults?: { address?: string | null }
 ) {
-  const normalizedName = normalizeOptionalString(clientName);
+  const normalizedName = trimOrNull(clientName);
 
   if (!normalizedName) {
     return null;
   }
 
-  const normalizedAddress = normalizeOptionalString(defaults?.address ?? undefined);
+  const normalizedAddress = trimOrNull(defaults?.address ?? undefined);
   const existingClient = await tx.client.findFirst({
     where: {
       name: {

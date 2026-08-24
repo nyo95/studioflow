@@ -1,161 +1,179 @@
-# PRD — StudioFlow Architecture Cleanup & Consolidation v2
-**Status:** Final
-**Scope:** Refactor / Cleanup / Consolidation
-**Applies to:** StudioFlow Core, Master Data, BQ, Shared Core, UI Engine
-**Primary rule:** **No feature expansion unless required to correct an existing architectural/business flaw.**
+# PRD — StudioFlow Rebuild / Architecture & Product Simplification
+
+**Status:** Final Rebuild PRD
+**Scope:** StudioFlow Core + Master Data + BQ + Shared Core + UI Engine
+**Strategy:** **Refactor existing repo, not rewrite from zero.**
+**Primary Goal:** Menyederhanakan produk, memperjelas SSOT, memperbaiki UX, dan membersihkan arsitektur tanpa menghilangkan behavior yang sudah benar.
 
 ---
 
-## 1. Objective
+# 1. Product Vision
 
-StudioFlow sudah memiliki banyak workflow dan domain logic yang bekerja, tetapi berkembang dengan pola implementasi yang berulang dan beberapa ownership yang kurang tegas.
+StudioFlow harus menjadi:
 
-Pekerjaan ini bertujuan untuk:
+> **Internal Operating System untuk design studio**, bukan generic project-management / ERP.
 
-* merapikan codebase tanpa rewrite;
-* mempertahankan business behavior yang sudah benar;
-* mengoptimalkan schema;
-* menghapus redundant tables/fields/utilities;
-* menetapkan satu SSOT untuk konsep shared;
-* menyederhanakan Master Data Pricing;
-* memperbaiki BQ project-cost architecture;
-* mengembangkan `ui_engine` menjadi actual layout/template engine;
-* memperjelas dependency antar-domain;
-* menghapus legacy setelah parity terbukti.
+User harus merasa:
 
-North star:
+> “Saya sedang mengerjakan proyek.”
 
-> **Satu konsep = satu ownership = satu canonical implementation.**
+Bukan:
 
----
+> “Saya sedang mengisi sistem.”
 
-# 2. Non-Goals
-
-Project ini **bukan** untuk:
-
-* rewrite StudioFlow;
-* membuat repository baru;
-* mengganti Next.js;
-* mengganti Prisma;
-* mengganti PostgreSQL;
-* redesign visual keseluruhan;
-* mengubah formula BQ yang sudah benar;
-* menambah ERP/accounting;
-* menambah procurement system;
-* membuat generic framework berlebihan;
-* memindahkan semua business logic ke shared core.
-
-Rule:
-
-> **Centralize what is truly shared. Keep business rules inside their domain.**
-
----
-
-# 3. Existing Foundation to Preserve
-
-Jangan rewrite tanpa alasan:
-
-* Authentication/session
-* RBAC
-* App access matrix
-* Prisma/PostgreSQL
-* Transaction pattern
-* Action wrapper
-* Master Data Brand/SKU/Party foundation
-* Project Schedule snapshot semantics
-* BQ standalone project
-* BQ 3-level hierarchy
-* BQ calculation engine
-* BQ Object/Sub-object library
-* Render annotations
-* SketchUp integration foundation
-* Audit history yang masih valid
-* Integration/unit test coverage
-
----
-
-# 4. Final Target Architecture
+Tiga domain utama:
 
 ```text
-                    ┌────────────────────┐
-                    │     UI ENGINE      │
-                    │ theme / template   │
-                    │ layout / patterns  │
-                    └─────────▲──────────┘
-                              │
-                    ┌─────────┴──────────┐
-                    │    SHARED CORE     │
-                    │ SSOT / utilities   │
-                    │ platform services  │
-                    └─────────▲──────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              │               │               │
-         STUDIOFLOW       MASTER DATA         BQ
+MASTER DATA
+= canonical office data / SSOT
+
+STUDIOFLOW
+= project & design workflow
+
+BQ
+= estimating / costing workspace
+```
+
+Hubungannya:
+
+```text
+                 MASTER DATA
+                     SSOT
+              ┌───────┴───────┐
+              ▼               ▼
+         STUDIOFLOW            BQ
+        project use        costing use
+              │               │
+              ▼               ▼
+          SNAPSHOT          SNAPSHOT
+```
+
+**Expose data, never create hidden live coupling.**
+
+---
+
+# 2. Rebuild Strategy
+
+Tidak membuat aplikasi baru.
+
+Gunakan:
+
+```text
+Current Repo
+→ Freeze Behavior
+→ Audit Architecture
+→ Establish Contracts
+→ Refactor Incrementally
+→ Migrate Consumers
+→ Verify Parity
+→ Remove Legacy
+```
+
+Dilarang:
+
+```text
+delete first
+→ rebuild later
+```
+
+Wajib:
+
+```text
+introduce
+→ migrate
+→ test
+→ verify
+→ remove
+```
+
+---
+
+# 3. Non-Negotiable Product Principles
+
+### 3.1 One Canonical Source, Many Snapshots
+
+```text
+MASTER DATA = FACT
+PROJECT     = SNAPSHOT
+LIBRARY     = REUSE
+```
+
+---
+
+### 3.2 No Workflow May Be Blocked by Master Data
+
+Jika canonical data belum tersedia:
+
+* StudioFlow tetap bekerja.
+* BQ tetap bekerja.
+* Project-local data diperbolehkan.
+
+Master Data tidak boleh menjadi bottleneck operasional.
+
+---
+
+### 3.3 No Silent Upstream Update
+
+Perubahan Master Data tidak boleh mengubah project/BQ lama.
+
+---
+
+### 3.4 Centralize Infrastructure, Not Business Logic
+
+Shared Core boleh punya:
+
+* Unit
+* Currency
+* Money
+* Date/time
+* Measurement
+* Normalization
+* Audit
+* Errors
+* Pagination
+
+Tetapi:
+
+* BQ calculation tetap BQ.
+* StudioFlow phase logic tetap StudioFlow.
+* pricing behavior tetap Master Data.
+
+---
+
+# 4. Target Architecture
+
+```text
+                  UI ENGINE
+       Theme / Patterns / Templates
+                        ▲
+                        │
+                  SHARED CORE
+       Reference / Utilities / Platform
+                        ▲
+             ┌──────────┼──────────┐
+             │          │          │
+        STUDIOFLOW  MASTERDATA     BQ
 ```
 
 Allowed:
 
 ```text
-StudioFlow  → Core
-MasterData  → Core
-BQ          → Core
-
-StudioFlow  → UI Engine
-MasterData  → UI Engine
-BQ          → UI Engine
+Domains → Core
+Domains → UI Engine
 ```
 
 Forbidden:
 
 ```text
-Core → StudioFlow
-Core → MasterData
-Core → BQ
-
-UI Engine → StudioFlow business logic
-UI Engine → MasterData business logic
-UI Engine → BQ business logic
+Core → Domain
+UI Engine → Domain business logic
 ```
 
 ---
 
-# 5. Source-of-Truth Architecture
+# 5. Shared Core SSOT
 
-Final ownership:
-
-| Concept                      | SSOT                       |
-| ---------------------------- | -------------------------- |
-| User / Role / Permission     | Core / StudioFlow platform |
-| Units                        | Shared Core                |
-| Currency                     | Shared Core                |
-| Measurement rules            | Shared Core                |
-| Date/time policy             | Shared Core                |
-| Formatting / normalization   | Shared Core                |
-| Party                        | Master Data                |
-| Brand                        | Master Data                |
-| SKU                          | Master Data                |
-| SKU Current Price            | Master Data                |
-| Work / Service               | Master Data                |
-| Canonical Categories         | Master Data                |
-| Samples                      | Master Data                |
-| StudioFlow Project           | StudioFlow                 |
-| Project Phase                | StudioFlow                 |
-| Task                         | StudioFlow                 |
-| Project Schedule             | Project snapshot           |
-| BQ Project                   | BQ                         |
-| BQ Project Cost Database     | BQ Project                 |
-| BQ Breakdown                 | BQ                         |
-| BQ Project Local Material    | BQ                         |
-| BQ Object/Sub-object Library | BQ                         |
-| Historical changes           | Audit                      |
-| Document-used value          | Snapshot                   |
-
----
-
-# 6. Shared Core
-
-Create/strengthen:
+Target:
 
 ```text
 src/core/
@@ -167,33 +185,9 @@ src/core/
 
 ---
 
-## 6.1 Unit Dictionary
+## 5.1 Unit Dictionary
 
-All business modules must use one canonical unit vocabulary.
-
-No uncontrolled duplicates such as:
-
-```text
-sheet
-Sheet
-lembar
-sht
-sqm
-m2
-M²
-```
-
-Conceptual definition:
-
-```text
-UnitDefinition
-- id
-- symbol
-- label
-- aliases
-- dimension
-- precision
-```
+Canonical unit vocabulary.
 
 Examples:
 
@@ -202,79 +196,75 @@ PCS
 SET
 SHEET
 ROLL
+
+MM
+CM
 M
 M2
 M3
-MM
-CM
+
 LS
 HOUR
 DAY
+PERSON_DAY
 ```
 
-Dimensions:
+Definition:
 
 ```text
-COUNT
-LENGTH
-AREA
-VOLUME
-TIME
-LUMP_SUM
+UnitDefinition
+- id
+- symbol
+- label
+- dimension
+- aliases
+- precision
 ```
 
-Aliases are used for import/search/input normalization.
+Aliases:
 
-Canonical ID is used internally.
+```text
+sheet
+sheets
+lembar
+sht
+```
+
+semuanya resolve ke:
+
+```text
+SHEET
+```
+
+Storage/comparison menggunakan canonical ID.
 
 ---
 
-# 7. Measurement Engine
+# 6. Measurement Utility
 
-One reusable measurement implementation.
-
-Responsibilities:
+Single reusable engine untuk:
 
 ```text
 mm ↔ cm ↔ m
 length
 area
 volume
-purchase conversion
-dimension normalization
+conversion
+dimensions
 ```
 
-Shared functions conceptually:
-
-```text
-convertMeasurement()
-calculateArea()
-calculateVolume()
-normalizeMeasurement()
-```
-
-Pricing UI may provide dimension calculators, but mathematical rules must come from this shared engine.
+Tidak boleh setiap domain membuat conversion engine sendiri.
 
 ---
 
-# 8. Currency & Money
+# 7. Currency & Money
 
-Canonical currencies:
+Canonical currency dictionary:
 
 ```text
 IDR
 SGD
 USD
-```
-
-Each definition may contain:
-
-```text
-code
-symbol
-decimalPlaces
-locale
-roundingPolicy
 ```
 
 Shared:
@@ -285,315 +275,69 @@ parseMoney()
 roundMoney()
 ```
 
-Business calculation must not depend on presentation formatter.
+Money calculation tidak bergantung pada UI formatter.
 
 ---
 
-# 9. Date & Time
+# 8. Date / Time Policy
 
-Establish one application timezone policy.
+Final rule:
 
-Shared:
+> **Store UTC, display Asia/Jakarta by default.**
 
 ```text
-formatDate()
-formatDateTime()
-formatRelativeDate()
+DATABASE
+→ UTC
+
+SHARED CORE / UI
+→ Asia/Jakarta (WIB)
 ```
 
-Remove independent `toLocaleDateString()` / locale handling from business components where possible.
+Jangan mengikuti timezone browser sebagai source of truth.
 
 ---
 
-# 10. Normalization
+# 9. Normalization
 
-One implementation for:
+Shared:
 
 ```text
 normalizeName()
 normalizeCode()
 normalizeSearchText()
-trimOrNull()
-emptyToNull()
 normalizeUnit()
+emptyToNull()
+trimOrNull()
 ```
 
-Especially important for:
+Dipakai oleh:
 
-* search;
-* Excel import;
-* categories;
-* units;
-* codes;
-* brand/SKU matching.
+* search
+* import
+* Master Data
+* BQ
+* StudioFlow
 
 ---
 
-# 11. Shared Provenance Vocabulary
+# 10. Audit Architecture
 
-Canonical vocabulary:
-
-```text
-MASTER_DATA
-PROJECT_LOCAL
-SNAPSHOT
-MANUAL_OVERRIDE
-LIBRARY
-```
-
-Domains may extend this when necessary.
-
-Do not create multiple names for identical concepts.
-
----
-
-# 12. Schema Optimization Pass
-
-Before migrating domains, perform a complete schema audit.
-
-Every table/field classified as:
-
-```text
-KEEP
-NORMALIZE
-CENTRALIZE
-DERIVE
-MERGE
-REMOVE
-```
-
-Rules:
-
-* derived data should not become second mutable SSOT;
-* duplicated ownership must be removed;
-* unused historical fields should not remain merely because they once existed;
-* remove only after runtime/data parity is verified;
-* migrations must be additive first where practical.
-
----
-
-# 13. Master Data
-
-Master Data is canonical office information.
-
-Contains:
-
-```text
-Party
-Brand
-SKU
-Category
-SKU Price
-Work / Service
-Sample
-```
-
----
-
-# 14. SKU Responsibility
-
-SKU represents product identity and costing profile.
-
-Conceptually:
-
-```text
-SKU
-- code
-- name
-- brand
-- category
-- specification
-- dimensions
-- base unit
-- usage unit
-- purchase unit
-- conversion
-- default waste
-- minimum order
-- rounding increment
-- supplier/reference metadata if required
-```
-
-SKU must not accidentally change identity because a pricing record is updated.
-
----
-
-# 15. Final Pricing Model
-
-> **❌ DICABUT OWNER 2026-08-24 (keputusan final sesi takeover, ❓U1/U3).**
-> Bagian §15–§18 tidak berlaku. Arah final: **multi-supplier** — setiap SKU
-> boleh punya beberapa harga berlaku satu per supplier; BQ memilih
-> supplier-price saat penarikan dan membekukannya sebagai snapshot immutable.
-> Kontrak `SkuPrice_current_uniq` (SKU × supplier) tetap berlaku. Sisa kerja
-> pricing yang disetujui: validasi unit harga vs `purchase_unit`, kolom
-> `updated_by_id`, perbaikan dokumentasi.
-
-This is a key architecture decision.
-
-## 15.1 One SKU = One Canonical Current Price
-
-Business requirement:
-
-> Master Data only needs to answer: **what is the office-approved current price of this SKU?**
+Audit dikonsolidasikan **secara fisik dan interface**.
 
 Target:
 
 ```text
-SKU
-  1 ─── 0..1 Current Price
-```
-
-Conceptual price record:
-
-```text
-SkuPrice
-- sku_id UNIQUE
-- amount
-- currency
-- updated_at
-- updated_by_id
-- updated_by_name
-```
-
-Optional source/reference metadata may exist only if useful.
-
-Do not retain unnecessary pricing lifecycle complexity such as:
-
-```text
-multiple current supplier prices
-is_current
-valid_to
-price selection algorithm
-```
-
-unless future real business requirements explicitly require them.
-
----
-
-# 16. Price Unit Ownership
-
-Price should not repeat data unnecessarily.
-
-Costing identity belongs primarily to SKU:
-
-```text
-usage_unit
-purchase_unit
-conversion
-```
-
-Therefore Price generally stores:
-
-```text
-amount
-currency
-```
-
-and uses SKU purchase-unit semantics.
-
-If a supplier quotation arrives in a different unit, normalize it before committing the canonical price.
-
----
-
-# 17. Price History
-
-Price history does **not** require multiple active historical `SkuPrice` records.
-
-Separate three concerns:
-
-```text
-CURRENT STATE
-→ SkuPrice
-
-CHANGE HISTORY
-→ Audit
-
-VALUE USED IN DOCUMENT
-→ Snapshot
-```
-
-Example:
-
-```text
-Current Master Data:
-Rp370,000
-
-Audit:
-Rp350,000 → Rp370,000
-Updated by Staff A
-24 Aug 2026
-
-Existing BQ:
-snapshot_price = Rp350,000
-```
-
-Historical BQ remains reproducible without making Master Data Pricing itself complicated.
-
----
-
-# 18. Supplier vs Price
-
-Supplier information is not automatically price ownership.
-
-Conceptually:
-
-```text
-SKU
-├─ supplier/reference
-└─ canonical office price
-```
-
-Estimator should not need to decide:
-
-> Supplier A or Supplier B price?
-
-unless supplier quotation comparison becomes a separate future requirement.
-
-For current StudioFlow:
-
-> **Master Data Price is the canonical office cost input.**
-
----
-
-# 19. Work / Service
-
-Work/service remains separate canonical pricing entity.
-
-Conceptually:
-
-```text
-Work
-- code
-- name
-- category
-- unit
-- price
-- scope note
-- vendor/reference
-- has_material if needed
-```
-
-Do not fabricate material BOM for a commercial lump-sum/material+labor quotation.
-
----
-
-# 20. Audit Platform
-
-Refactor audit to be domain-neutral.
-
-Conceptual:
-
-```text
-recordAudit({
-  domain,
-  entityType,
-  entityId,
-  action,
-  actorId,
-  before,
-  after,
-  metadata
-})
+AuditLog
+- id
+- domain
+- entity_type
+- entity_id
+- action
+- actor_id
+- before_json
+- after_json
+- metadata_json
+- created_at
 ```
 
 Domains:
@@ -604,103 +348,413 @@ MASTER_DATA
 BQ
 ```
 
-Do not require a BQ entity to pretend it belongs to StudioFlow Project.
+Audit menjawab:
 
-Audit answers:
+> siapa mengubah apa dan kapan.
 
-> **What changed? Who changed it? When?**
+Snapshot menjawab:
 
-Snapshot answers:
+> nilai apa yang dipakai project pada waktu itu.
 
-> **What value did this project/document use?**
-
-They are separate responsibilities.
+Jangan campur dua fungsi tersebut.
 
 ---
 
-# 21. Platform Action Contract
+# 11. Schema Optimization
 
-Retain centralized action wrapper.
+Seluruh Prisma schema harus diaudit.
 
-Every mutation should consistently handle:
-
-```text
-validation
-authentication
-authorization
-transaction
-business validation
-audit
-error mapping
-result
-```
-
-Canonical errors:
+Setiap table/field diklasifikasikan:
 
 ```text
-VALIDATION_ERROR
-NOT_FOUND
-FORBIDDEN
-CONFLICT
-BUSINESS_RULE
-LOCKED
+KEEP
+NORMALIZE
+CENTRALIZE
+DERIVE
+MERGE
+REMOVE
 ```
 
-Never expose raw Prisma errors.
+Tujuan:
+
+* hapus duplicate ownership;
+* hilangkan obsolete fields;
+* turunkan derived data menjadi calculation bila tidak perlu disimpan;
+* hapus dead tables jika benar-benar tidak punya consumer.
 
 ---
 
-# 22. Soft Delete
+## 11.1 ProjectTimeline
 
-Canonical semantic:
+Jika audit membuktikan:
 
-```text
-deleted_at = NULL
-→ active
+* write-only;
+* zero active reader;
+* tidak dipakai audit/report;
+* tidak required PRD;
 
-deleted_at != NULL
-→ deleted
-```
+maka:
 
-Shared helper/convention permitted.
+> **drop `ProjectTimeline` dan hapus write path terkait.**
 
-Business-level restore/delete rules remain domain-owned.
-
----
-
-# 23. Search / Pagination Contract
-
-Standard request:
-
-```text
-query
-page
-pageSize
-sort
-filters
-```
-
-Standard result:
-
-```text
-items
-page
-pageSize
-total
-pageCount
-```
-
-Do not force all domains into one generic repository.
-
-Only interface behavior is shared.
+Jangan mempertahankan dead schema karena “mungkin nanti”.
 
 ---
 
-# 24. BQ Architecture
+# 12. Master Data Product
 
-BQ remains standalone from StudioFlow Project.
+Master Data adalah office-wide canonical source.
 
-Core hierarchy stays:
+Contains:
+
+```text
+Party
+Supplier/Vendor
+Brand
+Category
+SKU
+SkuPrice
+Work / Service
+Sample
+```
+
+---
+
+# 13. Party / Supplier Model
+
+Party dapat mempunyai beberapa role.
+
+Contoh:
+
+```text
+SUPPLIER
+VENDOR
+SUBCON
+BRAND_OWNER
+CONTACT
+```
+
+Hindari duplicate company records hanya karena role berbeda.
+
+---
+
+# 14. SKU
+
+SKU adalah product identity + costing profile.
+
+Conceptual:
+
+```text
+SKU
+- code
+- name
+- brand
+- category
+- specification
+- dimensions
+
+- usage_unit
+- purchase_unit
+- conversion
+
+- default_waste
+- MOQ
+- rounding_increment
+
+- media
+```
+
+---
+
+# 15. Final Master Data Pricing Model
+
+Keputusan final:
+
+> **One current price per SKU × Supplier.**
+
+Bukan:
+
+> one price globally per SKU.
+
+Dan bukan:
+
+> unlimited historical price rows sebagai current business state.
+
+Example:
+
+```text
+SKU A
+├─ Vendor 1 → Rp6.000
+├─ Vendor 2 → Rp10.000
+└─ Vendor 3 → Rp7.500
+```
+
+Schema concept:
+
+```text
+SkuPrice
+- id
+- sku_id
+- supplier_party_id
+- amount
+- currency
+- updated_at
+- updated_by_id
+```
+
+Constraint:
+
+```text
+UNIQUE(sku_id, supplier_party_id)
+```
+
+Artinya:
+
+```text
+SKU + Supplier = one current price
+```
+
+---
+
+# 16. Price History
+
+Current:
+
+```text
+SkuPrice
+```
+
+History:
+
+```text
+AuditLog
+```
+
+BQ historical cost:
+
+```text
+BQ Snapshot
+```
+
+Jadi tidak perlu membuat historical pricing lifecycle yang rumit hanya untuk menyimpan perubahan lama.
+
+---
+
+# 17. Price Unit Rule
+
+Final rule:
+
+> **SkuPrice selalu menggunakan `sku.purchase_unit`.**
+
+Example:
+
+```text
+SKU:
+usage_unit    = m2
+purchase_unit = sheet
+conversion    = 2.88 m2 / sheet
+
+Vendor A:
+Rp350.000 / sheet
+
+Vendor B:
+Rp370.000 / sheet
+```
+
+Jangan simpan:
+
+```text
+Vendor A = /sheet
+Vendor B = /m2
+```
+
+Jika quotation supplier datang `/m2`, normalisasi dahulu ke purchase unit sebelum commit.
+
+Idealnya `SkuPrice.unit` bukan SSOT terpisah.
+
+---
+
+# 18. Updated By
+
+`SkuPrice` wajib menyimpan:
+
+```text
+updated_by_id
+updated_at
+```
+
+Display name dapat di-resolve dari actor/user.
+
+Optional name snapshot boleh tetap ada sebagai fallback bila dibutuhkan audit display.
+
+---
+
+# 19. Work / Service Pricing
+
+Work tetap separate entity.
+
+Example:
+
+```text
+Painting work
+Installation
+Carpentry labor
+Custom fabrication
+```
+
+Work price tidak harus dipecah menjadi fake material BOM jika quotation memang commercial lump-sum/material+labor.
+
+---
+
+# 20. Master Data Exposure
+
+Master Data harus menjadi reusable typed source untuk:
+
+```text
+StudioFlow
+BQ
+```
+
+Tetapi consumer tidak boleh menulis langsung ke Master Data sesuka hati.
+
+Target:
+
+```text
+Master Data
+→ Query/API/Service Boundary
+→ Consumer
+```
+
+Bukan:
+
+```text
+BQ → Prisma MasterData direct everywhere
+StudioFlow → Prisma MasterData direct everywhere
+```
+
+---
+
+# 21. StudioFlow Product Simplification
+
+StudioFlow tetap menggunakan design lifecycle:
+
+```text
+MOODBOARD
+LAYOUT
+DESIGN 3D
+CD
+SUPERVISION
+COMPLETED
+```
+
+Tetapi UX harus lebih ringan.
+
+Phase tidak boleh terasa seperti rigid workflow engine.
+
+---
+
+# 22. Phase Simplification
+
+User-facing presentation disederhanakan.
+
+Status utama:
+
+```text
+Working
+Internal Review
+Client Review
+Approved
+Done
+```
+
+Phase tetap sebagai context:
+
+```text
+Moodboard
+Layout
+3D
+CD
+Supervision
+```
+
+Tetapi user tidak harus “menavigasi state machine” untuk bekerja.
+
+Target:
+
+> phase = work context, bukan bureaucracy.
+
+---
+
+# 23. Project Navigation
+
+Project Home harus menjadi pusat.
+
+Target mental model:
+
+```text
+Project
+├─ Overview
+├─ Tasks
+├─ Design
+├─ Schedule
+├─ Material / FF&E
+├─ Render
+├─ MOM
+└─ Supervision
+```
+
+Kurangi:
+
+* duplicate navigation;
+* redundant cards;
+* stats yang tidak actionable;
+* terlalu banyak state indicators.
+
+---
+
+# 24. Project Snapshot Architecture
+
+Master Data/reference dapat digunakan dalam StudioFlow.
+
+Tetapi project menyimpan snapshot jika historical consistency diperlukan.
+
+Example:
+
+```text
+Master Data SKU
+        ↓
+Project Schedule Entry Snapshot
+```
+
+Jika Master Data SKU berubah/dihapus:
+
+```text
+Project lama tetap valid.
+```
+
+---
+
+# 25. BQ Product Vision
+
+BQ harus menjadi:
+
+> **Excel replacement khusus estimator.**
+
+Tidak boleh terasa seperti ERP form.
+
+Priority:
+
+1. speed;
+2. inline editing;
+3. keyboard usage;
+4. clarity;
+5. flexibility.
+
+---
+
+# 26. BQ Hierarchy
+
+Final:
 
 ```text
 L1 OBJECT
@@ -709,271 +763,456 @@ L1 OBJECT
    └─ L3 SERVICE
 ```
 
-No fourth hierarchy level.
+No L4.
 
 ---
 
-# 25. BQ Calculation Engine
+# 27. L1 Object
+
+Contains:
+
+```text
+code
+name
+qty
+unit
+markup
+notes
+lock
+derived rate
+total
+```
+
+---
+
+# 28. L2 Sub-object
+
+Example:
+
+```text
+Wall Display
+├─ Main Body ×1
+├─ Shelf ×5
+├─ Drawer ×2
+└─ Signage ×1
+```
+
+Each subobject has multiplier.
+
+---
+
+# 29. L3 Material
+
+Contains:
+
+```text
+material
+supplier/source
+qty
+usage unit
+purchase unit
+conversion
+price snapshot
+waste
+cost
+```
+
+---
+
+# 30. L3 Service
+
+Contains:
+
+```text
+service
+qty
+unit
+price snapshot
+cost
+```
+
+No waste/conversion/MOQ semantics unless genuinely relevant.
+
+---
+
+# 31. Canonical BQ Calculation
 
 Existing `calc.ts` remains canonical.
 
-Do not duplicate BQ arithmetic elsewhere.
-
-Order remains:
+Concept:
 
 ```text
-material quantity
-→ waste
-→ conversion
-→ L2 multiplier
-→ L3 cost
-
-Σ L3
-→ L2 cost
-
-Σ L2
-→ object base cost
-
-base + markup
-→ object unit rate
-
-unit rate × L1 qty
-→ object total
+Material Qty
+× Waste
+× L2 Qty
+× Price / Conversion
+= Cost
 ```
 
-Purchase rounding remains applied at the correct aggregated purchasing stage.
+Then:
 
-Existing regression values remain acceptance gates.
+```text
+Σ Material
++ Σ Service
+= Object Base Cost
+```
+
+Then:
+
+```text
+Base Cost
++ Markup
+= Unit Rate
+```
+
+Then:
+
+```text
+Unit Rate × L1 Qty
+= Object Total
+```
+
+Do not rewrite unless regression tests prove a defect.
 
 ---
 
-# 26. BQ Project Cost Database
+# 32. BQ Snapshot Rule — Critical Invariant
 
-Introduce/normalize a proper project-level cost source.
+Snapshot occurs **when data is pulled/selected**.
 
-Architecture:
+Example:
+
+### Day 1
 
 ```text
-MASTER DATA
-     │ snapshot
-     ▼
-BQ PROJECT COST DATABASE
-     │
-     ▼
-BQ BREAKDOWN
+Master Data
+HPL Vendor A = Rp5.000
 ```
 
-Project Cost Database contains:
+Pulled into:
 
 ```text
-ProjectMaterial
-ProjectService
+BQ Project A
+Wall Panel → HPL
+snapshot = Rp5.000
 ```
 
-Sources:
+---
+
+### Day 8
+
+Master Data updated:
 
 ```text
-MASTER_DATA
+HPL Vendor A = Rp10.000
+```
+
+Existing line remains:
+
+```text
+Wall Panel → Rp5.000
+```
+
+---
+
+### Day 8 — same SKU used again
+
+Another BQ line changes:
+
+```text
+Solid Surface
+→ HPL Vendor A
+```
+
+New acquisition:
+
+```text
+snapshot = Rp10.000
+```
+
+So within **one BQ project**:
+
+```text
+HPL line #1 = 5.000
+HPL line #2 = 10.000
+```
+
+This is valid.
+
+---
+
+# 33. No Refresh Existing BQ Snapshot
+
+There must be:
+
+```text
+NO Refresh All
+NO Refresh Selected
+NO stale-price sync
+NO auto-update
+NO upstream propagation
+```
+
+Existing snapshot is immutable relative to Master Data.
+
+If user chooses material again, that is a new acquisition event.
+
+---
+
+# 34. BQ Supplier Selection
+
+If SKU has:
+
+```text
+Vendor 1 = 6.000
+Vendor 2 = 10.000
+Vendor 3 = 7.500
+```
+
+BQ picker should allow estimator to select:
+
+```text
+SKU + Supplier + Current Price
+```
+
+Example:
+
+```text
+HPL A
+Vendor 1     6.000
+Vendor 2    10.000
+Vendor 3     7.500
+```
+
+After selected:
+
+```text
+supplier
+supplier name
+price
+unit
+conversion
+timestamp
+```
+
+are snapshotted.
+
+---
+
+# 35. BQ Project-Local Data
+
+Estimator may create material/service locally if Master Data is unavailable.
+
+Source:
+
+```text
 PROJECT_LOCAL
 ```
 
----
-
-# 27. BQ Master Data Snapshot
-
-When estimator imports a Master Data SKU:
+Minimum project-local material:
 
 ```text
-Master Data SKU
-Current Price: Rp350,000
-        │
-        ▼
-Project Material
-snapshot_price: Rp350,000
-source: MASTER_DATA
-snapshot_at: timestamp
+name
+code optional
+brand optional
+supplier optional
+
+usage unit
+purchase unit
+conversion
+price
+waste
+MOQ
+rounding
 ```
 
-Future Master Data changes must **not** modify the project automatically.
-
----
-
-# 28. BQ Project-Local Cost
-
-If Master Data is incomplete, estimator must continue working.
-
-Estimator may create:
-
-```text
-Project Material
-Project Service
-```
-
-with source:
-
-```text
-PROJECT_LOCAL
-```
-
-This does not write to Master Data.
-
-It can later be:
-
-* matched;
-* requested;
-* promoted through an explicit controlled workflow.
-
-No BQ workflow may be blocked merely because Master Data staff has not yet entered an item.
+Does not modify Master Data.
 
 ---
 
-# 29. BQ Cost Refresh
+# 36. BQ Project Cost Database
 
-*(Dicabut oleh owner pada sesi ratifikasi 2026-08-24 — lihat catatan di bawah.)*
+Project Cost Database remains useful as estimator-owned project workspace.
 
-> **KEPUTUSAN OWNER 2026-08-24:** bagian ini TIDAK berlaku dalam bentuk aslinya.
-> BQ snapshot tidak pernah refresh dari Master Data — tidak ada "Update
-> available", tidak ada Refresh selected/Refresh all. Harga current diambil
-> sekali saat baris ditarik ke project; existing snapshot tidak disentuh siapa
-> pun. Suntingan manual `is_manual_override` tetap jalur ubah yang sah.
-
-If:
+But it must not force:
 
 ```text
-Project snapshot = Rp350,000
-Master Data now = Rp370,000
+one SKU = one project-wide price forever
 ```
 
-BQ may show:
+It may act as:
 
-```text
-Update available
-```
+* project material list;
+* local source;
+* reusable selected cost entries.
 
-Actions:
-
-```text
-Refresh selected
-Refresh all
-Keep project values
-```
-
-~~Never silent-sync.~~ *(diganti keputusan di atas)*
+Each L3 line still owns its own acquisition snapshot.
 
 ---
 
-# 30. BQ Line Snapshot
+# 37. BQ Library
 
-L3 remains document snapshot.
-
-It stores enough information to reproduce calculation:
-
-```text
-identity snapshot
-unit snapshot
-conversion snapshot
-price snapshot
-waste snapshot
-source
-snapshot timestamp
-manual override state
-```
-
-Do not retain redundant values that provide no reproducibility benefit.
-
----
-
-# 31. BQ Lifecycle
-
-Create one central guard:
-
-```text
-assertBqProjectEditable()
-```
-
-Minimum rules:
-
-```text
-deleted project → reject mutations
-archived project → reject mutations
-locked object → reject descendant mutations
-```
-
-Enforced server-side.
-
-Not just hidden buttons.
-
----
-
-# 32. BQ Ordering
-
-Remove ambiguous ordering behavior.
-
-Concurrent inserts must not create unstable ordering.
-
-Use a deterministic strategy appropriate for internal-scale usage.
-
-Do not overengineer distributed ordering.
-
----
-
-# 33. BQ Library
-
-Keep separate:
+Reusable levels:
 
 ```text
 Object Library
 Sub-object Library
 ```
 
-Users can:
+Commands:
 
 ```text
 Save Object to Library
 Save Sub-object to Library
 ```
 
-Library is a reusable recipe.
+Workflow:
 
-When instantiated:
+```text
+real estimator work
+→ save recipe
+→ reuse later
+```
+
+Not only blank-template creation.
+
+---
+
+# 38. BQ Copy-on-Write
+
+When library item is instantiated:
 
 ```text
 Library Recipe
-→ resolve through Project Cost Database
-→ create project-owned structure
+→ Project-owned BQ structure
 ```
 
-Project edits do not silently mutate template.
+Editing project instance does not modify template automatically.
 
 ---
 
-# 34. StudioFlow Project Snapshot Rules
+# 39. BQ Outputs
 
-Project Schedule remains a project-owned snapshot.
+### Client BQ
 
-Flow:
+Show:
 
 ```text
-Master Data / Library
-        ↓ instantiate
-Project Schedule Snapshot
+Object
+Qty
+Unit
+Rate
+Amount
 ```
 
-No live coupling.
+Hide:
 
-Explicit refresh only.
-
-Project must remain usable even if upstream item is later deleted or changed.
+```text
+supplier
+raw material price
+waste
+markup detail
+```
 
 ---
 
-# 35. UI Engine v2
+### Internal Detail
 
-Current UI Engine must evolve into:
+Show:
 
-> **Theme + Primitives + Patterns + Layouts + Templates**
+```text
+L1/L2/L3
+supplier
+qty
+unit
+conversion
+waste
+snapshot price
+cost
+override
+source
+```
+
+---
+
+### Purchase Summary
+
+Aggregate purchasing requirement.
+
+---
+
+# 40. BQ Revision
+
+Minimum:
+
+```text
+Tender Rev 01
+Tender Rev 02
+Final Cost
+```
+
+No need to recreate Google Sheets-style granular version history.
+
+---
+
+# 41. BQ Backend Lifecycle
+
+Central guard:
+
+```text
+assertBqProjectEditable()
+```
+
+Rules:
+
+```text
+deleted → no mutation
+archived → no mutation
+locked object → descendant mutation blocked
+```
+
+Server-side enforcement mandatory.
+
+---
+
+# 42. BQ UX Rebuild
+
+BQ UI should behave like spreadsheet.
+
+Required:
+
+* inline text edit;
+* inline number edit;
+* inline select;
+* keyboard navigation;
+* rapid row creation;
+* fast picker;
+* predictable focus;
+* expandable hierarchy;
+* sticky/frozen relevant columns/header;
+* minimal modal usage.
+
+Avoid forcing estimator through CRUD forms.
+
+---
+
+# 43. UI Engine v2
 
 Target:
+
+```text
+Theme
++
+Primitives
++
+Patterns
++
+Layouts
++
+Templates
+```
+
+Structure:
 
 ```text
 src/ui_engine/
@@ -987,101 +1226,68 @@ src/ui_engine/
 
 ---
 
-# 36. UI Engine Rules
+# 44. UI Engine Domain Purification
 
-UI Engine must not know:
+At foundation phase, domain knowledge must be removed.
+
+Move out:
 
 ```text
-PhaseName
+PhaseLiveProvider
+ProjectLiveProvider
+PhaseReading
+PhaseLockNotice
+StudioFlow-specific Project components
+business status mappings
+```
+
+UI Engine cannot know:
+
+```text
+MOODBOARD
 DIC
-DRIC
 SKU
-BQ Object
-Project business lifecycle
-```
-
-It may know:
-
-```text
-navigation item
-slot
-badge tone
-page title
-sidebar
-toolbar
-content
-layout geometry
-responsive behavior
+BqObject
+SampleStatus
 ```
 
 ---
 
-# 37. Theme
+# 45. StatusBadge
 
-Theme owns:
-
-```text
-typography
-colors
-spacing
-radius
-shadow
-density
-header height
-rail widths
-canvas
-```
-
-Hardcoded geometry such as:
+Wrong:
 
 ```text
-78px
-256px
-top-14
+StatusBadge("ON_REVIEW_CLIENT")
 ```
 
-should derive from theme/layout tokens.
+Correct:
 
-Domain-specific configuration such as RenderBoard label geometry does not belong in global design system config.
+```text
+StatusBadge(tone="warning")
+```
+
+Domain owns:
+
+```text
+PhaseStatus → tone
+SkuStatus → tone
+BqStatus → tone
+```
 
 ---
 
-# 38. Primitive Layer
-
-Keep existing primitives behind:
-
-```text
-@/ui_engine
-```
+# 46. Shared UI Patterns
 
 Examples:
 
 ```text
-Button
-Input
-Dialog
-Select
-Table
-Tabs
-Checkbox
-Tooltip
-```
-
-Application code should not bypass engine primitives without reason.
-
----
-
-# 39. Shared UI Patterns
-
-Add reusable patterns:
-
-```text
-SearchPicker
-CreatablePicker
-
 InlineTextCell
 InlineNumberCell
 InlineSelectCell
+
+SearchPicker
+CreatablePicker
 
 DataTable
 Pagination
@@ -1093,88 +1299,47 @@ ErrorState
 ConfirmAction
 ```
 
-Domain components remain adapters:
+Domain adapters may exist:
 
 ```text
 SkuPicker
-BrandPicker
 PartyPicker
 WorkPicker
+BrandPicker
 ```
 
 ---
 
-# 40. Generic Status Component
+# 47. AppShell
 
-UI Engine receives tone:
-
-```text
-neutral
-info
-success
-warning
-critical
-```
-
-Example:
-
-```text
-<StatusBadge tone="warning" />
-```
-
-Mapping belongs to domain:
-
-```text
-PhaseStatus → tone
-SkuStatus → tone
-SampleStatus → tone
-BqProjectStatus → tone
-```
-
-UI Engine must not contain lists like:
-
-```text
-ON_REVIEW_CLIENT
-READY_FOR_NEXT
-DISCONTINUED
-```
-
----
-
-# 41. AppShell
-
-One shared shell should replace duplicated StudioFlow/MasterData/BQ chrome.
-
-Responsibilities:
-
-```text
-canvas
-top header
-app switcher
-outer navigation
-main viewport
-responsive behavior
-optional footer
-```
+StudioFlow, Master Data, BQ must share application shell.
 
 Target:
 
-```text
-<AppShell
-  app={appDefinition}
-  navigation={navigation}
->
+```tsx
+<AppShell app={definition}>
   {children}
 </AppShell>
 ```
 
-Sub-app layouts retain authorization responsibility but no longer duplicate visual shell implementation.
+Centralize:
+
+* header;
+* rail;
+* content width;
+* navigation frame;
+* app switch;
+* responsive behavior.
+
+No duplicated copies of shell code.
 
 ---
 
-# 42. UI Template Engine
+# 48. Template Engine
 
-Required page templates:
+UI Engine must become template-driven.
+
+Templates:
 
 ```text
 DashboardTemplate
@@ -1186,188 +1351,158 @@ SpreadsheetTemplate
 SettingsTemplate
 ```
 
-Templates use slots.
+---
+
+# 49. Template Execution Plan
+
+During UI Engine foundation:
+
+> create **contract/skeleton only**.
+
+Define:
+
+* directory;
+* TS slots;
+* template interfaces.
+
+No broad page rewrite yet.
+
+Full visual implementation/migration occurs during template migration phase.
 
 ---
 
-## DirectoryTemplate
+# 50. SpreadsheetTemplate
 
-For:
+Designed especially for BQ:
+
+```text
+Toolbar
+Frozen Header
+Grid
+Optional Inspector
+Summary
+```
+
+BQ should be the strongest test case for UI Engine's spreadsheet template.
+
+---
+
+# 51. DirectoryTemplate
+
+Used for:
 
 ```text
 SKU
 Brand
 Supplier
-Sample
+Samples
+Services
 ```
 
 Slots:
 
 ```text
-header
-actions
-search
-filters
-content
-pagination
+Header
+Actions
+Search
+Filters
+Content
+Pagination
 ```
 
 ---
 
-## SpreadsheetTemplate
+# 52. WorkspaceTemplate
 
-For BQ.
-
-Slots:
-
-```text
-toolbar
-grid
-inspector
-summary
-```
-
----
-
-## WorkspaceTemplate
-
-For:
+Used for:
 
 ```text
 Render
 Supervision
-phase workspaces
+Design workspace
 ```
 
 Slots:
 
 ```text
-navigation
-primary
-secondary
-actions
+Navigation
+Primary Content
+Secondary Panel
+Actions
 ```
 
 ---
 
-## ProjectTemplate
+# 53. AGENTS.md Authority
 
-Project-aware structurally, but not business-aware.
+Final rule:
 
-Receives context/navigation through slots or props.
+> **AGENTS.md governs AI behavior only.**
 
----
-
-# 43. Definition of UI Engine Success
-
-UI Engine is successful when:
-
-> Changing shell/template structure in one place changes every consumer of that template without editing every page.
-
-This is the intended WordPress-template-like behavior.
-
----
-
-# 44. Dependency Enforcement
-
-Automated lint/import rules required.
-
-Forbidden:
+Examples:
 
 ```text
-src/core/** → src/subapps/**
-src/core/** → src/extensions/**
-
-src/ui_engine/** → src/subapps/**
-src/ui_engine/** → domain-specific extensions
+delegation
+branch discipline
+review process
+test requirements
+migration safety
+agent permissions
 ```
 
-Exceptions require explicit architectural justification.
+Product requirements do not belong there.
 
----
+If `AGENTS.md` contains product/business requirements and conflicts with PRD:
 
-# 45. Cleanup of Repeated Utilities
+> **PRD wins.**
 
-Audit and consolidate repeated implementations of:
-
-* currency formatting;
-* number formatting;
-* date formatting;
-* measurement conversion;
-* normalization;
-* picker behavior;
-* inline editing;
-* pagination;
-* status rendering;
-* confirmations;
-* audit writes;
-* error mapping;
-* soft-delete queries;
-* ordering where semantics are identical.
-
-Do not centralize domain-specific calculations merely because the code looks similar.
-
----
-
-# 46. Documentation Hierarchy
-
-Final authority order:
+Authority by subject:
 
 ```text
-1. Product PRD
-2. Domain Contracts
-3. Schema / migrations
-4. Runtime implementation
-5. Roadmap
-6. Changelog
-7. Archive
+AGENTS.md
+→ Agent execution governance
+
+FINAL PRD
+→ Product/business truth
+
+DOMAIN CONTRACTS
+→ Detailed domain rules
+
+SCHEMA
+→ Technical implementation
+
+CODE/TEST
+→ Current implementation
+
+ROADMAP
+→ Execution order
+
+CHANGELOG
+→ History
 ```
 
-Old documents that contradict current decisions must be marked archived.
+Cleanup must move valid product rules out of `AGENTS.md`.
 
 ---
 
-# 47. Migration Strategy
+# 54. Execution Roadmap
 
-Never:
+Total:
 
-```text
-delete old
-→ build replacement
-```
-
-Use:
-
-```text
-identify behavior
-→ add regression test
-→ introduce canonical replacement
-→ migrate consumers
-→ verify parity
-→ remove legacy
-```
-
-Database migrations should preserve recoverability.
+> **R0–R12 = 13 stages**
 
 ---
-
-# 48. Execution Roadmap
 
 ## R0 — Baseline Freeze
 
-* no unrelated feature expansion;
 * capture current schema;
-* run typecheck/tests/integration;
-* capture critical workflow acceptance cases;
-* establish approved baseline.
-
-**Exit:** known-good baseline.
+* tests green;
+* critical behavior regression baseline;
+* freeze unrelated feature work.
 
 ---
 
 ## R1 — Schema & Ownership Audit
-
-Audit StudioFlow, Master Data, BQ.
 
 Classify:
 
@@ -1380,17 +1515,7 @@ MERGE
 REMOVE
 ```
 
-Special focus:
-
-* pricing;
-* units;
-* snapshots;
-* duplicate metadata;
-* audit references;
-* legacy project links;
-* redundant BQ recipe fields.
-
-**Exit:** approved migration map.
+Audit all domains.
 
 ---
 
@@ -1398,63 +1523,52 @@ Special focus:
 
 Implement:
 
-* Unit Dictionary
-* Measurement
-* Currency
-* Money
-* Date/time
-* Normalization
-* Provenance vocabulary
-
-No major visual changes.
+* Unit;
+* Currency;
+* Money;
+* Measurement;
+* Date;
+* Normalization;
+* provenance.
 
 ---
 
 ## R3 — Platform Consolidation
 
-Refactor:
+Implement:
 
-* audit;
-* action errors;
+* generic Audit;
+* action/error contract;
 * pagination;
-* soft-delete conventions;
-* actor metadata;
-* shared infrastructure.
+* soft delete;
+* shared platform helpers.
 
 ---
 
-## R4 — Pricing Simplification
+## R4 — Pricing Cleanup
 
-Convert Master Data pricing to:
+Finalize:
 
-> **one canonical current price per SKU**
+```text
+SKU × Supplier = current price
+```
 
-Requirements:
-
-* unique SKU-price relationship;
-* current price only;
-* audit captures changes;
-* existing BQ values remain snapshots;
-* remove unused price lifecycle complexity after verification.
+* supplier stays in SkuPrice;
+* current row per pair;
+* updated_by;
+* updated_at;
+* unit follows SKU purchase unit;
+* history via Audit.
 
 ---
 
 ## R5 — UI Engine v2 Foundation
 
-Create:
-
-```text
-theme
-tokens
-primitives
-patterns
-layout
-templates
-```
-
-Remove business-domain knowledge.
-
-No broad redesign.
+* new architecture;
+* remove domain knowledge;
+* tone-only status;
+* move StudioFlow components out;
+* template contracts/skeleton only.
 
 ---
 
@@ -1462,74 +1576,75 @@ No broad redesign.
 
 Migrate:
 
-1. Master Data
-2. BQ
-3. StudioFlow
+```text
+Master Data
+BQ
+StudioFlow
+```
 
-Remove duplicated shell code after parity.
+to one generic shell.
 
 ---
 
 ## R7 — Template Migration
 
-Introduce/migrate:
+Implement and adopt:
 
 ```text
+Dashboard
 Directory
 Detail
 Workspace
 Project
 Spreadsheet
 Settings
-Dashboard
 ```
-
-Start with representative pages before bulk migration.
 
 ---
 
 ## R8 — Master Data Cleanup
 
-* canonical unit integration;
-* price simplification integration;
-* picker consolidation;
-* formatter consolidation;
-* SKU/Price ownership correction;
-* remove redundant local utility implementations.
+* canonical units;
+* price integration;
+* selector consolidation;
+* remove redundant utilities;
+* cleanup schema.
 
 ---
 
-## R9 — BQ Cleanup
+## R9 — BQ Cleanup & UX
 
-* Project Cost Database;
-* Master Data snapshots;
-* Project-local data;
+* spreadsheet interaction;
+* snapshot correctness;
+* supplier-price picker;
+* project-local cost;
 * lifecycle guards;
-* provenance cleanup;
-* ordering hardening;
-* shared units/money;
-* audit cleanup.
-
-**Do not change BQ calculation result.**
+* library workflow;
+* remove refresh semantics.
 
 ---
 
-## R10 — StudioFlow Cleanup
+## R10 — StudioFlow Simplification
 
-* shared date utilities;
-* task interaction consolidation;
-* generic templates;
-* phase presentation mapping;
-* remove obsolete layout wrappers;
-* move StudioFlow-specific components out of UI Engine.
+* phase presentation simplification;
+* Project Home;
+* project navigation;
+* task interaction cleanup;
+* shared templates;
+* remove duplicate UI behavior.
 
 ---
 
-## R11 — Boundary Enforcement
+## R11 — Dependency Boundary Enforcement
 
-Enable strict imports/lint guards.
+Lint/build rules:
 
-Zero known violations.
+```text
+core -X→ domains
+ui_engine -X→ domains
+```
+
+Zero violations.
 
 ---
 
@@ -1537,212 +1652,139 @@ Zero known violations.
 
 Remove:
 
+* dead schema;
 * dead utilities;
-* duplicated components;
-* stale layout implementations;
-* obsolete pricing schema;
-* dead migrations compatibility where safely removable;
-* obsolete docs;
-* temporary files.
+* obsolete components;
+* duplicate shells;
+* dead docs;
+* stale AGENTS product rules;
+* temporary compatibility code.
 
-Only after all consumers migrated.
+Only after parity.
 
 ---
 
-# 49. Acceptance Criteria
+# 55. Definition of Done
 
-## Shared Core
+R0–R12 complete only when:
 
-* no duplicate unit dictionaries;
-* no independent currency rules;
-* common formatting/conversion uses one implementation.
+### Architecture
 
-## Pricing
+* clear domain ownership;
+* shared concepts centralized;
+* no unwanted cross-domain imports;
+* dead architecture removed.
 
-*(§15–§18 dicabut 2026-08-24 — arah final multi-supplier; kriteria di bawah
-diganti sesuai keputusan final.)*
+### Master Data
 
-* tepat satu harga berlaku per pasangan (SKU × supplier) — `SkuPrice_current_uniq`;
-* price update records actor + timestamp;
-* audit preserves before/after;
-* price changes never mutate old BQ snapshots;
-* unit harga divalidasi = `sku.purchase_unit` saat tulis.
+* SSOT usable by both StudioFlow and BQ;
+* multi-supplier pricing works;
+* one current price per SKU × supplier;
+* history auditable.
 
-## BQ
+### BQ
 
-Estimator can:
+* behaves like estimator spreadsheet;
+* snapshot per acquisition event;
+* old snapshots never upstream-refresh;
+* same SKU may legitimately have different prices in one project;
+* supplier selection explicit;
+* project-local fallback works.
 
-```text
-create BQ project
-→ snapshot Master Data prices
-→ create project-local material if unavailable
-→ use both in breakdown
-→ calculate
-→ update Project Cost Database
-→ explicitly refresh selected snapshots
-```
+### StudioFlow
 
-No dependency on staff updating Master Data first.
+* project workflow simpler;
+* phase presentation lighter;
+* design workflow preserved;
+* Master Data exposed cleanly.
 
-*(Catatan ratifikasi 2026-08-24: langkah "explicitly refresh selected snapshots"
-dicabut owner — snapshot tidak pernah refresh dari Master Data, lihat §29.)*
+### UI Engine
 
-## UI Engine
+* common AppShell;
+* reusable page templates;
+* no domain knowledge;
+* UI changes can propagate through templates.
 
-* StudioFlow/MasterData/BQ share AppShell;
-* templates are reusable;
-* no domain statuses inside generic UI;
-* hardcoded app-shell geometry centralized;
-* UI Engine does not import business domains.
+### Regression
 
-## Backend
-
-* archived/deleted BQ cannot be mutated;
-* permissions remain server-enforced;
-* audit generic across domains;
-* no raw DB errors leak to UI.
-
-## Regression
-
-Must pass:
+Required green:
 
 ```text
 Prisma validate
-typecheck
-unit tests
-integration tests
-production build
-boundary enforcement
-```
-
-Critical BQ calculation regression must remain unchanged.
-
----
-
-# 50. Agent Guardrails
-
-Implementation agent must **not**:
-
-* introduce new product features opportunistically;
-* rewrite working domains for stylistic reasons;
-* change formula semantics;
-* introduce microservices;
-* create new SSOT for an existing canonical concept;
-* duplicate compatibility implementations indefinitely;
-* modify unrelated modules in the same work order;
-* infer new business rules without explicit evidence.
-
-When uncertain:
-
-> **Preserve current behavior and simplify ownership, not behavior.**
-
----
-
-# 51. Final Architecture Principles
-
-### Canonical data
-
-```text
-Master Data = global facts
-```
-
-### Current pricing
-
-```text
-1 SKU = 1 canonical current price
-```
-
-### Historical change
-
-```text
-Audit = who changed what and when
-```
-
-### Project state
-
-```text
-Project/BQ = snapshots
-```
-
-### Missing canonical data
-
-```text
-Project Local = valid operational fallback
-```
-
-### Reusability
-
-```text
-Library = reusable recipe/template
-```
-
-### Shared concepts
-
-```text
-Core = one canonical utility/reference implementation
-```
-
-### Interface structure
-
-```text
-UI Engine = Theme + Components + Patterns + Layout + Templates
-```
-
-### Domain ownership
-
-```text
-StudioFlow logic stays StudioFlow
-Master Data logic stays Master Data
-BQ logic stays BQ
+TypeScript
+Unit tests
+Integration tests
+Production build
+Boundary enforcement
+Critical workflow regression tests
 ```
 
 ---
 
-# 52. Final Definition of Done
-
-Refactor selesai ketika codebase berubah dari:
+# 56. Final Product Rule Summary
 
 ```text
-banyak cara untuk melakukan hal yang sama
+Master Data
+= canonical office information
 ```
-
-menjadi:
 
 ```text
-satu canonical way
-+
-domain-specific rules hanya di domain pemiliknya
+SKU × Supplier
+= one current supplier price
 ```
 
-tanpa user merasa aplikasinya dibangun ulang.
+```text
+Audit
+= historical changes
+```
 
-**StudioFlow setelah cleanup harus lebih kecil secara konseptual, lebih jelas ownership-nya, lebih sulit mengalami logic drift, dan lebih mudah dikembangkan tanpa menciptakan versi kedua dari utility, price rule, layout, atau source-of-truth yang sama.**
+```text
+BQ acquisition
+= immutable snapshot at moment of pull
+```
+
+```text
+Same SKU pulled later
+= current price at that later moment
+```
+
+```text
+Existing snapshot
+= never refreshed from Master Data
+```
+
+```text
+Project Local
+= allowed operational fallback
+```
+
+```text
+StudioFlow
+= simplified design-project workflow
+```
+
+```text
+BQ
+= spreadsheet-first estimating tool
+```
+
+```text
+UI Engine
+= reusable template/layout engine
+```
+
+```text
+Shared Core
+= canonical cross-domain infrastructure
+```
+
+```text
+AGENTS.md
+= AI governance only
+```
 
 ---
 
-## Ratifikasi owner (sesi 2026-08-24)
+## Final North Star
 
-Keputusan eksplisit owner saat PRD ini diratifikasi, mengikat di atas teks di atas:
-
-1. ~~**§15–§18 (pricing): disetujui.**~~ **❌ DICABUT di hari yang sama** —
-   keputusan final owner (jawaban ❓U1/U3): **multi-supplier dipertahankan**;
-   setiap SKU boleh punya beberapa current price per supplier; BQ memilih
-   supplier saat penarikan dan snapshot-nya immutable.
-2. **§29 (cost refresh): dicabut dan diganti.** BQ snapshot tidak pernah refresh
-   dari Master Data dalam bentuk apa pun; harga current diambil sekali saat
-   baris ditarik; existing snapshot tidak disentuh.
-3. **§20 (audit): konsolidasi fisik.** Satu tabel `AuditLog` generic lintas
-   domain plus satu shared interface `recordAudit(...)`; `MasterDataAudit`
-   digabung lewat migrasi terjadwal (R3).
-4. **§46 (otoritas dokumen): diklarifikasi.** AGENTS.md hanya aturan kerja
-   agent, bukan source of truth requirement produk; Product PRD otoritas
-   tertinggi untuk requirement produk.
-
-Keputusan tambahan sesi takeover (audit R1, 2026-08-24):
-
-5. Unit harga wajib = `sku.purchase_unit` (validasi app-layer saat tulis).
-6. `SkuPrice.updated_by_id` ditambahkan sebagai plain column.
-7. Timezone: simpan UTC, tampilkan default Asia/Jakarta; device-local bukan
-   sumber kebenaran.
-8. `ProjectTimeline` (write-only, nol pembaca) di-drop; fitur timeline masa
-   depan dirancang ulang dari PRD baru bila dibutuhkan.
+> **Setelah rebuild, StudioFlow bukan menjadi aplikasi baru. Ia menjadi aplikasi yang sama secara tujuan, tetapi dengan arsitektur yang jauh lebih sederhana, UX lebih cepat, data ownership lebih jelas, Master Data benar-benar menjadi SSOT, BQ benar-benar bekerja dengan snapshot yang aman, dan UI Engine benar-benar menjadi fondasi reusable untuk seluruh aplikasi.**

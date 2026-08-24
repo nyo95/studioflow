@@ -1,6 +1,6 @@
 # StudioFlow — Roadmap
 
-**Terakhir dirapikan: 2026-08-18.** Berkas ini hanya memuat pekerjaan yang
+**Terakhir dirapikan: 2026-08-24.** Berkas ini hanya memuat pekerjaan yang
 **masih terbuka**. Seluruh riwayat, analisis, dan item yang sudah selesai
 dipindahkan ke
 [`docs/archive/roadmap-2026-08-18-sebelum-perapihan.md`](docs/archive/roadmap-2026-08-18-sebelum-perapihan.md)
@@ -43,7 +43,7 @@ kalau memang perlu, tanya dulu.
 
 | Berkas | Isinya |
 |---|---|
-| `AGENTS.md` | Kontrak & aturan kerja, berlaku Claude maupun Codex. **Dibaca pertama.** §🧱 Master Data Contract (v2) dan §🧾 BQ Contract adalah kontrak domain yang berlaku; §🧑‍⚖️ Pembagian Peran mengatur siapa menulis kode; §graphify mengatur pemakaian knowledge graph. |
+| `AGENTS.md` | Aturan kerja agent, berlaku Claude maupun Codex. **Dibaca pertama.** Requirement produk mengikuti PRD; kontrak domain yang masih hidup di AGENTS (mis. Master Data/BQ) tetap dipakai sampai diekstrak, tetapi bila bertentangan dengan PRD, PRD yang menang. |
 | `CLAUDE.md` | Komplemen `AGENTS.md`, spesifik-Claude: prosedur cek-in hemat token lewat `changelog.md` (checkpoint-based, bukan baca seluruh berkas). Ditulis 2026-08-19. |
 | `HANDOFF-CODEX.md` | **Dibaca kedua.** Batch aktif siklus 2026-08-19, per app (Main App/Master Data/BQ), plus aturan anti-halusinasi. Versi 2026-08-18 (18 keputusan non-reversible) di `docs/archive/HANDOFF-CODEX-2026-08-18.md`. |
 | `changelog.md` | Riwayat perubahan + alasannya. Sekaligus log handoff antar-agent. |
@@ -55,14 +55,15 @@ kalau memang perlu, tanya dulu.
 
 ---
 
-# ═══ PROGRAM: Architecture Cleanup & Consolidation v2 ═══
+# ═══ PROGRAM: StudioFlow Rebuild / Architecture & Product Simplification ═══
 
-> **Baru — diratifikasi owner 2026-08-24.** Sumber kebenaran program:
-> [`PRD-Architecture-Cleanup-v2.md`](PRD-Architecture-Cleanup-v2.md) (otoritas
-> tertinggi requirement produk). Fase-fase di bawah adalah kerangka eksekusi;
-> detail tiap fase ditulis sebagai work order terpisah saat fase itu dibuka.
-> **Tidak ada fase yang dimulai sebelum R0 selesai** dan baseline
-> typecheck/test/build tercatat.
+> **Diratifikasi owner 2026-08-24.** Sumber kebenaran program:
+> [`PRD-Architecture-Cleanup-v2.md`](PRD-Architecture-Cleanup-v2.md), yang kini
+> memuat PRD final **StudioFlow Rebuild / Architecture & Product
+> Simplification**. Fase-fase di bawah adalah kerangka eksekusi; detail tiap
+> fase ditulis sebagai work order terpisah saat fase itu dibuka. **Tidak ada
+> fase yang dimulai sebelum R0 selesai** dan baseline typecheck/test/build
+> tercatat.
 
 | Fase | Isi | Status |
 |---|---|---|

@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { logout } from "@/actions/user-actions";
 import { formatDateTime } from "@/core/utilities/datetime";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { Avatar, AvatarFallback } from "@/ui_engine";
 import { Button } from "@/ui_engine";
 import {
@@ -121,16 +122,16 @@ export function TopHeader({
   }, [activityNotifications, lastSeenAt]);
 
   const filteredProjects = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = normalizeSearchText(query);
     if (normalizedQuery.length === 0) {
       return projectSearchItems.slice(0, 6);
     }
 
     return projectSearchItems
       .filter((project) => {
-        const clientName = project.client?.name?.toLowerCase() ?? "";
+        const clientName = normalizeSearchText(project.client?.name);
         return (
-          project.name.toLowerCase().includes(normalizedQuery) ||
+          normalizeSearchText(project.name).includes(normalizedQuery) ||
           clientName.includes(normalizedQuery)
         );
       })

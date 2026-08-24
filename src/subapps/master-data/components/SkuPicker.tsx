@@ -18,6 +18,7 @@
  */
 
 import * as React from "react";
+import { normalizeSearchText } from "@/core/utilities/normalize";
 import { CreatableSearch } from "@/ui_engine";
 
 export type SkuPickerOption = {
@@ -25,10 +26,6 @@ export type SkuPickerOption = {
   sku: string;
   productName: string;
 };
-
-function normalize(value: string) {
-  return value.trim().toLocaleLowerCase("id-ID");
-}
 
 export function SkuPicker({
   skus,
@@ -54,7 +51,7 @@ export function SkuPicker({
         id: s.id,
         name: s.sku || s.productName,
         subText:
-          s.productName && normalize(s.productName) !== normalize(s.sku)
+          s.productName && normalizeSearchText(s.productName) !== normalizeSearchText(s.sku)
             ? s.productName
             : undefined,
       })),

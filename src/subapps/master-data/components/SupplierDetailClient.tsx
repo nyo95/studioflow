@@ -50,6 +50,7 @@ import {
   updatePartyContactAction,
   deletePartyContactAction,
 } from "@/subapps/master-data/actions/party-actions";
+import { formatDate } from "@/core/utilities/datetime";
 import { getMaterialPricesAction } from "@/subapps/master-data/actions/pricing-actions";
 import type { MaterialPricePageData } from "@/subapps/master-data/types/pricing";
 import type { PartyRoleKind } from "@/generated/prisma";
@@ -516,11 +517,7 @@ function PricesTab({ party }: { party: SupplierPartyInfo }) {
                     })}
               </TableCardCell>
               <TableCardCell className={cn("text-[var(--ui-text-tertiary)]", UI_ENGINE_TYPE_META)}>
-                {new Intl.DateTimeFormat("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                }).format(new Date(row.updated_at ?? row.created_at))}
+                {formatDate(row.updated_at ?? row.created_at)}
               </TableCardCell>
             </TableCardRow>
           ))}

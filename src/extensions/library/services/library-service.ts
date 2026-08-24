@@ -24,6 +24,7 @@ import { resolveCategoryPath } from "@/subapps/master-data/services/category-tre
 import { dropAncestorTags, productParentFor } from "@/subapps/master-data/services/category-tree-rules";
 import { slugify } from "@/subapps/master-data/lib/slug";
 import { createSkuCore } from "@/subapps/master-data/services/sku-core-service";
+import { normalizeSearchText, trimOrNull } from "@/core/utilities/normalize";
 
 /**
  * The one include shape every Library read uses. Kept in a single constant so
@@ -207,7 +208,7 @@ export class LibraryService {
     for (const raw of tags) {
       const tag = raw.trim();
       if (!tag) continue;
-      const key = tag.toLocaleLowerCase("id-ID");
+      const key = normalizeSearchText(tag);
       if (seen.has(key)) continue;
       seen.add(key);
       uniqueTags.push(tag);
@@ -231,11 +232,6 @@ export class LibraryService {
     });
   }
 
-  private static normalizeOptional(value?: string | null) {
-    const normalized = value?.trim();
-    return normalized ? normalized : null;
-  }
-
   /**
    * Category and the former sub-category are one ordered tag collection.
    * The first tag is the primary schedule category.
@@ -255,7 +251,7 @@ export class LibraryService {
     for (const value of raw) {
       const normalized = value?.trim();
       if (!normalized) continue;
-      const key = normalized.toLocaleLowerCase("id-ID");
+      const key = normalizeSearchText(normalized);
       if (seen.has(key)) continue;
       seen.add(key);
       tags.push(normalized);
@@ -284,10 +280,10 @@ export class LibraryService {
     existingSpec?: Record<string, unknown> | null
   ): Record<string, unknown> {
     const spec: Record<string, unknown> = { ...(existingSpec ?? {}) };
-    if (data.catalog_pattern !== undefined) spec.pattern = this.normalizeOptional(data.catalog_pattern) ?? undefined;
-    if (data.catalog_motif !== undefined) spec.motif = this.normalizeOptional(data.catalog_motif) ?? undefined;
-    if (data.catalog_color !== undefined) spec.color = this.normalizeOptional(data.catalog_color) ?? undefined;
-    if (data.catalog_finishing !== undefined) spec.finishing = this.normalizeOptional(data.catalog_finishing) ?? undefined;
+    if (data.catalog_pattern !== undefined) spec.pattern = trimOrNull(data.catalog_pattern) ?? undefined;
+    if (data.catalog_motif !== undefined) spec.motif = trimOrNull(data.catalog_motif) ?? undefined;
+    if (data.catalog_color !== undefined) spec.color = trimOrNull(data.catalog_color) ?? undefined;
+    if (data.catalog_finishing !== undefined) spec.finishing = trimOrNull(data.catalog_finishing) ?? undefined;
     if (data.catalog_metadata !== undefined) Object.assign(spec, data.catalog_metadata ?? {});
     for (const key of Object.keys(spec)) {
       if (spec[key] === undefined) delete spec[key];
@@ -298,7 +294,7 @@ export class LibraryService {
   private static buildMediaCreates(data: Partial<ProductCatalogInput>) {
     const entries: { kind: MediaKind; url: string }[] = [];
     const push = (kind: MediaKind, url?: string | null) => {
-      const v = this.normalizeOptional(url);
+      const v = trimOrNull(url);
       if (v) entries.push({ kind, url: v });
     };
     push(MediaKind.IMAGE, data.catalog_image_url);
@@ -479,8 +475,8 @@ export class LibraryService {
         data: {
           name: data.brand_name,
           slug: this.slugify(data.brand_name),
-          legal_name: this.normalizeOptional(data.legal_name),
-          address: this.normalizeOptional(data.address),
+          legal_name: trimOrNull(data.legal_name),
+          address: trimOrNull(data.address),
         },
       });
       ownerPartyId = party.id;
@@ -491,7 +487,7 @@ export class LibraryService {
       data: {
         name: data.brand_name,
         slug: this.slugify(data.brand_name),
-        notes: this.normalizeOptional(data.notes),
+        notes: trimOrNull(data.notes),
         owner_party_id: ownerPartyId,
         // Free-form hashtags (owner feedback 2026-08-18, item 5) — separate
         // from `syncSeedBrandCategories` below, which handles the curated
@@ -509,7 +505,7 @@ export class LibraryService {
             .map((l, i) => ({
               kind: l.kind,
               url: l.url.trim(),
-              label: this.normalizeOptional(l.label),
+              label: trimOrNull(l.label),
               sort_order: i,
             })),
         },
@@ -546,8 +542,8 @@ export class LibraryService {
           brand_id: vendor.id,
           person_name: c.contact_person,
           job_title: c.contact_role,
-          phone: this.normalizeOptional(c.phone_number),
-          email: this.normalizeOptional(c.email),
+          phone: trimOrNull(c.phone_number),
+          email: trimOrNull(c.email),
         })),
       });
     }
@@ -601,8 +597,8 @@ export class LibraryService {
         data: {
           name: data.brand_name ?? existing.name,
           slug: this.slugify(data.brand_name ?? existing.name),
-          legal_name: this.normalizeOptional(data.legal_name),
-          address: this.normalizeOptional(data.address),
+          legal_name: trimOrNull(data.legal_name),
+          address: trimOrNull(data.address),
         },
       });
       ownerPartyId = party.id;
@@ -611,8 +607,8 @@ export class LibraryService {
       await tx.party.update({
         where: { id: ownerPartyId },
         data: {
-          ...(data.legal_name !== undefined ? { legal_name: this.normalizeOptional(data.legal_name) } : {}),
-          ...(data.address !== undefined ? { address: this.normalizeOptional(data.address) } : {}),
+          ...(data.legal_name !== undefined ? { legal_name: trimOrNull(data.legal_name) } : {}),
+          ...(data.address !== undefined ? { address: trimOrNull(data.address) } : {}),
         },
       });
       await recordAudit(tx, { entity: "Party", entity_id: ownerPartyId, action: "UPDATE", actor: { id: userId, name: "system" } });
@@ -629,7 +625,7 @@ export class LibraryService {
         id: link.id,
         kind: link.kind,
         url: link.url.trim(),
-        label: this.normalizeOptional(link.label),
+        label: trimOrNull(link.label),
         sort_order: index,
       }));
     const requestedLinkState = requestedLinks?.map(({ kind, url, label }) => ({
@@ -727,7 +723,7 @@ export class LibraryService {
       ...(normalizedBrandName !== undefined
         ? { name: normalizedBrandName, slug: this.slugify(normalizedBrandName) }
         : {}),
-      ...(data.notes !== undefined ? { notes: this.normalizeOptional(data.notes) } : {}),
+      ...(data.notes !== undefined ? { notes: trimOrNull(data.notes) } : {}),
       ...(ownerPartyId !== existing.owner_party_id ? { owner: ownerPartyId ? { connect: { id: ownerPartyId } } : { disconnect: true } } : {}),
       ...(data.tags !== undefined
         ? { tags: [...new Set(data.tags.map((tag) => tag.trim()).filter(Boolean))] }
@@ -769,8 +765,8 @@ export class LibraryService {
             brand_id: id,
             person_name: c.contact_person,
             job_title: c.contact_role,
-            phone: this.normalizeOptional(c.phone_number),
-            email: this.normalizeOptional(c.email),
+            phone: trimOrNull(c.phone_number),
+            email: trimOrNull(c.email),
           })),
         });
       }
@@ -1286,7 +1282,7 @@ export class LibraryService {
     const dimT = this.parseDecimal(data.catalog_dimension_t);
     const dimUnit = data.catalog_dimension_unit || "cm";
     const spec = this.buildSpec(data);
-    const priceUnit = this.normalizeOptional(data.catalog_price_unit);
+    const priceUnit = trimOrNull(data.catalog_price_unit);
 
     // B5 (2026-08-18): create + audit now go through `createSkuCore` — see
     // its doc comment for what it guarantees. Media and samples stay as
@@ -1319,9 +1315,9 @@ export class LibraryService {
             create: data.samples.map(s => ({
               rack_number: s.catalog_rack_number,
               box_number: s.catalog_box_number,
-              notes: this.normalizeOptional(s.catalog_notes),
+              notes: trimOrNull(s.catalog_notes),
               status: catalogSampleStatusToV2(s.catalog_status),
-              borrower_name: this.normalizeOptional(s.current_borrower_name),
+              borrower_name: trimOrNull(s.current_borrower_name),
             }))
           } : undefined,
         },
@@ -1428,10 +1424,10 @@ export class LibraryService {
           data: {
             rack_number: s.catalog_rack_number,
             box_number: s.catalog_box_number,
-            notes: this.normalizeOptional(s.catalog_notes),
+            notes: trimOrNull(s.catalog_notes),
             ...(s.catalog_status !== undefined ? { status: catalogSampleStatusToV2(s.catalog_status) } : {}),
             ...(s.current_borrower_name !== undefined
-              ? { borrower_name: this.normalizeOptional(s.current_borrower_name) }
+              ? { borrower_name: trimOrNull(s.current_borrower_name) }
               : {}),
           },
         })),
@@ -1440,9 +1436,9 @@ export class LibraryService {
         .map((s) => ({
           rack_number: s.catalog_rack_number,
           box_number: s.catalog_box_number,
-          notes: this.normalizeOptional(s.catalog_notes),
+          notes: trimOrNull(s.catalog_notes),
           status: catalogSampleStatusToV2(s.catalog_status),
-          borrower_name: this.normalizeOptional(s.current_borrower_name),
+          borrower_name: trimOrNull(s.current_borrower_name),
         })),
     } : undefined;
 
@@ -1530,7 +1526,7 @@ export class LibraryService {
         price: data.catalog_price !== undefined
           ? (data.catalog_price ?? null)
           : (currentPrice?.price_net != null ? Number(currentPrice.price_net) : null),
-        unit: this.normalizeOptional(data.catalog_price_unit) || currentPrice?.unit || null,
+        unit: trimOrNull(data.catalog_price_unit) || currentPrice?.unit || null,
         supplier_party_id: supplierId,
       };
 
@@ -1781,13 +1777,13 @@ export class LibraryService {
         sku_name_snapshot: skuName,
         schedule_entry_id: data.schedule_entry_id || undefined,
         schedule_option_id: data.schedule_option_id || undefined,
-        custom_product_name: this.normalizeOptional(data.custom_product_name),
-        reference_url: this.normalizeOptional(data.reference_url),
+        custom_product_name: trimOrNull(data.custom_product_name),
+        reference_url: trimOrNull(data.reference_url),
         requested_by_id: userId,
         status: ProductRequestStatus.REQUESTED,
-        area_location: this.normalizeOptional(data.area_location),
+        area_location: trimOrNull(data.area_location),
         is_scheduled: data.is_scheduled ?? true,
-        notes: this.normalizeOptional(data.notes),
+        notes: trimOrNull(data.notes),
       },
       include: { requested_by: true, project: true, schedule_entry: true, schedule_option: true },
     });
@@ -1881,7 +1877,7 @@ export class LibraryService {
         sku_id: sku.id,
         rack_number: input.rack_number.trim(),
         box_number: input.box_number.trim(),
-        location_note: this.normalizeOptional(input.location_note),
+        location_note: trimOrNull(input.location_note),
         quantity: input.quantity ?? 1,
         status: "AVAILABLE",
       },
@@ -1921,7 +1917,7 @@ export class LibraryService {
       where: { id },
       data: {
         status: status,
-        staff_name_override: this.normalizeOptional(staffName),
+        staff_name_override: trimOrNull(staffName),
       },
       include: { requested_by: true, project: true, schedule_entry: true, schedule_option: true },
     });
