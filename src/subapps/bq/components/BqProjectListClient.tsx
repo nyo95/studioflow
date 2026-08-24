@@ -32,6 +32,7 @@ import {
   UI_ENGINE_RADIUS_CONTROL,
 } from "@/ui_engine";
 import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens";
+import { statusToTone } from "@/lib/ui/status-tone";
 import { cn } from "@/lib/utils";
 import { createBqProjectAction } from "../actions/bq-project-actions";
 import type { BqProjectSummary } from "../types/breakdown";
@@ -118,7 +119,7 @@ export function BqProjectListClient({
                     {project.name}
                   </p>
                 </div>
-                <StatusBadge status={project.status} />
+                <StatusBadge status={project.status} tone={statusToTone(project.status)} />
               </div>
 
               <div className="mt-4 flex items-center gap-2 text-slate-500">

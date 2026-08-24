@@ -9,7 +9,7 @@ import { CommentForm } from "./comment-form";
 import { CommentItem } from "./comment-item";
 import { MessageSquare, X, Upload } from "lucide-react";
 import React from "react";
-import { useProjectLive } from "@/ui_engine";
+import { useProjectLive } from "@/components/project-live-provider";
 import { toast } from "sonner";
 import { useHasMounted } from "@/hooks/use-hydration";
 import { useAppConfirm } from "@/hooks/use-app-confirm";

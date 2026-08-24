@@ -24,13 +24,16 @@ import {
   ActionSidebarSection,
   SectionCard,
   Heading,
+} from "@/ui_engine";
+import {
   PhaseStatusPill,
   PhaseOwner,
   PhaseDuration,
-  PhaseRunningAheadBadge,
-} from "@/ui_engine";
+} from "@/components/phase-reading";
+import { PhaseRunningAheadBadge } from "@/components/phase-lock-notice";
 import { readPhase, formatPhaseLabel } from "@/lib/domain/phase-presenter";
 import { explainPhaseLock } from "@/lib/domain/phase-lock";
+import { statusToTone } from "@/lib/ui/status-tone";
 import { cn } from "@/lib/utils";
 import { Lock } from "lucide-react";
 import { getProjectProgress } from "@/lib/project-progress";
@@ -213,7 +216,7 @@ export default async function ProjectOverviewPage({
       <PageHeader
         title={project.name}
         divider={false}
-        meta={<StatusBadge status={project.status_progress} />}
+        meta={<StatusBadge status={project.status_progress} tone={statusToTone(project.status_progress)} />}
       />
 
       <ProjectIdentityStrip

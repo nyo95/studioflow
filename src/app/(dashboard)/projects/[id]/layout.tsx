@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/core/platform/db";
-import { ProjectLayoutShell, ProjectLiveProvider } from "@/ui_engine";
+import { ProjectLayoutShell } from "@/components/project-layout-shell";
+import { ProjectLiveProvider } from "@/components/project-live-provider";
 import { ProjectChatSidebar } from "@/extensions/live-collaboration/components/project-chat-sidebar";
 import { getProjectDiscussionSnapshot } from "@/lib/project-discussion";
 import { getSession } from "@/lib/auth";

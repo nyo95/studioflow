@@ -12,15 +12,19 @@ import {
   DashboardPageShell,
   PageBackLink,
   PageHeader,
-  PhaseLiveProvider,
   Heading,
   ActionSidebar,
   ActionSidebarSection,
+} from "@/ui_engine";
+import { PhaseLiveProvider } from "@/components/phase-live-provider";
+import {
   PhaseReadingLine,
   PhaseProgressBar,
+} from "@/components/phase-reading";
+import {
   PhaseLockNotice,
   PhaseRunningAheadBadge,
-} from "@/ui_engine";
+} from "@/components/phase-lock-notice";
 import { readPhase, readPhaseProgress, formatPhaseLabel } from "@/lib/domain/phase-presenter";
 import { explainPhaseLock } from "@/lib/domain/phase-lock";
 import { getSession } from "@/lib/auth";

@@ -9,7 +9,7 @@
  * one of them able to add a row.
  */
 
-import { usePhaseLive } from "@/ui_engine";
+import { usePhaseLive } from "@/components/phase-live-provider";
 import { AlertTriangle } from "lucide-react";
 import { TaskList } from "@/components/task-list";
 import type { ChecklistUserRef } from "@/types/checklist";

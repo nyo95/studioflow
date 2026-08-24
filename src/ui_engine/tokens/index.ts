@@ -81,22 +81,9 @@ export const UI_ENGINE_TYPE_META = typography.TEXT_SIZE_BADGE;
 export const UI_ENGINE_PAGE_HEADER_TITLE_CLASS = cn("mt-1 select-none", typography.FONT_HEADING, typography.TEXT_H1, colors.TEXT_PRIMARY);
 export const UI_ENGINE_PAGE_HEADER_DESCRIPTION_CLASS = cn("mt-1.5 select-none", typography.FONT_BODY, typography.TEXT_SIZE_BODY, colors.TEXT_SECONDARY);
 
-// 5. Phase Section Component Classes
-export const UI_ENGINE_PHASE_SECTION_ITEM_CLASS = cn("overflow-hidden border bg-white", colors.BORDER_COLOR, radius.RADIUS_CARD);
-export const UI_ENGINE_PHASE_SECTION_TRIGGER_CLASS = cn("group flex flex-1 items-start justify-between gap-4 transition-colors hover:bg-slate-50", spacing.CARD_PADDING_X, spacing.ROW_PADDING_Y);
-export const UI_ENGINE_PHASE_SECTION_CONTENT_CLASS = cn("border-t", colors.BORDER_COLOR, spacing.CARD_PADDING_X, spacing.ROW_PADDING_Y);
-export const UI_ENGINE_PHASE_SECTION_BADGE_CLASS = cn("bg-white px-4 py-2 font-semibold uppercase tracking-[0.18em]", colors.BORDER_COLOR, typography.TEXT_SIZE_BADGE);
-
-// 6. Project Section Component Classes
-export const UI_ENGINE_PROJECT_SECTION_GROUP_CLASS = "space-y-8";
-export const UI_ENGINE_PROJECT_SECTION_CARD_CLASS = cn(
-  "overflow-hidden border bg-white text-left shadow-[var(--ui-surface-shadow)]",
-  radius.RADIUS_CARD,
-  colors.BORDER_COLOR
-);
-export const UI_ENGINE_PROJECT_SECTION_TRIGGER_CLASS = cn("group w-full text-left transition-colors hover:bg-slate-100/70", radius.RADIUS_CARD);
-export const UI_ENGINE_PROJECT_SECTION_HEADER_CLASS = cn("items-start gap-6 border-b bg-slate-50", colors.BORDER_COLOR, spacing.CARD_PADDING_X, spacing.ROW_PADDING_Y);
-export const UI_ENGINE_PROJECT_SECTION_CONTENT_CLASS = "contents";
+// 5-6. Phase/Project section component classes DIHAPUS dari engine (R5, PRD
+// §36): kelas-kelas itu milik komponen domain `PhaseSection`/`ProjectSection*`
+// yang kini hidup di `@/components` bersama definisinya.
 
 // 7. Utility Classes
 export const UI_ENGINE_TASK_ROW_CLASS = "group flex cursor-pointer items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5 transition-colors duration-150 hover:bg-slate-50";

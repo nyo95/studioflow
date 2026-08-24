@@ -3,22 +3,24 @@
 // ./primitives/index.ts for which layer to reach for and why.
 export * from "./primitives";
 
+// PRD Architecture Cleanup v2 §36: the engine must not know business domains.
+// Phase/Project components used to live here; they were relocated to
+// `@/components` in R5 — import them from there, never re-add them to this
+// barrel.
 export * from "./layout/page-header";
 export * from "./navigation/page-back-link";
-export * from "./primitives/phase-section";
-export * from "./primitives/project-section";
 export * from "./primitives/simple-card";
-export * from "./components/PhaseLiveProvider";
-export * from "./components/ProjectLiveProvider";
 export * from "./components/heading";
 export * from "./layout/shells/dashboard-page-shell";
 export * from "./layout/shells/settings-shell";
-export * from "./layout/shells/project-layout-shell";
 export * from "./components/section-card";
 export * from "./components/table-card";
-export * from "./components/status-badge";
-export * from "./components/phase-reading";
-export * from "./components/phase-lock-notice";
 export * from "./components/action-sidebar";
+// §40 generic status component — tone-only; status→tone mapping lives in
+// the domains (`@/lib/ui/status-tone`), never here.
+export * from "./components/status-badge";
+export * from "./patterns";
+export * from "./theme";
+export * from "./templates/contracts";
 export * from "./design-system.config";
 export * from "./tokens"; // Points to ./tokens/index.ts

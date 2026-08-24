@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { PhaseSectionBadge } from "@/ui_engine";
+import { PhaseSectionBadge } from "@/components/phase-section";
 
 interface PhaseLinkProps {
   href: string;

@@ -14,7 +14,7 @@ import {
 import { Loader2, Plus, Trash2, CheckCircle2, Circle, MessageSquare, ArrowRightCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Role, PhaseName } from "@/generated/prisma";
-import { usePhaseLive, Activity } from "@/ui_engine";
+import { usePhaseLive, Activity } from "@/components/phase-live-provider";
 import { unwrapActionResult } from "@/lib/result";
 import { ActivityListSorted } from "@/components/activity-list-sorted";
 import { useAppConfirm } from "@/hooks/use-app-confirm";

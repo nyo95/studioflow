@@ -60,6 +60,7 @@ import {
   UI_ENGINE_RADIUS_CONTROL,
 } from "@/ui_engine";
 import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens";
+import { statusToTone } from "@/lib/ui/status-tone";
 import { cn } from "@/lib/utils";
 import { formatIdr, formatPct, formatQty, type WasteSource } from "../lib/calc";
 import {
@@ -312,7 +313,7 @@ export function BqBreakdownClient({
         description="Closed rows read like a client BQ. Open them to see how each rate was reached."
         meta={
           <>
-            <StatusBadge status={view.project.status} />
+            <StatusBadge status={view.project.status} tone={statusToTone(view.project.status)} />
             <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
               {view.objects.length} {view.objects.length === 1 ? "object" : "objects"}
             </span>

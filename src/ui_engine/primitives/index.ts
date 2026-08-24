@@ -25,8 +25,12 @@
  * Prefer the UI Engine composition components for anything structural:
  *   containers/sections -> SectionCard, SimpleCard, TableCard
  *   headings            -> Heading
- *   page frames         -> DashboardPageShell, SettingsShell, ProjectLayoutShell
- *   status pills        -> StatusBadge
+ *   page frames         -> DashboardPageShell, SettingsShell
+ *   status pills        -> StatusBadge (tone-only; mapping status→tone ada di
+ *                          domain, lihat `@/lib/ui/status-tone`)
+ *
+ * Komponen Phase/Project bukan bagian engine lagi — sejak R5 (PRD §36) ia
+ * hidup di `@/components` dan TIDAK boleh dikembalikan ke barrel ini.
  *
  * Reach for the raw primitives below only for genuine form/interaction
  * controls (Button, Input, Dialog, Select…) that the Engine does not wrap.

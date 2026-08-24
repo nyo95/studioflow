@@ -123,6 +123,14 @@
   --ui-section-py: 1.25rem;      /* 20px — down from 24px */
   --ui-section-gap: 1.25rem;     /* 20px — down from 24px */
 
+  /* App chrome geometry (theme layer, R5 — PRD Cleanup v2 §37).
+     Nilai default di sini mereproduksi geometri shell saat ini (78px rail,
+     256px expanded, header 3.5rem) supaya migrasi konsumen di R6 tidak
+     mengubah tampilan sedikit pun. Jangan tulis angka ini hardcoded lagi. */
+  --ui-header-height: 3.5rem;
+  --ui-rail-width-collapsed: 4.875rem;   /* 78px */
+  --ui-rail-width-expanded: 16rem;       /* 256px */
+
   /* Dialog widths - global because portals render outside dashboard wrappers */
   --ui-dialog-width-sm: 420px;
   --ui-dialog-width-md: 560px;

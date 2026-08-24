@@ -65,6 +65,78 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-24 — R5 selesai: UI Engine v2 foundation
+
+### Hasil akhir
+
+Fase R5 selesai sesuai PRD §35–§43. **Nol perubahan visual** — semua nilai
+token yang dipindah direproduksi apa adanya:
+
+- **§36 — knowledge domain dibersihkan dari engine** (keputusan owner:
+  relokasi penuh sekarang). Tujuh berkas pindah dari `src/ui_engine` ke
+  `src/components` (git mv, riwayat terjaga): `phase-reading`,
+  `phase-lock-notice`, `phase-live-provider` (+`usePhaseLive`, `Activity`),
+  `project-live-provider` (+`useProjectLive`), `phase-section`
+  (+`PhaseSectionBadge`), `project-section`, `project-layout-shell`. Token
+  classes `UI_ENGINE_PHASE_SECTION_*`/`UI_ENGINE_PROJECT_SECTION_*` keluar
+  dari `ui_engine/tokens` dan ikut komponennya (nilai tidak berubah). Barrel
+  `@/ui_engine` tidak lagi mengekspor satu pun simbol Phase/Project.
+- **§40 — StatusBadge jadi tone-only.** Auto-map status domain
+  ("ON REVIEW CLIENT" → warning, dst.) DIHAPUS dari engine; mapping dipindah
+  verbatim ke `src/lib/ui/status-tone.ts` (`statusToTone()`), tone
+  (`neutral/info/success/warning/critical`) jadi API komponen. Tiga pemakai
+  diupdate mengirim `tone={statusToTone(...)}`: BqProjectListClient,
+  BqBreakdownClient, projects/[id]/page. Warna badge tidak berubah.
+- **§37 — layer `theme/`**: `ui_engine/theme/index.ts` memiliki
+  shadow/density/chrome geometry + token baru `--ui-header-height`,
+  `--ui-rail-width-collapsed/expanded` di designTokens.css (default =
+  geometri shell saat ini: 3.5rem / 78px / 256px). Konsumen lama yang masih
+  menulis angka hardcoded bermigrasi di R6 — token sudah tersedia supaya tidak
+  ada angka baru yang ditambahkan.
+- **§39 — layer `patterns/`**: EmptyState/LoadingState/ErrorState,
+  InlineTextCell/InlineNumberCell/InlineSelectCell (kosong commit `null`,
+  bukan `0`), Pagination — generik, tanpa domain. Foundation saja; konsumen
+  domain bermigrasi di R8–R10.
+- **§42 — kontrak templates/** (kerangka saja, implementasi R7 per keputusan
+  owner): `templates/contracts.ts` mengunci tipe slot untuk ketujuh template.
+
+Verifikasi lengkap (semuanya benar-benar dijalankan): prisma validate ✓,
+typecheck ✓, unit **198/198** (gate AT-01 tetap Rp5.653.559), integration
+docker **8/8**, production build ✓, eslint dijalankan — tidak ada error/warning
+baru dari berkas yang disentuh (baseline noise `_to_delete` dll. pra-ada).
+
+### Area/berkas
+
+Dipindah (git mv): 7 berkas ui_engine → src/components. Baru:
+`ui_engine/theme/index.ts`, `ui_engine/patterns/index.tsx`,
+`ui_engine/templates/contracts.ts`, `lib/ui/status-tone.ts`. Diubah:
+`ui_engine/index.ts`, `ui_engine/tokens/index.ts`,
+`ui_engine/primitives/index.ts` (dokumen), `ui_engine/components/status-badge.tsx`
+(rewrite), `styles/designTokens.css`, consumer import: activity-manager,
+phase-checklist, phase-link, project-chat-sidebar, projects/[id]/layout +
+page, phases/[phaseId]/page, BqProjectListClient, BqBreakdownClient.
+
+### Risiko
+
+- Import path komponen pindahan berubah (`@/ui_engine` → `@/components/...`);
+  typecheck+build mengonfirmasi tidak ada referensi yang tertinggal, tapi
+  agent berikutnya yang mencari simbol ini di barrel engine harus diarahkan
+  ke `@/components` (sudah dianotasi di index.ts dan primitives/index.ts).
+- StatusBadge tanpa `tone` kini selalu netral (dulu auto-map). Tiga call site
+  aktif sudah dikoreksi; kalau ada pemanggil baru yang lupa mengirim tone,
+  badge tampil netral — bukan warna salah, tapi penanda lemah. Pertimbangkan
+  lint rule saat R11.
+- Token chrome baru belum dikonsumsi siapa pun; shell hardcoded (78px/256px/
+  top-14) masih ada sampai R6 AppShell migration.
+
+### Pekerjaan terbuka
+
+- R6 AppShell migration — Master Data → BQ → StudioFlow; sekalian memindahkan
+  konsumen shell ke token theme.
+- Sisa R3 tetap: backfill/flip/drop `MasterDataAudit`; SearchPicker/
+  CreatablePicker/DataTable/ConfirmAction patterns menyusul saat konsumennya
+  dimigrasikan.
+
 ## [Unreleased] - 2026-08-24 — R4 selesai: validasi satuan harga + `updated_by_id`
 
 ### Hasil akhir
