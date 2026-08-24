@@ -96,6 +96,23 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    files: ["src/subapps/master-data/**/*.{ts,tsx}", "src/app/masterdata/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/extensions/library", "@/extensions/library/*"],
+              message:
+                "Master Data must not depend on extensions/library. Move shared catalog behavior into the Master Data boundary and let the Library extension delegate inward instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     rules: {
       "no-restricted-syntax": [
         "error",

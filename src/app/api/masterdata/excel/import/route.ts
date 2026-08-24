@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await (file as File).arrayBuffer();
 
     // `actor` ditambahkan 2026-08-18 (audit H6) — sebelumnya tiap baris yang
-    // ditulis import ini tidak tercatat di `MasterDataAudit` sama sekali.
+    // ditulis import ini tidak tercatat di shared audit trail sama sekali.
     const result = await importMasterDataExcel(arrayBuffer, {
       id: userId || null,
       name: user?.name ?? role,

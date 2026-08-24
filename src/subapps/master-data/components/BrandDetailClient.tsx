@@ -56,12 +56,12 @@ import {
 } from "@/subapps/master-data/actions/masterdata-actions";
 import type { PartyData } from "@/subapps/master-data/types/party";
 import { PARTY_ROLE_LABEL } from "@/subapps/master-data/types/party";
-import { getSkuDetailAction } from "@/extensions/library/actions/library-actions";
+import { getSkuDetailAction } from "@/subapps/master-data/actions/catalog-query-actions";
 import type {
   LibraryAccess,
   LibraryVendor,
   ProductCatalogWithRelations,
-} from "@/extensions/library/types";
+} from "@/subapps/master-data/contracts/catalog";
 import { MasterDataProductDialog } from "./MasterDataProductDialog";
 
 /**

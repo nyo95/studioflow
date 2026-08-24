@@ -8,6 +8,7 @@ import {
   getBrandView,
   getSkusForBrand,
 } from "@/subapps/master-data/services/material-view-service";
+import { lookupProductsLastChange } from "@/subapps/master-data/services/audit-read-service";
 import { softDeleteSku } from "@/subapps/master-data/services/sku-delete-service";
 
 const runId = `${Date.now()}-${process.pid}`;
@@ -44,8 +45,8 @@ async function cleanupFixtures() {
   const skuIds = skus.map((sku) => sku.id);
 
   if (skuIds.length > 0) {
-    await prisma.masterDataAudit.deleteMany({
-      where: { entity: "Sku", entity_id: { in: skuIds } },
+    await prisma.auditLog.deleteMany({
+      where: { domain: "MASTER_DATA", entity_type: "Sku", entity_id: { in: skuIds } },
     });
     await prisma.sampleMovement.deleteMany({
       where: { sample: { sku_id: { in: skuIds } } },
@@ -208,32 +209,12 @@ before(async () => {
         supplier_party_id: ids.supplier,
         price_net: 125,
         unit: "sheet",
-        is_current: true,
-      },
-      {
-        sku_id: ids.alphaSkuA,
-        supplier_party_id: ids.supplier,
-        price_net: 150,
-        unit: "sheet",
-        is_current: false,
-        valid_from: new Date(now.getTime() - 86_400_000),
-        valid_to: now,
       },
       {
         sku_id: ids.deleteTargetSku,
         supplier_party_id: ids.supplier,
         price_net: 225,
         unit: "sheet",
-        is_current: true,
-      },
-      {
-        sku_id: ids.deleteTargetSku,
-        supplier_party_id: ids.supplier,
-        price_net: 250,
-        unit: "sheet",
-        is_current: false,
-        valid_from: new Date(now.getTime() - 172_800_000),
-        valid_to: new Date(now.getTime() - 86_400_000),
       },
     ],
   });
@@ -367,11 +348,11 @@ describe("getSkusForBrand against PostgreSQL", () => {
 });
 
 describe("softDeleteSku against PostgreSQL", () => {
-  test("soft-deletes once, retains price history, and records one audit row", async () => {
+  test("soft-deletes once, retains current price rows, and records one audit row", async () => {
     const priceStateBefore = await prisma.skuPrice.findMany({
       where: { sku_id: ids.deleteTargetSku },
       orderBy: { price_net: "asc" },
-      select: { id: true, is_current: true, valid_to: true },
+      select: { id: true, supplier_party_id: true, price_net: true, unit: true },
     });
 
     const deleted = await prisma.$transaction((tx) =>
@@ -392,12 +373,17 @@ describe("softDeleteSku against PostgreSQL", () => {
     const priceStateAfter = await prisma.skuPrice.findMany({
       where: { sku_id: ids.deleteTargetSku },
       orderBy: { price_net: "asc" },
-      select: { id: true, is_current: true, valid_to: true },
+      select: { id: true, supplier_party_id: true, price_net: true, unit: true },
     });
     assert.deepEqual(priceStateAfter, priceStateBefore);
 
-    const audits = await prisma.masterDataAudit.findMany({
-      where: { entity: "Sku", entity_id: ids.deleteTargetSku, action: "DELETE" },
+    const audits = await prisma.auditLog.findMany({
+      where: {
+        domain: "MASTER_DATA",
+        entity_type: "Sku",
+        entity_id: ids.deleteTargetSku,
+        action: "DELETE",
+      },
     });
     assert.equal(audits.length, 1);
 
@@ -417,5 +403,37 @@ describe("softDeleteSku against PostgreSQL", () => {
         ),
       /already deleted/
     );
+  });
+
+  test("last-change lookup reads the generic AuditLog in newest-first order", async () => {
+    await prisma.auditLog.createMany({
+      data: [
+        {
+          domain: "MASTER_DATA",
+          entity_type: "Sku",
+          entity_id: ids.alphaSkuA,
+          action: "CREATE",
+          actor_name: "Older Actor",
+          created_at: new Date("2026-08-22T03:00:00.000Z"),
+        },
+        {
+          domain: "MASTER_DATA",
+          entity_type: "Sku",
+          entity_id: ids.alphaSkuA,
+          action: "UPDATE",
+          actor_name: "Newest Actor",
+          created_at: new Date("2026-08-23T03:00:00.000Z"),
+        },
+      ],
+    });
+
+    const result = await lookupProductsLastChange([ids.alphaSkuA, ids.alphaSkuB]);
+
+    assert.deepEqual(result[ids.alphaSkuA], {
+      actorName: "Newest Actor",
+      at: "2026-08-23T03:00:00.000Z",
+      action: "UPDATE",
+    });
+    assert.equal(result[ids.alphaSkuB], undefined);
   });
 });

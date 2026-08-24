@@ -1,5 +1,6 @@
 import { TxClient, SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import { trimOrNull } from "@/core/utilities/normalize";
+import { recordAudit } from "@/core/platform/audit/record";
 import { throwActionError } from "@/lib/error-types";
 import type { Prisma } from "@/generated/prisma";
 
@@ -46,23 +47,20 @@ export async function insertAuditLog(
 
   const finalUserId = userExists ? userId : ADMIN_ID;
 
-  await tx.auditLog.create({
-    data: {
-      // PRD Architecture Cleanup v2 §20: satu tabel audit lintas domain.
-      // BQ menulis lewat jalur ini dengan kunci `bq_project_id` (kontrak BQ
-      // §11) — barisnya ditandai domain BQ, bukan STUDIOFLOW.
-      domain:
-        detailsObj && typeof detailsObj.bq_project_id === "string"
-          ? "BQ"
-          : "STUDIOFLOW",
-      action,
-      entity_type: entityType,
-      entity_id: entityId,
-      user_id: finalUserId,
-      project_id: inferredProjectId,
-      phase_id: inferredPhaseId,
-      details: detailsEntry ?? undefined,
-    },
+  await recordAudit(tx, {
+    // PRD Architecture Cleanup v2 §20: satu jalur tulis kanonik lintas domain.
+    domain:
+      detailsObj && typeof detailsObj.bq_project_id === "string"
+        ? "BQ"
+        : "STUDIOFLOW",
+    action,
+    entityType,
+    entityId,
+    userId: finalUserId,
+    projectId: inferredProjectId,
+    phaseId: inferredPhaseId,
+    actorId: finalUserId,
+    metadata: (detailsEntry as Record<string, unknown> | undefined) ?? undefined,
   });
 }
 

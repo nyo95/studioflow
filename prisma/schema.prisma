@@ -68,7 +68,6 @@ model Project {
   checklists        ProjectChecklist[]
   product_requests  ProjectProductRequest[]
   schedule_entries  ProjectScheduleEntry[]
-  timelines         ProjectTimeline[]
   activities        Activity[]
   sketchup_projects SketchupProject[]
   mom_documents     ProjectMomDocument[]
@@ -100,7 +99,6 @@ model Phase {
   comments   Comment[]
   project    Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
   checklists ProjectChecklist[]
-  timelines  ProjectTimeline[]
   revisions  Revision[]
 
   @@schema("studioflow")
@@ -170,8 +168,8 @@ model File {
 model AuditLog {
   id      String      @id @default(uuid())
   /// PRD Architecture Cleanup v2 §20 (keputusan owner 2026-08-24): satu tabel
-  /// audit generic lintas domain. Baris lama di-backfill 'STUDIOFLOW' oleh
-  /// migrasi; MasterDataAudit digabung lewat dual-write + backfill terjadwal.
+  /// audit generic lintas domain. Baris lama `MasterDataAudit` dibackfill ke
+  /// sini saat R3 lalu tabel legacy dihapus.
   domain     AuditDomain @default(STUDIOFLOW)
   action      String
   entity_type String
@@ -183,7 +181,9 @@ model AuditLog {
   phase_id    String?
   actor_id    String?
   actor_name  String?
-  details     Json?
+  before_json   Json?
+  after_json    Json?
+  metadata_json Json?
   created_at  DateTime  @default(now())
   reverted_at DateTime?
   phase       Phase?    @relation(fields: [phase_id], references: [id], onDelete: SetNull)
@@ -198,29 +198,6 @@ enum AuditDomain {
   STUDIOFLOW
   MASTER_DATA
   BQ
-
-  @@schema("studioflow")
-}
-
-model ProjectTimeline {
-  id         String         @id @default(uuid())
-  project_id String
-  status     TimelineStatus @default(NOT_STARTED)
-  start_date DateTime?
-  end_date   DateTime?
-  phase_id   String?
-  created_at DateTime       @default(now())
-  updated_at DateTime       @updatedAt
-  phase      Phase?         @relation(fields: [phase_id], references: [id], onDelete: Cascade)
-  project    Project        @relation(fields: [project_id], references: [id], onDelete: Cascade)
-
-  @@schema("studioflow")
-}
-
-model TimelineTemplate {
-  id            String @id @default(uuid())
-  phase_enum    String @unique
-  duration_days Int    @default(7)
 
   @@schema("studioflow")
 }
@@ -581,7 +558,6 @@ model Sku {
   default_waste_pct  Decimal?  @db.Decimal(9,6)    // presedensi level 3
   minimum_order      Decimal?  @db.Decimal(18,6)
   rounding_increment Decimal?  @db.Decimal(18,6)   // default 1
-  preferred_supplier_party_id String?  // preferensi supplier untuk BQ
 
   notes String?
 
@@ -634,11 +610,6 @@ model SkuPrice {
 
   unit String
 
-  valid_from DateTime  @default(now())
-  valid_to   DateTime?
-
-  is_current Boolean @default(true)
-
   source_link_id String?
   source_link    BrandLink? @relation("SkuPriceSourceLink", fields: [source_link_id], references: [id], onDelete: SetNull)
 
@@ -652,9 +623,8 @@ model SkuPrice {
   /// snapshot harus selamat dari apa pun yang terjadi di sana.
   updated_by_id   String?
 
-  @@index([sku_id, is_current])
+  @@index([sku_id])
   @@index([supplier_party_id])
-  @@index([valid_from])
   @@schema("master_data")
 }
 
@@ -761,25 +731,6 @@ model SampleMovement {
   sample Sample @relation(fields: [sample_id], references: [id], onDelete: Cascade)
 
   @@index([sample_id, created_at])
-  @@schema("master_data")
-}
-
-model MasterDataAudit {
-  id String @id @default(uuid())
-
-  entity    String
-  entity_id String
-  action    AuditAction
-
-  actor_id   String?
-  actor_name String
-
-  changes Json?
-
-  created_at DateTime @default(now())
-
-  @@index([entity, entity_id, created_at])
-  @@index([created_at])
   @@schema("master_data")
 }
 
@@ -1316,14 +1267,6 @@ model PromotionRequest {
   reviewed_at        DateTime?
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
-
-  @@schema("studioflow")
-}
-
-enum TimelineStatus {
-  NOT_STARTED
-  IN_PROGRESS
-  COMPLETED
 
   @@schema("studioflow")
 }
@@ -1884,9 +1827,7 @@ model BqMaterialLine {
   snapshot_rounding_increment Decimal  @default(1) @db.Decimal(18, 6)
 
   // --- provenance ---------------------------------------------------------
-  snapshot_price_valid_from    DateTime?
-  snapshot_price_verified_from DateTime?
-  snapshot_taken_at            DateTime  @default(now())
+  snapshot_taken_at DateTime @default(now())
 
   /// TRUE kalau estimator menyunting salah satu nilai snapshot di dalam BQ.
   is_manual_override Boolean @default(false)
@@ -1943,8 +1884,7 @@ model BqServiceLine {
   /// tampak mahal tanpa harus menebaknya dari harga.
   snapshot_has_material Boolean @default(false)
 
-  snapshot_price_valid_from DateTime?
-  snapshot_taken_at         DateTime  @default(now())
+  snapshot_taken_at DateTime @default(now())
 
   is_manual_override Boolean @default(false)
   override_note      String?
@@ -2042,6 +1982,8 @@ model BqLibraryMaterialLine {
 
   source         BqLineSource @default(MASTER_DATA)
   sku_id         String?
+  sku_price_id   String?
+  supplier_party_id String?
   recipe_name    String?
   recipe_code    String?
   recipe_brand_name    String?

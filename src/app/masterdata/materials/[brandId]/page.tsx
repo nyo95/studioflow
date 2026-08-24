@@ -11,7 +11,7 @@ import {
   getMyLibraryAccessAction,
   getProductMetadataAction,
   getVendorsAction,
-} from "@/extensions/library/actions/library-actions";
+} from "@/subapps/master-data/actions/catalog-query-actions";
 import { getSupplierOptionsAction } from "@/subapps/master-data/actions/pricing-actions";
 
 export const dynamic = "force-dynamic";

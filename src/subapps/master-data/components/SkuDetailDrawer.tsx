@@ -156,7 +156,7 @@ export function SkuDetailDrawer({
                   <TableCardHeader>
                     <TableCardHead>Supplier</TableCardHead>
                     <TableCardHead align="right">Price</TableCardHead>
-                    <TableCardHead>Effective from</TableCardHead>
+                    <TableCardHead>Last updated</TableCardHead>
                     <TableCardHead>Notes</TableCardHead>
                   </TableCardHeader>
                   <TableCardBody>
@@ -168,7 +168,7 @@ export function SkuDetailDrawer({
                         <TableCardCell align="right" className="tabular-nums font-medium">
                           {priceLabel(price)}
                         </TableCardCell>
-                        <TableCardCell>{dateLabel(price.validFrom)}</TableCardCell>
+                        <TableCardCell>{dateLabel(price.updatedAt)}</TableCardCell>
                         <TableCardCell className="text-[var(--ui-text-secondary)]">
                           {price.notes || "—"}
                         </TableCardCell>
@@ -179,52 +179,6 @@ export function SkuDetailDrawer({
               ) : (
                 <p className={cn("text-[var(--ui-text-tertiary)]", UI_ENGINE_TYPE_BODY)}>
                   No current supplier prices.
-                </p>
-              )}
-            </section>
-
-            <section>
-              <SectionTitle>Price history</SectionTitle>
-              {sku.priceHistory.length > 0 ? (
-                <TableCard layout="fixed" minWidth="var(--ui-sku-viewer-history-table-min-width)">
-                  <TableCardHeader>
-                    <TableCardHead>Supplier</TableCardHead>
-                    <TableCardHead align="right">Price</TableCardHead>
-                    <TableCardHead>Valid from</TableCardHead>
-                    <TableCardHead>Valid to</TableCardHead>
-                    <TableCardHead>Status</TableCardHead>
-                    <TableCardHead>Updated by</TableCardHead>
-                  </TableCardHeader>
-                  <TableCardBody>
-                    {sku.priceHistory.map((price) => (
-                      <TableCardRow key={price.id}>
-                        <TableCardCell>{price.supplierName}</TableCardCell>
-                        <TableCardCell align="right" className="tabular-nums font-medium">
-                          {priceLabel(price)}
-                        </TableCardCell>
-                        <TableCardCell>{dateLabel(price.validFrom)}</TableCardCell>
-                        <TableCardCell>{dateLabel(price.validTo)}</TableCardCell>
-                        <TableCardCell>
-                          <span
-                            className={cn(
-                              "inline-flex rounded-[var(--ui-radius-pill)] px-[calc(var(--ui-section-px)/3)] py-[calc(var(--ui-section-py)/5)]",
-                              UI_ENGINE_TYPE_META,
-                              price.isCurrent
-                                ? "bg-[var(--ui-change-after-bg)] text-[var(--ui-change-after)]"
-                                : "bg-[var(--ui-canvas-bg)] text-[var(--ui-text-tertiary)]"
-                            )}
-                          >
-                            {price.isCurrent ? "Current" : "Archived"}
-                          </span>
-                        </TableCardCell>
-                        <TableCardCell>{price.updatedByName || "—"}</TableCardCell>
-                      </TableCardRow>
-                    ))}
-                  </TableCardBody>
-                </TableCard>
-              ) : (
-                <p className={cn("text-[var(--ui-text-tertiary)]", UI_ENGINE_TYPE_BODY)}>
-                  No price history.
                 </p>
               )}
             </section>

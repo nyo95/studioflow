@@ -2,7 +2,7 @@
  * MASTER DATA — audit trail service.
  *
  * Every write to a `master_data` table MUST pass through `recordAudit`. The
- * function writes a single `MasterDataAudit` row inside the same transaction
+ * function writes a single generic `AuditLog` row inside the same transaction
  * as the operation it records.
  *
  * Design decisions (from implementation_plan.md §3):
@@ -66,6 +66,52 @@ function sanitizeChanges(changes: Record<string, unknown>): Prisma.InputJsonValu
   return JSON.parse(JSON.stringify(changes, (_key, value) => serializeValue(value))) as Prisma.InputJsonValue;
 }
 
+function isDiffEntry(value: unknown): value is { from: unknown; to: unknown } {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "from" in value &&
+    "to" in value
+  );
+}
+
+export function splitLegacyChanges(
+  changes?: Record<string, unknown>
+): {
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+} {
+  if (!changes) {
+    return {};
+  }
+
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+  let hasDiffEntries = false;
+  let hasNonDiffEntries = false;
+
+  for (const [key, value] of Object.entries(changes)) {
+    if (isDiffEntry(value)) {
+      hasDiffEntries = true;
+      before[key] = serializeValue(value.from);
+      after[key] = serializeValue(value.to);
+      continue;
+    }
+
+    hasNonDiffEntries = true;
+  }
+
+  return {
+    before: hasDiffEntries ? before : undefined,
+    after: hasDiffEntries ? after : undefined,
+    metadata: hasNonDiffEntries
+      ? { changes: sanitizeChanges(changes) as Record<string, unknown> }
+      : undefined,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -81,25 +127,12 @@ export async function recordAudit(
   tx: PrismaTransaction,
   args: AuditArgs,
 ): Promise<void> {
-  const changesJson = args.changes
-    ? sanitizeChanges(args.changes)
-    : undefined;
+  const payload = splitLegacyChanges(
+    args.changes
+      ? (JSON.parse(JSON.stringify(args.changes, (_key, value) => serializeValue(value))) as Record<string, unknown>)
+      : undefined
+  );
 
-  await tx.masterDataAudit.create({
-    data: {
-      entity: args.entity,
-      entity_id: args.entity_id,
-      action: args.action,
-      actor_id: args.actor.id ?? null,
-      actor_name: args.actor.name,
-      changes: changesJson,
-    },
-  });
-
-  // R3 dual-write (PRD Architecture Cleanup v2 §20): baris kanonik baru
-  // ditulis ke satu tabel AuditLog generic di transaksi yang sama. Tabel
-  // master_data.MasterDataAudit tetap sumber baca sampai backfill historis
-  // selesai dan parity terverifikasi, lalu di-drop.
   await recordCoreAudit(tx, {
     domain: "MASTER_DATA",
     entityType: args.entity,
@@ -107,9 +140,9 @@ export async function recordAudit(
     action: args.action,
     actorId: args.actor.id ?? null,
     actorName: args.actor.name,
-    metadata: args.changes
-      ? ({ changes: JSON.parse(JSON.stringify(changesJson)) } as Record<string, unknown>)
-      : undefined,
+    before: payload.before,
+    after: payload.after,
+    metadata: payload.metadata,
   });
 }
 

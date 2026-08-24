@@ -252,7 +252,7 @@ mentah.
 
 | Index | Menjamin | Ditulis di |
 |---|---|---|
-| `SkuPrice_current_uniq` | Tepat satu harga berlaku per (SKU × supplier). `COALESCE` wajib — di Postgres NULL ≠ NULL, jadi tanpanya dua harga pabrikan tanpa supplier sama-sama lolos | `03_invariants.sql` §1 |
+| `SkuPrice_pair_uniq` | Tepat satu baris harga per (SKU × supplier). `COALESCE` tetap wajib — di Postgres NULL ≠ NULL, jadi tanpanya dua harga pabrikan tanpa supplier sama-sama lolos | `20260824170000` |
 | `Sku_slug_nobrand_uniq` | Barang tanpa merek tidak berduplikat nama | §2 |
 | `Sku_brand_code_uniq` / `Sku_code_nobrand_uniq` | Kode artikel unik per merek, **di mana ia terisi** | §2 |
 | `SkuCategory_primary_uniq` | Paling banyak satu kategori primer per SKU | §3 |
@@ -280,11 +280,12 @@ menulis lookup baru pakai `findFirst({ where: { kind, slug, is_active: true } })
 
 > **✅ KEPUTUSAN FINAL OWNER 2026-08-24 (sesi takeover, menjawab ❓U1/U3):**
 > arah pricing adalah **MULTI-SUPPLIER** — setiap SKU boleh punya beberapa
-> harga berlaku, satu per supplier (`SkuPrice_current_uniq` per SKU ×
-> supplier TETAP berlaku). Ini mencabut ratifikasi pagi hari atas PRD §15–§18
-> ("satu harga kanonik per SKU"); bagian itu tidak dieksekusi dan tidak akan
-> dieksekusi. Kontrak poin 3 di bawah (SkuPrice tabel riwayat,
-> `recordSkuPrice()`/`closeCurrentSkuPrice()`) tetap mengikat penuh.
+> harga berlaku, satu per supplier (`SkuPrice_pair_uniq` per SKU × supplier
+> tetap berlaku). Ini mencabut ratifikasi pagi hari atas PRD §15–§18 ("satu
+> harga kanonik per SKU"); bagian itu tidak dieksekusi dan tidak akan
+> dieksekusi. Kontrak poin 3 di bawah mengikat penuh: `SkuPrice` menyimpan
+> current state per pasangan, sedangkan riwayat perubahannya hidup di audit
+> generic.
 > Sisa pekerjaan pricing yang disetujui owner dari audit R1:
 > (a) validasi app-layer `unit` harga wajib = `sku.purchase_unit` saat tulis;
 > (b) tambah kolom `updated_by_id` (plain column); (c) perbaikan komentar/
@@ -302,11 +303,12 @@ menulis lookup baru pakai `findFirst({ where: { kind, slug, is_active: true } })
    `resolvePrice()` untuk `SkuPrice` (kosong = jangan tulis baris),
    `checkWorkPrice()` untuk `WorkPrice` (kosong = tolak). **DILARANG menulis
    `Number(input.price)` polos, dan DILARANG `?? 0`.**
-3. **`SkuPrice` adalah tabel RIWAYAT.** Mengedit penawaran berarti menutup baris
-   lama (`is_current: false` + `valid_to`) dan menulis yang baru. Yang boleh
-   diubah di tempat hanyalah `notes` — catatan bukan penawaran. Satu-satunya
-   jalur tulis adalah `recordSkuPrice()` / `closeCurrentSkuPrice()`; demosi
-   WAJIB di-scope per supplier.
+3. **`SkuPrice` adalah tabel current-state per pasangan.** Tepat satu baris
+   disimpan untuk setiap `(sku_id, supplier_party_id)`; mengedit penawaran
+   memperbarui baris pasangan itu di tempat lewat `recordSkuPrice()`, bukan
+   menutup baris lama lalu menulis supersede row baru. Riwayat perubahan harga
+   hidup di `studioflow.AuditLog` melalui `recordAudit()`, bukan di lifecycle
+   columns pada tabel harga.
 4. **`WorkPrice.kind` dinyatakan, bukan disimpulkan.** `MATERIAL_LABOR` (Excel
    Table 3) vs `LABOR_ONLY` (Table 4). Jangan menyimpulkannya dari kolom mana
    yang terisi — itu justru cacat yang migrasi `20260811120000` buang.
@@ -336,13 +338,14 @@ menulis lookup baru pakai `findFirst({ where: { kind, slug, is_active: true } })
    `updateServicePriceAction`/`updateMaterialLaborPriceAction` mengedit baris
    di tempat, dan `code` `@unique` global secara struktural mencegah pola
    supersede ala `SkuPrice`.
-   Riwayat perubahan harga jasa hanya ada di `MasterDataAudit.changes`.
+   Riwayat perubahan harga jasa hanya ada di `studioflow.AuditLog`.
    **Jangan** membangun `recordWorkPrice()`/`closeCurrentWorkPrice()` tanpa
    keputusan owner baru — itu perubahan arah, bukan bug yang perlu ditambal.
-10. **Soft-delete SKU tidak menghapus riwayat harga.** Menghapus sebuah SKU hanya
-   mengisi `Sku.deleted_at`; seluruh `SkuPrice` (baris berlaku maupun yang sudah
-   ditutup) dipertahankan apa adanya untuk audit. Pembaca aktif mengecualikan
-   SKU melalui `Sku.deleted_at`, bukan dengan menghapus atau mendemosi harga.
+10. **Soft-delete SKU tidak menghapus data harga.** Menghapus sebuah SKU hanya
+   mengisi `Sku.deleted_at`; seluruh `SkuPrice` yang tersimpan untuk SKU itu
+   dipertahankan apa adanya untuk audit dan provenance. Pembaca aktif
+   mengecualikan SKU melalui `Sku.deleted_at`, bukan dengan menghapus baris
+   harga.
 
 ### 4. Kategori
 
@@ -384,22 +387,17 @@ Engsel, Lampu).
 
 ### 6. Audit
 
-> **⚠️ KEPUTUSAN OWNER 2026-08-24 (PRD Architecture Cleanup v2 §20):** audit
-> akan **dikonsolidasikan secara fisik** menjadi satu tabel `AuditLog` generic
-> lintas domain (`STUDIOFLOW`, `MASTER_DATA`, `BQ`) plus satu shared interface
-> `recordAudit({ domain, entityType, entityId, action, actorId, before, after,
-> metadata })`. Penggabungan `master_data.MasterDataAudit` ke dalamnya adalah
-> migrasi terjadwal (fase R3 roadmap) — sampai migrasi itu merge, aturan di
-> bawah tetap mengikat kode yang hidup. Jangan menambah tabel audit baru mana
-> pun sejak sekarang.
+> **✅ KEPUTUSAN OWNER 2026-08-24 (PRD Architecture Cleanup v2 §20) SUDAH
+> DIEKSEKUSI:** audit kini **terkonsolidasi secara fisik** ke satu tabel
+> generic `studioflow.AuditLog` lintas domain (`STUDIOFLOW`, `MASTER_DATA`,
+> `BQ`) plus satu shared interface `recordAudit({ domain, entityType, entityId,
+> action, actorId, before, after, metadata })`. Tabel audit legacy Master Data
+> sudah dibackfill lalu dihapus oleh migrasi R3. Jangan menambah tabel audit
+> baru mana pun.
 
-Setiap tulis ke tabel `master_data` WAJIB lewat `recordAudit(tx, …)` →
-`master_data.MasterDataAudit`, **di dalam transaksi yang sama** dengan tulisan
-yang dicatatnya. Audit yang selamat dari rollback adalah kebohongan.
-
-`studioflow.AuditLog` adalah tabel yang BERBEDA, milik StudioFlow. Jangan
-membaca provenance Master Data dari sana dan jangan menulis ke sana sebagai
-pengganti.
+Setiap tulis ke tabel `master_data` WAJIB lewat `recordAudit(tx, …)` ke
+`studioflow.AuditLog`, **di dalam transaksi yang sama** dengan tulisan yang
+dicatatnya. Audit yang selamat dari rollback adalah kebohongan.
 
 ### 7. Transaksi
 
@@ -461,10 +459,11 @@ CSV staging master-data lama adalah **bukti saja**, bukan sumber impor.
    UI; jangan membuat versi client yang menjawab berbeda.
 2. `Sku.code` dan `Sku.brand_id` **bukan syarat kelengkapan** karena keduanya
    nullable secara kanonik. Keberadaan harga juga bukan syarat kelengkapan;
-   ia filter terpisah berdasarkan sedikitnya satu `SkuPrice.is_current: true`.
-3. Viewer SKU menampilkan seluruh harga berlaku lintas supplier dan seluruh
-   riwayat harga, termasuk baris yang sudah ditutup. Riwayat hanya dibaca;
-   menampilkannya tidak boleh menghidupkan kembali penawaran lama.
+   ia filter terpisah berdasarkan sedikitnya satu baris `SkuPrice`.
+3. Viewer SKU menampilkan seluruh harga supplier yang tersimpan lintas
+   supplier. Bila riwayat perubahan harga ditampilkan, sumbernya adalah audit
+   read-only; menampilkannya tidak boleh menulis atau menghidupkan kembali
+   penawaran lama.
 
 ## 🧾 BQ Contract (Fixture Breakdown, `/bq`)
 

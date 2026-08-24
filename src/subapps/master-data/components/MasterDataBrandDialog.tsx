@@ -26,12 +26,12 @@ import {
 import {
   createVendorAction,
   updateVendorAction,
-} from "@/extensions/library/actions/library-actions";
+} from "@/subapps/master-data/actions/catalog-mutation-actions";
 import type {
   BrandLinkInput,
   LibraryVendor,
   LibraryVendorInput,
-} from "@/extensions/library/types";
+} from "@/subapps/master-data/contracts/catalog";
 import type { PartyData } from "../types/party";
 import { BrandLinksEditor } from "@/components/shared/brand-links-editor";
 import { unwrapActionResult } from "@/lib/result";

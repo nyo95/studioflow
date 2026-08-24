@@ -23,8 +23,8 @@ import { ActionError } from "@/lib/error-types";
 import { recordAudit } from "../services/audit-service";
 import { invalidateCache } from "@/lib/revalidation";
 import { REVALIDATE_LIBRARY } from "@/lib/revalidation-tags";
-import { LibraryService } from "@/extensions/library/services/library-service";
 import { normaliseLocation } from "../lib/sample-location";
+import { CatalogSampleService } from "../services/catalog-sample-service";
 import type { PrismaTransaction } from "@/types/common";
 import { sampleStatusNeedsHolder } from "../types/sample";
 import type {
@@ -142,7 +142,7 @@ async function logMovement(
     takenBy?: string;
   }
 ) {
-  return LibraryService.logSampleAction(tx, {
+  return CatalogSampleService.logSampleAction(tx, {
     sample_id: args.sampleId,
     action: args.action,
     userId: args.userId,
@@ -422,16 +422,15 @@ export const updateSampleStatusAction = createAction<SampleStatusInput, SampleDa
 );
 
 /**
- * Soft-deletes a sample. Reuses LibraryService.deletePhysicalSample so the
- * "cannot remove something that is currently lent out" rule lives in exactly
- * one place rather than being restated — and mistakenly relaxed — here.
+ * Soft-deletes a sample via the Master Data boundary so the
+ * "cannot remove something that is currently lent out" rule stays canonical.
  */
 export const deleteSampleAction = createAction<{ sampleId: string }, { id: string }>(
   async ({ input, ctx, tx }) => {
     if (!hasPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_SAMPLES)) {
       throw new ActionError("Access denied", "FORBIDDEN");
     }
-    await LibraryService.deletePhysicalSample(tx, input.sampleId, ctx.userId);
+    await CatalogSampleService.deletePhysicalSample(tx, input.sampleId, ctx.userId);
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return { id: input.sampleId };
   },

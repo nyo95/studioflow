@@ -1,17 +1,21 @@
 import type { Prisma } from "@/generated/prisma";
 
 export type AuditDomain = "STUDIOFLOW" | "MASTER_DATA" | "BQ";
+export type AuditJsonObject = Record<string, unknown>;
 
 export interface RecordAuditArgs {
-  domain: Exclude<AuditDomain, "STUDIOFLOW">;
+  domain: AuditDomain;
   entityType: string;
   entityId: string;
   action: string;
+  userId?: string | null;
+  projectId?: string | null;
+  phaseId?: string | null;
   actorId?: string | null;
   actorName?: string | null;
-  before?: Record<string, unknown> | null;
-  after?: Record<string, unknown> | null;
-  metadata?: Record<string, unknown> | null;
+  before?: AuditJsonObject | null;
+  after?: AuditJsonObject | null;
+  metadata?: AuditJsonObject | null;
 }
 
 type AuditLogWriter = {
@@ -21,7 +25,7 @@ type AuditLogWriter = {
 };
 
 function sanitize(
-  value: Record<string, unknown> | null | undefined
+  value: AuditJsonObject | null | undefined
 ): Prisma.InputJsonValue | undefined {
   if (!value) return undefined;
   if (Object.keys(value).length === 0) return undefined;
@@ -29,25 +33,49 @@ function sanitize(
   return clean;
 }
 
+function toRecord(value: Prisma.JsonValue | null): AuditJsonObject {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as AuditJsonObject)
+    : {};
+}
+
+export function buildAuditDetails(source: {
+  before_json?: Prisma.JsonValue | null;
+  after_json?: Prisma.JsonValue | null;
+  metadata_json?: Prisma.JsonValue | null;
+}): AuditJsonObject {
+  const details = {
+    ...toRecord(source.metadata_json ?? null),
+  };
+  const before = toRecord(source.before_json ?? null);
+  const after = toRecord(source.after_json ?? null);
+  if (Object.keys(before).length > 0) {
+    details.before = before;
+  }
+  if (Object.keys(after).length > 0) {
+    details.after = after;
+  }
+  return details;
+}
+
 export async function recordAudit(
   tx: AuditLogWriter,
   args: RecordAuditArgs
 ): Promise<void> {
-  const details = sanitize({
-    before: args.before ?? undefined,
-    after: args.after ?? undefined,
-    ...args.metadata,
-  });
-
   await tx.auditLog.create({
     data: {
       domain: args.domain,
       action: args.action,
       entity_type: args.entityType,
       entity_id: args.entityId,
+      user_id: args.userId ?? null,
+      project_id: args.projectId ?? null,
+      phase_id: args.phaseId ?? null,
       actor_id: args.actorId ?? null,
       actor_name: args.actorName ?? null,
-      details,
+      before_json: sanitize(args.before),
+      after_json: sanitize(args.after),
+      metadata_json: sanitize(args.metadata),
     },
   });
 }

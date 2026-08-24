@@ -3,7 +3,7 @@
 //
 // Two v2 tables behind three screens:
 //   SkuPrice   → material prices (Excel Table 2), one current row per
-//                (SKU × supplier), with history
+//                (SKU × supplier)
 //   WorkPrice  → Excel Table 3 (material + labour) and Table 4 (labour only),
 //                told apart by `kind` rather than by which column is filled
 // ---------------------------------------------------------------------------
@@ -112,16 +112,12 @@ export type MaterialPriceData = {
   price: number | null;
   /**
    * Who is quoting. NULL is meaningful, not missing: it is the manufacturer's
-   * own list price rather than a shop's offer. `SkuPrice_current_uniq` encodes
+   * own list price rather than a shop's offer. `SkuPrice_pair_uniq` encodes
    * the same distinction with its COALESCE sentinel.
    */
   supplier_party_id: string | null;
   supplier?: { id: string; name: string } | null;
   source_link_id: string | null;
-  valid_from: Date | null;
-  /** Set when the offer was superseded or closed. NULL = still in force. */
-  valid_to: Date | null;
-  is_current: boolean;
   notes: string | null;
   updated_by_name: string | null;
   created_at: Date;
@@ -165,7 +161,6 @@ export type MaterialPriceInput = {
   unit: string;
   /** Satu harga. String karena `<input type="number">` mengembalikan string. */
   price: number | string | null;
-  valid_from: string | null;
   notes: string;
   /** Satuan pakai di BQ (sqm, m', pcs). Disimpan ke Sku.usage_unit. */
   usage_unit: string;
@@ -177,7 +172,7 @@ export type MaterialPriceInput = {
   category_names: string[];
 };
 
-/** One row in the SKU pricing viewer. Current and retired offers share it. */
+/** One current supplier row in the SKU pricing viewer. */
 export type SkuPricingViewerPrice = {
   id: string;
   supplierId: string | null;
@@ -185,14 +180,12 @@ export type SkuPricingViewerPrice = {
   price: number;
   unit: string;
   currency: string;
-  validFrom: Date;
-  validTo: Date | null;
-  isCurrent: boolean;
+  updatedAt: Date;
   notes: string | null;
   updatedByName: string | null;
 };
 
-/** Read-only SKU identity, specification, live offers, and full price history. */
+/** Read-only SKU identity, specification, and current supplier prices. */
 export type SkuPricingViewerData = {
   id: string;
   code: string | null;
@@ -204,5 +197,4 @@ export type SkuPricingViewerData = {
   baseUnit: string;
   status: string;
   currentPrices: SkuPricingViewerPrice[];
-  priceHistory: SkuPricingViewerPrice[];
 };

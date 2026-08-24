@@ -10,11 +10,6 @@ import { cn } from "@/lib/utils";
 import type { UISettings } from "@/types/common";
 import { useAppConfirm } from "@/hooks/use-app-confirm";
 
-interface TimelineTemplate {
-  phase_enum: string;
-  duration_days: number;
-}
-
 interface ChecklistTemplate {
   id: string;
   phase_enum: string | null;
@@ -60,7 +55,7 @@ const sections = [
   {
     key: "project-engine" as const,
     label: "Project Engine",
-    description: "Timeline and checklist templates",
+    description: "Checklist and default item rules",
     icon: Blocks,
   },
   {
@@ -75,7 +70,6 @@ export function StudioSettingsPanel({
   allUsers,
   currentUserId,
   requesterRole,
-  timelineTemplates,
   checklistTemplates,
   scheduleTemplates,
   schedulePrefixes,
@@ -88,7 +82,6 @@ export function StudioSettingsPanel({
   allUsers: Array<{ id: string; name: string; email: string; role: Role }>;
   currentUserId: string;
   requesterRole: Role;
-  timelineTemplates: TimelineTemplate[];
   checklistTemplates: ChecklistTemplate[];
   scheduleTemplates: ScheduleTemplateConfig[];
   schedulePrefixes: SchedulePrefixConfig[];
@@ -607,7 +600,6 @@ export function StudioSettingsPanel({
           <section className="rounded-3xl border border-slate-200 bg-slate-50/50 p-6">
             <TemplateManager
               mode="project-engine"
-              timelineTemplates={timelineTemplates}
               checklistTemplates={checklistTemplates}
               scheduleTemplates={scheduleTemplates}
               schedulePrefixes={schedulePrefixes}
@@ -620,7 +612,6 @@ export function StudioSettingsPanel({
           <section className="rounded-3xl border border-slate-200 bg-slate-50/50 p-6">
             <TemplateManager
               mode="product-catalog"
-              timelineTemplates={timelineTemplates}
               checklistTemplates={checklistTemplates}
               scheduleTemplates={scheduleTemplates}
               schedulePrefixes={schedulePrefixes}

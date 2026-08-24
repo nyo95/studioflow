@@ -162,7 +162,7 @@ export function ActivityLogTable({
             const isReverted = Boolean(log.reverted_at);
             const detailsText = detailsToText(log.details);
             const allowUndo = canUndo && !isReverted && UNDOABLE_ACTIONS.has(log.action);
-            const actorName = log.user?.name || "Sistem";
+            const actorName = log.user?.name || "System";
             const actorRole = log.user?.role || "SYSTEM";
             const summary = buildActivitySentence({
               actorName,
@@ -191,7 +191,7 @@ export function ActivityLogTable({
                       </span>
                       {isReverted ? (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                          Sudah dibatalkan
+                          Already reverted
                         </span>
                       ) : null}
                     </div>

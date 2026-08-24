@@ -1369,13 +1369,14 @@ function LineTable({
       {editable ? (
         <BqLinePicker
           subObjectId={sub.id}
-          onAddMaterial={(skuId, qty) =>
+          onAddMaterial={({ skuId, skuPriceId, qtyPerSub }) =>
             run(
               () =>
                 addBqMaterialLineAction({
                   subObjectId: sub.id,
                   skuId,
-                  qtyPerSub: qty,
+                  skuPriceId,
+                  qtyPerSub,
                 }),
               "Material added.",
             )

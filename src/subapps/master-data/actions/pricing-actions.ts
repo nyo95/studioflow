@@ -6,7 +6,7 @@
  * Master Data v2 (2026-08-10) merged four v1 models into two:
  *   - ServicePrice + MaterialLaborPrice -> WorkPrice (distinguished by
  *     `kind` — MATERIAL_LABOR or LABOR_ONLY — not by table).
- *   - MaterialPrice -> SkuPrice (per-SKU price HISTORY; sku_id is now
+ *   - MaterialPrice -> SkuPrice (per-SKU current supplier price; sku_id is now
  *     REQUIRED, so a price can no longer exist ahead of a registered SKU).
  *   - ServiceVendor -> Party (no dedicated vendor table anymore).
  *
@@ -38,7 +38,6 @@ import type {
   ServiceVendorInput,
 } from "../types/pricing";
 import {
-  closeCurrentSkuPrice,
   isOfferChange,
   recordSkuPrice,
   SKU_PRICE_INCLUDE,
@@ -131,7 +130,6 @@ const MaterialPriceInputSchema = z.object({
   price: z.union([z.number(), z.string(), z.null()]).transform(
     (v) => (v === null || v === "" ? null : Number(v))
   ).nullable(),
-  valid_from: z.string().nullable().default(null),
   notes: z.string().default(""),
   usage_unit: z.string().default(""),
   conversion: z.union([z.number(), z.string(), z.null()]).transform(
@@ -362,7 +360,7 @@ function mapWorkPriceAsMaterialLabor(p: WorkPriceRow): MaterialLaborPriceData {
 
 function mapMaterialPrice(p: {
   id: string; sku_id: string; unit: string; price_net: unknown;
-  supplier_party_id: string | null; valid_from: Date; valid_to: Date | null; is_current: boolean;
+  supplier_party_id: string | null;
   notes: string | null; updated_by_name: string | null;
   created_at: Date; updated_at: Date | null;
   sku: {
@@ -387,14 +385,11 @@ function mapMaterialPrice(p: {
     supplier_party_id: p.supplier_party_id,
     supplier: p.supplier ? { id: p.supplier.id, name: p.supplier.name } : null,
     source_link_id: null,
-    valid_from: p.valid_from,
-    valid_to: p.valid_to,
-    is_current: p.is_current,
     notes: p.notes,
     updated_by_name: p.updated_by_name,
     created_at: p.created_at,
     updated_at: p.updated_at,
-    // SkuPrice has no soft-delete column — it is a history row, not a
+    // SkuPrice has no soft-delete column — it is a current-state row, not a
     // record that gets "undeleted". Always null; kept for type compat.
     deleted_at: null,
     sku_usage_unit: p.sku?.usage_unit ?? null,
@@ -725,7 +720,6 @@ export const getMaterialPricesAction = createAction<MaterialPriceQuery, Material
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? 50;
     const baseWhere: Prisma.SkuPriceWhereInput = {
-      is_current: true,
       sku: { deleted_at: null },
       ...(input.supplierId ? { supplier_party_id: input.supplierId } : {}),
     };
@@ -749,7 +743,7 @@ export const getMaterialPricesAction = createAction<MaterialPriceQuery, Material
       db.skuPrice.findMany({
         where,
         include: SKU_PRICE_INCLUDE,
-        orderBy: [{ valid_from: "desc" }, { id: "asc" }],
+        orderBy: [{ updated_at: "desc" }, { created_at: "desc" }, { id: "asc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -775,7 +769,7 @@ export const getMaterialPriceUnitsAction = createAction<undefined, string[]>(
       throw new ActionError("Access denied", "FORBIDDEN");
     }
     const rows = await db.skuPrice.findMany({
-      where: { is_current: true, sku: { deleted_at: null } },
+      where: { sku: { deleted_at: null } },
       select: { unit: true },
       distinct: ["unit"],
       orderBy: { unit: "asc" },
@@ -822,11 +816,10 @@ function mapViewerPrice(price: {
   price_net: unknown;
   unit: string;
   currency: string;
-  valid_from: Date;
-  valid_to: Date | null;
-  is_current: boolean;
   notes: string | null;
   updated_by_name: string | null;
+  created_at: Date;
+  updated_at: Date | null;
   supplier: { id: string; name: string } | null;
 }): SkuPricingViewerPrice {
   return {
@@ -836,9 +829,7 @@ function mapViewerPrice(price: {
     price: Number(price.price_net),
     unit: price.unit,
     currency: price.currency,
-    validFrom: price.valid_from,
-    validTo: price.valid_to,
-    isCurrent: price.is_current,
+    updatedAt: price.updated_at ?? price.created_at,
     notes: price.notes,
     updatedByName: price.updated_by_name,
   };
@@ -871,18 +862,17 @@ export const getSkuPricingViewerAction = createAction<
           select: { category: { select: { name: true } } },
         },
         prices: {
-          orderBy: [{ valid_from: "desc" }, { created_at: "desc" }],
+          orderBy: [{ updated_at: "desc" }, { created_at: "desc" }],
           select: {
             id: true,
             supplier_party_id: true,
             price_net: true,
             unit: true,
             currency: true,
-            valid_from: true,
-            valid_to: true,
-            is_current: true,
             notes: true,
             updated_by_name: true,
+            created_at: true,
+            updated_at: true,
             supplier: { select: { id: true, name: true } },
           },
         },
@@ -890,9 +880,8 @@ export const getSkuPricingViewerAction = createAction<
     });
     if (!sku) return null;
 
-    const priceHistory = sku.prices.map(mapViewerPrice);
-    const currentPrices = priceHistory
-      .filter((price) => price.isCurrent)
+    const currentPrices = sku.prices
+      .map(mapViewerPrice)
       .sort((a, b) => a.price - b.price || a.supplierName.localeCompare(b.supplierName, "en"));
 
     return {
@@ -906,7 +895,6 @@ export const getSkuPricingViewerAction = createAction<
       baseUnit: sku.base_unit,
       status: sku.status,
       currentPrices,
-      priceHistory,
     };
   },
   { schema: z.object({ skuId: z.string().min(1) }), useTransaction: false }
@@ -976,7 +964,6 @@ export const createMaterialPriceAction = createAction<MaterialPriceInput, Materi
       supplier_party_id: supplierId,
       price: toNumberOrNull(input.price),
       unit: input.unit,
-      valid_from: input.valid_from ? new Date(input.valid_from) : null,
       notes: input.notes,
       updated_by_name: ctx.user.name ?? null,
     }, { id: ctx.userId, name: ctx.user.name ?? "" });
@@ -1011,19 +998,7 @@ export const createMaterialPriceAction = createAction<MaterialPriceInput, Materi
   { schema: MaterialPriceInputSchema }
 );
 
-/**
- * Editing a price supersedes it rather than overwriting it.
- *
- * `SkuPrice` is a history table — `valid_from` / `valid_to` / `is_current`
- * exist for no other reason. Updating the current row in place, which is what
- * this did before, rewrites what the studio quoted last month. The quote that
- * went out to a client stops being answerable, and nothing in the UI shows
- * that anything was lost.
- *
- * Annotations are the exception: changing only `notes` amends in place. A note
- * is not an offer, and spawning a history row for a corrected spelling buries
- * the real price changes among bookkeeping.
- */
+/** Update the current SKU × supplier price row. */
 export const updateMaterialPriceAction = createAction<
   { id: string; data: MaterialPriceInput; updatedByName: string },
   MaterialPriceData
@@ -1078,20 +1053,6 @@ export const updateMaterialPriceAction = createAction<
       return mapMaterialPrice(row);
     }
 
-    // A superseded row must not stay current. If the edit moved the price to a
-    // different supplier, the row being replaced belongs to the OLD supplier —
-    // `recordSkuPrice` only closes rows for the new one, so close this one here.
-    if (existing.supplier_party_id !== supplierId && existing.is_current) {
-      await closeCurrentSkuPrice(tx, existing.sku_id, existing.supplier_party_id, undefined, { id: ctx.userId, name: actor ?? "" });
-      await recordAudit(tx, {
-        entity: "SkuPrice",
-        entity_id: existing.id,
-        action: "UPDATE",
-        actor: { id: ctx.userId, name: actor ?? "" },
-        changes: { is_current: { from: true, to: false } },
-      });
-    }
-
     // Sama seperti create — costing profile + dimensi + base_unit ke Sku lebih
     // dulu (R4), supaya validasi satuan di `recordSkuPrice` melihat nilai baru.
     const conversionNum2 = toNumberOrNull(input.data.conversion);
@@ -1110,7 +1071,6 @@ export const updateMaterialPriceAction = createAction<
       supplier_party_id: supplierId,
       price: toNumberOrNull(input.data.price),
       unit: input.data.unit,
-      valid_from: input.data.valid_from ? new Date(input.data.valid_from) : null,
       notes: input.data.notes,
       updated_by_name: actor,
     }, { id: ctx.userId, name: actor ?? "" });
@@ -1140,24 +1100,33 @@ export const updateMaterialPriceAction = createAction<
       }
     }
 
+    if (existing.supplier_party_id !== supplierId && row.id !== existing.id) {
+      await tx.skuPrice.delete({ where: { id: existing.id } });
+      await recordAudit(tx, {
+        entity: "SkuPrice",
+        entity_id: existing.id,
+        action: "DELETE",
+        actor: { id: ctx.userId, name: actor ?? "" },
+        changes: {
+          deleted_row: {
+            from: {
+              supplier_party_id: existing.supplier_party_id,
+              price_net: existing.price_net,
+              unit: existing.unit,
+              notes: existing.notes,
+            },
+            to: null,
+          },
+        },
+      });
+    }
+
     return mapMaterialPrice(row);
   },
   { schema: z.object({ id: z.string(), data: MaterialPriceInputSchema, updatedByName: z.string() }) }
 );
 
-/**
- * "Delete" closes the offer; it does not erase it.
- *
- * The row disappears from every list, because every list filters
- * `is_current: true` — so this looks exactly like a delete to whoever clicked
- * it. What survives is the record that this supplier once quoted this number,
- * which is the entire point of a history table and the one thing a hard
- * `DELETE` used to throw away.
- *
- * The previous offer is deliberately NOT promoted back to current. "No current
- * price" is a truthful state; silently resurrecting an older number as if it
- * were today's is not.
- */
+/** Delete the current SKU × supplier price row. */
 export const deleteMaterialPriceAction = createAction<{ id: string }, { id: string }>(
   async ({ input, ctx, tx }) => {
     if (!hasPermission(ctx.role, PERMISSION.MASTERDATA_VENDOR_MANAGE)) {
@@ -1166,16 +1135,23 @@ export const deleteMaterialPriceAction = createAction<{ id: string }, { id: stri
     const existing = await tx.skuPrice.findUnique({ where: { id: input.id } });
     if (!existing) throw new ActionError("Price not found", "NOT_FOUND");
 
-    await tx.skuPrice.update({
-      where: { id: input.id },
-      data: { is_current: false, valid_to: new Date(), updated_by_name: ctx.user.name ?? null },
-    });
+    await tx.skuPrice.delete({ where: { id: input.id } });
     await recordAudit(tx, {
       entity: "SkuPrice",
       entity_id: input.id,
-      action: "UPDATE",
+      action: "DELETE",
       actor: { id: ctx.userId, name: ctx.user.name ?? "" },
-      changes: { is_current: { from: true, to: false } },
+      changes: {
+        deleted_row: {
+          from: {
+            supplier_party_id: existing.supplier_party_id,
+            price_net: existing.price_net,
+            unit: existing.unit,
+            notes: existing.notes,
+          },
+          to: null,
+        },
+      },
     });
     return { id: input.id };
   }
@@ -1349,4 +1325,3 @@ export const deleteMaterialLaborPriceAction = createAction<{ id: string }, { id:
     return { id: input.id };
   }
 );
-

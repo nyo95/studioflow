@@ -16,22 +16,33 @@ export function getDateBounds(dateFrom?: string | null, dateTo?: string | null) 
 
 export function buildWhere(filters: AuditFiltersInput, entityIds?: string[]): Prisma.AuditLogWhereInput {
   const { gte, lte } = getDateBounds(filters.dateFrom, filters.dateTo);
+  const andClauses: Prisma.AuditLogWhereInput[] = [{ created_at: { gte, lte } }];
 
-  return {
-    created_at: { gte, lte },
-    ...(entityIds?.length ? { entity_id: { in: entityIds } } : {}),
-    ...(filters.userIds?.length ? { user_id: { in: filters.userIds } } : {}),
-    ...(filters.actions?.length ? { action: { in: filters.actions } } : {}),
-    ...(filters.phaseIds?.length
-      ? {
-          OR: filters.phaseIds.flatMap((phaseId) => [
-            { phase_id: phaseId },
-            { details: { path: ["phase_id"], equals: phaseId } },
-            { entity_type: "PHASE", entity_id: phaseId },
-          ]),
-        }
-      : {}),
-  };
+  if (entityIds?.length) {
+    andClauses.push({ entity_id: { in: entityIds } });
+  }
+  if (filters.userIds?.length) {
+    andClauses.push({
+      OR: [
+        { user_id: { in: filters.userIds } },
+        { actor_id: { in: filters.userIds } },
+      ],
+    });
+  }
+  if (filters.actions?.length) {
+    andClauses.push({ action: { in: filters.actions } });
+  }
+  if (filters.phaseIds?.length) {
+    andClauses.push({
+      OR: filters.phaseIds.flatMap((phaseId) => [
+        { phase_id: phaseId },
+        { metadata_json: { path: ["phase_id"], equals: phaseId } },
+        { entity_type: "PHASE", entity_id: phaseId },
+      ]),
+    });
+  }
+
+  return andClauses.length === 1 ? andClauses[0] : { AND: andClauses };
 }
 
 export function getPhaseIdFromReference(reference: AuditReferenceRecord) {
@@ -44,12 +55,12 @@ export function getPhaseIdFromReference(reference: AuditReferenceRecord) {
   }
 
   if (
-    reference.details &&
-    typeof reference.details === "object" &&
-    !Array.isArray(reference.details) &&
-    typeof (reference.details as Record<string, unknown>).phase_id === "string"
+    reference.metadata_json &&
+    typeof reference.metadata_json === "object" &&
+    !Array.isArray(reference.metadata_json) &&
+    typeof (reference.metadata_json as Record<string, unknown>).phase_id === "string"
   ) {
-    return (reference.details as Record<string, string>).phase_id;
+    return (reference.metadata_json as Record<string, string>).phase_id;
   }
 
   return null;

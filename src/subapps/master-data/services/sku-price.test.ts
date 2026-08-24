@@ -25,11 +25,10 @@ import {
  * and that no type check can see: what a blank price means, when an edit is a
  * new offer, and when a row is worth writing at all.
  *
- * Only the pure helpers are exercised — `recordSkuPrice` and
- * `closeCurrentSkuPrice` touch Prisma, and `npm test` deliberately cannot
- * import anything that does (see roadmap §Perkakas). The database side is
- * covered by the `SkuPrice_current_uniq` index itself, which is the stronger
- * guarantee of the two.
+ * Only the pure helpers are exercised — `recordSkuPrice` touches Prisma, and
+ * `npm test` deliberately cannot import anything that does (see roadmap
+ * §Perkakas). The database side is covered by the `SkuPrice_pair_uniq` index
+ * itself, which is the stronger guarantee of the two.
  *
  * 2026-08-14: pasangan price_list / price_net menjadi satu kolom `price`, jadi
  * test "net jatuh ke list" hilang bersama aturannya. Yang TIDAK boleh hilang

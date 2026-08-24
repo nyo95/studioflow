@@ -17,14 +17,13 @@ import {
 import type { CatalogSampleStatus } from "../types";
 import { insertAuditLog } from "@/actions/_shared";
 import { AUDIT_ACTIONS } from "@/core/platform/audit/types";
-import { isOfferChange, recordSkuPrice } from "@/subapps/master-data/services/sku-price-service";
-import { recordAudit, diffFields } from "@/subapps/master-data/services/audit-service";
-import { assertPriceSourceParty } from "@/subapps/master-data/services/party-role-service";
+import { recordAudit } from "@/subapps/master-data/services/audit-service";
 import { resolveCategoryPath } from "@/subapps/master-data/services/category-tree-service";
 import { dropAncestorTags, productParentFor } from "@/subapps/master-data/services/category-tree-rules";
 import { slugify } from "@/subapps/master-data/lib/slug";
 import { createSkuCore } from "@/subapps/master-data/services/sku-core-service";
 import { normalizeSearchText, trimOrNull } from "@/core/utilities/normalize";
+import { CatalogWriteService } from "@/subapps/master-data/services/catalog-write-service";
 
 /**
  * The one include shape every Library read uses. Kept in a single constant so
@@ -32,15 +31,12 @@ import { normalizeSearchText, trimOrNull } from "@/core/utilities/normalize";
  * cannot drift apart — a missing relation here is a runtime crash there.
  *
  * Master Data v2: no more `catalog_*` columns on Sku. Pricing lives in
- * `SkuPrice` (history — only the current row is pulled here), images in
+ * `SkuPrice` (current rows only), images in
  * `SkuMedia`, categories in `SkuCategory` -> `Category`.
  *
  * `prices` is NOT capped at one row any more. Since suppliers became real
- * (`SkuPrice.supplier_party_id`), one SKU can legitimately have several current
- * prices — one per shop, plus the manufacturer's own list price. `take: 1` with
- * no `orderBy` used to pick whichever row Postgres happened to return, so the
- * price shown on a card could change between two page loads without anything
- * being edited.
+ * (`SkuPrice.supplier_party_id`), one SKU can legitimately have several
+ * current prices — one per shop, plus the manufacturer's own list price.
  *
  * Ordered cheapest-first so `prices[0]` has a defined meaning: **the best
  * current offer**. That is the number a catalog should show, and the same one
@@ -51,8 +47,7 @@ const SKU_FULL_INCLUDE = {
   samples: { where: { deleted_at: null } },
   media: true,
   prices: {
-    where: { is_current: true },
-    orderBy: [{ price_net: "asc" }, { valid_from: "desc" }],
+    orderBy: [{ price_net: "asc" }, { updated_at: "desc" }, { created_at: "desc" }],
     include: { supplier: { select: { id: true, name: true } } },
   },
   categories: { include: { category: true } },
@@ -468,357 +463,12 @@ export class LibraryService {
    * old "one form, one save" UX keeps working without a separate step.
    */
   static async createVendor(data: LibraryVendorInput, userId: string, tx: PrismaTransaction) {
-    let ownerPartyId = data.company_id || null;
-
-    if (!ownerPartyId && (data.legal_name || data.address || data.contacts.length > 0)) {
-      const party = await tx.party.create({
-        data: {
-          name: data.brand_name,
-          slug: this.slugify(data.brand_name),
-          legal_name: trimOrNull(data.legal_name),
-          address: trimOrNull(data.address),
-        },
-      });
-      ownerPartyId = party.id;
-      await recordAudit(tx, { entity: "Party", entity_id: party.id, action: "CREATE", actor: { id: userId, name: "system" } });
-    }
-
-    const vendor = await tx.brand.create({
-      data: {
-        name: data.brand_name,
-        slug: this.slugify(data.brand_name),
-        notes: trimOrNull(data.notes),
-        owner_party_id: ownerPartyId,
-        // Free-form hashtags (owner feedback 2026-08-18, item 5) — separate
-        // from `syncSeedBrandCategories` below, which handles the curated
-        // Category checklist instead.
-        tags: [...new Set((data.tags ?? []).map((t) => t.trim()).filter(Boolean))],
-        // Excel Table 1 column J — who SELLS this brand, which is a different
-        // question from who owns it. `suppliers` is a list because a brand is
-        // normally stocked in several places.
-        suppliers: {
-          create: [...new Set(data.supplier_party_ids ?? [])].map((party_id) => ({ party_id })),
-        },
-        links: {
-          create: (data.links ?? [])
-            .filter((l) => l.url.trim().length > 0)
-            .map((l, i) => ({
-              kind: l.kind,
-              url: l.url.trim(),
-              label: trimOrNull(l.label),
-              sort_order: i,
-            })),
-        },
-      },
-    });
-
-    await recordAudit(tx, { entity: "Brand", entity_id: vendor.id, action: "CREATE", actor: { id: userId, name: "system" } });
-
-    if ((data.links ?? []).some((link) => link.url.trim().length > 0)) {
-      const createdLinks = await tx.brandLink.findMany({
-        where: { brand_id: vendor.id },
-        orderBy: { sort_order: "asc" },
-      });
-      for (const link of createdLinks) {
-        await recordAudit(tx, {
-          entity: "BrandLink",
-          entity_id: link.id,
-          action: "CREATE",
-          actor: { id: userId, name: "system" },
-          changes: {
-            brand_id: vendor.id,
-            kind: link.kind,
-            url: link.url,
-            label: link.label,
-          },
-        });
-      }
-    }
-
-    if (ownerPartyId && data.contacts.length > 0) {
-      await tx.partyContact.createMany({
-        data: data.contacts.map((c) => ({
-          party_id: ownerPartyId!,
-          brand_id: vendor.id,
-          person_name: c.contact_person,
-          job_title: c.contact_role,
-          phone: trimOrNull(c.phone_number),
-          email: trimOrNull(c.email),
-        })),
-      });
-    }
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_CREATE_VENDOR, "VENDOR", vendor.id, userId, {
-      brand_name: vendor.name
-    });
-
-    // Excel Table 1 "Category" — seed categories explicitly set at brand level.
-    if (data.brand_category_tags && data.brand_category_tags.length > 0) {
-      await this.syncSeedBrandCategories(tx, vendor.id, data.brand_category_tags, { id: userId, name: "system" });
-    }
-
-    const created = await tx.brand.findUniqueOrThrow({
-      where: { id: vendor.id },
-      include: {
-        scoped_contacts: true,
-        links: true,
-        owner: { select: { id: true, name: true, legal_name: true, address: true } },
-        categories: { where: { source: "SEED" }, orderBy: { sort_order: "asc" }, include: { category: { select: { id: true, name: true } } } },
-      },
-    });
-    return {
-      ...created,
-      seed_categories: created.categories.map((link) => link.category),
-    };
+    return CatalogWriteService.createVendor(data, userId, tx);
   }
 
   /** Updates vendor fields and replaces contact/link lists, then writes audit log. */
   static async updateVendor(id: string, data: Partial<LibraryVendorInput>, userId: string, tx: PrismaTransaction) {
-    const existing = await tx.brand.findUniqueOrThrow({
-      where: { id },
-      include: {
-        links: { orderBy: { sort_order: "asc" } },
-        categories: {
-          where: { source: "SEED" },
-          orderBy: { sort_order: "asc" },
-          include: { category: { select: { id: true, name: true } } },
-        },
-      },
-    });
-    let ownerPartyId = data.company_id !== undefined ? data.company_id : existing.owner_party_id;
-
-    const normalizedBrandName = data.brand_name?.trim();
-    if (data.brand_name !== undefined && !normalizedBrandName) {
-      throw new ActionError("Brand name is required.", "VALIDATION_ERROR");
-    }
-
-    if (!ownerPartyId && (data.legal_name || data.address || (data.contacts && data.contacts.length > 0))) {
-      const party = await tx.party.create({
-        data: {
-          name: data.brand_name ?? existing.name,
-          slug: this.slugify(data.brand_name ?? existing.name),
-          legal_name: trimOrNull(data.legal_name),
-          address: trimOrNull(data.address),
-        },
-      });
-      ownerPartyId = party.id;
-      await recordAudit(tx, { entity: "Party", entity_id: party.id, action: "CREATE", actor: { id: userId, name: "system" } });
-    } else if (ownerPartyId && (data.legal_name !== undefined || data.address !== undefined)) {
-      await tx.party.update({
-        where: { id: ownerPartyId },
-        data: {
-          ...(data.legal_name !== undefined ? { legal_name: trimOrNull(data.legal_name) } : {}),
-          ...(data.address !== undefined ? { address: trimOrNull(data.address) } : {}),
-        },
-      });
-      await recordAudit(tx, { entity: "Party", entity_id: ownerPartyId, action: "UPDATE", actor: { id: userId, name: "system" } });
-    }
-
-    const existingLinkState = existing.links.map((link) => ({
-      kind: link.kind,
-      url: link.url,
-      label: link.label,
-    }));
-    const requestedLinks = data.links
-      ?.filter((link) => link.url.trim().length > 0)
-      .map((link, index) => ({
-        id: link.id,
-        kind: link.kind,
-        url: link.url.trim(),
-        label: trimOrNull(link.label),
-        sort_order: index,
-      }));
-    const requestedLinkState = requestedLinks?.map(({ kind, url, label }) => ({
-      kind,
-      url,
-      label,
-    }));
-    const linksChanged =
-      requestedLinkState !== undefined &&
-      JSON.stringify(existingLinkState) !== JSON.stringify(requestedLinkState);
-
-    if (linksChanged && requestedLinks) {
-      const existingById = new Map(existing.links.map((link) => [link.id, link]));
-      const requestedIds = new Set(requestedLinks.flatMap((link) => (link.id ? [link.id] : [])));
-      const unknownId = [...requestedIds].find((linkId) => !existingById.has(linkId));
-      if (unknownId) {
-        throw new ActionError("Brand link not found.", "NOT_FOUND");
-      }
-
-      for (const link of existing.links) {
-        if (requestedIds.has(link.id)) continue;
-        await tx.brandLink.delete({ where: { id: link.id } });
-        await recordAudit(tx, {
-          entity: "BrandLink",
-          entity_id: link.id,
-          action: "DELETE",
-          actor: { id: userId, name: "system" },
-          changes: {
-            link: {
-              from: {
-                kind: link.kind,
-                url: link.url,
-                label: link.label,
-                sort_order: link.sort_order,
-              },
-              to: null,
-            },
-          },
-        });
-      }
-
-      for (const link of requestedLinks) {
-        const current = link.id ? existingById.get(link.id) : undefined;
-        if (!current) {
-          const created = await tx.brandLink.create({
-            data: {
-              brand_id: id,
-              kind: link.kind,
-              url: link.url,
-              label: link.label,
-              sort_order: link.sort_order,
-            },
-          });
-          await recordAudit(tx, {
-            entity: "BrandLink",
-            entity_id: created.id,
-            action: "CREATE",
-            actor: { id: userId, name: "system" },
-            changes: { brand_id: id, kind: created.kind, url: created.url, label: created.label },
-          });
-          continue;
-        }
-
-        const changed =
-          current.kind !== link.kind ||
-          current.url !== link.url ||
-          current.label !== link.label ||
-          current.sort_order !== link.sort_order;
-        if (!changed) continue;
-        const updatedLink = await tx.brandLink.update({
-          where: { id: current.id },
-          data: {
-            kind: link.kind,
-            url: link.url,
-            label: link.label,
-            sort_order: link.sort_order,
-          },
-        });
-        await recordAudit(tx, {
-          entity: "BrandLink",
-          entity_id: current.id,
-          action: "UPDATE",
-          actor: { id: userId, name: "system" },
-          changes: {
-            link: {
-              from: { kind: current.kind, url: current.url, label: current.label, sort_order: current.sort_order },
-              to: { kind: updatedLink.kind, url: updatedLink.url, label: updatedLink.label, sort_order: updatedLink.sort_order },
-            },
-          },
-        });
-      }
-    }
-
-    const brandData: Prisma.BrandUpdateInput = {
-      ...(normalizedBrandName !== undefined
-        ? { name: normalizedBrandName, slug: this.slugify(normalizedBrandName) }
-        : {}),
-      ...(data.notes !== undefined ? { notes: trimOrNull(data.notes) } : {}),
-      ...(ownerPartyId !== existing.owner_party_id ? { owner: ownerPartyId ? { connect: { id: ownerPartyId } } : { disconnect: true } } : {}),
-      ...(data.tags !== undefined
-        ? { tags: [...new Set(data.tags.map((tag) => tag.trim()).filter(Boolean))] }
-        : {}),
-    };
-    if (Object.keys(brandData).length > 0) {
-      await tx.brand.update({ where: { id }, data: brandData });
-    }
-
-    // Replaced wholesale, like contacts and links. `BrandSupplier` carries
-    // `is_authorized` and `notes`, which the Brand form does not expose yet —
-    // clearing them on every save would lose curation nobody entered through
-    // this screen, so the columns are carried forward per party.
-    if (data.supplier_party_ids !== undefined) {
-      const wanted = [...new Set(data.supplier_party_ids)];
-      const existingLinks = await tx.brandSupplier.findMany({
-        where: { brand_id: id },
-        select: { party_id: true },
-      });
-      const have = new Set(existingLinks.map((l) => l.party_id));
-      const toRemove = [...have].filter((pid) => !wanted.includes(pid));
-      const toAdd = wanted.filter((pid) => !have.has(pid));
-      if (toRemove.length > 0) {
-        await tx.brandSupplier.deleteMany({ where: { brand_id: id, party_id: { in: toRemove } } });
-      }
-      if (toAdd.length > 0) {
-        await tx.brandSupplier.createMany({
-          data: toAdd.map((party_id) => ({ brand_id: id, party_id })),
-        });
-      }
-    }
-
-    if (data.contacts && ownerPartyId) {
-      await tx.partyContact.deleteMany({ where: { brand_id: id } });
-      if (data.contacts.length > 0) {
-        await tx.partyContact.createMany({
-          data: data.contacts.map((c) => ({
-            party_id: ownerPartyId!,
-            brand_id: id,
-            person_name: c.contact_person,
-            job_title: c.contact_role,
-            phone: trimOrNull(c.phone_number),
-            email: trimOrNull(c.email),
-          })),
-        });
-      }
-    }
-
-    // Sync seed categories when provided explicitly from the Brand form.
-    if (data.brand_category_tags !== undefined) {
-      await this.syncSeedBrandCategories(tx, id, data.brand_category_tags, { id: userId, name: "system" });
-    }
-
-    const updated = await tx.brand.findUniqueOrThrow({
-      where: { id },
-      include: {
-        scoped_contacts: true,
-        links: { orderBy: { sort_order: "asc" } },
-        owner: { select: { id: true, name: true, legal_name: true, address: true } },
-        categories: { where: { source: "SEED" }, orderBy: { sort_order: "asc" }, include: { category: { select: { id: true, name: true } } } },
-      },
-    });
-
-    // Tags and curated categories are Brand data too. Before #37, a save that
-    // changed only one of these wrote master_data without any MasterDataAudit
-    // record because the diff considered only name/notes/owner.
-    const brandChanges = diffFields(
-      {
-        name: existing.name,
-        notes: existing.notes,
-        owner_party_id: existing.owner_party_id,
-        tags: existing.tags,
-        seed_categories: existing.categories.map((link) => link.category.name),
-      },
-      {
-        name: updated.name,
-        notes: updated.notes,
-        owner_party_id: updated.owner_party_id,
-        tags: updated.tags,
-        seed_categories: updated.categories.map((link) => link.category.name),
-      },
-      ["name", "notes", "owner_party_id", "tags", "seed_categories"]
-    );
-    if (Object.keys(brandChanges).length > 0) {
-      await recordAudit(tx, { entity: "Brand", entity_id: id, action: "UPDATE", actor: { id: userId, name: "system" }, changes: brandChanges });
-    }
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_UPDATE_VENDOR, "VENDOR", id, userId, {
-      changes: { brand_name: updated.name }
-    });
-
-    return {
-      ...updated,
-      seed_categories: updated.categories.map((link) => link.category),
-    };
+    return CatalogWriteService.updateVendor(id, data, userId, tx);
   }
 
   /**
@@ -826,27 +476,7 @@ export class LibraryService {
    * @throws {ActionError} VENDOR_HAS_ITEMS when vendor still owns active products.
    */
   static async deleteVendor(id: string, userId: string, tx: PrismaTransaction) {
-    const productCount = await tx.sku.count({ where: { brand_id: id, deleted_at: null } });
-
-    if (productCount > 0) {
-      throw new ActionError(
-        "Cannot delete vendor with associated products. Move or delete products first.",
-        "VENDOR_HAS_ITEMS"
-      );
-    }
-
-    const vendor = await tx.brand.update({
-      where: { id },
-      data: { deleted_at: new Date() }
-    });
-
-    await recordAudit(tx, { entity: "Brand", entity_id: id, action: "DELETE", actor: { id: userId, name: "system" }, changes: { name: { from: vendor.name, to: null } } });
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.LIBRARY_DELETE_VENDOR, "VENDOR", id, userId, {
-      brand_name: vendor.name
-    });
-
-    return vendor;
+    return CatalogWriteService.deleteVendor(id, userId, tx);
   }
 
   /**
@@ -958,15 +588,15 @@ export class LibraryService {
     // `none` are exact complements here, so READY + INCOMPLETE always partition
     // the full set — the two counts add up to the unfiltered total.
     if (filters?.price === "READY") {
-      and.push({ prices: { some: { is_current: true, unit: { not: "" } } } });
+      and.push({ prices: { some: { unit: { not: "" } } } });
     } else if (filters?.price === "INCOMPLETE") {
-      and.push({ prices: { none: { is_current: true, unit: { not: "" } } } });
+      and.push({ prices: { none: { unit: { not: "" } } } });
     }
 
     if (filters?.pricePresence === "WITH") {
-      and.push({ prices: { some: { is_current: true } } });
+      and.push({ prices: { some: {} } });
     } else if (filters?.pricePresence === "WITHOUT") {
-      and.push({ prices: { none: { is_current: true } } });
+      and.push({ prices: { none: {} } });
     }
 
     const completeSku: Prisma.SkuWhereInput = {
@@ -1212,158 +842,7 @@ export class LibraryService {
 
   /** @returns Created product with relations. */
   static async createProduct(data: ProductCatalogInput, userId: string, tx: PrismaTransaction): Promise<ProductCatalogWithRelations> {
-    // Brandless is legal (Q7 / X23), so an empty brand must NOT reach
-    // `resolveVendor` — that function throws "Vendor name is required" on an
-    // empty string, which is how the 2026-08-11 "brand is optional" change was
-    // only half done: the form let it through and the server rejected it two
-    // frames later with a message about a field the user had deliberately left
-    // blank.
-    const typedBrandName = (data.vendor_name || "").trim();
-    const resolvedVendorId =
-      data.brand_id ||
-      (typedBrandName ? await this.resolveVendor(typedBrandName, userId, tx) : null);
-    const categoryTags = this.normalizeCategoryTags(data);
-    const catalogSku = data.catalog_sku.trim();
-    const productName = data.catalog_product_name.trim();
-    // Validated with the SAME rule the Pricing page uses. Before this the
-    // material dialog could attach any Party id at all: one form checked the
-    // party's categories, the other did not, and the one that did not was the
-    // one most people use.
-    const supplierId = await assertPriceSourceParty(tx, data.supplier_party_id);
-
-    const isApproved = (data.catalog_status || LibraryItemStatus.PENDING) === LibraryItemStatus.APPROVED;
-
-    await this.assertValidProduct(
-      {
-        ...data,
-        catalog_type: data.catalog_type || ProductType.material,
-        catalog_tags: categoryTags,
-        brand_id: resolvedVendorId || undefined,
-      },
-      isApproved ? "CATALOG" : "SNAPSHOT"
-    );
-    await this.assertCatalogTypeRules(data.catalog_type || ProductType.material, {}, false);
-
-    // Brand is OPTIONAL (Q7). Excel Table 2 column D says so outright —
-    // "apabila tidak ada brand bisa dikosongkan" — and `03_invariants.sql`
-    // creates two indexes (`Sku_slug_nobrand_uniq`, `Sku_code_nobrand_uniq`)
-    // whose only purpose is guarding brandless rows. Rejecting them here made
-    // both indexes unreachable and forced generic stock ("plywood 9mm") to be
-    // filed under a junk brand named "-".
-    if (resolvedVendorId) {
-      const vendor = await tx.brand.findUnique({ where: { id: resolvedVendorId } });
-      if (!vendor || vendor.deleted_at) throw new ActionError("Invalid brand.", "VENDOR_REQUIRED");
-    }
-
-    const slug = this.slugify(productName || catalogSku || "product");
-
-    // Mirrors the partial unique indexes exactly, brandless case included.
-    // Doing the check here as well as in the database is not redundancy: the
-    // index produces a Postgres error string, this produces a message the
-    // person filling the form can act on.
-    const existingDup = await tx.sku.findFirst({
-      where: {
-        brand_id: resolvedVendorId || null,
-        deleted_at: null,
-        ...(catalogSku ? { code: { equals: catalogSku, mode: "insensitive" } } : { slug }),
-      }
-    });
-    if (existingDup) {
-      throw new ActionError(
-        resolvedVendorId
-          ? "A product with the same code and brand already exists."
-          : "A brandless product with the same name already exists.",
-        'DUPLICATE_PRODUCT'
-      );
-    }
-
-    const dimP = this.parseDecimal(data.catalog_dimension_p);
-    const dimL = this.parseDecimal(data.catalog_dimension_l);
-    const dimT = this.parseDecimal(data.catalog_dimension_t);
-    const dimUnit = data.catalog_dimension_unit || "cm";
-    const spec = this.buildSpec(data);
-    const priceUnit = trimOrNull(data.catalog_price_unit);
-
-    // B5 (2026-08-18): create + audit now go through `createSkuCore` — see
-    // its doc comment for what it guarantees. Media and samples stay as
-    // nested creates in the same write (still one insert, still one
-    // transaction); `include` only needs to be wide enough to read back
-    // `product.samples` below, which is what `createSkuCore` already returns.
-    const product = await createSkuCore(
-      tx,
-      {
-        data: {
-          brand_id: resolvedVendorId || null,
-          code: catalogSku || null,
-          name: productName,
-          kind: (data.catalog_type || ProductType.material) === "fixture" ? "FIXTURE" : "MATERIAL",
-          status: catalogStatusToSkuStatus(data.catalog_status || LibraryItemStatus.PENDING),
-          spec: Object.keys(spec).length > 0 ? (spec as Prisma.InputJsonValue) : Prisma.JsonNull,
-          dim_length: dimP ?? undefined,
-          dim_width: dimL ?? undefined,
-          dim_height: dimT ?? undefined,
-          dim_unit: dimUnit,
-          dim_display: this.buildDimDisplay(data.catalog_dimension_p, data.catalog_dimension_l, data.catalog_dimension_t, dimUnit),
-          base_unit: priceUnit || "pcs",
-          media: { create: this.buildMediaCreates(data) },
-          // Price is deliberately NOT created inline any more. It goes through
-          // `recordSkuPrice` below, in this same transaction, so that exactly one
-          // piece of code decides what a price row means — see
-          // `subapps/master-data/services/sku-price-service.ts`. The inline
-          // version defaulted `price_net` to 0 and never touched the supplier.
-          samples: data.samples ? {
-            create: data.samples.map(s => ({
-              rack_number: s.catalog_rack_number,
-              box_number: s.catalog_box_number,
-              notes: trimOrNull(s.catalog_notes),
-              status: catalogSampleStatusToV2(s.catalog_status),
-              borrower_name: trimOrNull(s.current_borrower_name),
-            }))
-          } : undefined,
-        },
-        slugSeed: productName || catalogSku || "product",
-        // Category tags are attached below via `upsertSkuCategories`, which
-        // already applies the same is-first-primary rule for the full
-        // multi-tag list AND reconciles an existing sku's tags — a job
-        // `createSkuCore` has no reason to duplicate for a brand-new row.
-      },
-      { id: userId, name: "system" }
-    );
-
-    // Same transaction as the SKU insert. Before this, the dialog saved the
-    // material in one action and its price in a second, so a failure in the
-    // second left a material saved without the price the user had just typed —
-    // the UI even had a toast for it ("Material tersimpan, tetapi harga gagal
-    // disimpan"). A torn write with an apology attached is still a torn write.
-    await recordSkuPrice(tx, {
-      sku_id: product.id,
-      supplier_party_id: supplierId,
-      price: data.catalog_price ?? null,
-      unit: priceUnit,
-      notes: null,
-    }, { id: userId, name: "" });
-
-    // Only when there IS a brand. `BrandCategory` answers "which categories
-    // does this brand cover" for the Library's brand cards; a brandless SKU has
-    // no card to feed, and passing a null brand id here would throw.
-    if (resolvedVendorId) {
-      await this.upsertBrandCategories(tx, resolvedVendorId, categoryTags, { id: userId, name: "" });
-    }
-    await this.upsertSkuCategories(tx, product.id, categoryTags, { id: userId, name: "" });
-
-    if (product.samples.length > 0) {
-      await Promise.all(product.samples.map(sample =>
-        this.logSampleAction(tx, {
-          sample_id: sample.id,
-          action: SampleAction.IN,
-          notes: "Initial inventory registration",
-          userId
-        })
-      ));
-    }
-
-    const withCategories = await tx.sku.findUniqueOrThrow({ where: { id: product.id }, include: SKU_FULL_INCLUDE });
-    return attachDerivedCatalogFields(withCategories);
+    return CatalogWriteService.createProduct(data, userId, tx);
   }
 
   /**
@@ -1371,241 +850,7 @@ export class LibraryService {
    * Registers schedule category only when status becomes APPROVED.
    */
   static async updateProduct(id: string, data: Partial<ProductCatalogInput>, userId: string, tx: PrismaTransaction, role?: Role): Promise<ProductCatalogWithRelations> {
-    await this.assertEditable(tx, id, role);
-
-    const existing = await tx.sku.findUnique({
-      where: { id },
-      // Every current price, not just one: the update below has to find the row
-      // belonging to the supplier being edited, and `take: 1` would hand it a
-      // different shop's row as often as not.
-      include: { samples: { select: { id: true } }, prices: { where: { is_current: true } } },
-    });
-    if (!existing) throw new ActionError("Product not found", "NOT_FOUND");
-    const preExistingSampleIds = new Set(existing.samples.map((s) => s.id));
-    const nextCategoryTags =
-      data.catalog_category !== undefined ||
-      data.catalog_sub_category !== undefined ||
-      data.catalog_tags !== undefined
-        ? this.normalizeCategoryTags(data)
-        : undefined;
-    const nextCatalogSku = data.catalog_sku?.trim() ?? existing.code ?? "";
-    const nextProductName = data.catalog_product_name?.trim() ?? existing.name;
-
-    if (!nextProductName) {
-      throw new ActionError(
-        "Vendor, brand, SKU, dan nama produk wajib diisi.",
-        "MATERIAL_IDENTITY_REQUIRED"
-      );
-    }
-
-    // STRICT: Type Immutability
-    if (data.catalog_type !== undefined) {
-      const nextKind = data.catalog_type === "fixture" ? "FIXTURE" : "MATERIAL";
-      const existingIsFixture = existing.kind !== "MATERIAL";
-      if ((nextKind === "FIXTURE") !== existingIsFixture) {
-        throw new ActionError("Product TYPE is immutable after creation.", "IMMUTABILITY_VIOLATION");
-      }
-    }
-
-    // NON-DESTRUCTIVE sample reconciliation — same rules as v1:
-    //   undefined  -> samples untouched.
-    //   []         -> samples untouched.
-    //   with id    -> update in place; movement history survives.
-    //   without id -> create a new row.
-    const incomingSamples = data.samples?.filter(
-      (s) => s.catalog_rack_number?.trim() || s.catalog_box_number?.trim() || s.id
-    );
-
-    const sampleOps = incomingSamples && incomingSamples.length > 0 ? {
-      update: incomingSamples
-        .filter((s): s is typeof s & { id: string } => !!s.id)
-        .map((s) => ({
-          where: { id: s.id },
-          data: {
-            rack_number: s.catalog_rack_number,
-            box_number: s.catalog_box_number,
-            notes: trimOrNull(s.catalog_notes),
-            ...(s.catalog_status !== undefined ? { status: catalogSampleStatusToV2(s.catalog_status) } : {}),
-            ...(s.current_borrower_name !== undefined
-              ? { borrower_name: trimOrNull(s.current_borrower_name) }
-              : {}),
-          },
-        })),
-      create: incomingSamples
-        .filter((s) => !s.id)
-        .map((s) => ({
-          rack_number: s.catalog_rack_number,
-          box_number: s.catalog_box_number,
-          notes: trimOrNull(s.catalog_notes),
-          status: catalogSampleStatusToV2(s.catalog_status),
-          borrower_name: trimOrNull(s.current_borrower_name),
-        })),
-    } : undefined;
-
-    const dimP = data.catalog_dimension_p !== undefined ? this.parseDecimal(data.catalog_dimension_p) : undefined;
-    const dimL = data.catalog_dimension_l !== undefined ? this.parseDecimal(data.catalog_dimension_l) : undefined;
-    const dimT = data.catalog_dimension_t !== undefined ? this.parseDecimal(data.catalog_dimension_t) : undefined;
-    const dimChanged = data.catalog_dimension_p !== undefined || data.catalog_dimension_l !== undefined ||
-      data.catalog_dimension_t !== undefined || data.catalog_dimension_unit !== undefined;
-    const specChanged = data.catalog_pattern !== undefined || data.catalog_motif !== undefined ||
-      data.catalog_color !== undefined || data.catalog_finishing !== undefined || data.catalog_metadata !== undefined;
-    const nextSpec = specChanged ? this.buildSpec(data, existing.spec as Record<string, unknown> | null) : undefined;
-
-    const updated = await tx.sku.update({
-      where: { id },
-      data: {
-        ...(data.brand_id ? { brand_id: data.brand_id } : {}),
-        ...(data.catalog_sku !== undefined ? { code: nextCatalogSku || null } : {}),
-        ...(data.catalog_product_name !== undefined ? { name: nextProductName } : {}),
-        ...(data.catalog_type !== undefined ? { kind: data.catalog_type === "fixture" ? "FIXTURE" : "MATERIAL" } : {}),
-        ...(nextSpec ? { spec: nextSpec as Prisma.InputJsonValue } : {}),
-        ...(dimP !== undefined ? { dim_length: dimP ?? null } : {}),
-        ...(dimL !== undefined ? { dim_width: dimL ?? null } : {}),
-        ...(dimT !== undefined ? { dim_height: dimT ?? null } : {}),
-        ...(data.catalog_dimension_unit !== undefined ? { dim_unit: data.catalog_dimension_unit } : {}),
-        ...(dimChanged ? {
-          dim_display: this.buildDimDisplay(
-            data.catalog_dimension_p, data.catalog_dimension_l, data.catalog_dimension_t, data.catalog_dimension_unit
-          ),
-        } : {}),
-        ...(data.catalog_status !== undefined ? { status: catalogStatusToSkuStatus(data.catalog_status) } : {}),
-        // BQ costing fields
-        ...(data.usage_unit !== undefined ? { usage_unit: data.usage_unit || null } : {}),
-        ...(data.purchase_unit !== undefined ? { purchase_unit: data.purchase_unit || null } : {}),
-        ...(data.conversion !== undefined ? { conversion: data.conversion ?? null } : {}),
-        ...(data.default_waste_pct !== undefined ? { default_waste_pct: data.default_waste_pct ?? null } : {}),
-        ...(data.minimum_order !== undefined ? { minimum_order: data.minimum_order ?? null } : {}),
-        ...(data.rounding_increment !== undefined ? { rounding_increment: data.rounding_increment ?? null } : {}),
-        ...(data.preferred_supplier_party_id !== undefined ? { preferred_supplier_party_id: data.preferred_supplier_party_id || null } : {}),
-        samples: sampleOps,
-      },
-      include: SKU_FULL_INCLUDE
-    });
-
-    await recordAudit(tx, { entity: "Sku", entity_id: updated.id, action: "UPDATE", actor: { id: userId, name: "system" } });
-
-    // Images: replace whichever kinds were explicitly sent in this call.
-    const mediaTouched = this.buildMediaCreates(data);
-    const mediaKindsProvided = ([
-      ["catalog_image_url", MediaKind.IMAGE],
-      ["catalog_image_thumbnail_url", MediaKind.THUMBNAIL],
-      ["catalog_image_original_url", MediaKind.ORIGINAL],
-      ["catalog_reference_url", MediaKind.REFERENCE],
-      ["catalog_folder_url", MediaKind.FOLDER],
-    ] as const).filter(([field]) => data[field as keyof ProductCatalogInput] !== undefined).map(([, kind]) => kind);
-    if (mediaKindsProvided.length > 0) {
-      await tx.skuMedia.deleteMany({ where: { sku_id: id, kind: { in: mediaKindsProvided } } });
-      const toCreate = mediaTouched.filter((m) => mediaKindsProvided.includes(m.kind));
-      if (toCreate.length > 0) {
-        await tx.skuMedia.createMany({ data: toCreate.map((m) => ({ ...m, sku_id: id })) });
-      }
-    }
-
-    // Price: v2 models pricing as history, so a changed price becomes a new
-    // current row rather than an in-place edit of the old one.
-    //
-    // Scoped to ONE supplier. The previous version demoted every current row
-    // for the SKU — harmless while every price was supplier-less, and quietly
-    // destructive the moment suppliers became real: editing one shop's quote
-    // would have retired every other shop's, leaving the comparison the split
-    // between `Sku` and `SkuPrice` exists to enable with a single row in it.
-    if (
-      data.catalog_price !== undefined ||
-      data.catalog_price_unit !== undefined ||
-      data.supplier_party_id !== undefined
-    ) {
-      const supplierId = data.supplier_party_id !== undefined
-        ? await assertPriceSourceParty(tx, data.supplier_party_id)
-        : (existing.prices[0]?.supplier_party_id ?? null);
-      // Carry forward only from the row being replaced — the one belonging to
-      // the same supplier. Falling back to `prices[0]` here would copy a
-      // different shop's number into this shop's offer.
-      const currentPrice = existing.prices.find((p) => p.supplier_party_id === supplierId);
-
-      const nextPrice = {
-        price: data.catalog_price !== undefined
-          ? (data.catalog_price ?? null)
-          : (currentPrice?.price_net != null ? Number(currentPrice.price_net) : null),
-        unit: trimOrNull(data.catalog_price_unit) || currentPrice?.unit || null,
-        supplier_party_id: supplierId,
-      };
-
-      // Only supersede when the offer actually moved.
-      //
-      // Without this guard every material save wrote a fresh price row, because
-      // the dialog always sends every price field — including the ones it
-      // just loaded unchanged. Correcting a typo in a product name would retire
-      // the current price and file an identical one behind it, so a week of
-      // spelling fixes buries the real price changes under duplicates. The
-      // Pricing page already had this guard; the material dialog did not.
-      const offerMoved =
-        !currentPrice ||
-        isOfferChange(
-          {
-            price_net: currentPrice.price_net,
-            unit: currentPrice.unit,
-            supplier_party_id: currentPrice.supplier_party_id,
-          },
-          nextPrice
-        );
-
-      if (offerMoved) {
-        await recordSkuPrice(tx, {
-          sku_id: id,
-          ...nextPrice,
-          notes: currentPrice?.notes ?? null,
-        }, { id: userId, name: "" });
-      }
-    }
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.CATALOG_UPDATE, "Sku", updated.id, userId, {
-      changes: data
-    });
-
-    if (sampleOps) {
-      const touchedIds = new Set(
-        (incomingSamples ?? []).map((s) => s.id).filter((v): v is string => !!v)
-      );
-      const samplesToLog = updated.samples.filter(
-        (s) => touchedIds.has(s.id) || !preExistingSampleIds.has(s.id)
-      );
-
-      await Promise.all(samplesToLog.map(sample => {
-        const isNew = !preExistingSampleIds.has(sample.id);
-        return this.logSampleAction(tx, {
-          sample_id: sample.id,
-          action: SampleAction.IN,
-          notes: isNew
-            ? `Sample registered: Rack ${sample.rack_number}, Box ${sample.box_number}`
-            : `Inventory updated: Rack ${sample.rack_number}, Box ${sample.box_number}`,
-          userId
-        });
-      }));
-    }
-
-    if (nextCategoryTags) {
-      await this.upsertBrandCategories(tx, updated.brand_id ?? "", nextCategoryTags, { id: userId, name: "" });
-      await this.upsertSkuCategories(tx, updated.id, nextCategoryTags, { id: userId, name: "" });
-    }
-
-    const refetched = await tx.sku.findUniqueOrThrow({ where: { id: updated.id }, include: SKU_FULL_INCLUDE });
-
-    // CRITICAL: Category registration ONLY on APPROVE
-    if (data.catalog_status === LibraryItemStatus.APPROVED) {
-      const primaryCategory = refetched.categories.find((c) => c.is_primary)?.category.name ?? refetched.categories[0]?.category.name;
-      await this.assertValidProduct(
-        { ...data, catalog_sku: refetched.code ?? "", catalog_product_name: refetched.name, catalog_brand: refetched.brand?.name ?? "", catalog_type: data.catalog_type || ProductType.material, catalog_category: primaryCategory } as ProductCatalogInput,
-        "CATALOG"
-      );
-
-      await settingsService.executeUpsertScheduleCategoryConfig(tx, {
-        section: data.catalog_type || ProductType.material,
-        category: primaryCategory,
-        userId,
-      });
-    }
-
-    return attachDerivedCatalogFields(refetched);
+    return CatalogWriteService.updateProduct(id, data, userId, tx, role);
   }
 
   /** Consolidates duplicate brands/vendors into one target vendor. */
@@ -1853,8 +1098,7 @@ export class LibraryService {
       // B5 (2026-08-18): same createSkuCore consolidation as the main "add
       // material" path above — see its doc comment. This site used to call
       // BOTH recordAudit AND insertAuditLog for the same creation, double
-      // writing the event (once correctly to master_data.MasterDataAudit,
-      // once wrongly to studioflow.AuditLog) — that second call is gone now.
+      // writing the event into two audit paths. The extra write is gone now.
       sku = await createSkuCore(
         tx,
         {

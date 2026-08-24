@@ -17,21 +17,17 @@
  * separate, bounded, read-only lookup.
  *
  * ============================================================================
- * FIXED 2026-08-18 (audit H1) — was reading the wrong table
+ * FIXED 2026-08-24 (R3) — now reads the generic audit SSOT
  * ============================================================================
- * `getProductsLastChangeAction` used to read `studioflow.AuditLog`, chosen
- * because that table WAS where product-catalog audit rows lived — before the
- * v2 rebaseline (2026-08-10) moved every Master Data write to its own table,
- * `master_data.MasterDataAudit`, via `recordAudit()`. `AuditLog` stopped
- * receiving new Master Data rows that day, so this lookup has returned empty
- * for anything changed since — silently, because the function turned out to
- * have no caller in the UI yet either.
+ * `getProductsLastChangeAction` first read the wrong `studioflow.AuditLog`,
+ * then during R2 it was pointed at transitional `master_data.MasterDataAudit`.
+ * R3 finishes the consolidation: Master Data history is now physically stored
+ * in generic `studioflow.AuditLog` under domain `MASTER_DATA`, so this lookup
+ * reads the final table directly.
  *
- * `AuditLog`'s old polymorphic-casing problem (`entity_type` written as
- * "Sku"/"ProductCatalog"/"VENDOR" inconsistently by different call sites) does
- * NOT apply to `MasterDataAudit`: every writer goes through `recordAudit()`,
- * which types `entity` as the single `MasterDataEntity` union, so "Sku" is the
- * only spelling that has ever been written. One value, no drift to guard.
+ * Casing drift still does not apply here: every Master Data writer goes
+ * through typed `recordAudit()`, so "Sku" is the only spelling written for the
+ * product entity.
  *
  * ============================================================================
  * WHAT THIS DELIBERATELY DOES NOT DO
@@ -49,22 +45,15 @@ import { ActionError } from "@/lib/error-types";
 import { hasPermission, PERMISSION } from "@/core/rbac/rbac";
 import type { Role } from "@/generated/prisma";
 import { getSkusForBrand, type MaterialRow } from "../services/material-view-service";
+import { lookupProductsLastChange, type LastChange } from "../services/audit-read-service";
 import { softDeleteSku } from "../services/sku-delete-service";
 import { z } from "zod";
 
 /**
- * DIHAPUS 2026-08-18 (audit H1) — konstanta `AUDIT_ENTITY` dan pembacaan
- * `studioflow.AuditLog`.
+ * DIHAPUS 2026-08-24 (R3) — pembacaan tabel legacy `master_data.MasterDataAudit`.
  *
- * Baris di atasnya sudah benar SAAT DITULIS: `library-service.ts` memang
- * pernah menulis provenance Master Data ke `AuditLog` dengan `entity_type`
- * yang tidak konsisten. Yang berubah adalah rebaseline v2 (2026-08-10):
- * sejak itu SEMUA tulisan ke tabel `master_data` lewat `recordAudit()` →
- * `master_data.MasterDataAudit`, tabel yang berbeda sama sekali. `AuditLog`
- * (schema `studioflow`) berhenti menerima baris Master Data yang baru, jadi
- * lookup di bawah ini selalu kembali kosong untuk apa pun yang berubah
- * setelah 10 Agustus — dan fungsi ini ternyata TIDAK DIPANGGIL dari mana pun
- * di UI, jadi kekosongannya belum pernah terlihat siapa pun.
+ * Setelah R3, argumen "tabelnya berbeda" tidak berlaku lagi karena riwayat
+ * lama sudah dibackfill dan SSOT fisiknya kembali tunggal di `AuditLog`.
  *
  * Diperbaiki bersama fungsinya di bawah, bukan dihapus sepenuhnya: komentar
  * kepala berkas ini menjanjikan kolom "Update" pada suatu tampilan staf, dan
@@ -74,16 +63,6 @@ import { z } from "zod";
 
 /** Hard cap so a caller cannot turn this into a table scan. */
 const MAX_IDS_PER_CALL = 200;
-
-export type LastChange = {
-  /** Real User.name of the actor. Null when no audit row exists. */
-  actorName: string | null;
-  /** ISO timestamp of the audit row. Null when no audit row exists. */
-  at: string | null;
-  /** The audit action, e.g. CATALOG_UPDATE. Lets the UI distinguish
-   *  "created" from "edited" instead of labelling everything "updated". */
-  action: string | null;
-};
 
 function assertMasterDataPermission(role: Role, permission: PERMISSION) {
   if (!hasPermission(role, permission)) {
@@ -118,36 +97,7 @@ export const getProductsLastChangeAction = createAction<
       );
     }
 
-    // `master_data.MasterDataAudit`, bukan `studioflow.AuditLog` — lihat catatan
-    // di kepala berkas ini. `actor_name` sudah string biasa di tabel ini
-    // (kontrak Master Data §6: master_data tidak boleh menyeberang ke
-    // studioflow, jadi tidak ada relasi `user` untuk di-join).
-    const rows = await prisma.masterDataAudit.findMany({
-      where: {
-        entity: "Sku",
-        entity_id: { in: ids },
-      },
-      orderBy: { created_at: "desc" },
-      select: {
-        entity_id: true,
-        action: true,
-        created_at: true,
-        actor_name: true,
-      },
-    });
-
-    const result: Record<string, LastChange> = {};
-    for (const row of rows) {
-      // First hit wins because rows are already sorted newest-first.
-      if (result[row.entity_id]) continue;
-      result[row.entity_id] = {
-        actorName: row.actor_name || null,
-        at: row.created_at.toISOString(),
-        action: row.action,
-      };
-    }
-
-    return result;
+    return lookupProductsLastChange(ids);
   },
   // Read-only: no transaction needed, and preflight already ran for the page.
   { useTransaction: false }
@@ -269,7 +219,6 @@ export const getBrandDetailAction = createAction<
 
     const priceCount = await prisma.skuPrice.count({
       where: {
-        is_current: true,
         sku: { brand_id: input.brandId, deleted_at: null },
       },
     });
@@ -325,8 +274,7 @@ export const getBrandSkusAction = createAction<
           // tabel ini. Harga di kolom Harga tetap yang termurah (index 0);
           // yang berubah adalah kolom Supplier sekarang bisa menyebut semua.
           prices: {
-            where: { is_current: true },
-            orderBy: [{ price_net: "asc" as const }, { valid_from: "desc" as const }],
+            orderBy: [{ price_net: "asc" as const }, { updated_at: "desc" as const }, { created_at: "desc" as const }],
             select: {
               price_net: true,
               unit: true,
@@ -392,14 +340,13 @@ export const getBrandSuppliersAction = createAction<
           by: ["supplier_party_id"],
           where: {
             supplier_party_id: { in: partyIds },
-            is_current: true,
             sku: { brand_id: input.brandId, deleted_at: null },
           },
           _count: { id: true },
         })
       : [];
     const priceCountMap = Object.fromEntries(
-      priceCounts.map((pc) => [pc.supplier_party_id, pc._count.id])
+      priceCounts.map((pc) => [pc.supplier_party_id, typeof pc._count === "object" ? pc._count.id ?? 0 : 0])
     );
 
     return suppliers.map((s) => ({
@@ -488,7 +435,6 @@ export const getPartyBrandsAction = createAction<
           by: ["sku_id"],
           where: {
             supplier_party_id: input.partyId,
-            is_current: true,
             sku: { brand_id: { in: brandIds }, deleted_at: null },
           },
           _count: { id: true },
@@ -513,7 +459,8 @@ export const getPartyBrandsAction = createAction<
     for (const pc of priceCounts) {
       const brandId = skuBrandMap[pc.sku_id];
       if (brandId) {
-        brandPriceCount[brandId] = (brandPriceCount[brandId] ?? 0) + pc._count.id;
+        const count = typeof pc._count === "object" ? pc._count.id ?? 0 : 0;
+        brandPriceCount[brandId] = (brandPriceCount[brandId] ?? 0) + count;
       }
     }
 

@@ -3,7 +3,12 @@ import { after, before, describe, test } from "node:test";
 import { randomUUID } from "node:crypto";
 
 import { closePrismaConnection, prisma } from "@/core/platform/db";
-import { diffFields, recordAudit } from "@/subapps/master-data/services/audit-service";
+import { recordAudit as recordPlatformAudit } from "@/core/platform/audit/record";
+import {
+  diffFields,
+  recordAudit,
+  splitLegacyChanges,
+} from "@/subapps/master-data/services/audit-service";
 import type { PrismaTransaction } from "@/types/common";
 
 const runId = `${Date.now()}-${process.pid}`;
@@ -16,7 +21,7 @@ const ids = {
 
 async function cleanupFixtures() {
   const audits = await prisma.auditLog.findMany({
-    where: { entity_id: { in: [ids.brand, ids.party] }, domain: "MASTER_DATA" },
+    where: { entity_id: { in: [ids.brand, ids.party] } },
     select: { id: true },
   });
   if (audits.length > 0) {
@@ -24,9 +29,6 @@ async function cleanupFixtures() {
       where: { id: { in: audits.map((a) => a.id) } },
     });
   }
-  await prisma.masterDataAudit.deleteMany({
-    where: { entity_id: { in: [ids.brand, ids.party] } },
-  });
   await prisma.brand.deleteMany({ where: { id: ids.brand } });
   await prisma.party.deleteMany({ where: { id: ids.party } });
 }
@@ -58,8 +60,57 @@ after(async () => {
   }
 });
 
-describe("audit dual-write (R3 consolidation)", () => {
-  test("recordAudit writes MasterDataAudit AND generic AuditLog in the same tx", async () => {
+describe("audit consolidation (R3)", () => {
+  test("generic AuditLog accepts StudioFlow, Master Data, and BQ rows", async () => {
+    await prisma.$transaction(async (tx: PrismaTransaction) => {
+      await recordPlatformAudit(tx, {
+        domain: "STUDIOFLOW",
+        entityType: "IntegrationProbe",
+        entityId: ids.party,
+        action: "UPDATE",
+        actorId: "studioflow-actor",
+        metadata: { project_id: "project-a" },
+      });
+      await recordPlatformAudit(tx, {
+        domain: "MASTER_DATA",
+        entityType: "Party",
+        entityId: ids.party,
+        action: "CREATE",
+        actorName: "Master Data Actor",
+      });
+      await recordPlatformAudit(tx, {
+        domain: "BQ",
+        entityType: "BqProject",
+        entityId: ids.party,
+        action: "CREATE",
+        actorId: "bq-actor",
+        metadata: { bq_project_id: "bq-project-a" },
+      });
+    });
+
+    const rows = await prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { domain: "STUDIOFLOW", entity_type: "IntegrationProbe", entity_id: ids.party },
+          { domain: "MASTER_DATA", entity_type: "Party", entity_id: ids.party },
+          { domain: "BQ", entity_type: "BqProject", entity_id: ids.party },
+        ],
+      },
+      orderBy: [{ domain: "asc" }, { entity_type: "asc" }],
+    });
+
+    assert.equal(rows.length, 3);
+    assert.deepEqual(
+      rows.map((row) => [row.domain, row.entity_type, row.entity_id]),
+      [
+        ["STUDIOFLOW", "IntegrationProbe", ids.party],
+        ["MASTER_DATA", "Party", ids.party],
+        ["BQ", "BqProject", ids.party],
+      ],
+    );
+  });
+
+  test("master data recordAudit writes one generic row with before/after preserved", async () => {
     await prisma.$transaction(async (tx: PrismaTransaction) => {
       await recordAudit(tx, {
         entity: "Brand",
@@ -84,12 +135,6 @@ describe("audit dual-write (R3 consolidation)", () => {
       });
     });
 
-    const legacyRows = await prisma.masterDataAudit.findMany({
-      where: { entity: "Brand", entity_id: ids.brand },
-      orderBy: { created_at: "asc" },
-    });
-    assert.equal(legacyRows.length, 2);
-
     const coreRows = await prisma.auditLog.findMany({
       where: { entity_type: "Brand", entity_id: ids.brand, domain: "MASTER_DATA" },
       orderBy: { created_at: "asc" },
@@ -104,25 +149,37 @@ describe("audit dual-write (R3 consolidation)", () => {
     assert.equal(coreRows[1].action, "UPDATE");
     assert.equal(coreRows[1].actor_id, null);
     assert.equal(coreRows[1].actor_name, "No Id Actor");
-    const details = coreRows[1].details as {
-      changes?: Record<string, { from: unknown; to: unknown }>;
-    };
-    assert.deepEqual(details.changes?.name, { from: "Old", to: "New" });
-
-    for (let i = 0; i < legacyRows.length; i++) {
-      assert.equal(legacyRows[i].action, coreRows[i].action);
-      assert.equal(legacyRows[i].entity, coreRows[i].entity_type);
-      assert.equal(legacyRows[i].entity_id, coreRows[i].entity_id);
-      assert.equal(legacyRows[i].actor_name, coreRows[i].actor_name);
-    }
+    assert.deepEqual(coreRows[1].before_json, { name: "Old" });
+    assert.deepEqual(coreRows[1].after_json, { name: "New" });
+    assert.equal(coreRows[1].metadata_json, null);
   });
 
-  test("rollback of the transaction discards BOTH audit rows", async () => {
+  test("legacy change payload keeps non-diff audit information for historical migration", () => {
+    const payload = splitLegacyChanges({
+      status: { from: "REQUESTED", to: "IN_PROGRESS" },
+      vendor_contacted_by: "Integration User",
+      notes: "Called supplier",
+    });
+
+    assert.deepEqual(payload.before, { status: "REQUESTED" });
+    assert.deepEqual(payload.after, { status: "IN_PROGRESS" });
+    assert.deepEqual(payload.metadata, {
+      changes: {
+        status: { from: "REQUESTED", to: "IN_PROGRESS" },
+        vendor_contacted_by: "Integration User",
+        notes: "Called supplier",
+      },
+    });
+  });
+
+  test("rollback of the transaction discards the generic audit row", async () => {
+    const rollbackEntityId = randomUUID();
+
     await assert.rejects(() =>
       prisma.$transaction(async (tx: PrismaTransaction) => {
         await recordAudit(tx, {
           entity: "Party",
-          entity_id: ids.party,
+          entity_id: rollbackEntityId,
           action: "UPDATE",
           actor: { name: "Rollback Actor" },
         });
@@ -130,13 +187,9 @@ describe("audit dual-write (R3 consolidation)", () => {
       })
     );
 
-    const legacyLeft = await prisma.masterDataAudit.count({
-      where: { entity: "Party", entity_id: ids.party },
-    });
     const coreLeft = await prisma.auditLog.count({
-      where: { entity_type: "Party", entity_id: ids.party, domain: "MASTER_DATA" },
+      where: { entity_type: "Party", entity_id: rollbackEntityId, domain: "MASTER_DATA" },
     });
-    assert.equal(legacyLeft, 0);
     assert.equal(coreLeft, 0);
   });
 

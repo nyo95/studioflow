@@ -433,7 +433,7 @@ function WorkPriceFields({
 type MaterialPriceDialogState = { open: boolean; mode: "CREATE" | "EDIT"; row: MaterialPriceData | null };
 const EMPTY_MP: MaterialPriceInput = {
   brand_id: "", sku_id: null, supplier_party_id: null, item_description: "", unit: "",
-  price: null, valid_from: null, notes: "",
+  price: null, notes: "",
   usage_unit: "", conversion: null,
   dim_display: null, category_names: [],
 };
@@ -648,7 +648,6 @@ function HargaMaterialTab({
       brand_id: row.brand_id, sku_id: row.sku_id, supplier_party_id: row.supplier_party_id,
       item_description: row.item_description,
       unit: row.unit ?? "", price: row.price,
-      valid_from: row.valid_from ? new Date(row.valid_from).toISOString().slice(0, 10) : null,
       notes: row.notes ?? "",
       usage_unit: row.sku_usage_unit ?? "",
       conversion: row.sku_conversion ?? null,

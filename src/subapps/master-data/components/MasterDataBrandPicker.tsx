@@ -15,7 +15,7 @@
 
 import * as React from "react";
 import { CreatableSearch } from "@/ui_engine";
-import type { LibraryVendor } from "@/extensions/library/types";
+import type { LibraryVendor } from "@/subapps/master-data/contracts/catalog";
 
 export function MasterDataBrandPicker({
   vendors,

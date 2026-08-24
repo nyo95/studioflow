@@ -48,7 +48,7 @@ const adapter = new PrismaPg(pool as any);
 // existed — `prisma.<newModel>` is then `undefined` at runtime (e.g. render
 // board actions throwing "Cannot read properties of undefined (reading
 // 'findFirst')") even though the generated client and DB migration are fine.
-const PRISMA_CLIENT_SIGNATURE = "studioflow-prisma-v3.1.0-checklist-filter-view";
+const PRISMA_CLIENT_SIGNATURE = "studioflow-prisma-v3.2.0-r4-current-pricing";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -243,8 +243,7 @@ export async function ensureDbSchemaPreflight() {
       // `price_list` dihapus 2026-08-14 — SkuPrice sekarang satu kolom harga.
       "price_net",
       "unit",
-      "is_current",
-      "valid_from",
+      "updated_by_id",
     ];
     const requiredSampleColumns = ["sku_id", "rack_number", "box_number", "status"];
     const requiredPartyColumns = ["name", "slug", "legal_name", "type"];

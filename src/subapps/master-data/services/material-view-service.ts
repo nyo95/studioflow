@@ -44,11 +44,12 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/core/platform/db";
-import type { ProductCatalogWithRelations, SkuWithRelations } from "@/extensions/library/types";
-import { attachDerivedCatalogFields } from "@/extensions/library/types";
+import type { ProductCatalogWithRelations, SkuWithRelations } from "@/subapps/master-data/contracts/catalog";
+import { attachDerivedCatalogFields } from "@/subapps/master-data/contracts/catalog";
 import { isBrandComplete } from "@/subapps/master-data/lib/brand-view-rules";
 import { isSkuDataComplete } from "@/subapps/master-data/lib/sku-directory-rules";
 import { evaluateBqMaterialReadiness } from "@/subapps/master-data/lib/bq-readiness";
+import { CatalogReadService } from "@/subapps/master-data/services/catalog-read-service";
 
 export type MaterialSampleState =
   | "AVAILABLE"
@@ -293,14 +294,6 @@ function toRow(material: ProductCatalogWithRelations): MaterialRow {
 export async function getMaterialView(
   filters: MaterialFilters = {}
 ): Promise<MaterialViewResult> {
-  // LibraryService pulls in the full mutation/audit/RBAC graph. This read path
-  // only needs it when the SKU-grain view is actually requested, so defer the
-  // import. Besides reducing eager server-module work, this keeps the two
-  // Brand-grain query functions below independently executable in the real
-  // PostgreSQL integration suite.
-  const { LibraryService } = await import(
-    "@/extensions/library/services/library-service"
-  );
   const page = Math.max(1, filters.page ?? 1);
   const pageSize = filters.pageSize ?? MATERIAL_PAGE_SIZE;
 
@@ -310,7 +303,7 @@ export async function getMaterialView(
   // (see the `price` filter in getAllProducts), so subtracting is not an
   // approximation.
   const [listed, allCount, readyCount, categoryRows] = await Promise.all([
-    LibraryService.getAllProducts(prisma, {
+    CatalogReadService.getAllProducts(prisma, {
       search: filters.search,
       vendorId: filters.vendorId,
       category: filters.category,
@@ -325,7 +318,7 @@ export async function getMaterialView(
     prisma.sku.count({
       where: {
         deleted_at: null,
-        prices: { some: { is_current: true, unit: { not: "" } } },
+        prices: { some: { unit: { not: "" } } },
       },
     }),
     // Facet list for the category dropdown. Reads `Category` directly rather
@@ -535,8 +528,7 @@ export async function getSkusForBrand(
       samples: { where: { deleted_at: null } },
       media: true,
       prices: {
-        where: { is_current: true },
-        orderBy: [{ price_net: "asc" }, { valid_from: "desc" }],
+        orderBy: [{ price_net: "asc" }, { updated_at: "desc" }, { created_at: "desc" }],
         include: { supplier: { select: { id: true, name: true } } },
       },
       categories: { include: { category: true } },

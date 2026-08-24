@@ -9,7 +9,7 @@ import { DESIGN_SYSTEM_CONFIG } from "@/ui_engine/design-system.config";
 import { sanitizeUISettings, uiSettingsToStyle } from "@/lib/ui-settings";
 import { SYSTEM_CONFIG_ID } from "@/core/rbac/permissions";
 import type { UISettings } from "@/types/common";
-import type { Prisma } from "@/generated/prisma";
+import { buildAuditDetails } from "@/core/platform/audit/record";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +33,6 @@ export default async function DashboardLayout({
       : null;
 
   type AuditDetailsRecord = Record<string, unknown>;
-  const toRecord = (value: Prisma.JsonValue | null): AuditDetailsRecord =>
-    value && typeof value === "object" && !Array.isArray(value)
-      ? (value as AuditDetailsRecord)
-      : {};
 
   const [systemConfig, projectSearchItems, recentActivityLogs] = await Promise.all([
     prisma.systemConfig.findUnique({
@@ -76,7 +72,7 @@ export default async function DashboardLayout({
   const logoUrl = uiSettings.appLogoUrl || null;
   const uiStyle = uiSettingsToStyle(uiSettings);
   const recentActivity = recentActivityLogs.map((log) => {
-    const details = toRecord(log.details);
+    const details = buildAuditDetails(log) as AuditDetailsRecord;
     const detailsProjectId = typeof details.project_id === "string" ? details.project_id : null;
     const detailsProjectName = typeof details.project_name === "string" ? details.project_name : null;
     const projectId = log.project_id ?? detailsProjectId;
@@ -86,7 +82,7 @@ export default async function DashboardLayout({
       action: log.action,
       entityType: log.entity_type,
       createdAt: log.created_at.toISOString(),
-      actorName: log.user?.name ?? "Sistem",
+      actorName: log.user?.name ?? log.actor_name ?? "System",
       projectId,
       projectName: log.project?.name ?? detailsProjectName ?? null,
       href: projectId ? `/projects/${projectId}/activity` : "/activity",

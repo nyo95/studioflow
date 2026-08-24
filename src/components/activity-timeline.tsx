@@ -41,7 +41,7 @@ export function ActivityTimeline({ logs }: { logs: ActivityTimelineEntry[] }) {
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-900">
               {buildActivitySentence({
-                actorName: log.user?.name || "Sistem",
+                actorName: log.user?.name || "System",
                 action: log.action,
                 entityType: log.entity_type,
               })}

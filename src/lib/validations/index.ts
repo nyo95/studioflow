@@ -272,11 +272,6 @@ export const SetAutoNamingSchema = z.object({
   isEnabled: z.boolean(),
 });
 
-export const UpsertTimelineTemplateSchema = z.object({
-  phaseEnum: z.string(),
-  durationDays: z.number().int().min(0),
-});
-
 export const CreateChecklistTemplateSchema = z.object({
   phaseEnum: z.string().nullable(),
   label: z.string().min(1),

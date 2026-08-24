@@ -25,10 +25,9 @@ import "server-only";
  *
  * Yang DIWARISI dari view itu dan ditegakkan di sini adalah aturannya, bukan
  * SQL-nya:
- *   - hanya `SkuPrice.is_current`;
  *   - SKU `deleted_at IS NULL` dan `status <> 'DISCONTINUED'`;
  *   - `bq_ready` = harga ADA dan satuan COCOK (AGENTS.md §3.6);
- *   - `WorkPrice` hanya yang `is_current AND is_active AND deleted_at IS NULL`.
+ *   - `WorkPrice` hanya yang `is_active AND deleted_at IS NULL`.
  *
  * ============================================================================
  * GATE MASUK PICKER (keputusan owner 2026-08-19)
@@ -39,9 +38,9 @@ import "server-only";
  * pertama tercatat. `NO_PROFILE` dihapus dari kode karena tidak mungkin
  * terjadi dalam alur normal.
  *
- * Kalau satu SKU punya beberapa supplier (beberapa baris `SkuPrice` berlaku),
- * picker menampilkan harga preferred supplier atau terbaru — estimator memilih
- * supplier di luar picker (nego, PO) bukan di BQ.
+ * Kalau satu SKU punya beberapa supplier, picker menampilkan SELURUH opsi
+ * supplier-price. Estimator memilihnya eksplisit saat menambah baris, lalu
+ * pilihan itu dibekukan ke snapshot proyek.
  *
  * ============================================================================
  * KOSONG BUKAN NOL
@@ -93,7 +92,6 @@ const SKU_SELECT = {
   default_waste_pct: true,
   minimum_order: true,
   rounding_increment: true,
-  preferred_supplier_party_id: true,
   brand: { select: { name: true } },
   categories: {
     where: { is_primary: true },
@@ -102,7 +100,6 @@ const SKU_SELECT = {
   },
   prices: {
     where: {
-      is_current: true,
       OR: [
         { supplier_party_id: null },
         {
@@ -116,13 +113,14 @@ const SKU_SELECT = {
         },
       ],
     },
-    orderBy: [{ valid_from: "desc" }] as const,
+    orderBy: [{ price_net: "asc" }, { updated_at: "desc" }, { created_at: "desc" }] as const,
     select: {
       id: true,
       unit: true,
       price_net: true,
       currency: true,
-      valid_from: true,
+      updated_at: true,
+      created_at: true,
       supplier_party_id: true,
       supplier: { select: { name: true } },
     },
@@ -130,23 +128,6 @@ const SKU_SELECT = {
 } satisfies Prisma.SkuSelect;
 
 type SkuRow = Prisma.SkuGetPayload<{ select: typeof SKU_SELECT }>;
-
-/**
- * Penawaran mana yang dipakai BQ ketika satu SKU punya beberapa harga berlaku
- * (satu per supplier — dijamin index parsial `SkuPrice_current_uniq`).
- *
- * Urutannya: supplier yang dipilih di profil BQ, kalau tidak ada baru yang
- * `valid_from` terbaru. TIDAK PERNAH "yang termurah" — memilih termurah secara
- * otomatis adalah keputusan pembelian, dan itu bukan wewenang alat estimasi.
- */
-function pickPrice(sku: SkuRow) {
-  const preferred = sku.preferred_supplier_party_id ?? null;
-  if (preferred) {
-    const match = sku.prices.find((p) => p.supplier_party_id === preferred);
-    if (match) return match;
-  }
-  return sku.prices[0] ?? null;
-}
 
 /**
  * Kenapa sebuah SKU belum bisa dipakai di breakdown — dinyatakan, bukan
@@ -160,10 +141,10 @@ function pickPrice(sku: SkuRow) {
  * profilnya, bisa penawarannya, dan BQ tidak menebak yang mana.
  */
 function evaluateReadiness(sku: SkuRow): BqMaterialReadiness {
-  const price = pickPrice(sku);
+  const price = sku.prices[0] ?? null;
   return evaluateBqMaterialReadiness({
     skuExists: true,
-      skuDeleted: sku.deleted_at !== null,
+    skuDeleted: sku.deleted_at !== null,
     skuStatus: sku.status,
     price,
     purchaseUnit: sku.purchase_unit,
@@ -172,7 +153,6 @@ function evaluateReadiness(sku: SkuRow): BqMaterialReadiness {
 }
 
 function toCandidate(sku: SkuRow): BqMaterialCandidate {
-  const price = pickPrice(sku);
   const primary = sku.categories[0]?.category ?? null;
 
   const hasCosting = sku.purchase_unit && sku.conversion;
@@ -194,17 +174,15 @@ function toCandidate(sku: SkuRow): BqMaterialCandidate {
           roundingIncrement: sku.rounding_increment ? decToNumberStrict(sku.rounding_increment) : 1,
         }
       : null,
-    price: price
-      ? {
+    priceOptions: sku.prices.map((price) => ({
           skuPriceId: price.id,
           supplierPartyId: price.supplier_party_id,
           supplierName: price.supplier?.name ?? null,
           unit: price.unit,
           price: decToNumberStrict(price.price_net),
           currency: price.currency,
-          validFrom: price.valid_from.toISOString(),
-        }
-      : null,
+          updatedAt: (price.updated_at ?? price.created_at).toISOString(),
+        })),
     readiness: evaluateReadiness(sku),
   };
 }
@@ -272,7 +250,8 @@ const WORK_PRICE_SELECT = {
   currency: true,
   scope_note: true,
   kind: true,
-  valid_from: true,
+  created_at: true,
+  updated_at: true,
   vendor_party_id: true,
   vendor: {
     where: {
@@ -302,7 +281,7 @@ function toServiceCandidate(row: WorkPriceRow): BqServiceCandidate {
     // Dinyatakan, bukan disimpulkan dari kolom mana yang terisi — AGENTS.md
     // §3.4. Menyimpulkannya adalah cacat yang migrasi 20260811120000 buang.
     hasMaterial: row.kind === "MATERIAL_LABOR",
-    validFrom: row.valid_from.toISOString(),
+    updatedAt: row.updated_at?.toISOString() ?? row.created_at.toISOString(),
   };
 }
 
@@ -311,9 +290,8 @@ function toServiceCandidate(row: WorkPriceRow): BqServiceCandidate {
  *
  * `WorkPrice` BUKAN tabel riwayat (AGENTS.md §3.7, keputusan owner SK1): satu
  * baris per `code`, diedit di tempat. Jadi tidak ada penyaringan "ambil yang
- * terbaru" seperti pada `SkuPrice` — `is_current` di sini adalah kolom yang
- * tidak dipakai sebagai riwayat, dan tetap difilter semata-mata karena
- * `v_bq_work_rate` memfilternya.
+ * terbaru" seperti pada `SkuPrice`; cukup baca baris aktif yang belum
+ * soft-delete.
  */
 export async function searchServiceCandidates(
   query: string,

@@ -34,7 +34,7 @@ function isRedirectError(error: unknown): boolean {
  * lewat sini sebagai jaring pengaman kedua — perbaikan utamanya ada di
  * masing-masing, ini yang menangkap sisanya.
  */
-function mapKnownPrismaError(error: Prisma.PrismaClientKnownRequestError): ActionError {
+export function mapKnownPrismaError(error: Prisma.PrismaClientKnownRequestError): ActionError {
   const target = Array.isArray(error.meta?.target)
     ? (error.meta.target as unknown[]).join(", ")
     : typeof error.meta?.target === "string"
@@ -75,11 +75,24 @@ function mapKnownPrismaError(error: Prisma.PrismaClientKnownRequestError): Actio
       );
     default:
       // Other known-but-unmapped Prisma codes: still not the raw message,
-      // still not silent about being a database error.
+      // and no longer leak the Prisma code into the UI contract.
       return new ActionError(
         "The database could not save this change. Try again; if it keeps happening, contact an administrator.",
-        error.code
+        "BUSINESS_RULE"
       );
+  }
+}
+
+export function normalizeActionErrorCode(code?: string): string | undefined {
+  switch (code) {
+    case "VALIDATION_FAILED":
+    case "INVALID_INPUT":
+      return "VALIDATION_ERROR";
+    case "UNAUTHORIZED_ACTION":
+    case "UNAUTHORIZED":
+      return "FORBIDDEN";
+    default:
+      return code;
   }
 }
 
@@ -133,7 +146,7 @@ export function createAction<TInput, TOutput>(
         } catch (zodError) {
           if (zodError instanceof z.ZodError) {
             const issues = zodError.issues.map((i) => i.message).join(", ");
-            throw new ActionError(`Validation Error: ${issues}`, "VALIDATION_FAILED");
+            throw new ActionError(`Validation Error: ${issues}`, "VALIDATION_ERROR");
           }
           throw zodError;
         }
@@ -161,7 +174,11 @@ export function createAction<TInput, TOutput>(
       console.error("[Action Error]:", error);
 
       if (error instanceof ActionError) {
-        return { success: false, error: error.message, code: error.code };
+        return {
+          success: false,
+          error: error.message,
+          code: normalizeActionErrorCode(error.code),
+        };
       }
 
       // M6: known Prisma errors (constraint violations, missing rows) get a
@@ -170,6 +187,19 @@ export function createAction<TInput, TOutput>(
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         const mapped = mapKnownPrismaError(error);
         return { success: false, error: mapped.message, code: mapped.code };
+      }
+
+      if (
+        error instanceof Prisma.PrismaClientUnknownRequestError ||
+        error instanceof Prisma.PrismaClientValidationError ||
+        error instanceof Prisma.PrismaClientInitializationError ||
+        error instanceof Prisma.PrismaClientRustPanicError
+      ) {
+        return {
+          success: false,
+          error: "The database could not process this request. Try again; if it keeps happening, contact an administrator.",
+          code: "BUSINESS_RULE",
+        };
       }
 
       // Handle common Prisma or generic errors

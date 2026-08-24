@@ -20,7 +20,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, dirname, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -50,6 +50,10 @@ if (testFiles.length === 0) {
 }
 
 console.log(`Compiling ${testFiles.length} test file(s)…`);
+
+// The output directory is a cache, not a source of truth. Cleaning it first
+// prevents deleted tests from lingering as executable .js files.
+rmSync(OUT, { recursive: true, force: true });
 
 // tsc reports the `@/…` imports it cannot resolve and still emits correct JS,
 // because every one of them in tested code is type-only. Those specific errors

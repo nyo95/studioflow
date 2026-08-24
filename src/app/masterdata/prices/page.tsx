@@ -23,7 +23,7 @@ import {
   getServiceVendorsAction,
   getSupplierOptionsAction,
 } from "@/subapps/master-data/actions/pricing-actions";
-import { getVendorsAction } from "@/extensions/library/actions/library-actions";
+import { getVendorsAction } from "@/subapps/master-data/actions/catalog-query-actions";
 import { getSampleSkuOptionsAction } from "@/subapps/master-data/actions/sample-actions";
 import { PricingClient } from "@/subapps/master-data/components/PricingClient";
 

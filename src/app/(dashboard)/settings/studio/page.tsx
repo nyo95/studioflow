@@ -32,7 +32,6 @@ export default async function StudioSettingsPage() {
     orderBy: { name: "asc" },
   });
 
-  const timelineTemplates = await prisma.timelineTemplate.findMany();
   const checklistTemplates = await prisma.checklistTemplate.findMany();
   const scheduleTemplates = await prisma.scheduleTemplate.findMany({
     orderBy: [{ section: "asc" }, { schedule_category: "asc" }],
@@ -70,13 +69,12 @@ export default async function StudioSettingsPage() {
       activeTab="studio"
       isAdmin
       title="Studio Controls"
-      description="Manage branding rules, team access, and project engine templates."
+      description="Manage branding rules, team access, and project defaults."
     >
       <StudioSettingsPanel
         allUsers={allUsers}
         currentUserId={userId}
         requesterRole={role}
-        timelineTemplates={timelineTemplates}
         checklistTemplates={checklistTemplates}
         scheduleTemplates={scheduleTemplates}
         schedulePrefixes={schedulePrefixes}

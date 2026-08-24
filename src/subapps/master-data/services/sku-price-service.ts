@@ -2,7 +2,7 @@ import "server-only";
 
 import type { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
-import { recordAudit } from "./audit-service";
+import { diffFields, recordAudit } from "./audit-service";
 import { checkPriceUnit, resolveEffectivePriceUnit, resolvePrice } from "./sku-price-rules";
 
 // The pricing JUDGEMENTS live in `./sku-price-rules`, which imports nothing —
@@ -20,52 +20,11 @@ export {
 /**
  * MASTER DATA — the single write path for `SkuPrice`.
  *
- * ============================================================================
- * WHY THIS FILE EXISTS
- * ============================================================================
- * Before this, four places created SkuPrice rows and no two of them agreed:
- *
- *   library-service.createProduct   inline `prices: { create: [...] }`,
- *                                   no demotion of the previous current row
- *   library-service.updateProduct   demoted EVERY current row for the SKU
- *   pricing-actions.createMaterialPrice
- *   pricing-actions.upsertSkuMaterialPrice
- *                                   demoted only rows with supplier IS NULL
- *
- * Three of them defaulted `price_net` to `0` when the field was blank, which
- * is how a material ends up advertising a real price of nothing. Two of them
- * never set `valid_to`, so a superseded row still claimed to be in force. None
- * of them ever wrote `supplier_party_id`, which made the entire reason
- * `Sku` and `SkuPrice` were split — comparing offers between shops —
- * unreachable from the UI.
- *
- * ============================================================================
- * THE INVARIANT THIS FILE EXISTS TO PROTECT
- * ============================================================================
- * `03_invariants.sql` §1 creates:
- *
- *   CREATE UNIQUE INDEX "SkuPrice_current_uniq"
- *     ON master_data."SkuPrice" (
- *       sku_id,
- *       (COALESCE(supplier_party_id, '00000000-0000-0000-0000-000000000000'))
- *     )
- *     WHERE is_current;
- *
- * Read it carefully, because the COALESCE is the part that bites: in Postgres
- * NULL <> NULL, so without it two supplier-less current rows would both be
- * allowed. With it, "no supplier" behaves as one specific supplier — the
- * manufacturer's own list price.
- *
- * The practical consequence for every caller: **demotion must be scoped to the
- * same supplier**. Demoting all current rows for a SKU (as updateProduct used
- * to) silently retires every other shop's offer the moment one shop's price is
- * edited. Demoting only `supplier_party_id: null` rows (as the pricing actions
- * used to) leaves the index to reject the insert instead — a 500, not a bug
- * report.
+ * PRD Architecture Cleanup v2 §15–§18 flattened `SkuPrice` into CURRENT STATE:
+ * one row per (SKU × supplier), history in generic AuditLog, no close-old /
+ * create-new lifecycle. This file is therefore the only place allowed to
+ * create OR update that current row.
  */
-
-/** Sentinel used by `SkuPrice_current_uniq`'s COALESCE. Not a real Party. */
-export const NO_SUPPLIER_SENTINEL = "00000000-0000-0000-0000-000000000000";
 
 export type SkuPriceWriteInput = {
   sku_id: string;
@@ -87,7 +46,6 @@ export type SkuPriceWriteInput = {
    */
   unit: string | null;
   currency?: string;
-  valid_from?: Date | null;
   notes?: string | null;
   updated_by_name?: string | null;
 };
@@ -99,53 +57,7 @@ function assertPriceSane(price: number) {
 }
 
 /**
- * Retires the current offer for one (SKU, supplier) pair.
- *
- * Scoped to the supplier on purpose — see the invariant note at the top.
- * `valid_to` is stamped in the same statement: a row that is no longer current
- * but still has an open validity window is a row that two different readers
- * will disagree about.
- */
-export async function closeCurrentSkuPrice(
-  tx: PrismaTransaction,
-  sku_id: string,
-  supplier_party_id: string | null,
-  at: Date = new Date(),
-  actor?: { id?: string | null; name: string }
-): Promise<number> {
-  // Read the ids before the update, because `updateMany` returns a count and
-  // an audit row that says "3 offers retired" without saying which ones is not
-  // an audit trail. `actor` was already threaded through here and then dropped
-  // on the floor — this is the write it was threaded for.
-  const retiring = await tx.skuPrice.findMany({
-    where: { sku_id, supplier_party_id, is_current: true },
-    select: { id: true },
-  });
-
-  const { count } = await tx.skuPrice.updateMany({
-    where: { sku_id, supplier_party_id, is_current: true },
-    data: { is_current: false, valid_to: at },
-  });
-
-  // No rows changed => no audit. An UPDATE that updated nothing is not an event.
-  if (actor && retiring.length > 0) {
-    for (const { id } of retiring) {
-      await recordAudit(tx, {
-        entity: "SkuPrice",
-        entity_id: id,
-        action: "UPDATE",
-        actor: { id: actor.id ?? null, name: actor.name },
-        changes: { is_current: { from: true, to: false }, valid_to: { from: null, to: at } },
-      });
-    }
-  }
-
-  return count;
-}
-
-/**
- * Records a new current price, superseding the previous one for the same
- * (SKU, supplier) pair.
+ * Creates or updates the current price for one (SKU, supplier) pair.
  *
  * Returns `null` when the input carries no usable price — callers treat that
  * as "the user left the price blank", not as an error. That distinction is why
@@ -180,23 +92,76 @@ export async function recordSkuPrice(
     );
   }
 
-  const now = new Date();
-  const validFrom = input.valid_from ?? now;
+  const effectiveUnit = resolveEffectivePriceUnit(input.unit, sku?.purchase_unit ?? null);
+  const effectiveCurrency = input.currency?.trim() || "IDR";
+  const effectiveNotes = input.notes?.trim() || null;
+  const effectiveUpdatedByName = input.updated_by_name?.trim() || null;
 
-  await closeCurrentSkuPrice(tx, input.sku_id, input.supplier_party_id, validFrom, actor);
+  const existing = await tx.skuPrice.findFirst({
+    where: {
+      sku_id: input.sku_id,
+      supplier_party_id: input.supplier_party_id,
+    },
+  });
+
+  if (existing) {
+    const row = await tx.skuPrice.update({
+      where: { id: existing.id },
+      data: {
+        price_net: price,
+        unit: effectiveUnit,
+        currency: effectiveCurrency,
+        notes: effectiveNotes,
+        updated_by_name: effectiveUpdatedByName,
+        updated_by_id: actor?.id ?? null,
+      },
+      include: SKU_PRICE_INCLUDE,
+    });
+
+    if (actor) {
+      const changes = diffFields(
+        {
+          price_net: existing.price_net,
+          unit: existing.unit,
+          currency: existing.currency,
+          notes: existing.notes,
+          updated_by_name: existing.updated_by_name,
+          updated_by_id: existing.updated_by_id,
+        },
+        {
+          price_net: row.price_net,
+          unit: row.unit,
+          currency: row.currency,
+          notes: row.notes,
+          updated_by_name: row.updated_by_name,
+          updated_by_id: row.updated_by_id,
+        },
+        ["price_net", "unit", "currency", "notes", "updated_by_name", "updated_by_id"]
+      );
+      if (Object.keys(changes).length > 0) {
+        await recordAudit(tx, {
+          entity: "SkuPrice",
+          entity_id: row.id,
+          action: "UPDATE",
+          actor: { id: actor.id ?? null, name: actor.name },
+          changes,
+        });
+      }
+    }
+
+    return row;
+  }
 
   const row = await tx.skuPrice.create({
     data: {
       sku_id: input.sku_id,
       supplier_party_id: input.supplier_party_id,
       price_net: price,
-      unit: resolveEffectivePriceUnit(input.unit, sku?.purchase_unit ?? null),
-      currency: input.currency?.trim() || "IDR",
-      valid_from: validFrom,
-      notes: input.notes?.trim() || null,
-      updated_by_name: input.updated_by_name?.trim() || null,
+      unit: effectiveUnit,
+      currency: effectiveCurrency,
+      notes: effectiveNotes,
+      updated_by_name: effectiveUpdatedByName,
       updated_by_id: actor?.id ?? null,
-      is_current: true,
     },
     include: SKU_PRICE_INCLUDE,
   });

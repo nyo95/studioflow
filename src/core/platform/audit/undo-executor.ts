@@ -1,9 +1,9 @@
 import { PrismaTransaction } from "@/types/common";
 import { ActionError } from "@/lib/error-types";
-import { insertAuditLog } from "@/actions/_shared";
 import { PhaseStatus, RevisionStatus, Role } from "@/generated/prisma";
 import { isAdminLevel } from "@/core/rbac/rbac";
 import { AUDIT_ACTIONS } from "./types";
+import { buildAuditDetails, recordAudit } from "./record";
 
 /**
  * Recovers the phase's PREVIOUS status timestamp from an audit log's details.
@@ -36,7 +36,7 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
     throw new ActionError("This action has already been reverted.", "ALREADY_REVERTED");
   }
 
-  const details = (log.details ?? {}) as Record<string, unknown>;
+  const details = buildAuditDetails(log);
 
   switch (log.action) {
     case AUDIT_ACTIONS.ACTIVATE_PHASE: {
@@ -249,9 +249,17 @@ export async function executeUndoPhaseTrigger(tx: PrismaTransaction, params: { l
     data: { reverted_at: new Date() },
   });
 
-  await insertAuditLog(tx, AUDIT_ACTIONS.UNDO_TRIGGER, "AUDIT_LOG", logId, userId, {
-    reverted_action: log.action,
-    reverted_log_id: logId,
+  await recordAudit(tx, {
+    domain: "STUDIOFLOW",
+    action: AUDIT_ACTIONS.UNDO_TRIGGER,
+    entityType: "AUDIT_LOG",
+    entityId: logId,
+    userId,
+    actorId: userId,
+    metadata: {
+      reverted_action: log.action,
+      reverted_log_id: logId,
+    },
   });
 
   return { success: true };

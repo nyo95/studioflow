@@ -23,6 +23,7 @@ import ExcelJS from "exceljs";
 import { z } from "zod";
 import { prisma } from "@/core/platform/db";
 import { recordAudit } from "./audit-service";
+import { recordSkuPrice } from "./sku-price-service";
 import { checkPriceUnit, resolveEffectivePriceUnit } from "./sku-price-rules";
 import { createSkuCore } from "./sku-core-service";
 
@@ -82,7 +83,6 @@ export async function exportMasterDataExcel(): Promise<Uint8Array> {
       brand: { select: { name: true } },
       categories: { include: { category: { select: { name: true } } } },
       prices: {
-        where: { is_current: true },
         include: { supplier: { select: { name: true } } },
       },
     },
@@ -218,15 +218,16 @@ export type ImportResult = {
  *   3. INSERT new (slug derived from name if not given)
  *
  * Match for SkuPrice: same SKU + same supplier (NULL = list price).
- * Records that already exist: upsert (price history is preserved by
- * `recordSkuPrice` → is_current flip pattern). Records that don't exist: create.
+ * Records that already exist: update the current pair row through
+ * `recordSkuPrice`; records that don't exist: create. Change history is kept
+ * by the shared audit trail, not by superseded `SkuPrice` rows.
  */
 export async function importMasterDataExcel(
   buffer: ArrayBuffer,
   /**
    * WAJIB sejak 2026-08-18 (audit H6). Sebelumnya fungsi ini tidak menerima
    * siapa pun sama sekali, dan setiap baris yang ditulis — Category, Sku,
-   * SkuPrice — tidak tercatat di `MasterDataAudit`. Untuk sebuah alur yang
+   * SkuPrice — tidak tercatat di audit sama sekali. Untuk sebuah alur yang
    * bisa menulis ratusan baris sekaligus dari satu file, itu justru yang
    * PALING butuh provenance: kalau importnya keliru, tidak ada yang bisa
    * dijawab "baris mana yang datang dari import ini".
@@ -564,29 +565,25 @@ export async function importMasterDataExcel(
         ? (partyMap.get(data.supplier_name.toLowerCase()) ?? null)
         : null;
 
-      // Flip existing is_current row and write new one
       await prisma.$transaction(async (tx) => {
-        await tx.skuPrice.updateMany({
-          where: { sku_id: skuId!, supplier_party_id: supplierPartyId, is_current: true },
-          data: { is_current: false, valid_to: new Date() },
-        });
-        const created = await tx.skuPrice.create({
-          data: {
-            sku_id: skuId!,
-            supplier_party_id: supplierPartyId,
-            price_net: priceNet,
-            unit: resolveEffectivePriceUnit(data.unit, purchaseUnit),
-            currency: data.currency,
-            updated_by_id: actor.id ?? null,
-            is_current: true,
-          },
-        });
+        const written = await recordSkuPrice(tx, {
+          sku_id: skuId!,
+          supplier_party_id: supplierPartyId,
+          price: priceNet,
+          unit: resolveEffectivePriceUnit(data.unit, purchaseUnit),
+          currency: data.currency,
+          updated_by_name: actor.name,
+          notes: null,
+        }, actor);
+        if (!written) {
+          throw new Error("Excel import could not persist the current price row.");
+        }
         await recordAudit(tx, {
           entity: "SkuPrice",
-          entity_id: created.id,
-          action: "CREATE",
+          entity_id: written.id,
+          action: "UPDATE",
           actor,
-          changes: { price_net: priceNet, unit: data.unit, source: "excel_import", row: rowNum },
+          changes: { source: "excel_import", row: rowNum },
         });
       });
 

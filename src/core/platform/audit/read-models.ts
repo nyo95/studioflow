@@ -1,22 +1,27 @@
 import { prisma } from "@/core/platform/db";
 import { AUDIT_LOG_LIMIT } from "@/lib/constants";
-import { AuditFiltersInput, AuditLogWithUser, AuditReferenceRecord, AUDIT_ACTIONS } from "./types";
+import { AuditFiltersInput, AuditLogWithUser, AUDIT_ACTIONS } from "./types";
 import { buildWhere, getPhaseIdFromReference } from "./query-builder";
 import { ActionError } from "@/lib/error-types";
 import { Prisma } from "@/generated/prisma";
+import { buildAuditDetails } from "./record";
 
 export function mapLog(log: AuditLogWithUser) {
+  const actorName = log.user?.name ?? log.actor_name ?? null;
+  const actorId = log.user?.id ?? log.actor_id ?? undefined;
+
   return {
     ...log,
-    details: (log.details ?? {}) as Record<string, unknown>,
-    user: log.user
-      ? {
-          id: log.user.id,
-          name: log.user.name,
-          role: log.user.role,
-          image: null,
-        }
-      : null,
+    details: buildAuditDetails(log),
+    user:
+      log.user || actorName
+        ? {
+            id: actorId,
+            name: actorName,
+            role: log.user?.role ?? null,
+            image: null,
+          }
+        : null,
   };
 }
 
@@ -44,17 +49,18 @@ async function getFilterReferenceData(
     where: scopedWhere,
     select: {
       user_id: true,
+      actor_id: true,
       phase_id: true,
       entity_type: true,
       entity_id: true,
-      details: true,
+      metadata_json: true,
     },
   });
 
   const userIds = Array.from(
     new Set(
       references
-        .map((reference) => reference.user_id)
+        .flatMap((reference) => [reference.user_id, reference.actor_id])
         .filter((userId): userId is string => Boolean(userId))
     )
   );

@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { hasPermission } from "@/core/rbac/guards";
 import { PERMISSION } from "@/core/rbac/constants";
 import { landingRouteFor } from "@/core/rbac/app-access";
-import { getVendorsAction } from "@/extensions/library/actions/library-actions";
+import { getVendorsAction } from "@/subapps/master-data/actions/catalog-query-actions";
 import { unwrapActionResult } from "@/lib/result";
 import { getMaterialView } from "@/subapps/master-data/services/material-view-service";
 import { SkuDirectoryClient } from "@/subapps/master-data/components/SkuDirectoryClient";

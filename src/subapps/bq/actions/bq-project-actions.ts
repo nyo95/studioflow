@@ -15,9 +15,8 @@
  * 2. **Snapshot dibekukan saat baris dibuat.** Aksi yang membuat baris L3
  *    membaca master data SEKALI, di sini, lalu menyalin nilainya ke kolom
  *    `snapshot_*`. Sesudah itu tidak ada jalur baca yang kembali ke master
- *    (PRD §5.4). Satu-satunya cara memperbarui snapshot adalah
- *    `refreshMaterialLineSnapshotAction` / `refreshServiceLineSnapshotAction`,
- *    yang dipanggil tombol, per baris.
+ *    (PRD §5.4). Baris lama tetap lama; kalau material yang sama dipilih lagi
+ *    nanti, snapshot barunya boleh berbeda.
  *
  * ============================================================================
  * MASTER DATA ADALAH SSOT
@@ -124,6 +123,20 @@ async function nextSortOrder(
 ): Promise<number> {
   if (current.length === 0) return 0;
   return Math.max(...current.map((r) => r.sort_order)) + 1;
+}
+
+function resolveSelectedMaterialPrice(
+  candidate: Awaited<ReturnType<typeof loadMaterialCandidate>>,
+  skuPriceId: string
+) {
+  const selected = candidate?.priceOptions.find((option) => option.skuPriceId === skuPriceId) ?? null;
+  if (!selected) {
+    throw new ActionError(
+      "That supplier price is no longer available in Master Data. Pick a current supplier price and try again.",
+      "NOT_FOUND"
+    );
+  }
+  return selected;
 }
 
 // ---------------------------------------------------------------------------
@@ -569,11 +582,11 @@ export const addBqMaterialLineAction = createAction(
       throw new ActionError(candidate.readiness.detail, candidate.readiness.reason);
     }
 
-    // price pasti non-null (sudah jadi gate readiness.ok).
+    const price = resolveSelectedMaterialPrice(candidate, input.skuPriceId);
+
     // profile bisa null kalau SKU tidak punya costing data — dalam kasus itu
     // snapshot costing disimpan null dan calc pakai 1:1 fallback.
     const profile = candidate.profile ?? null;
-    const price = candidate.price!;
 
     const siblings = await tx.bqMaterialLine.findMany({
       where: { sub_object_id: input.subObjectId },
@@ -607,7 +620,6 @@ export const addBqMaterialLineAction = createAction(
         snapshot_category_default_waste_pct: null,
         snapshot_minimum_order: profile?.minimumOrder ?? null,
         snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
-        snapshot_price_valid_from: new Date(price.validFrom),
         snapshot_taken_at: new Date(),
 
         sort_order: await nextSortOrder(siblings),
@@ -629,6 +641,7 @@ export const addBqMaterialLineAction = createAction(
     schema: z.object({
       subObjectId: z.string().min(1),
       skuId: z.string().min(1, "Pick a material from Master Data."),
+      skuPriceId: z.string().min(1, "Pick a supplier price from Master Data."),
       /** Kebutuhan untuk SATU sub-object, dalam usage unit. */
       qtyPerSub: nonNegative,
       wasteOverridePct: optionalPercent.optional(),
@@ -878,7 +891,6 @@ export const addBqServiceLineAction = createAction(
         snapshot_currency: candidate.currency,
         snapshot_scope_note: candidate.scopeNote,
         snapshot_has_material: candidate.hasMaterial,
-        snapshot_price_valid_from: new Date(candidate.validFrom),
         snapshot_taken_at: new Date(),
         sort_order: await nextSortOrder(siblings),
         notes: input.notes?.trim() || null,

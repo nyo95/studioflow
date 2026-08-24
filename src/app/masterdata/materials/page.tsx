@@ -9,7 +9,7 @@ import {
   getMyLibraryAccessAction,
   getProductMetadataAction,
   getVendorsAction,
-} from "@/extensions/library/actions/library-actions";
+} from "@/subapps/master-data/actions/catalog-query-actions";
 import { unwrapActionResult } from "@/lib/result";
 import {
   getMaterialView,

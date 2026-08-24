@@ -65,6 +65,135 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-24 — Rekonsiliasi R4-R12 terhadap PRD final
+
+### Yang dieksekusi
+
+- **R4 selesai benar-benar ke model final current-state pricing.**
+  `SkuPrice` tidak lagi memakai `is_current` / `valid_from` / `valid_to`;
+  histori baris lama diarsipkan ke `studioflow.AuditLog` lewat migrasi
+  `20260824170000_r4_r9_r12_current_pricing_cleanup`, lalu pembacaan dan
+  penulisan harga dipindah ke satu baris aktif per `(sku_id, supplier_party_id)`.
+- **R9 diselesaikan ke explicit supplier-price selection.**
+  BQ tidak lagi memilih supplier secara implisit (`pickPrice()` dihapus).
+  Picker material sekarang menampilkan opsi harga per supplier; menambah line
+  menyimpan `sku_price_id` / `supplier_party_id` sebagai provenance snapshot,
+  termasuk saat recipe Library dipakai ulang.
+- **R12 dipurge lebih lanjut.**
+  `ProjectTimeline` yang sudah tidak punya reader aktif dipertahankan tetap
+  terhapus, lalu jalur legacy `TimelineTemplate` / enum `TimelineStatus` /
+  util `src/lib/services/project-timeline.ts` / test terkait ikut dihapus.
+  Halaman Studio Settings berhenti menampilkan default durasi fase dan kini
+  hanya memuat checklist/default-item yang masih hidup.
+- **Akurasi gerbang test diperbaiki.**
+  `scripts/run-tests.mjs` kini membersihkan `tmp/test-out` sebelum compile,
+  supaya test yang sudah dihapus tidak ikut lolos dari artefak cache lokal.
+- **R8 dipersempit ke sisa coupling mutasi saja.**
+  DTO katalog (`sku-dto`, `catalog`), query read-path vendor/SKU/product/sample,
+  dan sample movement/delete kini punya boundary Master Data sendiri
+  (`src/subapps/master-data/contracts/*`,
+  `services/catalog-read-service.ts`,
+  `services/catalog-sample-service.ts`,
+  `actions/catalog-query-actions.ts`). Adapter di `extensions/library`
+  tinggal re-export/delegasi. Reverse dependency yang tersisa kini hanya tiga
+  import mutasi komponen Master Data ke `library-actions`
+  (`MasterDataBrandDialog.tsx`, `MasterDataMaterialsClient.tsx`,
+  `MasterDataProductDialog.tsx`).
+- **R8 ditutup: write-path vendor/SKU pindah ke boundary Master Data.**
+  Mutasi `create/update/delete` Brand dan `create/update` SKU kini dilayani
+  `src/subapps/master-data/services/catalog-write-service.ts` dan
+  `actions/catalog-mutation-actions.ts`. Tiga komponen Master Data terakhir
+  berhenti mengimpor `@/extensions/library/actions/library-actions`, dan action
+  Library yang sepadan kini mendelegasikan ke service Master Data yang sama.
+- **R11 ditutup: guard boundary aktif untuk Master Data.**
+  `eslint.config.mjs` sekarang menolak import
+  `src/subapps/master-data/**` / `src/app/masterdata/**` ke
+  `@/extensions/library*`. Scan reverse dependency terhadap
+  `actions/library-actions`, `types`, dan `services/library-service` kini nol.
+
+### Status rekonsiliasi
+
+- **DONE:** R4, R5, R6, R7, R8, R9, R10, R11
+- **PARTIAL:** R12
+  - Tidak ada lagi coupling aktif `Master Data -> extensions/library`.
+  - Sisa R12 kini normalization-only: cleanup kompatibilitas/delegasi yang
+    masih hidup di sisi extension, bukan migrasi consumer atau perubahan
+    perilaku.
+
+### Verifikasi state akhir run ini
+
+- `npx prisma validate` ✓
+- `npm run typecheck` ✓
+- `npx eslint src` ✓ (0 error, 51 warning baseline)
+- `npm test` ✓ (**207/207** pass setelah runner dibersihkan)
+- `npm run test:integration:docker` ✓ (**11/11** pass)
+- `npm run build` ✓
+
+## [Unreleased] - 2026-08-24 — R3 selesai: audit generik jadi SSOT fisik tunggal
+
+### Hasil akhir
+
+R3 sekarang benar-benar selesai pada state kode, skema, dan migration:
+
+- **Satu tabel audit fisik**: `master_data.MasterDataAudit` dihapus dari
+  `prisma/schema.prisma` dan dari database lewat migrasi
+  `20260824150000_r3_audit_consolidation`.
+- **Backfill historis**: seluruh baris legacy `MasterDataAudit` dipindahkan ke
+  `studioflow.AuditLog` (domain `MASTER_DATA`). Baris dual-write lama dipasangkan
+  dulu agar tidak diduplikasi, lalu payload-nya dipecah ke
+  `before_json` / `after_json` bila memang berbentuk diff, atau disimpan aman
+  di `metadata_json` bila bersifat domain-specific / campuran.
+- **Kontrak audit generik final**: `AuditLog` kini memakai
+  `before_json` / `after_json` / `metadata_json`; kolom legacy `details`
+  di-drop. Shared writer `src/core/platform/audit/record.ts` menjadi satu pintu
+  tulis lintas domain (`STUDIOFLOW` / `MASTER_DATA` / `BQ`).
+- **Jalur tulis lama dilipat ke jalur kanonik**:
+  `src/actions/_shared.ts` tidak lagi menulis langsung ke Prisma `auditLog.create`
+  tetapi memanggil `recordAudit()`. Wrapper Master Data berhenti dual-write dan
+  hanya menulis baris generik.
+- **Jalur baca ikut dipindah**: lookup "last change" SKU (`lookupProductsLastChange`)
+  dan read-model Activity Center sekarang membaca `AuditLog`; payload teknis
+  dibangun dari `metadata_json` + `before/after`, bukan dari `details`.
+- **Cleanup platform kecil**: `undo-executor` berhenti mengimpor helper audit
+  dari layer action dan memakai shared writer langsung; `action-wrapper`
+  menormalkan kode platform legacy (`VALIDATION_FAILED` → `VALIDATION_ERROR`,
+  `UNAUTHORIZED_ACTION` → `FORBIDDEN`) dan tidak lagi mengembalikan kode Prisma
+  mentah untuk known-request fallback.
+
+### Area/berkas
+
+- `prisma/schema.prisma`
+- `prisma/migrations/20260824150000_r3_audit_consolidation/migration.sql`
+- `src/core/platform/audit/{record.ts,query-builder.ts,read-models.ts,types.ts,undo-executor.ts}`
+- `src/actions/_shared.ts`
+- `src/lib/action-wrapper.ts`
+- `src/subapps/master-data/actions/masterdata-actions.ts`
+- `src/subapps/master-data/actions/sample-request-actions.ts`
+- `src/subapps/master-data/services/{audit-service.ts,audit-read-service.ts,excel-service.ts,sku-core-service.ts}`
+- `src/app/(dashboard)/layout.tsx`
+- `src/components/{activity-log-table.tsx,activity-timeline.tsx}`
+- `tests/integration/{audit-dual-write.integration.test.ts,material-view-service.integration.test.ts}`
+- `tests/unit/action-wrapper.test.ts`
+- `roadmap.md`
+
+### Verifikasi
+
+- `npx prisma validate` ✓
+- `npm run typecheck` ✓
+- `npx eslint ...touched files...` ✓
+- `npm test` ✓ (**209/209** pass)
+- `npm run test:integration:docker` ✓ (**11/11** pass; 47 migrasi diterapkan ke DB disposable, container dibuang)
+- `npm run build` ✓
+
+### Risiko
+
+- Migration baru sudah tervalidasi di disposable integration DB, tetapi
+  deployment nyata tetap wajib menjalankan `prisma migrate deploy`.
+- Backfill historis mengutamakan preservasi informasi. Untuk perubahan legacy
+  yang sejak awal tidak berbentuk pasangan `from/to`, data tetap tersimpan di
+  `metadata_json` sebagai payload historis, bukan dipaksakan ke struktur yang
+  akan berbohong.
+
 ## [Unreleased] - 2026-08-24 — R2 WO-R2-05: konsolidasi final Shared Core normalization
 
 ### Hasil akhir

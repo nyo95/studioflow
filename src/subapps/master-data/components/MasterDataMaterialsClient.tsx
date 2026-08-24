@@ -4,20 +4,22 @@ import * as React from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Eye, Loader2, MoreHorizontal, Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { deleteVendorAction, getSkuDetailAction, updateVendorAction } from "@/extensions/library/actions/library-actions";
+import { deleteVendorAction, updateVendorAction } from "@/subapps/master-data/actions/catalog-mutation-actions";
+import { getSkuDetailAction } from "@/subapps/master-data/actions/catalog-query-actions";
 import {
   getBrandDetailAction,
   type BrandDetail,
 } from "@/subapps/master-data/actions/masterdata-actions";
 import { isBrandComplete, isBrandLandingView } from "@/subapps/master-data/lib/brand-view-rules";
 import { unwrapActionResult } from "@/lib/result";
-import type { BrandLinkInput, ProductCatalogWithRelations } from "@/extensions/library/types";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, Button, DashboardTemplate, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, PageHeader, TableCard, TableCardBody, TableCardCell, TableCardHead, TableCardHeader, TableCardRow, UI_ENGINE_RADIUS_ACTION, UI_ENGINE_RADIUS_CONTROL, UI_ENGINE_TYPE_META } from "@/ui_engine";
 import type {
   BrandCategoryCoverage,
+  BrandLinkInput,
   LibraryAccess,
   LibraryVendor,
-} from "@/extensions/library/types";
+  ProductCatalogWithRelations,
+} from "@/subapps/master-data/contracts/catalog";
 import { cn } from "@/lib/utils";
 import type {
   BrandRow,

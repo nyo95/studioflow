@@ -57,12 +57,13 @@ export interface CreateSkuCoreParams {
  * 3. **Primary category** — if `categoryIds` is non-empty, the first entry
  *    is written `is_primary: true`. Whether to attach a category at all is
  *    still each caller's decision; this does not invent one.
- * 4. **`recordAudit`** — exactly once, to `master_data.MasterDataAudit`. Two
- *    of the five sites also called `insertAuditLog` right after creating —
- *    writing the SAME creation event into `studioflow.AuditLog` too, which
- *    `AGENTS.md` §6 rules out explicitly for `master_data` writes (the same
- *    class of defect as §11/H1, fixed for `Sample` in changelog #25). That
- *    second call is gone at both sites; this is the only one left.
+ * 4. **`recordAudit`** — exactly once, to the shared generic `AuditLog`
+ *    under domain `MASTER_DATA`. Two of the five sites also called
+ *    `insertAuditLog` right after creating — writing the SAME creation event
+ *    through a second path, which `AGENTS.md` §6 rules out explicitly for
+ *    `master_data` writes (the same class of defect as §11/H1, fixed for
+ *    `Sample` in changelog #25). That second call is gone at both sites; this
+ *    is the only one left.
  */
 export async function createSkuCore(
   tx: PrismaTransaction,

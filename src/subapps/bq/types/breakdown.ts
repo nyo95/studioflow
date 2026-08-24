@@ -58,7 +58,6 @@ export type BqMaterialLineRecord = {
   categoryDefaultWastePct: number | null;
   minimumOrder: number | null;
   roundingIncrement: number;
-  priceValidFrom: string | null;
   snapshotTakenAt: string;
   isManualOverride: boolean;
   overrideNote: string | null;
@@ -82,7 +81,6 @@ export type BqServiceLineRecord = {
   currency: string;
   scopeNote: string | null;
   hasMaterial: boolean;
-  priceValidFrom: string | null;
   snapshotTakenAt: string;
   isManualOverride: boolean;
   overrideNote: string | null;
@@ -142,18 +140,18 @@ export type BqMaterialCandidate = {
     purchaseUnit: string;
     conversion: number;
     defaultWastePct: number | null;
-    minimumOrder: number | null;
-    roundingIncrement: number;
+      minimumOrder: number | null;
+      roundingIncrement: number;
   } | null;
-  price: {
+  priceOptions: Array<{
     skuPriceId: string;
     supplierPartyId: string | null;
     supplierName: string | null;
     unit: string;
     price: number;
     currency: string;
-    validFrom: string;
-  } | null;
+    updatedAt: string | null;
+  }>;
   readiness: BqMaterialReadiness;
 };
 
@@ -171,7 +169,7 @@ export type BqServiceCandidate = {
   currency: string;
   scopeNote: string | null;
   hasMaterial: boolean;
-  validFrom: string;
+  updatedAt: string | null;
 };
 
 export type { ObjectResult, ProjectTotals, PurchaseSummary, WasteSource };

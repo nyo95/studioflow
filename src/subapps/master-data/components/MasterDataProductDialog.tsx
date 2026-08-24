@@ -37,19 +37,19 @@ import {
 } from "@/ui_engine";
 import {
   createProductAction,
-  deleteProductAction,
   updateProductAction,
-} from "@/extensions/library/actions/library-actions";
+} from "@/subapps/master-data/actions/catalog-mutation-actions";
 import type {
   BrandCategoryCoverage,
   LibraryAccess,
   LibraryVendor,
   ProductCatalogInput,
   ProductCatalogWithRelations,
-} from "@/extensions/library/types";
+} from "@/subapps/master-data/contracts/catalog";
 import { ProductType } from "@/generated/prisma";
-import { LibraryItemStatus } from "@/extensions/library/types";
+import { LibraryItemStatus } from "@/subapps/master-data/contracts/catalog";
 import { unwrapActionResult } from "@/lib/result";
+import { deleteSkuAction } from "@/subapps/master-data/actions/masterdata-actions";
 import { normalizeSearchText } from "@/core/utilities/normalize";
 import {
   UnsavedChangesPrompt,
@@ -95,7 +95,6 @@ type MaterialForm = {
   default_waste_pct: string;
   minimum_order: string;
   rounding_increment: string;
-  preferred_supplier_party_id: string;
 };
 
 const EMPTY_MATERIAL: MaterialForm = {
@@ -124,7 +123,6 @@ const EMPTY_MATERIAL: MaterialForm = {
   default_waste_pct: "",
   minimum_order: "",
   rounding_increment: "",
-  preferred_supplier_party_id: "",
 };
 
 function numberInput(value: number | null) {
@@ -173,7 +171,6 @@ function toMaterialForm(
     default_waste_pct: numberInput(product.default_waste_pct != null ? Number(product.default_waste_pct) : null),
     minimum_order: numberInput(product.minimum_order != null ? Number(product.minimum_order) : null),
     rounding_increment: numberInput(product.rounding_increment != null ? Number(product.rounding_increment) : null),
-    preferred_supplier_party_id: product.preferred_supplier_party_id ?? "",
   };
 }
 
@@ -503,7 +500,6 @@ export function MasterDataProductDialog({
       default_waste_pct: nullableNumber(form.default_waste_pct),
       minimum_order: nullableNumber(form.minimum_order),
       rounding_increment: nullableNumber(form.rounding_increment),
-      preferred_supplier_party_id: form.preferred_supplier_party_id || null,
       catalog_status:
         mode === "CREATE" ? LibraryItemStatus.PENDING : form.catalog_status,
       ...(mode === "CREATE" ? { catalog_type: form.catalog_type } : {}),
@@ -535,7 +531,7 @@ export function MasterDataProductDialog({
     if (!product?.id) return;
     setIsDeleting(true);
     try {
-      unwrapActionResult(await deleteProductAction({ id: product.id }));
+      unwrapActionResult(await deleteSkuAction({ id: product.id }));
       toast.success("Material deleted");
       setShowDelete(false);
       guard.closeAfterSave();
@@ -892,38 +888,6 @@ export function MasterDataProductDialog({
                 />
               </div>
 
-              <div className="grid gap-[calc(var(--ui-section-gap)/2)] sm:grid-cols-2">
-                {/* Preferred Supplier */}
-                <div className="flex flex-col gap-[calc(var(--ui-section-gap)/4)]">
-                  <Label htmlFor="preferred-supplier" className={UI_ENGINE_TYPE_META}>
-                    Preferred supplier
-                  </Label>
-                  {editable ? (
-                    <select
-                      id="preferred-supplier"
-                      value={form.preferred_supplier_party_id}
-                      onChange={(event) => setField("preferred_supplier_party_id", event.target.value)}
-                      className={cn(
-                        "border bg-[var(--ui-canvas-bg)] px-3 py-2 outline-none focus:border-[var(--ui-border-focus)]",
-                        UI_ENGINE_BORDER_SUBTLE,
-                        UI_ENGINE_RADIUS_CONTROL,
-                        UI_ENGINE_TYPE_BODY
-                      )}
-                    >
-                      <option value="">— None —</option>
-                      {suppliers.map((supplier) => (
-                        <option key={supplier.id} value={supplier.id}>
-                          {supplier.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <ReadValue>
-                      {suppliers.find((s) => s.id === form.preferred_supplier_party_id)?.name ?? "—"}
-                    </ReadValue>
-                  )}
-                </div>
-              </div>
             </section>
 
             {/* ── Curation status ───────────────────────────────────── */}

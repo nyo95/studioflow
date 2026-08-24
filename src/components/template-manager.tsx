@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  upsertTimelineTemplate,
   createChecklistTemplate,
   deleteChecklistTemplate,
   upsertScheduleCategoryConfig,
@@ -23,11 +22,6 @@ import { Loader2, Plus, Trash2, Save, CheckCircle2, Pencil, GitMerge, LayoutTemp
 import { Role, ProductType, ScheduleTemplateItem } from "@/generated/prisma";
 import { unwrapActionResult } from "@/lib/result";
 import { cn } from "@/lib/utils";
-
-interface TimelineTemplate {
-  phase_enum: string;
-  duration_days: number;
-}
 
 interface ChecklistTemplate {
   id: string;
@@ -55,7 +49,6 @@ function isGlobalChecklistTemplate(phaseEnum: string | null) {
 }
 
 interface TemplateManagerProps {
-  timelineTemplates: TimelineTemplate[];
   checklistTemplates: ChecklistTemplate[];
   scheduleTemplates: ScheduleTemplateConfig[];
   schedulePrefixes: SchedulePrefixConfig[];
@@ -66,7 +59,6 @@ interface TemplateManagerProps {
 const PHASES = ["MOODBOARD", "LAYOUT", "DESIGN_3D", "CD", "SUPERVISION"];
 
 export function TemplateManager({
-  timelineTemplates,
   checklistTemplates,
   scheduleTemplates,
   schedulePrefixes,
@@ -94,9 +86,6 @@ export function TemplateManager({
   const [editingPrefix, setEditingPrefix] = useState<string>("");
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [targetMergeCategory, setTargetMergeCategory] = useState<string>("");
-  const [durations, setDurations] = useState<Record<string, number>>(
-    Object.fromEntries(timelineTemplates.map((t) => [t.phase_enum, t.duration_days]))
-  );
   const router = useRouter();
   const schedulerSections = [ProductType.material, ProductType.fixture] as const;
 
@@ -119,20 +108,6 @@ export function TemplateManager({
       if ("items" in res && res.items) setTemplateItems(res.items);
     }).finally(() => setLoadingItems(false));
   }, [mode]);
-
-  const handleSaveDuration = async (phase: string) => {
-    setLoading(`duration-${phase}`);
-    try {
-      unwrapActionResult(
-        await upsertTimelineTemplate({ phaseEnum: phase, durationDays: durations[phase] || 7 })
-      );
-      router.refresh();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(null);
-    }
-  };
 
   const handleAddChecklist = async (phase: string | null) => {
     const key = phase ?? "GLOBAL";
@@ -287,7 +262,7 @@ export function TemplateManager({
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
         <h2 className="font-serif text-2xl font-bold text-slate-950">
-          Project Engine Templates
+          Project Defaults
         </h2>
         <p className="text-[11px] font-medium uppercase tracking-widest text-slate-400">
           Global Studio Standards
@@ -297,10 +272,9 @@ export function TemplateManager({
       {mode === "project-engine" && (
         <>
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4">
-            <h3 className="font-serif text-lg font-bold text-slate-900">Automation Logic</h3>
+            <h3 className="font-serif text-lg font-bold text-slate-900">Checklist Standards</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Templates below define the default timeline and checklist items for every
-              new project initialized in StudioFlow.
+              Defaults below define the checklist and starter items applied to new projects.
             </p>
           </div>
     
@@ -406,44 +380,6 @@ export function TemplateManager({
     
                   <AccordionContent>
                     <div className="space-y-5">
-                      <div className="flex flex-col gap-3 rounded-2xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                            Duration
-                          </Label>
-                          <p className="text-sm text-slate-500">
-                            Default duration assigned when this phase is created.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            value={durations[phase] ?? 7}
-                            onChange={(e) =>
-                              setDurations((prev) => ({
-                                ...prev,
-                                [phase]: parseInt(e.target.value) || 0,
-                              }))
-                            }
-                            className="h-10 w-20 border-slate-200 bg-white text-center text-sm font-semibold"
-                          />
-                          <span className="text-sm text-slate-500">days</span>
-                          <Button
-                            size="sm"
-                            className="h-10 bg-slate-900 px-4 text-[11px] font-bold uppercase tracking-[0.18em] hover:bg-slate-800"
-                            onClick={() => handleSaveDuration(phase)}
-                            disabled={loading === `duration-${phase}`}
-                          >
-                            {loading === `duration-${phase}` ? (
-                              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Save className="mr-2 h-3.5 w-3.5" />
-                            )}
-                            Save
-                          </Button>
-                        </div>
-                      </div>
-    
                       <div className="space-y-2">
                         {checklistTemplates
                           .filter((t) => t.phase_enum === phase)
@@ -505,12 +441,12 @@ export function TemplateManager({
 
           {mode === "project-engine" && (
             <div className="mt-4">
-              <h4 className="text-sm font-medium mb-2">Item Default (spesifikasi terisi)</h4>
+              <h4 className="mb-2 text-sm font-medium">Default Items</h4>
               {loadingItems ? (
-                <p className="text-xs text-muted-foreground">Memuat…</p>
+                <p className="text-xs text-muted-foreground">Loading...</p>
               ) : templateItems.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Belum ada. Gunakan tombol &quot;Set as default item&quot; di Catalog Board untuk menambah.
+                  No default items yet. Use &quot;Set as default item&quot; in Catalog Board to add one.
                 </p>
               ) : (
                 <div className="space-y-1">
@@ -536,15 +472,15 @@ export function TemplateManager({
                             if ("error" in res) toast.error(res.error);
                             else {
                               setTemplateItems((prev) => prev.filter((i) => i.id !== item.id));
-                              toast.success("Item default dihapus.");
+                              toast.success("Default item deleted.");
                             }
                             setLoading(null);
                           }}
                           disabled={loading === `tpl-del-${item.id}`}
                           className="ml-2 text-xs text-red-500 hover:underline disabled:opacity-50"
-                          aria-label={`Hapus item default ${productName}`}
+                          aria-label={`Delete default item ${productName}`}
                         >
-                          Hapus
+                          Delete
                         </button>
                       </div>
                     );

@@ -35,29 +35,6 @@ export const settingsService = {
   },
 
   /**
-   * Creates or updates a timeline template.
-   */
-  async executeUpsertTimelineTemplate(
-    tx: PrismaTransaction,
-    params: { phaseEnum: string; durationDays: number; userId: string }
-  ) {
-    const { phaseEnum, durationDays, userId } = params;
-
-    const result = await tx.timelineTemplate.upsert({
-      where: { phase_enum: phaseEnum },
-      update: { duration_days: durationDays },
-      create: { phase_enum: phaseEnum, duration_days: durationDays },
-    });
-
-    await insertAuditLog(tx, AUDIT_ACTIONS.UPDATE_TIMELINE_TEMPLATE, "SYSTEM", phaseEnum, userId, {
-      phase_enum: phaseEnum,
-      duration_days: durationDays
-    });
-
-    return result;
-  },
-
-  /**
    * Creates a checklist template.
    */
   async executeCreateChecklistTemplate(

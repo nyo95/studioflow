@@ -204,9 +204,9 @@ function mapRequest(
  * be stored ahead of a registered SKU. Callers must check `args.skuId` first.
  *
  * Goes through `recordSkuPrice` like every other price write (2026-08-11).
- * The hand-rolled version this replaces demoted only supplier-less rows and
- * never stamped `valid_to`, so a quote synced from here would have collided
- * with `SkuPrice_current_uniq` the moment a supplier was attached.
+ * The hand-rolled version this replaces had drifted away from the shared
+ * pricing path; keeping this funnelled through `recordSkuPrice` preserves the
+ * pair uniqueness contract, unit validation, and audit provenance in one place.
  *
  * A quote taken over the phone has no supplier Party yet — the request records
  * WHO was contacted as free text, not as a relation. So this writes the
@@ -408,10 +408,10 @@ export const receiveSampleAction = createAction<ReceiveSampleInput, SampleReques
       // (see its doc comment). Before this, the SKU created here got a plain
       // `slugify()` with no uniqueness check, AND its creation event was
       // written TWICE — once to `studioflow.AuditLog` via `insertAuditLog`,
-      // once to `master_data.MasterDataAudit` via a separately-added
-      // `recordAudit` call — exactly the dual-write §6 rules out (the same
-      // defect fixed at the other four SKU-creation sites). `createSkuCore`
-      // now owns the one `recordAudit` call for the SKU itself; the
+      // once through a second Master Data-specific audit path — exactly the
+      // dual-write §6 rules out (the same defect fixed at the other four
+      // SKU-creation sites). `createSkuCore` now owns the one `recordAudit`
+      // call for the SKU itself; the
       // `insertAuditLog` below for `MASTERDATA_REQUEST_RECEIVE` is a
       // different entity (the request, a StudioFlow record) and stays.
       sku = await createSkuCore(

@@ -16,7 +16,7 @@ import {
   MessageCircle,
   ShoppingBag,
 } from "lucide-react";
-import type { LibraryVendor } from "@/extensions/library/types";
+import type { LibraryVendor } from "@/subapps/master-data/contracts/catalog";
 
 // ---------------------------------------------------------------------------
 // Link icon + label maps (lucide@0.383 — no social media icons)

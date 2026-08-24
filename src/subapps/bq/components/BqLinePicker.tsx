@@ -36,11 +36,11 @@ import {
   UI_ENGINE_RADIUS_CONTROL,
 } from "@/ui_engine";
 import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens";
+import { formatDate } from "@/core/utilities/datetime";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatIdr } from "../lib/calc";
 import { searchBqMaterialsAction, searchBqServicesAction } from "../actions/bq-catalog-actions";
-import { addBqLocalMaterialLineAction, addBqLocalServiceLineAction } from "../actions/bq-project-actions";
 import { loadFromLibraryObjectAction, loadFromLibrarySubObjectAction, searchLibraryObjectsAction, searchLibrarySubObjectsAction } from "../actions/bq-library-actions";
 import type { BqMaterialCandidate, BqServiceCandidate } from "../types/breakdown";
 
@@ -54,7 +54,7 @@ export function BqLinePicker({
   onAddLocalService,
 }: {
   subObjectId: string;
-  onAddMaterial: (skuId: string, qtyPerSub: number) => Promise<boolean>;
+  onAddMaterial: (input: { skuId: string; skuPriceId: string; qtyPerSub: number }) => Promise<boolean>;
   onAddService: (workPriceId: string, qtyPerSub: number) => Promise<boolean>;
   onAddLocalMaterial: (input: { name: string; usageUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
   onAddLocalService: (input: { name: string; rateUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
@@ -95,7 +95,7 @@ function PickerDialog({
 }: {
   mode: Mode | null;
   onClose: () => void;
-  onAddMaterial: (skuId: string, qtyPerSub: number) => Promise<boolean>;
+  onAddMaterial: (input: { skuId: string; skuPriceId: string; qtyPerSub: number }) => Promise<boolean>;
   onAddService: (workPriceId: string, qtyPerSub: number) => Promise<boolean>;
   onAddLocalMaterial: (input: { name: string; usageUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
   onAddLocalService: (input: { name: string; rateUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
@@ -135,6 +135,15 @@ function PickerDialog({
     };
   }, [query, mode]);
 
+  const selectedMaterial = (() => {
+    if (mode !== "MATERIAL" || !selectedId) return null;
+    for (const candidate of materials) {
+      const option = candidate.priceOptions.find((entry) => entry.skuPriceId === selectedId);
+      if (option) return { candidate, option };
+    }
+    return null;
+  })();
+
   const handleAdd = React.useCallback(async () => {
     if (!mode) return;
     const parsed = Number(qty.replace(",", "."));
@@ -147,15 +156,21 @@ function PickerDialog({
         ? await onAddLocalMaterial({ name: customName, usageUnit: customUnit, price, qtyPerSub: parsed })
         : await onAddLocalService({ name: customName, rateUnit: customUnit, price, qtyPerSub: parsed })
       : mode === "MATERIAL"
-        ? await onAddMaterial(selectedId!, parsed)
+        ? selectedMaterial
+          ? await onAddMaterial({
+              skuId: selectedMaterial.candidate.skuId,
+              skuPriceId: selectedMaterial.option.skuPriceId,
+              qtyPerSub: parsed,
+            })
+          : false
         : await onAddService(selectedId!, parsed);
     setSaving(false);
     if (ok) onClose();
-  }, [selectedId, mode, qty, custom, customName, customUnit, customPrice, onAddMaterial, onAddService, onAddLocalMaterial, onAddLocalService, onClose]);
+  }, [selectedId, selectedMaterial, mode, qty, custom, customName, customUnit, customPrice, onAddMaterial, onAddService, onAddLocalMaterial, onAddLocalService, onClose]);
 
   const selectedUnit =
     mode === "MATERIAL"
-      ? materials.find((m) => m.skuId === selectedId)?.profile?.usageUnit
+      ? selectedMaterial?.candidate.profile?.usageUnit
       : services.find((s) => s.workPriceId === selectedId)?.rateUnit;
 
   return (
@@ -194,8 +209,8 @@ function PickerDialog({
                 <MaterialRow
                   key={m.skuId}
                   candidate={m}
-                  selected={selectedId === m.skuId}
-                  onSelect={() => m.readiness.ok && setSelectedId(m.skuId)}
+                  selectedPriceId={selectedId}
+                  onSelectPrice={(skuPriceId) => m.readiness.ok && setSelectedId(skuPriceId)}
                 />
               ))
             )
@@ -275,28 +290,21 @@ const READINESS_HINT: Record<string, string> = {
 
 function MaterialRow({
   candidate,
-  selected,
-  onSelect,
+  selectedPriceId,
+  onSelectPrice,
 }: {
   candidate: BqMaterialCandidate;
-  selected: boolean;
-  onSelect: () => void;
+  selectedPriceId: string | null;
+  onSelectPrice: (skuPriceId: string) => void;
 }) {
   const ready = candidate.readiness.ok;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      disabled={!ready}
+    <div
       className={cn(
-        "flex w-full items-start justify-between gap-3 border px-3 py-2 text-left transition-colors",
+        "border px-3 py-2",
         UI_ENGINE_RADIUS_CONTROL,
-        selected
-          ? "border-slate-300 bg-slate-100"
-          : ready
-            ? "border-transparent hover:bg-slate-50"
-            : "border-transparent opacity-60"
+        ready ? "border-transparent bg-white" : "border-transparent opacity-60"
       )}
     >
       <div className="min-w-0">
@@ -312,28 +320,56 @@ function MaterialRow({
           ) : null}
         </div>
 
-        {ready && candidate.profile && candidate.price ? (
+        {ready && candidate.profile ? (
           <p className={cn(UI_ENGINE_TYPE_META, "mt-0.5 text-slate-500")}>
-            {formatIdr(candidate.price.price, candidate.price.currency)} /{" "}
-            {candidate.profile.purchaseUnit} · 1 {candidate.profile.purchaseUnit} ={" "}
-            {candidate.profile.conversion} {candidate.profile.usageUnit}
-            {candidate.price.supplierName ? ` · ${candidate.price.supplierName}` : ""}
+            1 {candidate.profile.purchaseUnit} = {candidate.profile.conversion} {candidate.profile.usageUnit}
           </p>
         ) : (
-          // Alasannya ditampilkan penuh, bukan disingkat jadi "unavailable".
-          // Ketiga alasan mengarah ke layar yang berbeda.
           <p className={cn(UI_ENGINE_TYPE_META, "mt-0.5 text-amber-700")}>
             {candidate.readiness.ok ? null : candidate.readiness.detail}
           </p>
         )}
       </div>
 
-      {!ready && !candidate.readiness.ok ? (
-        <span className={cn(UI_ENGINE_TYPE_META, "shrink-0 text-amber-700")}>
-          {READINESS_HINT[candidate.readiness.reason]}
-        </span>
+      {ready ? (
+        <div className="mt-2 grid gap-2">
+          {candidate.priceOptions.map((price) => (
+            <button
+              key={price.skuPriceId}
+              type="button"
+              onClick={() => onSelectPrice(price.skuPriceId)}
+              className={cn(
+                "flex items-start justify-between gap-3 border px-3 py-2 text-left transition-colors",
+                UI_ENGINE_RADIUS_CONTROL,
+                selectedPriceId === price.skuPriceId
+                  ? "border-slate-300 bg-slate-100"
+                  : "border-slate-200 hover:bg-slate-50"
+              )}
+            >
+              <div className="min-w-0">
+                <div className="font-sans text-sm text-slate-900">
+                  {price.supplierName ?? "Manufacturer list price"}
+                </div>
+                <p className={cn(UI_ENGINE_TYPE_META, "mt-0.5 text-slate-500")}>
+                  {formatIdr(price.price, price.currency)} / {price.unit}
+                </p>
+              </div>
+              {price.updatedAt ? (
+                <span className={cn(UI_ENGINE_TYPE_META, "shrink-0 text-slate-400")}>
+                  Updated {formatDate(price.updatedAt)}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
       ) : null}
-    </button>
+
+      {!ready && !candidate.readiness.ok ? (
+        <div className={cn(UI_ENGINE_TYPE_META, "mt-2 text-amber-700")}>
+          {READINESS_HINT[candidate.readiness.reason]}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

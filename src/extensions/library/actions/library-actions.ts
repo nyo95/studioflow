@@ -24,9 +24,11 @@ import {
 import type { CatalogSampleStatus } from "../types";
 import { ProductRequestStatus, SampleAction, ProductType, SampleMovement, Sample, Role } from "@/generated/prisma";
 import { LibraryItemStatus } from "../types";
-import { REVALIDATE_LIBRARY, REVALIDATE_PROJECT } from "@/lib/revalidation-tags";
+import { REVALIDATE_LIBRARY } from "@/lib/revalidation-tags";
 import { hasPermission, PERMISSION } from "@/core/rbac/rbac";
 import { getProjectMembershipOrThrow } from "@/core/rbac/permissions";
+import { CatalogReadService } from "@/subapps/master-data/services/catalog-read-service";
+import { CatalogWriteService } from "@/subapps/master-data/services/catalog-write-service";
 
 /**
  * Library authorization helper.
@@ -56,14 +58,14 @@ function canApproveMaterial(role: Role) {
 // --- VENDOR ACTIONS ---
 
 export const getVendorsAction = createAction<void, LibraryVendor[]>(async ({ tx }) => {
-  return LibraryService.getAllVendors(tx);
+  return CatalogReadService.getAllVendors(tx);
 }, { useTransaction: false });
 
 export const createVendorAction = createAction<LibraryVendorInput, LibraryVendor>(
   async ({ input, ctx, tx }) => {
     assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_VENDORS);
 
-    const result = await LibraryService.createVendor(input, ctx.userId, tx);
+    const result = await CatalogWriteService.createVendor(input, ctx.userId, tx);
 
     // LibraryService.createVendor() handles audit logging
 
@@ -76,7 +78,7 @@ export const updateVendorAction = createAction<{ id: string; data: Partial<Libra
   async ({ input, ctx, tx }) => {
     assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_VENDORS);
 
-    const result = await LibraryService.updateVendor(input.id, input.data, ctx.userId, tx);
+    const result = await CatalogWriteService.updateVendor(input.id, input.data, ctx.userId, tx);
     // LibraryService.updateVendor() handles audit logging
 
     invalidateCache({ scope: REVALIDATE_LIBRARY });
@@ -88,7 +90,7 @@ export const deleteVendorAction = createAction<{ id: string }, LibraryVendor>(
   async ({ input, ctx, tx }) => {
     assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_MANAGE_VENDORS);
 
-    const result = await LibraryService.deleteVendor(input.id, ctx.userId, tx);
+    const result = await CatalogWriteService.deleteVendor(input.id, ctx.userId, tx);
     // LibraryService.deleteVendor() handles audit logging
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;
@@ -170,7 +172,7 @@ export const getSkuDetailAction = createAction<
 >(
   async ({ input, ctx, tx }) => {
     assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_VIEW);
-    return LibraryService.getProductById(tx, input.id) as Promise<ProductCatalogWithRelations | null>;
+    return CatalogReadService.getProductById(tx, input.id) as Promise<ProductCatalogWithRelations | null>;
   },
   { useTransaction: false }
 );
@@ -181,7 +183,7 @@ export const getSkuDetailAction = createAction<
  */
 export const getProductMetadataAction = createAction<void, { subCategories: string[]; finishings: string[]; tags: string[] }>(
   async ({ tx }) => {
-    return LibraryService.getProductMetadata(tx);
+    return CatalogReadService.getProductMetadata(tx);
   },
   { useTransaction: false }
 );
@@ -194,7 +196,7 @@ export const getBrandCategoryCoverageAction = createAction<
   void,
   Record<string, { category: string; section: ProductType; count: number }[]>
 >(async ({ tx }) => {
-  return LibraryService.getBrandCategoryCoverage(tx);
+  return CatalogReadService.getBrandCategoryCoverage(tx);
 }, { useTransaction: false });
 
 /**
@@ -212,7 +214,7 @@ export const getPhysicalSamplesAction = createAction<
   { items: LibrarySampleRow[]; total: number }
 >(async ({ input, ctx, tx }) => {
   assertLibraryPermission(ctx.role, PERMISSION.LIBRARY_VIEW);
-  return LibraryService.getPhysicalSamples(tx, input) as Promise<{
+  return CatalogReadService.getPhysicalSamples(tx, input) as Promise<{
     items: LibrarySampleRow[];
     total: number;
   }>;
@@ -259,7 +261,7 @@ export const createProductAction = createAction<ProductCatalogInput, Sku>(
       catalog_metadata: input.catalog_metadata ? ProductMetadataSchema.parse(input.catalog_metadata) : undefined,
     };
 
-    const result = await LibraryService.createProduct(validatedInput, ctx.userId, tx);
+    const result = await CatalogWriteService.createProduct(validatedInput, ctx.userId, tx);
     
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;
@@ -285,7 +287,7 @@ export const updateProductAction = createAction<{ id: string; data: Partial<Prod
       catalog_metadata: input.data.catalog_metadata ? ProductMetadataSchema.parse(input.data.catalog_metadata) : undefined,
     };
 
-    const result = await LibraryService.updateProduct(input.id, validatedData, ctx.userId, tx, ctx.role);
+    const result = await CatalogWriteService.updateProduct(input.id, validatedData, ctx.userId, tx, ctx.role);
     invalidateCache({ scope: REVALIDATE_LIBRARY });
     return result;
   }

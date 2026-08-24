@@ -166,8 +166,9 @@ export type AuditReferenceRecord = {
   /// Nullable sejak AuditLog generic (R3): baris MASTER_DATA/BQ tidak punya
   /// user StudioFlow.
   user_id: string | null;
+  actor_id: string | null;
   phase_id: string | null;
   entity_type: string;
   entity_id: string;
-  details: Prisma.JsonValue | null;
+  metadata_json: Prisma.JsonValue | null;
 };

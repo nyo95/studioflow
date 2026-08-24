@@ -18,6 +18,36 @@ function assertBqEditPerm(role: Role): void {
   }
 }
 
+function resolveLibraryMaterialPrice(
+  candidate: Awaited<ReturnType<typeof loadMaterialCandidate>>,
+  args: { skuPriceId?: string | null; supplierPartyId?: string | null }
+) {
+  if (!candidate?.readiness.ok) {
+    throw new ActionError("This Master Data material is no longer ready for BQ.", "INVALID_LIBRARY");
+  }
+
+  if (args.skuPriceId) {
+    const byId = candidate.priceOptions.find((option) => option.skuPriceId === args.skuPriceId);
+    if (byId) return byId;
+  }
+
+  if (args.supplierPartyId !== undefined && args.supplierPartyId !== null) {
+    const bySupplier = candidate.priceOptions.find(
+      (option) => option.supplierPartyId === args.supplierPartyId
+    );
+    if (bySupplier) return bySupplier;
+  }
+
+  if (candidate.priceOptions.length === 1) {
+    return candidate.priceOptions[0];
+  }
+
+  throw new ActionError(
+    "This library recipe no longer identifies one supplier price unambiguously. Re-save it from a current BQ line.",
+    "INVALID_LIBRARY"
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Save to library — from object
 // ---------------------------------------------------------------------------
@@ -71,6 +101,8 @@ export const saveObjectToLibraryAction = createAction(
             sub_object_of_object_id: libSub.id,
             source: line.source,
             sku_id: line.sku_id,
+            sku_price_id: line.sku_price_id,
+            supplier_party_id: line.supplier_party_id,
             recipe_name: line.source === "PROJECT_LOCAL" ? line.snapshot_name : null,
             recipe_code: line.source === "PROJECT_LOCAL" ? line.snapshot_code : null,
             recipe_brand_name: line.source === "PROJECT_LOCAL" ? line.snapshot_brand_name : null,
@@ -156,6 +188,8 @@ export const saveSubObjectToLibraryAction = createAction(
           sub_object_id: libSub.id,
           source: line.source,
           sku_id: line.sku_id,
+          sku_price_id: line.sku_price_id,
+          supplier_party_id: line.supplier_party_id,
           recipe_name: line.source === "PROJECT_LOCAL" ? line.snapshot_name : null,
           recipe_code: line.source === "PROJECT_LOCAL" ? line.snapshot_code : null,
           recipe_brand_name: line.source === "PROJECT_LOCAL" ? line.snapshot_brand_name : null,
@@ -278,11 +312,12 @@ export const loadFromLibraryObjectAction = createAction(
       }
       if (!m.sku_id) throw new ActionError("This Master Data recipe has no SKU reference.", "INVALID_LIBRARY");
       const candidate = await loadMaterialCandidate(m.sku_id, tx);
-      if (!candidate?.readiness.ok || !candidate.price) {
-        throw new ActionError("This Master Data material is no longer ready for BQ.", "INVALID_LIBRARY");
-      }
+      if (!candidate) throw new ActionError("This Master Data material no longer exists.", "INVALID_LIBRARY");
       const profile = candidate.profile;
-      const price = candidate.price;
+      const price = resolveLibraryMaterialPrice(candidate, {
+        skuPriceId: m.sku_price_id,
+        supplierPartyId: m.supplier_party_id,
+      });
 
       const siblings = await tx.bqMaterialLine.findMany({
         where: { sub_object_id: input.targetSubObjectId },
@@ -312,7 +347,6 @@ export const loadFromLibraryObjectAction = createAction(
           snapshot_category_default_waste_pct: null,
           snapshot_minimum_order: profile?.minimumOrder ?? null,
           snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
-          snapshot_price_valid_from: new Date(price.validFrom),
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,
@@ -375,7 +409,6 @@ export const loadFromLibraryObjectAction = createAction(
           snapshot_currency: candidate.currency,
           snapshot_scope_note: candidate.scopeNote,
           snapshot_has_material: candidate.hasMaterial,
-          snapshot_price_valid_from: new Date(candidate.validFrom),
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,
@@ -456,11 +489,12 @@ export const loadFromLibrarySubObjectAction = createAction(
       }
       if (!m.sku_id) throw new ActionError("This Master Data recipe has no SKU reference.", "INVALID_LIBRARY");
       const candidate = await loadMaterialCandidate(m.sku_id, tx);
-      if (!candidate?.readiness.ok || !candidate.price) {
-        throw new ActionError("This Master Data material is no longer ready for BQ.", "INVALID_LIBRARY");
-      }
+      if (!candidate) throw new ActionError("This Master Data material no longer exists.", "INVALID_LIBRARY");
       const profile = candidate.profile;
-      const price = candidate.price;
+      const price = resolveLibraryMaterialPrice(candidate, {
+        skuPriceId: m.sku_price_id,
+        supplierPartyId: m.supplier_party_id,
+      });
 
       const siblings = await tx.bqMaterialLine.findMany({
         where: { sub_object_id: input.targetSubObjectId },
@@ -490,7 +524,6 @@ export const loadFromLibrarySubObjectAction = createAction(
           snapshot_category_default_waste_pct: null,
           snapshot_minimum_order: profile?.minimumOrder ?? null,
           snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
-          snapshot_price_valid_from: new Date(price.validFrom),
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,
@@ -553,7 +586,6 @@ export const loadFromLibrarySubObjectAction = createAction(
           snapshot_currency: candidate.currency,
           snapshot_scope_note: candidate.scopeNote,
           snapshot_has_material: candidate.hasMaterial,
-          snapshot_price_valid_from: new Date(candidate.validFrom),
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,
@@ -635,6 +667,8 @@ export const saveSubObjectToLibraryAndLinkAction = createAction(
         data: {
           sub_object_id: libSub.id,
           sku_id: line.sku_id!,
+          sku_price_id: line.sku_price_id,
+          supplier_party_id: line.supplier_party_id,
           qty_per_sub: line.qty_per_sub,
           waste_override_pct: line.waste_override_pct,
           sort_order: line.sort_order,

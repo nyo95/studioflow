@@ -10,7 +10,6 @@ import {
   UpdateUISettingsSchema,
   UpsertScheduleCategorySchema,
   SetAutoNamingSchema,
-  UpsertTimelineTemplateSchema,
   CreateChecklistTemplateSchema,
   DeleteByIdSchema,
   DeleteScheduleCategorySchema,
@@ -52,19 +51,6 @@ export const setAutoNamingEnabled = createAction(
     return result;
   },
   { schema: SetAutoNamingSchema }
-);
-
-export const upsertTimelineTemplate = createAction(
-  async ({ input, ctx, tx }) => {
-    assertAdmin(ctx.role);
-
-    return settingsService.executeUpsertTimelineTemplate(tx, {
-      phaseEnum: input.phaseEnum,
-      durationDays: input.durationDays,
-      userId: ctx.userId,
-    });
-  },
-  { schema: UpsertTimelineTemplateSchema }
 );
 
 export const createChecklistTemplate = createAction(
