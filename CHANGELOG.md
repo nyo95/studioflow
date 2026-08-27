@@ -68,6 +68,42 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-27 (rev 9) — BQ-40: subtotal bahan/jasa kembali ke `calc.ts`
+
+### Hasil akhir
+
+Subtotal Bahan dan Jasa tidak lagi dijumlahkan di komponen klien.
+`computeObject()` dan `computeSubObject()` sekarang mengembalikan
+`materialsSubtotal` serta `servicesSubtotal`; `BqBreakdownClient` hanya
+menampilkan dua angka hasil mesin hitung tersebut.
+
+Untuk `ObjectResult`, subtotal ini sengaja hanya mencakup baris yang menempel
+langsung pada Works. Setiap sub-object legacy membawa subtotalnya sendiri, dan
+`ratePerUnit` tetap menjumlahkan kedua jalur tanpa perubahan angka layar.
+
+### Area/berkas
+
+- `src/subapps/bq/lib/calc.ts` — dua subtotal ditambahkan ke `ObjectResult` dan
+  `SubObjectResult`, lalu dipakai membentuk subtotal/rate yang sudah ada.
+- `src/subapps/bq/lib/calc.test.ts` — assertion mengunci pemisahan subtotal
+  bahan dan jasa pada kedua jalur.
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — dua `reduce` biaya dihapus;
+  footer tabel membaca hasil `calc.ts`.
+- `roadmap.md` — BQ-40 ditutup.
+
+### Verifikasi
+
+- `npm test` — **208/208 lulus**.
+- `npx tsc --noEmit` — **lulus**.
+- `npx eslint src/subapps/bq/` — **exit 0**, dua warning lama/non-blocking.
+- Pencarian `reduce(` pada `.tsx` BQ yang mengandung `cost`/`price` — **kosong**.
+
+### Risiko / tindak lanjut
+
+- Tidak ada perubahan skema atau angka; risiko terbatas pada kontrak hasil
+  kalkulasi yang sudah dikunci typecheck dan test.
+- Lanjut sesuai urutan: BQ-41.
+
 ## [Unreleased] - 2026-08-27 (rev 8) — BQ-39: markup dicabut dari BQ
 
 ### Hasil akhir

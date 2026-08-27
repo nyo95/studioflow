@@ -1366,12 +1366,14 @@ di `src/subapps/bq/`**.
       `BIAYA_UMUM` / `TRANSPORT_AKOMODASI` — ketiganya tidak perlu menunggu
       Master Data menyediakan tempat. Nol perubahan kode. Lihat `PRD-BQ.md` §4.
 
-- [ ] **BQ-40 — Penjumlahan harga di komponen klien.** 🛠 agent
+- [x] **BQ-40 — Penjumlahan harga di komponen klien. SELESAI 2026-08-27.**
       `BqBreakdownClient.tsx:1938-1939` menjumlahkan `l.cost` untuk baris Total
       di bawah tabel Bahan/Jasa. Melanggar PRD §3.2. Risiko rendah (menjumlahkan
       keluaran `calc.ts`, bukan harga mentah) tapi tetap tempat kedua uang
       dijumlahkan. Pindahkan jadi `materialsSubtotal` / `servicesSubtotal` di
-      `ObjectResult` + `SubObjectResult`, kunci dengan test.
+      `ObjectResult` + `SubObjectResult`, kunci dengan test. Kedua subtotal kini
+      dihitung di `calc.ts`; komponen hanya merender hasilnya dan tidak lagi
+      mempunyai `reduce` atas harga/biaya.
 
 - [ ] **BQ-41 — Guard lama memblokir pembuatan L2.** 🛠 agent
       `createBqSectionAction` menolak menambah Sub Section ke section yang sudah

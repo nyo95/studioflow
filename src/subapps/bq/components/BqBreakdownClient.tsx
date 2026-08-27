@@ -1536,7 +1536,12 @@ function ObjectRow({
               <LineTable
                 parent={{ objectId: c.objectId }}
                 records={{ materials: object.materials, services: object.services }}
-                computed={{ materials: c.materials, services: c.services }}
+                computed={{
+                  materials: c.materials,
+                  services: c.services,
+                  materialsSubtotal: c.materialsSubtotal,
+                  servicesSubtotal: c.servicesSubtotal,
+                }}
                 subtotal={null}
                 editable={editable}
                 pending={pending}
@@ -1856,6 +1861,8 @@ function LineTable({
   computed: {
     materials: MaterialLineResult[];
     services: ServiceLineResult[];
+    materialsSubtotal: number;
+    servicesSubtotal: number;
   };
   /** Ditampilkan sebagai "Total" di bawah tabel. NULL = jangan tampilkan. */
   subtotal: number | null;
@@ -1864,8 +1871,6 @@ function LineTable({
   run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
 }) {
   const sub = records;
-  const matTotal = computed.materials.reduce((s, l) => s + l.cost, 0);
-  const svcTotal = computed.services.reduce((s, l) => s + l.cost, 0);
   const hasLines = computed.materials.length > 0 || computed.services.length > 0;
   // Fix #1: per-section add buttons so +Bahan lives under Materials,
   // +Jasa lives under Services — not floating together at the bottom.
@@ -2049,7 +2054,7 @@ function LineTable({
                 <tr className="border-t border-slate-200 bg-slate-50/60">
                   <td colSpan={editable ? 5 : 4} />
                   <td className={cn(UI_ENGINE_TYPE_META, "py-1 text-right font-medium text-slate-600")}>
-                    {formatIdr(matTotal)}
+                    {formatIdr(computed.materialsSubtotal)}
                   </td>
                   {editable ? <td /> : null}
                 </tr>
@@ -2198,7 +2203,7 @@ function LineTable({
                 <tr className="border-t border-slate-200 bg-slate-50/60">
                   <td colSpan={editable ? 5 : 4} />
                   <td className={cn(UI_ENGINE_TYPE_META, "py-1 text-right font-medium text-slate-600")}>
-                    {formatIdr(svcTotal)}
+                    {formatIdr(computed.servicesSubtotal)}
                   </td>
                   {editable ? <td /> : null}
                 </tr>

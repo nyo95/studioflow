@@ -116,6 +116,8 @@ test("object rate is the sum of coefficient times price for material and service
   const result = computeObject(objectFixture());
 
   // 0,7 × 150.000 + 0,7 × 85.000 = 164.500
+  assert.equal(result.subObjects[0]?.materialsSubtotal, 105_000);
+  assert.equal(roundRupiah(result.subObjects[0]?.servicesSubtotal ?? 0), 59_500);
   assert.equal(result.ratePerUnit, 164_500);
   assert.equal(result.total, 164_500);
 });
@@ -208,6 +210,8 @@ test("baris yang menempel langsung di L1 ikut terhitung, tanpa pengali L2", () =
   });
 
   // 65.000 x 0,2 = 13.000  +  90.000 x 0,15 = 13.500  ->  26.500 per sqm
+  assert.equal(result.materialsSubtotal, 13_000);
+  assert.equal(result.servicesSubtotal, 13_500);
   assert.equal(result.ratePerUnit, 26_500);
   assert.equal(result.total, 1_192_500);
   assert.equal(result.lineCount, 2);

@@ -110,6 +110,8 @@ export type SubObjectResult = {
   qty: number;
   materials: MaterialLineResult[];
   services: ServiceLineResult[];
+  materialsSubtotal: number;
+  servicesSubtotal: number;
   /** Untuk 1 object. Sudah termasuk pengali L2. */
   subtotal: number;
   lineCount: number;
@@ -124,6 +126,9 @@ export type ObjectResult = {
   /** Hasil hitung baris yang menempel langsung di L1. */
   materials: MaterialLineResult[];
   services: ServiceLineResult[];
+  /** Subtotal baris langsung; isi sub-object tetap ada pada hasilnya sendiri. */
+  materialsSubtotal: number;
+  servicesSubtotal: number;
   subObjects: SubObjectResult[];
   /** Harga satuan object: jumlah biaya seluruh baris L4 untuk satu unit L3. */
   ratePerUnit: number;
@@ -187,10 +192,9 @@ export function computeServiceLine(
 export function computeSubObject(sub: SubObjectInput): SubObjectResult {
   const materials = sub.materials.map((m) => computeMaterialLine(m, sub.qty));
   const services = sub.services.map((s) => computeServiceLine(s, sub.qty));
-
-  const subtotal =
-    materials.reduce((acc, m) => acc + m.cost, 0) +
-    services.reduce((acc, s) => acc + s.cost, 0);
+  const materialsSubtotal = materials.reduce((acc, m) => acc + m.cost, 0);
+  const servicesSubtotal = services.reduce((acc, s) => acc + s.cost, 0);
+  const subtotal = materialsSubtotal + servicesSubtotal;
 
   return {
     subObjectId: sub.id,
@@ -198,6 +202,8 @@ export function computeSubObject(sub: SubObjectInput): SubObjectResult {
     qty: sub.qty,
     materials,
     services,
+    materialsSubtotal,
+    servicesSubtotal,
     subtotal,
     lineCount: materials.length + services.length,
   };
@@ -209,13 +215,13 @@ export function computeObject(obj: ObjectInput): ObjectResult {
   const materials = obj.materials.map((m) => computeMaterialLine(m, 1));
   const services = obj.services.map((s) => computeServiceLine(s, 1));
   const subObjects = obj.subObjects.map((s) => computeSubObject(s));
+  const materialsSubtotal = materials.reduce((acc, m) => acc + m.cost, 0);
+  const servicesSubtotal = services.reduce((acc, s) => acc + s.cost, 0);
 
   // Kedua jalur dijumlahkan, dan sebuah item boleh memakai keduanya sekaligus:
   // kabinet dengan sub-rakitan Body/Pintu, plus sekrup dan lem yang tidak
   // masuk akal dipecah ke salah satunya.
-  const directCost =
-    materials.reduce((acc, m) => acc + m.cost, 0) +
-    services.reduce((acc, s) => acc + s.cost, 0);
+  const directCost = materialsSubtotal + servicesSubtotal;
   const ratePerUnit =
     directCost + subObjects.reduce((acc, s) => acc + s.subtotal, 0);
 
@@ -227,6 +233,8 @@ export function computeObject(obj: ObjectInput): ObjectResult {
     unit: obj.unit,
     materials,
     services,
+    materialsSubtotal,
+    servicesSubtotal,
     subObjects,
     ratePerUnit,
     total: ratePerUnit * obj.qty,
