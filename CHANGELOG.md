@@ -15,6 +15,9 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | Tanggal | Area | Perubahan |
 |---|---|---|
+| 2026-08-26 | BQ → UI/UX | **Redesign UI sebagai pengganti Excel RAB/BQ:** Terminologi diubah ke standar RAB Indonesia (Vol., Harga Sat., Jumlah, Bahan Material, Jasa/Upah, Total Anggaran, OH+Profit %). Tabel L3 direstruktur dengan kolom No./Uraian/Sat./Koef./Harga Sat./Jumlah mirip format spreadsheet BQ; Sat. kini kolom tersendiri. Subtotal row muncul di bawah tabel Bahan dan Jasa, plus total per sub-pekerjaan. Tombol hapus baris tampil hanya hover. Empty state membimbing estimator. Column-header hint (Uraian/Vol./Harga Sat./Jumlah) di atas daftar L1. `BqLinePicker`: label Indonesia (+Bahan, +Jasa), EmptyResult punya link "input manual", form custom jadi panel tersendiri. |
+| 2026-08-26 | Documentation → BQ | `designbq.md` ditambahkan sebagai catatan arah desain BQ: app diposisikan sebagai worksheet estimator yang ringkas, berbasis koefisien manual, dan tidak meniru kalkulasi material otomatis ala engine costing. |
+| 2026-08-26 | BQ | Breakdown viewer disederhanakan untuk workflow estimator: code + title diringkas ke satu identitas utama, tabel line cukup menampilkan description, coefficient, unit price, dan total; waste override dan purchase summary otomatis dihapus dari viewer kerja. |
 | 2026-08-20 | BQ | BQ picker now supports fast project-local material/service entry, and breakdown rows expose subtle Master/Local provenance with inline description and rate editing. |
 | 2026-08-20 | Master Data → SKU Directory | **Fix (3 issues):** (1) **Base unit** — sebelumnya selalu "pcs" (default quick-create); sekarang diupdate ke purchase unit (mis. "lembar") saat pricing disimpan. (2) **Dimension** — kalkulator dimensi sekarang juga menulis `dim_display` (mis. "1200 × 2400 mm") ke `Sku.dim_display`; SKU Directory menampilkannya bukan "Not recorded" lagi. (3) **Categories** — dialog Add Material Price sekarang menampilkan chip kategori dari brand; klik untuk pilih/hapus; disimpan ke `SkuCategory` dan dipropagasi ke `BrandCategory` bila kategori baru. |
 | 2026-08-20 | Master Data → Pricing → Add Material Price | **Feature (v2):** Field Usage unit & Conversion diganti **kalkulator dimensi** — toggle Area (W × L) atau Linear (L), unit selector (mm / cm / m, konversi terpusat 1m=1000mm), input lebar × panjang → usage_unit (`m2` / `m`) dan conversion terisi otomatis. Preview "→ 1 lembar = 2.88 m²" tampil real-time. State dim bersifat lokal (UI helper), hanya usage_unit & conversion yang disimpan ke `Sku`. |
@@ -65,10 +68,911 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-27 (rev 8) — BQ-39: markup dicabut dari BQ
+
+### Hasil akhir
+
+BQ sekarang menghitung **koefisien × harga snapshot** tanpa markup, OH, profit,
+PPN, atau diskon. `computeObject()` menjadikan jumlah biaya L4 sebagai Harga
+Satuan L3 apa adanya, lalu hanya mengalikannya dengan qty L3 untuk memperoleh
+total pekerjaan.
+
+Jejak markup dicabut dari RBAC, server action, settings, library recipe, viewer,
+dan toolbar. Migrasi `20260827120000_drop_bq_markup` menghapus
+`BqObject.markup_pct`, `BqSettings.default_markup_pct`, dan
+`BqLibraryObject.markup_pct`; berkas migrasi hanya ditulis dan **tidak
+dijalankan** sesuai pagar owner. `designbq.md` ikut diselaraskan karena masih
+menyebut Markup sebagai input utama.
+
+### Area/berkas
+
+- `prisma/schema.prisma` + migrasi BQ-39 — tiga kolom markup dihapus.
+- `src/core/rbac/{constants,matrix}.ts` — `BQ_MARKUP_EDIT` dihapus.
+- `src/subapps/bq/lib/{calc,calc.test}.ts` — rumus dan assertion menjadi
+  aritmatika koefisien × harga biasa.
+- action/service/UI BQ terkait — payload, default, tampilan, dan aksi massal
+  markup dihapus.
+- `src/subapps/master-data/lib/bq-readiness.test.ts` — assertion lama tentang
+  konversi/purchase unit diselaraskan dengan kontrak BQ sederhana yang hanya
+  mensyaratkan harga dan satuan harganya.
+- `PRD-BQ.md`, `designbq.md`, `roadmap.md` — status implementasi dan kontrak UI
+  diselaraskan; BQ-32 ikut tertutup karena pengali terakhir sudah hilang.
+
+### Verifikasi
+
+- `npx prisma validate` — **lulus**.
+- `npx prisma generate` — **lulus**, tanpa menjalankan migrasi.
+- `npx tsc --noEmit` — **lulus**.
+- `npx eslint src/subapps/bq/ src/app/bq/ src/core/rbac/constants.ts src/core/rbac/matrix.ts`
+  — **exit 0**, dua warning lama/non-blocking.
+- `npm test` — **208/208 lulus**, termasuk 10 test `calc.test.ts` dan assertion
+  readiness yang sudah diselaraskan dengan model koefisien.
+
+### Risiko / tindak lanjut
+
+- Migrasi BQ-39 menambah antrean BQ-2 dan tetap harus diterapkan owner sebelum
+  `/bq` dapat diuji di browser.
+- Lanjut sesuai urutan: BQ-40.
+
+## [Unreleased] - 2026-08-27 (rev 7) — `PROMPT-CODEX-BQ.md` untuk melanjutkan siklus R3
+
+### Hasil akhir
+
+`PROMPT-CODEX-BQ.md` — prompt siap salin untuk Codex melanjutkan BQ. Isinya
+penunjuk + pagar, **bukan salinan** `HANDOFF-BQ-R3.md`; detail dan acceptance
+tetap hidup di satu tempat.
+
+Urutan kerja yang ditetapkan: **BQ-39 → BQ-40 → BQ-41 → BQ-36 → BQ-34**, commit
+terpisah per nomor.
+
+BQ-39 sengaja didahulukan meski paling besar: ia dan BQ-40 sama-sama menyentuh
+`calc.ts` dan `calc.test.ts`. Kalau BQ-40 dikerjakan lebih dulu, testnya ditulis
+dua kali — sekali dengan markup, sekali tanpa.
+
+### Pagar yang ditulis eksplisit
+
+- **`BqSubObject` jangan disentuh** — 12 berkas, ada data lama yang belum
+  diperiksa.
+- **Jangan menjalankan migrasi** — tulis berkasnya, owner yang menjalankan.
+  Antrean BQ-2 masih enam migrasi.
+- **Jangan mengutip AT-01**, dan jangan mengedit dokumen arsip yang masih
+  menyuruhnya.
+- **Jangan menurunkan aturan dari workbook** — ia mockup.
+- **Jangan baca `docs/archive/bq-2026-08/**` sebagai acuan**, dengan penanda
+  usangnya disebut langsung (waste berlapis, konversi otomatis, pembulatan,
+  purchase summary, mode detail/ringkas, drift harga).
+- BQ-41: **jangan** membuat aksi "pindahkan Works ke Sub Section baru" — jalur
+  rumit untuk masalah yang hilang begitu guard dicabut.
+
+Ditutup dua aturan sikap: aturan tunggal (*kalau menambah angka yang bukan
+koefisien atau bukan harga, jawabannya tidak*), dan izin untuk melawan
+dokumennya sendiri — kalau sebuah tugas terasa lebih rumit daripada masalahnya,
+laporkan, jangan diam-diam bangun jalur rumitnya.
+
+### Area/berkas
+
+- `PROMPT-CODEX-BQ.md` — **baru**. Bacaan wajib, 5 tugas berurut, daftar larangan,
+  gerbang, dan kewajiban mencatat changelog + roadmap sesuai instruksi project.
+
+### Verifikasi
+
+Nol perubahan kode. Urutan tugas dicek terhadap berkas yang disentuh masing-masing
+supaya tidak ada pekerjaan yang ditulis dua kali.
+
+### Risiko / tindak lanjut
+
+- Gerbang `npm test` akan **berubah angkanya** setelah BQ-39 (7 assertion markup
+  ditulis ulang). Prompt menyatakan yang penting seluruhnya lulus, bukan
+  jumlahnya tetap 30.
+- `/bq` tetap tidak bisa diuji di browser sampai owner menjalankan migrasi.
+- `HANDOFF-CODEX.md` belum diperiksa ulang; §3 BQ di dalamnya kemungkinan usang.
+
+## [Unreleased] - 2026-08-27 (rev 6) — `PRD-BQ.md` kompak; enam dokumen BQ diarsipkan
+
+### Hasil akhir
+
+**`PRD-BQ.md` menggantikan `PRD-BQ-v2.md`** — 230 baris dari 416, isi teknis
+sama. Yang dipangkas: pengulangan, narasi bukti pembacaan workbook (pindah ke
+arsip), dan peringatan yang muncul tiga kali di tempat berbeda. Yang
+dipertahankan penuh: model, rumus, enam aturan keras, dan tabel "yang tidak ada"
+— karena itu yang mencegah mesin lama dihidupkan lagi.
+
+Nama berkasnya sengaja dilepas dari nomor versi. Lima revisi dalam satu hari
+membuktikan `-v2` di nama berkas cuma jadi utang penamaan berikutnya.
+
+### Enam dokumen BQ diarsipkan
+
+Dipindah ke **`docs/archive/bq-2026-08/`** beserta README yang menjelaskan
+statusnya satu per satu:
+
+| Berkas | Kenapa diarsipkan |
+|---|---|
+| `PRD-BQ-v2.md` | digantikan `PRD-BQ.md` |
+| `PLAN-BQ-REFACTOR-2026-08-27.md` | rencana R3; sebagian usulannya dibatalkan owner di hari yang sama (`variantGroup`, kolom `area`, heuristik varian) |
+| `PLAN-BQ-SIMPLIFY-2026-08-19.md` | rencana R1, sudah dieksekusi |
+| `HANDOFF-OPENCODE.md` | handoff R1 — **bagian library-nya salah** (pour-and-forget, padahal tertaut + copy-on-write) |
+| `HANDOFF-OPENCODE-R2.md` | handoff R2, sudah dieksekusi #67 |
+| `UPSTREAM-BQ-MATERIAL-SOURCE.md` | menggambarkan BQ sebagai aplikasi terpisah; dibalik owner 2026-08-19 |
+
+README arsipnya menyebut satu penanda usang yang berlaku untuk hampir seluruh
+isinya: **dokumen mana pun yang menyebut waste berlapis, konversi purchase unit
+otomatis, pembulatan pembelian, purchase summary, mode detail/ringkas, atau
+drift/refresh harga merujuk mesin yang sudah dibongkar.** Satu kalimat itu lebih
+berguna daripada memeriksa keenamnya satu per satu.
+
+Empat dari enam berkas mengutip AT-01. Peringatannya dipasang di README arsip,
+dan **berkasnya sendiri tidak diedit** — mengubah catatan handoff lama supaya
+cocok dengan keadaan sekarang adalah mengarang riwayat.
+
+### Rujukan yang ikut diperbaiki
+
+Semua penunjuk ke berkas yang pindah ditelusuri dan dibetulkan, bukan dibiarkan
+menggantung:
+
+- `AGENTS.md` — §BQ Contract menunjuk `PRD-BQ.md`; peta dokumen menambah
+  `PRD-BQ.md` + `HANDOFF-BQ-R3.md` sebagai mengikat, menambah baris
+  `docs/archive/bq-2026-08/**` sebagai jangan-diikuti, dan mencabut
+  `UPSTREAM-BQ-MATERIAL-SOURCE.md` dari baris Master Data v1 karena sudah pindah.
+- `HANDOFF-BQ-R3.md` — §0 dan §4 menunjuk `PRD-BQ.md` dan folder arsip.
+- `roadmap.md` — empat rujukan diperbarui, termasuk catatan siklus R2 dan R3.
+- `docs/archive/README.md` — menambah bagian `bq-2026-08/`.
+
+Setelah ini, dokumen BQ yang hidup di root tinggal tiga: **`PRD-BQ.md`**
+(spesifikasi), **`designbq.md`** (rasa & UI), **`HANDOFF-BQ-R3.md`** (urutan
+kerja) — plus §BQ Contract di `AGENTS.md` sebagai penunjuk.
+
+### Verifikasi
+
+`grep` memastikan tidak ada lagi rujukan `PRD-BQ-v2` di `AGENTS.md`,
+`roadmap.md`, maupun `HANDOFF-BQ-R3.md`. Nol perubahan kode — 30 test,
+typecheck, dan lint tidak terpengaruh.
+
+### Risiko / tindak lanjut
+
+- Entri CHANGELOG rev 1–5 hari ini menyebut nama berkas yang sekarang ada di
+  arsip. **Sengaja tidak diedit** — riwayat mencatat keadaan saat itu.
+- `HANDOFF-CODEX.md` sengaja **tidak** diarsipkan: cakupannya lebih luas dari BQ
+  dan `AGENTS.md` masih menandainya mengikat. §3 BQ di dalamnya perlu dicek ulang
+  terpisah.
+
+## [Unreleased] - 2026-08-27 (rev 5) — Kerumitan yang dibuat sendiri dibubarkan
+
+### Hasil akhir
+
+Arahan owner: *"pokoknya sederhana aja, ga usah ribet-ribet dan automasi
+gimana-gimana. perhitungannya pake koefisien nantinya di level L3, L4."*
+
+Ditindaklanjuti dengan **membongkar tiga kerumitan yang saya buat sendiri di
+rencana sebelumnya**, bukan dengan menulis rencana baru.
+
+| Sempat direncanakan | Jadinya |
+|---|---|
+| **BQ-37** — owner menetapkan "fixture kanonik" pengganti AT-01 sebelum boleh menyentuh angka | **Dibubarkan.** Cukup test aritmatika biasa. Tidak butuh keputusan owner. |
+| **BQ-41** — agent memilih antara cabut guard vs bikin aksi "pindahkan Works ke Sub Section baru" | **Cabut guard-nya.** Masalahnya hilang sendiri; jalur rumitnya tidak usah dibuat. |
+| **BQ-33** — skrip impor sheet `Tes` + pemecah varian + kurasi draft | **Library tumbuh dari tombol "Simpan ke library"** saat estimator bekerja. Tidak ada impor massal. |
+
+**BQ-37 dibubarkan, dan itu melepas BQ-39.** AT-01 dulu masuk akal karena mesin
+hitungnya rumit — waste berlapis, konversi satuan, pembulatan pembelian — sehingga
+butuh satu contoh nyata dari dokumen kantor untuk membuktikan seluruh rantainya
+benar. Rantai itu sudah tidak ada. Yang tersisa cuma perkalian, dan perkalian
+cukup diuji `2 × 100.000 = 200.000`.
+
+Menuntut fixture kanonik sebelum boleh menyentuh angka adalah kerumitan yang
+saya buat sendiri, lalu saya pakai untuk memblokir pekerjaan orang lain. Markup
+(BQ-39) sekarang **tidak diblokir apa pun** dan pindah dari 🔴 ke 🟢 di handoff.
+
+### Koefisien ada di dua tempat, bukan satu
+
+Revisi sebelumnya menulis *"satu koefisien saja, di L4"*. Owner mengoreksi:
+koefisien ada di **L3 dan L4** — mekaniknya sama, mengalikan:
+
+- **koefisien L4** — berapa banyak bahan/jasa untuk SATU unit L3
+- **koefisien L3** (qty) — berapa banyak unit L3 di project
+
+Yang tidak ada adalah lapis pengali **ketiga**. Rumusnya sendiri tidak berubah;
+yang berubah cara menyebutnya, dan itu penting supaya tidak ada yang mengira qty
+di L3 adalah hal yang berbeda jenis.
+
+### Aturan tunggal kalau ragu
+
+Ditulis ke PRD §3.1 dan handoff §1: **kalau sebuah usulan menambah angka yang
+bukan koefisien atau bukan harga, jawabannya tidak.**
+
+Handoff juga menambah §8 yang menyatakan: kalau sebuah pekerjaan di dokumen itu
+terasa lebih rumit daripada masalah yang diselesaikannya, kemungkinan besar
+**dokumennya yang salah** — katakan begitu, jangan diam-diam membangun jalur
+rumitnya. Ketiga contoh di tabel atas dipasang sebagai pola yang patut dicurigai.
+
+### Area/berkas
+
+- `PRD-BQ-v2.md` — §3.1 koefisien di L3 & L4 + aturan tunggal · §3.5 diringkas ·
+  §11 AT-01 tidak perlu pengganti setara · §12 susut jadi 3 baris.
+- `HANDOFF-BQ-R3.md` — §1 aturan tunggal · D1 (markup) pindah ke 🟢 dengan
+  acceptance · D4 diputuskan (cabut guard, jangan bikin aksi pindah) · §4 AT-01
+  ditulis ulang · BQ-37 dihapus dari daftar tahan · §8 prinsip baru.
+  Bagian 🔴 sekarang menyisakan **satu** item: pensiun `BqSubObject`.
+- `roadmap.md` — BQ-37 ditutup sebagai dibubarkan; BQ-39 dari `⏳ owner` jadi
+  `🛠 agent`; BQ-41 diputuskan; BQ-33 disederhanakan + turun prioritas.
+
+### Verifikasi
+
+Nol perubahan kode. 30 test, typecheck, dan lint tidak terpengaruh.
+
+### Risiko / tindak lanjut
+
+- **BQ-39 bawa migrasi** dan antrean BQ-2 masih enam migrasi belum diterapkan.
+  Handoff menyuruh agent menulis migrasinya, **tidak menjalankannya** — itu
+  urusan owner di mesinnya.
+- Yang tersisa di 🔴 tinggal pensiun `BqSubObject`: 12 berkas, ada data lama yang
+  belum diperiksa.
+
+## [Unreleased] - 2026-08-27 (rev 4) — Recheck logic terhadap PRD rev 3; `HANDOFF-BQ-R3.md`
+
+### Hasil akhir
+
+Audit kode terhadap `PRD-BQ-v2.md` rev 3 — mencari divergensi, bukan membaca
+ulang. Hasilnya dituang ke **`HANDOFF-BQ-R3.md`** yang bisa langsung dipakai
+agent coding lain.
+
+### Yang terbukti SUDAH BENAR
+
+Dicek ke kode, bukan diasumsikan:
+
+| Yang dicek | Hasil |
+|---|---|
+| Tabel `BqLibrary*` punya kolom `snapshot_*`? | tidak ada — library memang menunjuk (§4.1) |
+| `breakdown-service.ts` menyentuh master data? | tidak — hanya kolom `snapshot_*` (§6) |
+| Ada input harga satuan L3 yang diketik manual? | tidak ada (§2.1) |
+| Subtotal pengelompok post-order? | ya, 8 test |
+| Batas kedalaman hanya di jalur tulis? | ya, 12 test |
+| `hasMaterial` tampil saat memilih baris? | **ya** — picker, quick-add, toolbar |
+
+Temuan terakhir itu **mempersempit BQ-34**: `hasMaterial` sudah tampil sebagai
+*"incl. material"* saat estimator memilih baris. Yang belum cuma rekap per
+`cost_category`, yang masih menggolongkan borongan sebagai Upah murni. Judul
+roadmap-nya dikoreksi dari *"Tampilkan kategori Material + Upah"* jadi *"Rekap
+kategori belum membedakan borongan"*.
+
+**BQ-32 hampir selesai tanpa disadari:** `computeObject()` sudah menghitung harga
+satuan dari Σ L4, dan tidak ada input harga satuan yang diketik di UI. Rumus PRD
+§3.1 praktis sudah terpenuhi — sisa satu-satunya adalah markup yang masih ikut
+dikalikan (BQ-39). Ditandai `[~]` di roadmap.
+
+### Divergensi baru yang ditemukan
+
+**BQ-40 — penjumlahan harga hidup di komponen klien.**
+`BqBreakdownClient.tsx:1938-1939` menjumlahkan `l.cost` untuk baris Total di
+bawah tabel Bahan/Jasa. Melanggar PRD §3.2. Risikonya rendah — ia menjumlahkan
+keluaran `calc.ts`, bukan harga mentah — tapi ia tetap tempat kedua uang
+dijumlahkan, persis pola yang melahirkan selisih di kertas penawaran.
+Perbaikannya sama dengan yang sudah dilakukan untuk rollup: angkat jadi
+`materialsSubtotal` / `servicesSubtotal` di `ObjectResult`.
+
+**BQ-41 — guard lama memblokir pembuatan L2.**
+`createBqSectionAction` menolak menambah Sub Section ke section yang sudah punya
+Works (*"move them into divisions first"*). Guard itu lahir waktu model masih dua
+lapis. Sekarang ia memblokir alur yang paling wajar: estimator mengisi "Wall
+Works" dulu, baru sadar perlu dipisah per area — dan saat itu ia buntu.
+
+Aturan ini **tidak ada di PRD sama sekali**, jadi statusnya menggantung. Apa pun
+yang dipilih (cabut guard, atau sediakan aksi "pindahkan Works ke Sub Section
+baru"), pasalnya harus masuk PRD §2.3.
+
+### `HANDOFF-BQ-R3.md`
+
+Dipilah tegas antara **🟢 boleh langsung dikerjakan** (BQ-40, BQ-41, BQ-36,
+BQ-34) dan **🔴 tunggu owner** (markup BQ-39, pensiun `BqSubObject`, BQ-37),
+masing-masing dengan alasan kenapa ditahan.
+
+Yang ditulis eksplisit untuk agent berikutnya:
+
+- **Urutan BQ-37 → BQ-39 tidak boleh dibalik.** Mencabut markup menulis ulang 7
+  assertion di `calc.test.ts`, satu-satunya test angka yang tersisa setelah AT-01
+  terbukti gerbang hantu.
+- **Jangan mengutip AT-01**, meski beberapa handoff lama menyuruhnya. Dokumen
+  lama sengaja tidak diedit.
+- **Jangan menurunkan aturan dari workbook** — ia mockup, bukan spesifikasi.
+- **BQ-2 belum lepas**, jadi tidak ada yang bisa diuji di browser. Typecheck,
+  lint, dan unit test tetap jalan.
+- Lima aturan keras, termasuk yang terakhir: kalau PRD dan kode berbeda, jangan
+  diam-diam memilih salah satu — perbaiki atau perbarui, lalu catat. Perbedaan
+  yang tidak dicatat adalah cara gerbang hantu lahir.
+
+### Area/berkas
+
+- `HANDOFF-BQ-R3.md` — **baru**, 7 bab.
+- `roadmap.md` — BQ-40 dan BQ-41 ditambahkan; BQ-32 ditandai `[~]` dengan status
+  sebenarnya; BQ-34 dipersempit sesuai temuan.
+
+### Verifikasi
+
+Setiap baris "sudah benar" di atas berasal dari `grep`/`awk` ke berkas
+sebenarnya. Nol perubahan kode — 30 test, typecheck, dan lint tidak terpengaruh.
+
+### Risiko / tindak lanjut
+
+- **BQ-41 butuh keputusan desain**, bukan cuma coding. Agent yang mengerjakannya
+  harus memilih salah satu jalur dan menulis pasalnya ke PRD — jangan diam-diam
+  mencabut guard tanpa mencatat.
+- **BQ-37 memblokir BQ-39.** Yang dibutuhkan owner cuma satu contoh perhitungan
+  kanonik: satu Works, beberapa L4, angka yang disetujui.
+
+## [Unreleased] - 2026-08-27 (rev 3) — Markup dibuang; `PROJECT_LOCAL` tidak jadi dicabut
+
+### Hasil akhir
+
+Tiga arahan owner sore ini menyederhanakan model, dan salah satunya **membatalkan
+pencabutan yang dicatat rev 2 beberapa jam sebelumnya**.
+
+**1. Markup dibuang.** Owner: OH, profit, markup, PPN, diskon —
+*"TIDAK MAU DI BUAT SERUMIT INI"*; *"hitungan hanya dari koefisien."*
+
+BQ tidak mengenal margin sama sekali. Harga satuan Works adalah biaya pokoknya,
+titik. Kalau kantor perlu margin, itu terjadi di luar BQ — di dokumen penawaran,
+atau sudah termasuk di harga Master Data.
+
+Ini menutup pertanyaan terbuka yang rev 2 buka (letak markup: melebur vs baris
+OH+Profit). Jawabannya ternyata bukan salah satu dari keduanya.
+
+**2. `PROJECT_LOCAL` TIDAK jadi dicabut.** Owner: *"data yang tidak ada di master
+data → override per proyek / dibuat library di bq saja."*
+
+Rev 2 mencatat pencabutan total berdasarkan *"semua pricing dari master data,
+kalau ga ada harus buat dulu di master data"*. Arahan sore ini melunakkannya jadi
+dua jalan keluar:
+
+| Jalan | Untuk apa | Hidup di mana |
+|---|---|---|
+| Override per project | sekali pakai, khas project itu | baris L4 `PROJECT_LOCAL` |
+| Library BQ | berulang, tapi bukan urusan Master Data | resep L3 di library BQ |
+
+Urutannya tetap Master Data dulu; dua jalan itu jalan keluar, bukan jalan pintas.
+
+**Ini menutup bloker yang rev 2 angkat**: `ALAT`, `BIAYA_UMUM`, dan
+`TRANSPORT_AKOMODASI` tidak perlu menunggu Master Data menyediakan tempat.
+Keduanya sah lewat override atau library BQ. Konsekuensi lain: template yang
+menuang baris `PROJECT_LOCAL` harga 0 tetap sah — yang perlu diperbaiki cuma
+pengalamannya, supaya harga 0 terbaca *belum diisi*, bukan *gratis*.
+
+Nol perubahan kode untuk poin 2 — yang berubah cuma dokumennya, dan arah kerja
+yang batal dimulai.
+
+### Kenapa markup belum dicabut dari kode
+
+Keputusannya final, eksekusinya belum. Jejaknya ~60 kemunculan, diukur dengan
+`grep -rc`, bukan ditaksir:
+
+```
+BqObject.markup_pct + BqSettings.default_markup_pct   migrasi
+BQ_MARKUP_EDIT  →  constants.ts (2) + matrix.ts (2)   cabut permission
+calc.ts (10)        computeObject() mengalikannya
+calc.test.ts (7)    satu-satunya test angka yang tersisa
+bq-project-actions (8) · settings-service (7) · BqBreakdownClient (6)
+BqToolbar (4, applyMarkupAll) · library-service (4) · schema.prisma (6)
+```
+
+Yang membuatnya harus ditunda: mencabut markup **menulis ulang satu-satunya test
+angka yang ada**, sementara AT-01 sudah terbukti gerbang hantu (BQ-37). Mencabut
+jaring pengaman terakhir tanpa menyiapkan penggantinya bukan urutan yang benar.
+Karena itu BQ-39 ditandai dikerjakan **sesudah** BQ-37.
+
+PRD §3.5 menyatakan eksplisit bahwa markup **masih hidup di aplikasi**, supaya
+tidak ada yang mengira sudah dicabut.
+
+### Area/berkas
+
+- `PRD-BQ-v2.md` — revisi 3. §3.1 rumus tanpa markup · §3.5 ditulis ulang jadi
+  "Markup dibuang" + status kode · §5 ditulis ulang jadi "Dari mana harga datang"
+  dengan dua jalan keluar (§5.1 urutan, §5.2 kosong bukan nol) · §7 catatan
+  template dikoreksi · §8 ALAT/BIAYA_UMUM/TRANSPORT tidak lagi masalah terbuka ·
+  §9 `BQ_MARKUP_EDIT` ditandai akan dicabut · §10 markup masuk arsip · §12
+  disusutkan jadi 5 baris.
+- `roadmap.md` — BQ-38 **ditutup tanpa dikerjakan** (tidak jadi dicabut,
+  alasannya dicatat); BQ-39 diganti isinya dari "letak markup" jadi "cabut markup
+  dari kode", lengkap dengan peta jejaknya dan urutan terhadap BQ-37.
+
+### Verifikasi
+
+Jejak markup dihitung `grep -rc` ke berkas sebenarnya. Nol perubahan kode —
+`prisma validate`, `tsc`, `eslint`, dan 30 test tidak terpengaruh.
+
+### Risiko / tindak lanjut
+
+- **BQ-39 destruktif dan menunggu aba-aba owner.** Sampai dikerjakan, aplikasi
+  masih menghitung markup — PRD dan kode sengaja berbeda, dan perbedaannya
+  ditulis eksplisit di §3.5.
+- **BQ-37 mendahului BQ-39.** Tanpa fixture kanonik, menulis ulang
+  `calc.test.ts` berarti kehilangan satu-satunya acuan angka.
+- Rev 2 sempat mencatat pencabutan `PROJECT_LOCAL` sebagai arah kerja. Entri rev
+  2 **tidak diedit** — mengubah catatan lama supaya cocok dengan keadaan sekarang
+  adalah mengarang riwayat. Pembatalannya dicatat di sini.
+
+## [Unreleased] - 2026-08-27 (rev 2) — PRD BQ ditulis ulang; Excel turun status jadi mockup; `PROJECT_LOCAL` dicabut
+
+### Hasil akhir
+
+`PRD-BQ-v2.md` **ditulis ulang dari nol** mengikuti tujuh jawaban owner. Owner:
+*"PRD lama lupain aja."* Revisi pagi ini masih membawa asumsi dari PRD lama;
+revisi 2 berdiri sendiri.
+
+**Perubahan yang paling mengubah arah:**
+
+- **`BQ template tes.xlsx` turun status jadi MOCKUP, bukan spesifikasi.** Owner:
+  *"ga wajib persis kayak di sheet1 jg bentuknya, excel itu hanya mockup saja."*
+  Konsekuensi yang dipegang: kalau model berbeda dari workbook, **model yang
+  menang**. Berhenti menurunkan aturan dari formula Excel. Ini juga membuat
+  penomoran cetak L3 turun jadi keputusan UI (BQ-35), bukan bagian model.
+
+- **Pembagian tugas antar lapis dipertegas.** Owner: *"yang bisa di-breakdown
+  dengan perhitungan hanya sub-works saja, works itu pengalinya berapa unit."*
+  L4 satu-satunya lapis yang dirinci koefisien × harga; L3 menjawab "berapa
+  unit" dan harga satuannya **tidak diketik** — ia hasil Σ L4.
+
+- **`BqSubObject` resmi dipensiunkan.** Kasus furniture yang dulu jadi alasan
+  keberadaannya ditangani L3 + L4 langsung. Contoh dari owner:
+  `L0 FIXTURES → L1 KABINET → L3 Pintu Kabinet → L4 penyusun pintu`. Tidak ada
+  lapis rakitan di antara L3 dan L4.
+
+- **Library menyimpan RUJUKAN, bukan harga.** Owner: *"yg di simpan itu query id
+  nya saja, jadi saat lg di snapshot saat itu akan ngambil harga saat L3 itu di
+  import ke proyek."* Resep = L3 + baris L4 yang menyimpan `sku_id` /
+  `work_price_id` + koefisien. Pembagiannya jadi tegas: **library menunjuk,
+  project membekukan.**
+
+- **Heuristik varian dibatalkan.** Owner: *"terlalu ribet."* Usulan "kategori
+  beda = aditif, kategori sama = varian" dibuang; impor sheet `Tes` menghasilkan
+  draft yang dikurasi manual.
+
+### ⚠️ `PROJECT_LOCAL` dicabut — MEMBALIK keputusan 2026-08-24
+
+Owner 2026-08-27: *"semua pricing dari master data, kalau ga ada harus buat dulu
+di master data."*
+
+Ini mencabut keputusan owner 2026-08-24 (PRD Architecture Cleanup v2 §28) yang
+mengesahkan project-local entry, dan yang sudah berjalan di kode sejak
+2026-08-20.
+
+Cakupan yang diukur, bukan ditaksir:
+
+| Area | Kemunculan |
+|---|---|
+| `bq-library-actions.ts` | 48 |
+| `bq-project-actions.ts` | 4 |
+| `bq-template-actions.ts` | 3 — template menuang baris `PROJECT_LOCAL` harga 0 |
+| enum `BqLineSource`, `types/breakdown.ts`, `library-service.ts`, `bq-template-data.ts` | ada |
+| data yang terlanjur ada | belum diperiksa |
+
+**Bloker sebenarnya bukan di BQ.** `ALAT`, `BIAYA_UMUM`, dan
+`TRANSPORT_AKOMODASI` tidak punya padanan di Master Data — tidak ada SKU
+"akomodasi supervisor". Aturan baru menuntut mereka dibuatkan tempat di Master
+Data lebih dulu, dan itu keputusan Master Data, bukan keputusan BQ.
+
+**Tidak ada kode yang diubah.** `PROJECT_LOCAL` masih berjalan; PRD §5.1 menyatakan
+eksplisit bahwa §5 belum berlaku di kode, supaya tidak ada yang mengira sudah.
+Dilacak roadmap **BQ-38**.
+
+### Markup jadi pertanyaan terbuka baru (BQ-39)
+
+Dicek ke workbook: **tidak ada baris OH, Profit, Markup, PPN, maupun diskon di
+seluruh sheet `BQ`** — `GRAND TOTAL = G18 + SUBTOTAL B + G177`, murni jumlah
+subtotal. Aplikasi menyimpan `markup_pct` per L3 Works.
+
+Dua kemungkinan yang belum dipilih owner: (a) melebur ke harga satuan seperti
+sekarang, atau (b) satu baris OH+Profit di akhir dokumen — bentuk RAB yang lebih
+lazim. PRD §3.5 melarang menyentuh markup sampai dijawab.
+
+### Area/berkas
+
+- `PRD-BQ-v2.md` — **ditulis ulang**, 13 bab. §0 status mockup · §2 model lima
+  lapis + pembagian tugas antar lapis · §4 library menyimpan rujukan ·
+  §5 + §5.1 SSOT tunggal beserta cakupan pencabutan `PROJECT_LOCAL` ·
+  §3.5 markup terbuka · §10 arsip yang gugur · §12 daftar yang belum diputuskan.
+- `roadmap.md` — BQ-38 (cabut `PROJECT_LOCAL`) dan BQ-39 (letak markup)
+  ditambahkan; BQ-33 diperbarui: heuristik varian dibatalkan, library menyimpan
+  id master data saja.
+
+### Verifikasi
+
+Cakupan `PROJECT_LOCAL` dihitung dengan `grep -rc` ke berkas sebenarnya, bukan
+ditaksir. Ketiadaan baris OH/Profit/PPN dicek dengan memindai seluruh 184 baris
+× 11 kolom sheet `BQ`. Nol perubahan kode — gerbang tidak terpengaruh.
+
+### Risiko / tindak lanjut
+
+- **BQ-38 bergantung keputusan Master Data**, bukan BQ. Jangan mulai mencabut
+  `PROJECT_LOCAL` sebelum ada tempat untuk ALAT / BIAYA_UMUM / TRANSPORT.
+- **BQ-39 memblokir pekerjaan markup apa pun**, termasuk `applyMarkupAll`.
+- BQ-32 (harga satuan = Σ L4) sekarang **sudah ditegaskan PRD §2.1** sebagai
+  model, bukan usulan — tinggal dieksekusi.
+
+## [Unreleased] - 2026-08-27 — `PRD-BQ-v2.md` jadi PRD kanonik BQ; §BQ Contract dirampingkan
+
+### Hasil akhir
+
+**`PRD-BQ-v2.md` ditulis** sebagai PRD produk kanonik untuk `/bq`. Pemicunya:
+tiga siklus refactor (R1, R2, R3) membongkar sebagian besar mesin yang
+dijelaskan PRD asal, tapi dokumennya tidak ikut dikoreksi — sehingga setiap
+handoff mengutip kontrak yang menggambarkan kode yang sudah tidak ada.
+
+Yang ditemukan usang saat verifikasi, dan sudah diarsipkan di PRD v2 §10:
+
+| Yang dikutip dokumen | Kenyataan |
+|---|---|
+| `price-drift-service.ts` | **tidak ada berkasnya** — dihapus di R9 |
+| `BqPurchaseSummary` | **tidak ada berkasnya** — dihapus di R2 |
+| `BqMaterialProfile`, `BqCategoryWaste` | dihapus di R1 |
+| PRD Bab 3 "waste dikali sebelum pengali L2", "pembulatan setelah agregasi" | gugur bersama waste & rounding |
+| PRD Bab 7 (Rp4.711.299 / Rp5.653.559 / variance Rp721.201) | tidak bisa direproduksi mode koefisien |
+| AT-05b "konversi tidak pernah dimatikan" | AT-05b dihapus di BQ-8 (O3); `conversion` tidak dipakai menghitung |
+| PRD §2.2 "tiga lapis, tidak lebih" | digantikan lima lapis |
+
+`conversion`, `waste*`, `minimumOrder`, `roundingIncrement` masih ada di
+`MaterialLineInput` dan kolom snapshot, tapi **tidak satu pun dipakai
+menghitung** — dibawa sebagai provenance historis. PRD v2 §3.4 menyatakannya
+eksplisit supaya tidak ada yang menghidupkannya karena mengira itu bug.
+
+### `AGENTS.md` §BQ Contract dirampingkan 202 baris → 45 baris
+
+Isi lamanya bukan cuma panjang, tapi **salah**: ia menjelaskan mesin yang sudah
+dibongkar. Membiarkannya berarti dua dokumen saling bertentangan, dan yang
+dibaca agen berikutnya selalu yang salah — persis pola yang melahirkan gerbang
+hantu AT-01.
+
+Yang tersisa: penunjuk ke `PRD-BQ-v2.md` plus lima hal yang tidak boleh
+dilanggar (hirarki lima lapis · aritmatika hanya di `calc.ts` + rollup wajib
+post-order · snapshot tidak pernah refresh · Master Data SSOT · batas ditegakkan
+di jalur tulis, tidak pernah di jalur baca), dan peringatan eksplisit untuk
+berhenti mengutip AT-01.
+
+### Area/berkas
+
+- `PRD-BQ-v2.md` — **baru**, 13 bab. Hirarki lima lapis beserta bukti
+  formulanya, rumus hitung yang berlaku, aturan snapshot, SSOT, library resep
+  (varian lewat nama, bukan struktur), template kerangka, kategori biaya, RBAC,
+  **arsip keputusan yang gugur (§10)**, gerbang + peringatan AT-01 (§11), dan
+  daftar yang belum diputuskan (§12).
+- `AGENTS.md` — §BQ Contract dirampingkan; peta dokumen menambah `PRD-BQ-v2.md`
+  dan `designbq.md` sebagai mengikat untuk BQ, serta menandai
+  `PRD_Fixture_Breakdown.md` sebagian gugur; klarifikasi owner 2026-08-24
+  diperluas ke PRD BQ.
+- `roadmap.md` — BQ-1 dikoreksi: `BqPurchaseSummary` yang disebutnya sudah
+  dihapus di R2.
+
+### Verifikasi
+
+Setiap klaim "sudah tidak ada" dicek ke filesystem lebih dulu (`find` + `grep`
+ke `src/`), bukan disimpulkan dari dokumen. Tidak ada kode yang diubah —
+`prisma validate`, `tsc`, `eslint`, dan test tidak terpengaruh.
+
+`designbq.md` sengaja **tidak** disentuh: ia arah rasa & UI, dan masih benar
+seluruhnya.
+
+### Risiko / tindak lanjut
+
+- **BQ-37 tetap menunggu owner.** PRD v2 §11 sekarang menyatakan larangan
+  mengutip AT-01 secara eksplisit, tapi keputusan fixture penggantinya belum ada.
+- `HANDOFF-OPENCODE.md`, `HANDOFF-OPENCODE-R2.md`, dan
+  `PLAN-BQ-SIMPLIFY-2026-08-19.md` masih memuat kutipan AT-01. Dibiarkan apa
+  adanya — mengubah catatan handoff lama supaya cocok dengan keadaan sekarang
+  adalah mengarang riwayat. Peringatannya hidup di dokumen yang mengikat.
+
+## [Unreleased] - 2026-08-27 — BQ-31: pengelompok jadi tiga lapis (tanpa migrasi); AT-01 ternyata gerbang hantu
+
+### Hasil akhir
+
+**BQ-31 selesai — dan ternyata TIDAK butuh migrasi.** `BqSection` sudah punya
+self-relation `parent_id` sejak dibangun; yang mengunci di dua lapis cuma
+validasi aplikasi dan UI. Jadi antrean migrasi BQ-2 tidak bertambah.
+
+Yang berubah:
+
+- **Batas kedalaman jadi tiga** (L0 Section → L1 Sub Section → L2 Sub Section).
+  Menggantikan penolakan lama *"a division cannot contain another division"*.
+  Kedalaman induk ditelusuri dengan loop **berbatas**, bukan rekursi terbuka —
+  data yang berputar tidak boleh berujung query tak berhingga di jalur tulis.
+- **Penomoran otomatis mengikuti kedalaman** — A/B/C, lalu I/II/III, lalu 1/2/3,
+  sesuai dokumen kantor (`1 Shopfront Area`, `2 Store Area`).
+- **Batas ditegakkan di jalur TULIS saja.** Jalur baca sengaja tidak memaksakan
+  apa pun: data yang terlanjur lebih dalam tetap tampil, karena yang tidak
+  tampil tidak bisa diperbaiki pengguna. Prinsip yang sama dipakai untuk
+  pengelompok yatim (induknya di-soft-delete) dan data berputar — keduanya
+  diangkat jadi akar, bukan dihilangkan.
+- **UI jadi rekursif.** `SectionBlock` + `DivisionBlock` yang kembar diganti satu
+  komponen rekursif. Tanpa ini seluruh Works di dalam L2 tidak akan pernah
+  dirender — hilang dari layar tanpa pesan apa pun. Bobot tipografi turun tiap
+  lapis; tanpa itu L1 dan L2 terlihat kembar.
+- `onAddDivision` → `onAddSubSection`, mengikuti penamaan yang dikonfirmasi owner.
+
+### AT-01 adalah gerbang hantu
+
+Ditemukan saat memverifikasi gerbang. Tujuh dokumen — `AGENTS.md`, `roadmap.md`,
+`HANDOFF-OPENCODE.md`, `HANDOFF-OPENCODE-R2.md`, `PLAN-BQ-SIMPLIFY-2026-08-19.md`,
+CHANGELOG, dan revisi awal `PLAN-BQ-REFACTOR-2026-08-27.md` — menyatakan
+*"AT-01 = Rp5.653.559 dikunci `calc.test.ts`"*, dan setiap handoff memerintahkan
+agen berikutnya menjaganya.
+
+Angka itu **tidak ada di satu berkas pun** di `src/` maupun `prisma/`. Dicari
+juga sebagai `5_653_559` dan `5653559`; nihil. Ia gugur saat R1/R2 menulis ulang
+`calc.ts` ke mode koefisien — waste dan conversion dibuang, sehingga contoh PRD
+Bab 7 tidak lagi bisa direproduksi — tapi dokumennya tidak ikut dikoreksi.
+
+`calc.test.ts` yang hidup tetap sah dan tetap lulus; ia cuma menguji fixture lain
+(164.500 / 197.400 / 592.200), bukan AT-01. Yang hilang adalah **gerbangnya**,
+bukan mesin hitungnya.
+
+Ditindaklanjuti **BQ-37** (⏳ owner): tetapkan fixture kanonik baru dari dokumen
+kantor, atau cabut AT-01 secara resmi dari seluruh dokumen. Sengaja tidak
+mengarang angka pengganti.
+
+### Lint bawaan yang ikut ditutup
+
+`npx eslint src/subapps/bq/` sudah merah **sebelum** siklus ini: 6 error
+`react/no-unescaped-entities` pada tiga baris drop-zone di `BqBreakdownClient`
+(pekerjaan #67 yang belum ter-commit — baris itu tidak ada di HEAD). Ditutup
+dengan meng-escape tanda kutipnya; render tidak berubah sama sekali. Tersisa
+3 warning bawaan yang tidak menggagalkan gerbang.
+
+### Area/berkas
+
+- `src/subapps/bq/lib/section-tree.ts` — **baru**. `MAX_SECTION_DEPTH`,
+  `sectionCodeForDepth()`, `buildSectionTree()`, `countWorksDeep()`,
+  `letterForIndex`/`romanForIndex` (dipindah dari action).
+- `src/subapps/bq/lib/section-tree.test.ts` — **baru**. 12 test: penomoran per
+  lapis, pohon tiga lapis, Works campuran di beberapa lapis, invarian urutan,
+  yatim, self-parent, siklus, dan data lebih dalam dari batas.
+- `src/subapps/bq/actions/bq-project-actions.ts` — `sectionDepth()` berbatas;
+  penolakan "divisi dari divisi" diganti batas tiga lapis; penomoran lewat
+  `sectionCodeForDepth()`.
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — `SectionNode` jadi
+  `SectionTreeNode`; `SectionBlock` rekursif menggantikan dua komponen kembar;
+  `SectionHeader` menerima `depth: number`, bukan `level: 0 | 1`; pembangun
+  pohon 12 baris diganti satu panggilan `buildSectionTree()`.
+- `prisma/schema.prisma` — komentar `BqSection.parent_id` diperbarui: dua lapis
+  → tiga, beserta alasan kenapa batasnya dokumenter dan bukan teknis. **Tidak
+  ada perubahan struktur, tidak ada migrasi.**
+- `PLAN-BQ-REFACTOR-2026-08-27.md` — §7 mencabut klaim AT-01 dan menjelaskan
+  temuannya.
+- `roadmap.md` — BQ-30 & BQ-31 ditandai selesai; BQ-37 ditambahkan.
+
+### Verifikasi
+
+- `npx prisma validate` → valid
+- `npx tsc --noEmit` → 0 error
+- `npx eslint src/subapps/bq/` → **exit 0**, 0 error (dari 6 sebelumnya)
+- 30/30 test lulus (`calc` 10 + `section-rollup` 8 + `section-tree` 12)
+- `lib/calc.ts` tidak tersentuh sepanjang siklus ini
+
+Catatan lingkungan: `npm test` tidak bisa dijalankan lewat mount device —
+runner-nya menghapus `tmp/test-out/` dan mount tidak mengizinkan hapus file
+(`EPERM`). Test dikompilasi manual ke luar repo dengan `tsc --strict`. Di mesin
+owner `npm test` jalan normal; bagus kalau owner mengonfirmasi hitungan penuhnya.
+
+### Risiko / tindak lanjut
+
+- **BQ-37 menunggu owner** — jangan biarkan handoff berikutnya terus mengutip
+  gerbang yang tidak ada.
+- **BQ-2 tetap belum lepas** — enam migrasi belum diterapkan. BQ-31 tidak
+  menambah antrean, tapi BQ-33 nanti kemungkinan iya.
+- Berikutnya **BQ-32** (harga satuan = Σ L3 dengan fallback lumpsum) — tahap
+  yang paling berisiko menggeser angka.
+
+## [Unreleased] - 2026-08-27 — BQ-30: rollup subtotal jadi post-order; hirarki 5 lapis dikonfirmasi
+
+### Hasil akhir
+
+**Hirarki dikonfirmasi owner** lewat diagram. Penamaan resmi yang dipakai dari
+sini — menggantikan istilah "seksi/divisi/area" yang saya pakai sebelumnya:
+
+| Lapis | Nama | Contoh | Peran |
+|---|---|---|---|
+| L0 | Section | PRELIMINARIES · INTERIOR WORKS · LIGHTING & MEP WORKS · **FIXTURES** | pengelompok |
+| L1 | Sub Section | Floor Works · Ceiling Works · Wall Works · Signage Work | pengelompok |
+| L2 | Sub Section *(opsional)* | Shopfront Area · Store Area | pengelompok |
+| L3 | Works | Flat Ceiling · Screeding · Mobilization | **baris berharga** — Qty × Harga Satuan |
+| L4 | Sub-Works | dari template library / master data | koefisien × harga |
+
+Tiga lapis pengelompok, satu lapis berharga, satu lapis resep. `BqDetailMode`
+tetap tidak dihidupkan (keputusan O3 utuh). `FIXTURES` adalah Section yang belum
+ada di sheet `BQ` — ditambahkan saat BQ-33. `BqSubObject` tidak punya slot di
+model ini: dibiarkan di schema, tidak dipakai jalur baru.
+
+**BQ-30 selesai.** Kenaikan subtotal pengelompok diangkat dari
+`services/breakdown-service.ts` menjadi fungsi murni post-order di
+`lib/section-rollup.ts`.
+
+Bug yang ditutup, dibuktikan dengan menjalankan implementasi lama apa adanya:
+
+```
+sections: B → III → Shopfront/Store    direct: Shopfront=100, Store=40
+
+LAMA  → { B: 0,   III: 140, shopfront: 100, store: 40 }   ← SUBTOTAL B = 0
+BARU  → { B: 140, III: 140, shopfront: 100, store: 40 }
+```
+
+Loop datar yang lama hanya benar pada pohon dua lapis: urutannya `sort_order`
+dan induk hampir selalu dibuat lebih dulu, jadi induk sudah "lewat" sebelum
+anaknya menerima sumbangan cucunya. Dorman selama schema efektif dua lapis;
+menjadi nyata pada baris pertama L2 (BQ-31) — persis bentuk
+"Wall Works → Shopfront Area" di dokumen kantor.
+
+Logikanya sengaja dipisah dari service supaya bisa diuji tanpa database.
+
+### Area/berkas
+
+- `src/subapps/bq/lib/section-rollup.ts` — **baru**. `rollupSectionSubtotals()`,
+  rekursi bermemo post-order. Hasilnya tidak bergantung urutan masukan. Induk
+  yang hilang (soft-delete) membuat anaknya jadi akar; data berputar dihitung
+  nol alih-alih melempar — satu baris cacat tidak boleh membuat seluruh
+  breakdown gagal dimuat.
+- `src/subapps/bq/lib/section-rollup.test.ts` — **baru**. 8 test, termasuk
+  regresi eksplisit "SUBTOTAL B = 0", invarian urutan, Works yang menempel di
+  beberapa lapis sekaligus, pohon 4 lapis, orphan, dan siklus.
+- `src/subapps/bq/services/breakdown-service.ts` — loop datar diganti panggilan
+  ke fungsi di atas; komentar yang menjelaskan "dua tahap" dicabut karena sudah
+  tidak menggambarkan kode.
+- `PLAN-BQ-REFACTOR-2026-08-27.md` — §2 T1 diubah dari "menunggu konfirmasi"
+  jadi tabel hirarki final; bacaan alternatif yang ditolak diarsipkan di dalam
+  `<details>`.
+- `roadmap.md` — BQ-31 tidak lagi `⏳ owner`.
+
+### Verifikasi
+
+- `npx tsc --noEmit` → 0 error
+- 8/8 test `section-rollup` lulus
+- Implementasi lama dijalankan terpisah untuk memastikan bug-nya nyata, bukan
+  hasil pembacaan kode — hasilnya `B = 0` seperti dugaan
+- `lib/calc.ts` tidak tersentuh; AT-01 tidak terpengaruh
+
+Catatan lingkungan: `npm test` tidak bisa dijalankan lewat mount device —
+runner-nya menghapus `tmp/test-out/` dan mount tidak mengizinkan hapus file
+(`EPERM`). Test dikompilasi manual ke luar folder repo. Di mesin owner
+`npm test` jalan normal.
+
+### Risiko / tindak lanjut
+
+- **BQ-31 berikutnya** dan ia yang membawa migrasi: `BqSection` rekursif +
+  validasi kedalaman maks 3 di server.
+- **BQ-2 masih belum lepas** — enam migrasi belum diterapkan ke database.
+  BQ-31 akan menambah satu lagi di atas antrean itu.
+
+## [Unreleased] - 2026-08-27 — Audit hirarki BQ terhadap sumber Excel; rencana refactor R3
+
+### Hasil akhir
+
+Tidak ada kode yang diubah pada siklus ini — owner meminta pembahasan lebih
+dulu. Yang dihasilkan: pembacaan ulang `BQ template tes.xlsx` (kedua sheet
+**beserta formulanya**, bukan hasil kalkulasinya) dan empat temuan yang
+mengubah arah model BQ.
+
+- **T1 — `Shopfront Area` / `Store Area` adalah pengelompok, bukan pekerjaan.**
+  `SUBTOTAL B.III = SUM(G51:G72)` menjumlahkan baris **strip**; baris nama area
+  (50/55/66/69) tidak menyumbang angka apa pun. Usulan: area jadi `BqSection`
+  bersarang (seksi → divisi → area), sehingga L2 **selalu** baris berharga dan
+  L3 **selalu** resep — di Floor Works maupun Wall Works sama. Bacaan alternatif
+  (area = pekerjaan) memaksa lapis cetak berpindah-pindah dan menghidupkan lagi
+  `BqDetailMode` yang dibuang di O3. **Menunggu konfirmasi owner.**
+- **T2 — bug rollup subtotal, dorman tapi nyata.** `breakdown-service.ts`
+  menaikkan subtotal dengan satu kali loop datar; induk diproses sebelum anaknya
+  terisi. Pada 3 lapis hasilnya `SUBTOTAL B = 0`. Aman sekarang karena schema
+  efektif 2 lapis; jadi blocker begitu T1 diterapkan.
+- **T3 — varian spec dituang sebagai komponen aditif.** `Flat Ceiling`
+  menghasilkan 4 baris L3 padahal 3 di antaranya saling menggantikan (sheet
+  `Tes` baris 77–79). Sama di `Ceiling Finish PT` dan `Screeding Base`.
+  Ini salah **angka**, bukan salah tampilan.
+- **T4 — kategori `Material + Upah` tidak pernah tampil.** Sheet `Tes` punya 6
+  kategori, `BqCostCategory` punya 5. Datanya sudah tertampung di
+  `BqServiceLine.snapshot_has_material`; tampilannya belum ada.
+- **T5 — doc drift.** Header `lib/bq-template-data.ts` :17–20 masih menulis peta
+  lama (`Grup → BqObject`, `Item → BqSubObject`) yang sudah dibatalkan
+  `actions/bq-template-actions.ts`.
+
+Rumus yang ditegakkan sebagai acuan, diturunkan dari kedua sheet:
+
+```
+Harga Satuan pekerjaan =  Σ ( koefisien sub-pekerjaan × harga sub-pekerjaan )
+Total pekerjaan        =  Harga Satuan × Qty        (G79 = F79*D79)
+Subtotal divisi        =  Σ Total pekerjaan di bawahnya, termasuk lewat area
+```
+
+Satu koefisien saja, di lapis sub-pekerjaan — tidak ada pengali kedua. Karena
+itu `BqSubObject` (pengali qty tanpa satuan/harga) turun status jadi kedalaman
+**opsional** untuk fixture joinery, bukan jalur default. `lib/calc.ts` tidak
+perlu disentuh: `computeMaterialLine(m, 1)` sudah mendukung L3 menempel langsung
+di L2.
+
+### Keputusan owner 2026-08-27
+
+- Varian spec = **resep terpisah yang dibedakan namanya**
+  (`Second Skin Partition (Plywood)` / `(Gypsum)`), ditemukan lewat search —
+  **bukan** field `variantGroup`. Membatalkan usulan schema sebelumnya.
+- Library BQ = daftar **datar** resep bernama; spec masuk ke dalam nama; tidak
+  ada struktur varian di dalam resep.
+- Urutan kerja: **logic/schema dulu, UI menyusul**.
+
+### Area/berkas
+
+- `PLAN-BQ-REFACTOR-2026-08-27.md` — **baru**. Bukti dari sumber, lima temuan,
+  model sasaran, urutan kerja, rencana `ui_engine`, invariant.
+- `roadmap.md` — §Terbuka menambah "Siklus R3" dengan BQ-30..BQ-36. BQ-30
+  ditandai blocker; BQ-31 menunggu konfirmasi owner.
+- `CHANGELOG.md` — entri ini.
+
+### Verifikasi
+
+Tidak ada gerbang yang dijalankan — nol perubahan kode. Temuan T2 diverifikasi
+dengan menelusuri urutan eksekusi loop `rollup` terhadap tiga seksi bersarang,
+bukan asumsi.
+
+### Risiko / tindak lanjut
+
+- **BQ-31 diblokir keputusan owner**, bukan teknis. Menebaknya menghasilkan
+  migrasi yang harus dibongkar.
+- **BQ-2 masih belum lepas** — enam migrasi (empat R1 + dua R2) belum diterapkan
+  ke database. Refactor ini menambah migrasi di atasnya, jadi antreannya makin
+  panjang kalau ditunda.
+- Hasil re-impor sheet `Tes` (BQ-33) sengaja masuk sebagai **draft**: heuristik
+  kategori tidak bisa membedakan `Mobilization` (8 sub-item sekategori, aditif)
+  dari varian yang saling menggantikan.
+
+## [Unreleased] - 2026-08-26 — BQ disederhanakan ke workflow koefisien estimator
+
+### Hasil akhir
+
+- **Mesin hitung BQ sekarang koefisien-driven murni.** Material line tidak lagi
+  menghitung pemakaian lembar/luas secara otomatis dari conversion, waste
+  default, minimum order, atau rounding purchase. Estimator mengisi koefisien
+  manual per sub-object terhadap unit harga yang dipilih, lalu cost dihitung
+  langsung `coefficient × unit price × qty sub-object`.
+- **Viewer kerja dibuat lebih ringkas dan tidak redundant.** Breakdown object
+  menampilkan identitas utama lebih padat, dan row material/jasa cukup berisi
+  deskripsi, coefficient, unit price, dan total. Informasi provenance Master vs
+  Local tetap ada, tetapi elemen seperti waste override dan purchase summary
+  otomatis tidak lagi mengganggu permukaan editing utama.
+- **Snapshot material mengikuti unit harga yang dipilih.** Saat estimator
+  menambahkan line dari Master Data atau Library, BQ membekukan unit dan harga
+  supplier yang dipilih apa adanya, tanpa membangun ulang profil costing
+  semi-otomatis di belakang layar.
+- **BQ readiness ikut dipersempit.** Gate material untuk BQ sekarang hanya
+  menuntut SKU hidup, harga tersedia, dan unit harga jelas. Validasi
+  purchase-unit/conversion mismatch yang relevan untuk pricing otomatis tidak
+  lagi memblok BQ sederhana ini.
+- **PRD internal diperbarui.** `PRD-Architecture-Cleanup-v2.md` kini menegaskan
+  bahwa BQ diposisikan sebagai pengganti Excel untuk menyusun breakdown yang
+  mudah dipakai saat estimasi, sedangkan bentuk ekspor ideal boleh tetap lebih
+  mirip template Excel final.
+
+### Area/berkas
+
+- `PRD-Architecture-Cleanup-v2.md`
+- `src/subapps/bq/lib/{calc.ts,calc.test.ts}`
+- `src/subapps/bq/components/{BqBreakdownClient.tsx,BqLinePicker.tsx}`
+- `src/subapps/bq/actions/{bq-project-actions.ts,bq-library-actions.ts}`
+- `src/subapps/bq/services/{breakdown-service.ts,master-data-service.ts}`
+- `src/subapps/bq/types/breakdown.ts`
+- `src/subapps/master-data/lib/bq-readiness.ts`
+
+### Verifikasi
+
+- `npm run typecheck` ✓
+- `npx eslint ...touched BQ files...` ✓
+- `npm test -- calc` ✓ (**8/8** pass)
+
+### Risiko / tindak lanjut
+
+- Export layout Excel-style belum disentuh pada run ini; yang disederhanakan
+  adalah viewer/editing flow BQ.
+- State schema snapshot lama (field conversion/waste) masih ada untuk kompatibilitas
+  data, tetapi runtime hitung viewer tidak lagi bergantung pada field-field itu.
+
 ## [Unreleased] - 2026-08-24 — Rekonsiliasi R4-R12 terhadap PRD final
 
 ### Yang dieksekusi
 
+- **Bootstrap project tidak lagi gagal karena template schedule duplikat.**
+  `ScheduleService.applyDefaultTemplateEntries()` sekarang melewati
+  `ScheduleTemplateItem` yang memicu `DUPLICATE_PRODUCT` saat apply, sehingga
+  modal Create Project tidak lagi memantulkan pesan error produk ketika default
+  template mengandung kartu yang identitasnya bentrok.
 - **R4 selesai benar-benar ke model final current-state pricing.**
   `SkuPrice` tidak lagi memakai `is_current` / `valid_from` / `valid_to`;
   histori baris lama diarsipkan ke `studioflow.AuditLog` lewat migrasi

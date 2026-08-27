@@ -36,7 +36,6 @@ export default async function BqBreakdownPage({
     <BqBreakdownClient
       view={view}
       canEdit={hasPermission(role, PERMISSION.BQ_BREAKDOWN_EDIT)}
-      canEditMarkup={hasPermission(role, PERMISSION.BQ_MARKUP_EDIT)}
     />
   );
 }

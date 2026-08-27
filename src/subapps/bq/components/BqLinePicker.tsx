@@ -18,9 +18,8 @@
  * membuat estimator mencari bahan yang ia TAHU ada di Master Data dan tidak
  * pernah tahu kenapa ia tidak muncul — lalu menyimpulkan alatnya rusak.
  *
- * Dua alasan mengarah ke tempat yang berbeda:
- *   NO_PRICE       -> Master Data (harga belum dicatat staff)
- *   UNIT_MISMATCH  -> salah satu dari keduanya, dan BQ tidak menebak yang mana
+ * Harga atau satuan harga yang belum ada diarahkan kembali ke Master Data;
+ * BQ tidak mengarang angka maupun satuan pengganti.
  */
 
 import * as React from "react";
@@ -48,34 +47,68 @@ type Mode = "MATERIAL" | "SERVICE";
 
 export function BqLinePicker({
   subObjectId,
+  objectId,
+  openFor,
+  onExternalClose,
   onAddMaterial,
   onAddService,
   onAddLocalMaterial,
   onAddLocalService,
 }: {
-  subObjectId: string;
+  /** Induk baris — tepat satu terisi. Baris boleh menempel di item (L1) atau
+   *  sub-item (L2). Komponen ini tidak memakainya selain untuk `key`; tujuan
+   *  sesungguhnya ada di dalam callback yang dikirim pemanggil. */
+  subObjectId?: string;
+  objectId?: string;
+  /**
+   * Mode terkendali: dialog dibuka langsung pada mode ini dan tombol pemicunya
+   * tidak dirender.
+   *
+   * Dipakai sejak baris cepat inline jadi jalur utama — dialog ini turun
+   * pangkat jadi jalur "input manual" untuk barang yang memang belum ada di
+   * Master Data, dan pemicunya hidup di tabel L3, bukan di sini.
+   */
+  openFor?: Mode | null;
+  onExternalClose?: () => void;
   onAddMaterial: (input: { skuId: string; skuPriceId: string; qtyPerSub: number }) => Promise<boolean>;
   onAddService: (workPriceId: string, qtyPerSub: number) => Promise<boolean>;
   onAddLocalMaterial: (input: { name: string; usageUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
   onAddLocalService: (input: { name: string; rateUnit: string; price: number; qtyPerSub: number }) => Promise<boolean>;
 }) {
-  const [mode, setMode] = React.useState<Mode | null>(null);
+  const [internalMode, setInternalMode] = React.useState<Mode | null>(null);
+  const controlled = openFor !== undefined;
+  const mode = controlled ? openFor : internalMode;
+  const parentKey = subObjectId ?? objectId ?? "none";
+
+  if (controlled) {
+    return (
+      <PickerDialog
+        key={`${parentKey}-${mode ?? "closed"}-ext`}
+        mode={mode}
+        onClose={onExternalClose ?? (() => {})}
+        onAddMaterial={onAddMaterial}
+        onAddService={onAddService}
+        onAddLocalMaterial={onAddLocalMaterial}
+        onAddLocalService={onAddLocalService}
+      />
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 pt-1">
-      <Button size="sm" variant="outline" className="h-7" onClick={() => setMode("MATERIAL")}>
+      <Button size="sm" variant="outline" className="h-7" onClick={() => setInternalMode("MATERIAL")}>
         <Plus className="mr-1.5 h-3 w-3" />
-        Material
+        + Bahan
       </Button>
-      <Button size="sm" variant="outline" className="h-7" onClick={() => setMode("SERVICE")}>
+      <Button size="sm" variant="outline" className="h-7" onClick={() => setInternalMode("SERVICE")}>
         <Plus className="mr-1.5 h-3 w-3" />
-        Service
+        + Jasa
       </Button>
 
       <PickerDialog
-        key={`${subObjectId}-${mode ?? "closed"}`}
+        key={`${parentKey}-${mode ?? "closed"}`}
         mode={mode}
-        onClose={() => setMode(null)}
+        onClose={() => setInternalMode(null)}
         onAddMaterial={onAddMaterial}
         onAddService={onAddService}
         onAddLocalMaterial={onAddLocalMaterial}
@@ -170,122 +203,162 @@ function PickerDialog({
 
   const selectedUnit =
     mode === "MATERIAL"
-      ? selectedMaterial?.candidate.profile?.usageUnit
+      ? selectedMaterial?.option.unit
       : services.find((s) => s.workPriceId === selectedId)?.rateUnit;
 
   return (
     <Dialog open={mode !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader className="pr-12">
-          <DialogTitle>{mode === "SERVICE" ? "Add service" : "Add material"}</DialogTitle>
-          <DialogDescription>
-            {mode === "SERVICE"
-              ? "Services come from Master Data. Rates are frozen onto the line when you add it."
-              : "Materials come from Master Data. Price and waste are frozen onto the line when you add it."}
-          </DialogDescription>
+          <DialogTitle>{mode === "SERVICE" ? "Tambah Jasa / Upah" : "Tambah Bahan Material"}</DialogTitle>
         </DialogHeader>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={mode === "SERVICE" ? "Search services…" : "Search materials…"}
-            className="pl-9"
-            autoFocus
-          />
-        </div>
-
-        {!custom ? <div className="max-h-80 space-y-1 overflow-y-auto">
-          {loading ? (
-            <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-400")}>Searching…</p>
-          ) : mode === "MATERIAL" ? (
-            materials.length === 0 ? (
-              <EmptyResult mode={mode} />
-            ) : (
-              materials
-              .filter((m) => m.readiness.ok || m.readiness.reason !== "NO_PRICE")
-              .map((m) => (
-                <MaterialRow
-                  key={m.skuId}
-                  candidate={m}
-                  selectedPriceId={selectedId}
-                  onSelectPrice={(skuPriceId) => m.readiness.ok && setSelectedId(skuPriceId)}
-                />
-              ))
-            )
-          ) : services.length === 0 ? (
-            <EmptyResult mode={mode} />
-          ) : (
-            services.map((s) => (
-              <ServiceRow
-                key={s.workPriceId}
-                candidate={s}
-                selected={selectedId === s.workPriceId}
-                onSelect={() => setSelectedId(s.workPriceId)}
-              />
-            ))
-          )}
-        </div> : (
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={mode === "MATERIAL" ? "Custom material name" : "Custom service name"} />
-            <Input value={customUnit} onChange={(e) => setCustomUnit(e.target.value)} placeholder="Unit (e.g. m², lot)" />
-            <Input value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} placeholder="Unit price" inputMode="decimal" />
-          </div>
-        )}
-
         {!custom ? (
-          <Button variant="outline" onClick={() => { setCustom(true); setSelectedId(null); }}>
-            <Plus className="mr-1.5 h-3 w-3" /> Add custom {mode === "MATERIAL" ? "material" : "service"}
-          </Button>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={mode === "SERVICE" ? "Cari jasa, mis: Pasang HPL…" : "Cari bahan, mis: Plywood, HPL…"}
+              className="pl-9"
+              autoFocus
+            />
+          </div>
         ) : null}
 
-        <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-          <label className="flex items-center gap-2">
-            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
-              Qty per sub-object
-            </span>
-            <Input
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              className="h-8 w-24 text-right"
-              inputMode="decimal"
-            />
-            {selectedUnit ? (
-              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{selectedUnit}</span>
-            ) : null}
-          </label>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleAdd} disabled={saving || (!custom && !selectedId)}>
-            {saving ? "Adding…" : "Add"}
-          </Button>
+        {/* Mode: cari dari Master Data */}
+        {!custom ? (
+          <div className="max-h-80 space-y-1 overflow-y-auto">
+            {loading ? (
+              <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-400")}>Mencari…</p>
+            ) : mode === "MATERIAL" ? (
+              materials.length === 0 ? (
+                <EmptyResult mode={mode} onUseCustom={() => { setCustom(true); setSelectedId(null); }} />
+              ) : (
+                materials
+                .filter((m) => m.readiness.ok || m.readiness.reason !== "NO_PRICE")
+                .map((m) => (
+                  <MaterialRow
+                    key={m.skuId}
+                    candidate={m}
+                    selectedPriceId={selectedId}
+                    onSelectPrice={(skuPriceId) => m.readiness.ok && setSelectedId(skuPriceId)}
+                  />
+                ))
+              )
+            ) : services.length === 0 ? (
+              <EmptyResult mode={mode} onUseCustom={() => { setCustom(true); setSelectedId(null); }} />
+            ) : (
+              services.map((s) => (
+                <ServiceRow
+                  key={s.workPriceId}
+                  candidate={s}
+                  selected={selectedId === s.workPriceId}
+                  onSelect={() => setSelectedId(s.workPriceId)}
+                />
+              ))
+            )}
+          </div>
+        ) : null}
+
+        {/* Mode: input manual / custom */}
+        {custom ? (
+          <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Input
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder={mode === "MATERIAL" ? "Nama bahan, mis: Plywood 15mm Non-Std" : "Nama jasa, mis: Pasang Custom"}
+                  autoFocus
+                />
+              </div>
+              <Input
+                value={customUnit}
+                onChange={(e) => setCustomUnit(e.target.value)}
+                placeholder="Satuan, mis: lbr, m², lot"
+              />
+              <Input
+                value={customPrice}
+                onChange={(e) => setCustomPrice(e.target.value)}
+                placeholder="Harga satuan (Rp)"
+                inputMode="decimal"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {/* Qty input + tombol aksi */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          {/* Tombol toggle manual — hanya tampil saat mode cari */}
+          {!custom ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-slate-500"
+              onClick={() => { setCustom(true); setSelectedId(null); }}
+            >
+              <Plus className="mr-1.5 h-3 w-3" />
+              Manual
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-slate-500"
+              onClick={() => { setCustom(false); setCustomName(""); setCustomUnit(""); setCustomPrice(""); }}
+            >
+              ← Katalog
+            </Button>
+          )}
+
+          <div className="ml-auto flex items-center gap-3">
+            <label className="flex items-center gap-2">
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
+                Koef.
+              </span>
+              <Input
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                className="h-8 w-20 text-right"
+                inputMode="decimal"
+              />
+              {selectedUnit ? (
+                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{selectedUnit}</span>
+              ) : null}
+            </label>
+            <Button variant="ghost" onClick={onClose} disabled={saving}>
+              Batal
+            </Button>
+            <Button onClick={handleAdd} disabled={saving || (!custom && !selectedId)}>
+              {saving ? "Menambahkan…" : "Tambah"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function EmptyResult({ mode }: { mode: Mode | null }) {
+function EmptyResult({ mode, onUseCustom }: { mode: Mode | null; onUseCustom: () => void }) {
   return (
-    <div className="py-6 text-center">
-      <p className="font-sans text-sm text-slate-600">Nothing matched.</p>
-      <p className={cn(UI_ENGINE_TYPE_META, "mt-1 text-slate-400")}>
-        {mode === "SERVICE"
-          ? "Services live in Master Data. Ask Master Data staff to add it there first."
-          : "Materials live in Master Data. Ask Master Data staff to add it there first."}
-      </p>
+    <div className="py-5 text-center">
+      <p className="font-sans text-sm text-slate-600">Tidak ditemukan.</p>
+      <button
+        type="button"
+        className={cn(UI_ENGINE_TYPE_META, "mt-1 text-slate-500 underline underline-offset-2 hover:text-slate-900")}
+        onClick={onUseCustom}
+      >
+        Manual
+      </button>
     </div>
   );
 }
 
 const READINESS_HINT: Record<string, string> = {
   NO_PRICE: "No price in Master Data",
-  UNIT_MISMATCH: "Unit mismatch",
   SKU_DISCONTINUED: "Discontinued in Master Data",
-  PURCHASE_UNIT_MISSING: "Purchase unit missing",
-  CONVERSION_INVALID: "Conversion missing",
+  PRICE_UNIT_MISSING: "Price unit missing",
 };
 
 function MaterialRow({
@@ -320,15 +393,11 @@ function MaterialRow({
           ) : null}
         </div>
 
-        {ready && candidate.profile ? (
-          <p className={cn(UI_ENGINE_TYPE_META, "mt-0.5 text-slate-500")}>
-            1 {candidate.profile.purchaseUnit} = {candidate.profile.conversion} {candidate.profile.usageUnit}
-          </p>
-        ) : (
+        {!ready ? (
           <p className={cn(UI_ENGINE_TYPE_META, "mt-0.5 text-amber-700")}>
-            {candidate.readiness.ok ? null : candidate.readiness.detail}
+            {candidate.readiness.detail}
           </p>
-        )}
+        ) : null}
       </div>
 
       {ready ? (
@@ -609,10 +678,10 @@ export function LibraryPickerDialog({
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
           <Button variant="ghost" onClick={onClose} disabled={saving}>
-            Cancel
+            Batal
           </Button>
           <Button onClick={handleLoad} disabled={!selectedId || saving}>
-            {saving ? "Loading…" : "Load"}
+            {saving ? "Memuat…" : "Muat ke Sub-pekerjaan"}
           </Button>
         </div>
       </DialogContent>

@@ -1563,7 +1563,7 @@ enum RenderLabelSide {
 // ----------------------------------------------------------------------------
 // TIGA LAPIS, TIDAK LEBIH
 // ----------------------------------------------------------------------------
-//   L1 BqObject      satu fixture utuh — qty, unit, markup, rate hasil hitung
+//   L3 BqObject      satu pekerjaan — qty, unit, rate hasil hitung
 //     L2 BqSubObject   bagian fixture — PUNYA QTY PENGALI SENDIRI
 //       L3 BqMaterialLine / BqServiceLine   baris biaya paling dasar
 //
@@ -1627,17 +1627,40 @@ enum BqLineSource {
   @@schema("bq")
 }
 
+/// Kategori biaya baris L3 — mengikuti kolom KATEGORI pada template BQ kantor.
+///
+/// Ini BUKAN pengganti pemisahan bahan/jasa. Pemisahan itu struktural: bahan
+/// menunjuk SKU, jasa menunjuk WorkPrice, dan keduanya punya kolom snapshot
+/// yang berbeda. Kategori adalah lapisan PELAPORAN di atasnya — ia menjawab
+/// "uang ini masuk pos apa", bukan "baris ini bentuknya apa".
+///
+/// Pemetaan dari template:
+///   Material                  -> MATERIAL              (baris bahan)
+///   Upah                      -> UPAH                  (baris jasa)
+///   Material + Upah           -> DUA baris: MATERIAL + UPAH
+///   Alat                      -> ALAT                  (baris jasa)
+///   Biaya Umum                -> BIAYA_UMUM            (baris jasa)
+///   Transportasi & Akomodasi  -> TRANSPORT_AKOMODASI   (baris jasa)
+///
+/// Tiga kategori terakhir tidak punya padanan di Master Data — tidak ada SKU
+/// "akomodasi supervisor". Barisnya dibuat `PROJECT_LOCAL` dan harganya
+/// diketik estimator per project. Resep di library menyimpan NAMA, SATUAN dan
+/// KATEGORI-nya saja; harga tetap kosong sampai ada project yang mengisinya.
+enum BqCostCategory {
+  MATERIAL
+  UPAH
+  ALAT
+  BIAYA_UMUM
+  TRANSPORT_AKOMODASI
+
+  @@schema("bq")
+}
+
 /// Setelan global kantor. Satu baris, `id` dikunci ke `SETTINGS_ID`
 /// (`src/subapps/bq/lib/constants.ts`) — pola yang sama dengan
 /// `studioflow.SystemConfig`.
 model BqSettings {
   id String @id
-
-  /// Fraksi. 0.2 = 20%. Menjawab PRD §11 open decision 1: ADA default kantor,
-  /// DAN ia bisa di-override per object — nilainya disalin ke `BqObject`
-  /// saat object dibuat, jadi mengubah default di sini tidak pernah mengubah
-  /// object yang sudah ada (alasan yang sama dengan snapshot harga).
-  default_markup_pct Decimal @default(0.2) @db.Decimal(9, 6)
 
   currency String @default("IDR")
 
@@ -1669,9 +1692,73 @@ model BqProject {
   deleted_at      DateTime?
   updated_by_name String?
 
-  objects BqObject[]
+  sections BqSection[]
+  objects  BqObject[]
 
   @@index([status, deleted_at])
+  @@index([deleted_at])
+  @@schema("bq")
+}
+
+/// L0 — pengelompok cetak di atas L1, mengikuti kolom "A / B / C" pada
+/// template BQ kantor (A PRELIMINARIES, B INTERIOR WORKS, C LIGHTING & MEP).
+///
+/// Sengaja TIPIS: ia tidak punya qty maupun angka komersial, dan tidak menyimpan
+/// angka apa pun. Satu-satunya alasan ia ada adalah dokumen keluaran —
+/// "SUBTOTAL A", "SUBTOTAL B.I", "GRAND TOTAL A+B+C". Subtotalnya dihitung
+/// dari object di bawahnya saat dibaca, sama seperti seluruh angka lain di
+/// subapp ini.
+///
+/// `section_id` pada BqObject NULLABLE, dan itu disengaja: BQ yang dibuat
+/// sebelum template ini ada tetap sah, objectnya cuma tidak berseksi. Jangan
+/// jadikan wajib — memaksa seksi berarti setiap BQ kecil harus mengarang
+/// "A PEKERJAAN" sebelum boleh menulis satu baris pun.
+model BqSection {
+  id         String    @id @default(uuid())
+  project_id String
+  project    BqProject @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  /// Pengelompok induk. NULL = L0 Section ("A PRELIMINARIES"); terisi =
+  /// Sub Section di dalamnya ("I Floor Works", lalu "Shopfront Area").
+  ///
+  /// Dokumen BQ kantor punya TIGA lapis pengelompok (dikonfirmasi owner
+  /// 2026-08-27, lihat PLAN-BQ-REFACTOR-2026-08-27.md):
+  ///
+  ///   L0 Section                 A PRELIMINARIES      SUBTOTAL A
+  ///   L1 Sub Section             I Floor Works        SUBTOTAL B.I
+  ///   L2 Sub Section (opsional)  Shopfront Area
+  ///
+  /// Ketiganya SAMA sifatnya — pengelompok tanpa qty, tanpa harga, punya
+  /// subtotal — jadi dimodelkan satu tabel yang menunjuk dirinya sendiri,
+  /// bukan tiga tabel kembar. Lapis berharga selalu L3 `BqObject`.
+  ///
+  /// Kedalaman dibatasi TIGA di lapisan aplikasi, bukan di sini. Batasnya
+  /// dokumenter, bukan teknis: penomoran BQ kantor cuma punya tiga bentuk
+  /// (A/B/C, I/II/III, 1/2/3) dan lapis keempat tidak punya bentuk cetak.
+  /// Ditegakkan `createBqSectionAction` saat MENULIS; jalur baca tetap
+  /// menampilkan apa pun yang terlanjur ada.
+  parent_id String?
+  parent    BqSection?  @relation("BqSectionTree", fields: [parent_id], references: [id], onDelete: Cascade)
+  children  BqSection[] @relation("BqSectionTree")
+
+  /// "A", "B", "C" untuk seksi; "I", "II", "III" untuk divisi. Ditampilkan apa
+  /// adanya — bukan dihitung dari sort_order, karena kantor kadang melompati
+  /// nomor saat satu bagian dibatalkan.
+  code String?
+  name String
+
+  sort_order Int     @default(0)
+  notes      String?
+
+  created_at      DateTime  @default(now())
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime?
+  updated_by_name String?
+
+  objects BqObject[]
+
+  @@index([project_id, sort_order])
+  @@index([parent_id, sort_order])
   @@index([deleted_at])
   @@schema("bq")
 }
@@ -1688,18 +1775,17 @@ model BqObject {
   project_id String
   project    BqProject @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
+  /// Seksi cetak (L0). NULL = object tidak dikelompokkan — lihat catatan di
+  /// `BqSection`. `onDelete: SetNull` supaya menghapus seksi tidak ikut
+  /// menghapus pekerjaan di dalamnya.
+  section_id String?
+  section    BqSection? @relation(fields: [section_id], references: [id], onDelete: SetNull)
+
   code String?
   name String
 
   qty  Decimal @default(1) @db.Decimal(18, 6)
   unit String  @default("unit")
-
-  /// Fraksi. Disalin dari `BqSettings.default_markup_pct` saat object dibuat.
-  /// Markup diterapkan di L1, bukan per baris L3 (PRD §3.4): ia keputusan
-  /// komersial atas satu fixture utuh, bukan atas sebatang edging.
-  ///
-  /// TIDAK PERNAH tercetak ke klien — klien lihat rate saja.
-  markup_pct Decimal @default(0.2) @db.Decimal(9, 6)
 
   /// Presedensi waste level 2 — "seluruh object ini waste 5%". NULL = tidak
   /// di-override; 0 adalah nilai sah yang menang atas default bahan.
@@ -1720,7 +1806,12 @@ model BqObject {
 
   sub_objects BqSubObject[]
 
+  /// Baris yang menempel LANGSUNG ke item ini, tanpa lewat L2.
+  material_lines BqMaterialLine[]
+  service_lines  BqServiceLine[]
+
   @@index([project_id, sort_order])
+  @@index([section_id, sort_order])
   @@index([deleted_at])
   @@schema("bq")
 }
@@ -1779,15 +1870,44 @@ model BqSubObject {
 /// staff lewat Master Data lebih dulu. `sku_id` nullable hanya untuk baris
 /// yang SKU-nya benar-benar lenyap sesudahnya, bukan pintu masuk baris karangan.
 model BqMaterialLine {
-  id            String      @id @default(uuid())
-  sub_object_id String
-  sub_object    BqSubObject @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
+  id String @id @default(uuid())
+
+  /// ==========================================================================
+  /// DUA KEMUNGKINAN INDUK — TEPAT SATU TERISI
+  /// ==========================================================================
+  /// Baris L3 boleh menempel langsung ke L1 (item sederhana) ATAU ke L2 (item
+  /// komposit). Ini bukan kelonggaran, melainkan bentuk dua jenis item yang
+  /// memang ada di BQ interior:
+  ///
+  ///   "Screeding Base 45 sqm"   koefisiennya langsung per sqm — semen 0,2 zak,
+  ///                             pasir 0,03 m3, tukang 0,15 OH. Tidak ada
+  ///                             sub-rakitan. Barisnya menempel di L1.
+  ///
+  ///   "Counter Cabinet 4 unit"  tersusun dari Body x1, Pintu x2, Ambalan x3,
+  ///                             masing-masing dengan bahannya sendiri. Di
+  ///                             sinilah pengali L2 bekerja (PRD 2.1), dan
+  ///                             barisnya menempel di L2.
+  ///
+  /// Memaksa semua lewat L2 berarti mayoritas item membawa satu pembungkus
+  /// kosong bernama sama dengan dirinya sendiri — lapis yang harus dibuka
+  /// tanpa memberi informasi apa pun.
+  ///
+  /// Ditegakkan CHECK constraint di migrasi, bukan cuma di app layer: baris
+  /// tanpa induk atau berinduk dua adalah data yang tidak bisa dihitung.
+  object_id     String?
+  object        BqObject?    @relation(fields: [object_id], references: [id], onDelete: Cascade)
+  sub_object_id String?
+  sub_object    BqSubObject? @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
 
   /// Kolom biasa, BUKAN FK — lihat catatan snapshot di kepala blok ini.
   sku_id            String?
   sku_price_id      String?
   supplier_party_id String?
   source            BqLineSource @default(MASTER_DATA)
+
+  /// Pos biaya untuk pelaporan (kolom KATEGORI template). Default MATERIAL —
+  /// baris bahan hampir selalu material. Lihat `BqCostCategory`.
+  cost_category BqCostCategory @default(MATERIAL)
 
   /// Kebutuhan untuk SATU sub-object, dalam `snapshot_usage_unit`.
   qty_per_sub Decimal @db.Decimal(18, 6)
@@ -1852,13 +1972,42 @@ model BqMaterialLine {
 /// Kalau suatu saat `waste_override_pct` muncul di tabel ini, yang salah
 /// adalah migrasinya. Jangan menambahkannya "supaya seragam dengan bahan".
 model BqServiceLine {
-  id            String      @id @default(uuid())
-  sub_object_id String
-  sub_object    BqSubObject @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
+  id String @id @default(uuid())
+
+  /// ==========================================================================
+  /// DUA KEMUNGKINAN INDUK — TEPAT SATU TERISI
+  /// ==========================================================================
+  /// Baris L3 boleh menempel langsung ke L1 (item sederhana) ATAU ke L2 (item
+  /// komposit). Ini bukan kelonggaran, melainkan bentuk dua jenis item yang
+  /// memang ada di BQ interior:
+  ///
+  ///   "Screeding Base 45 sqm"   koefisiennya langsung per sqm — semen 0,2 zak,
+  ///                             pasir 0,03 m3, tukang 0,15 OH. Tidak ada
+  ///                             sub-rakitan. Barisnya menempel di L1.
+  ///
+  ///   "Counter Cabinet 4 unit"  tersusun dari Body x1, Pintu x2, Ambalan x3,
+  ///                             masing-masing dengan bahannya sendiri. Di
+  ///                             sinilah pengali L2 bekerja (PRD 2.1), dan
+  ///                             barisnya menempel di L2.
+  ///
+  /// Memaksa semua lewat L2 berarti mayoritas item membawa satu pembungkus
+  /// kosong bernama sama dengan dirinya sendiri — lapis yang harus dibuka
+  /// tanpa memberi informasi apa pun.
+  ///
+  /// Ditegakkan CHECK constraint di migrasi, bukan cuma di app layer: baris
+  /// tanpa induk atau berinduk dua adalah data yang tidak bisa dihitung.
+  object_id     String?
+  object        BqObject?    @relation(fields: [object_id], references: [id], onDelete: Cascade)
+  sub_object_id String?
+  sub_object    BqSubObject? @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
 
   work_price_id   String?
   vendor_party_id String?
   source          BqLineSource @default(MASTER_DATA)
+
+  /// Pos biaya untuk pelaporan (kolom KATEGORI template). Default UPAH; baris
+  /// alat / biaya umum / transport memakai nilai lain. Lihat `BqCostCategory`.
+  cost_category BqCostCategory @default(UPAH)
 
   /// Kebutuhan untuk SATU sub-object, dalam `snapshot_rate_unit`.
   qty_per_sub Decimal @db.Decimal(18, 6)
@@ -1914,9 +2063,8 @@ model BqLibraryObject {
   code String?
   name String
 
-  unit        String
-  markup_pct  Decimal @db.Decimal(9, 6)
-  notes       String?
+  unit  String
+  notes String?
 
   created_by_name String
   created_at      DateTime  @default(now())
@@ -1981,6 +2129,10 @@ model BqLibraryMaterialLine {
   sub_object              BqLibrarySubObject? @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
 
   source         BqLineSource @default(MASTER_DATA)
+
+  /// Pos biaya resep. Ikut tersalin ke baris project saat resep dituang.
+  cost_category  BqCostCategory @default(MATERIAL)
+
   sku_id         String?
   sku_price_id   String?
   supplier_party_id String?
@@ -2016,6 +2168,10 @@ model BqLibraryServiceLine {
   sub_object              BqLibrarySubObject? @relation(fields: [sub_object_id], references: [id], onDelete: Cascade)
 
   source        BqLineSource @default(MASTER_DATA)
+
+  /// Pos biaya resep. Ikut tersalin ke baris project saat resep dituang.
+  cost_category BqCostCategory @default(UPAH)
+
   work_price_id String?
   recipe_name   String?
   recipe_code   String?

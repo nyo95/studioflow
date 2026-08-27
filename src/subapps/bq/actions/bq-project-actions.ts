@@ -34,10 +34,13 @@ import { createAction } from "@/lib/action-wrapper";
 import { ActionError } from "@/lib/error-types";
 import { hasPermission, PERMISSION } from "@/core/rbac/rbac";
 import { insertAuditLog } from "@/actions/_shared";
+import {
+  MAX_SECTION_DEPTH,
+  sectionCodeForDepth,
+} from "../lib/section-tree";
 import type { PrismaTransaction } from "@/types/common";
 import type { Role } from "@/generated/prisma";
 import { loadMaterialCandidate, loadServiceCandidate } from "../services/master-data-service";
-import { getObjectDefaults } from "../services/settings-service";
 
 // ---------------------------------------------------------------------------
 // Penjaga
@@ -259,6 +262,290 @@ export const deleteBqProjectAction = createAction(
   { schema: z.object({ id: z.string().min(1) }) }
 );
 
+
+/**
+ * Menentukan induk sebuah baris L3, dan memastikan induknya boleh disunting.
+ *
+ * Baris boleh menempel ke L1 (item sederhana) atau ke L2 (item komposit) —
+ * tepat satu, tidak boleh dua, tidak boleh nol. Ditegakkan juga oleh CHECK
+ * constraint di database; pemeriksaan di sini ada supaya pesannya bisa
+ * dimengerti manusia, bukan berupa pelanggaran constraint.
+ *
+ * Mengembalikan potongan `data` yang siap disebar ke `create`, plus `where`
+ * untuk mencari saudara sebaris saat menghitung `sort_order`.
+ */
+async function resolveLineParent(
+  tx: PrismaTransaction,
+  input: { objectId?: string; subObjectId?: string }
+): Promise<{
+  /** Salah satu terisi, satunya `undefined` — Prisma memperlakukan `undefined`
+   *  sebagai "tidak disebut", jadi bentuk ini aman untuk `create` maupun
+   *  `where` tanpa perlu union diskriminan yang menyulitkan tipe Prisma. */
+  data: { object_id?: string; sub_object_id?: string };
+  where: { object_id?: string; sub_object_id?: string };
+  objectId: string;
+}> {
+  const hasObject = !!input.objectId;
+  const hasSub = !!input.subObjectId;
+  if (hasObject === hasSub) {
+    throw new ActionError(
+      "A line must belong to exactly one parent: a work item or a sub-item.",
+      "VALIDATION_ERROR"
+    );
+  }
+
+  if (hasSub) {
+    const objectId = await assertSubObjectEditable(tx, input.subObjectId!);
+    return {
+      data: { sub_object_id: input.subObjectId! },
+      where: { sub_object_id: input.subObjectId!, object_id: undefined },
+      objectId,
+    };
+  }
+
+  await assertObjectEditable(tx, input.objectId!);
+  return {
+    data: { object_id: input.objectId! },
+    where: { object_id: input.objectId!, sub_object_id: undefined },
+    objectId: input.objectId!,
+  };
+}
+
+/**
+ * Versi untuk baris yang SUDAH ada di database.
+ *
+ * Sesudah hirarki diluruskan, baris L3 bisa menempel langsung ke L1 atau tetap
+ * lewat L2. Aksi edit/hapus tidak boleh lagi mengasumsikan `sub_object_id`
+ * selalu ada.
+ */
+async function resolveStoredLineParent(
+  tx: PrismaTransaction,
+  input: { object_id: string | null; sub_object_id: string | null }
+): Promise<{ objectId: string; subObjectId: string | null }> {
+  if (input.sub_object_id) {
+    const objectId = await assertSubObjectEditable(tx, input.sub_object_id);
+    return { objectId, subObjectId: input.sub_object_id };
+  }
+
+  if (input.object_id) {
+    await assertObjectEditable(tx, input.object_id);
+    return { objectId: input.object_id, subObjectId: null };
+  }
+
+  throw new ActionError(
+    "This line is missing its parent. Re-open the project and try again.",
+    "VALIDATION_ERROR"
+  );
+}
+
+/** Skema induk baris, dipakai keempat aksi tambah-baris. */
+const lineParentSchema = {
+  /** Isi SALAH SATU. objectId = baris menempel langsung ke item. */
+  objectId: z.string().min(1).optional(),
+  subObjectId: z.string().min(1).optional(),
+};
+
+// ---------------------------------------------------------------------------
+// L0 — Section
+// ---------------------------------------------------------------------------
+
+/**
+ * Kedalaman sebuah pengelompok: 0 untuk L0 Section, 1 untuk L1 Sub Section,
+ * 2 untuk L2 Sub Section.
+ *
+ * Ditelusuri ke atas dengan loop BERBATAS, bukan rekursi terbuka: data yang
+ * berputar tidak boleh berujung query tak berhingga di jalur tulis. Kalau
+ * batasnya terlewat, angka yang dikembalikan sudah cukup besar untuk membuat
+ * pemanggilnya menolak.
+ */
+async function sectionDepth(
+  tx: PrismaTransaction,
+  sectionId: string,
+): Promise<number> {
+  let depth = 0;
+  let cursor: string | null = sectionId;
+
+  for (let hop = 0; hop <= MAX_SECTION_DEPTH; hop += 1) {
+    if (!cursor) return depth;
+    const row: { parent_id: string | null } | null = await tx.bqSection.findUnique({
+      where: { id: cursor },
+      select: { parent_id: true },
+    });
+    if (!row?.parent_id) return depth;
+    depth += 1;
+    cursor = row.parent_id;
+  }
+
+  return depth;
+}
+
+export const createBqSectionAction = createAction(
+  async ({ input, ctx, tx }) => {
+    assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
+
+    // L0 Section -> L1 Sub Section -> L2 Sub Section, lalu berhenti.
+    //
+    // Batasnya BUKAN teknis: `rollupSectionSubtotals` sanggup kedalaman berapa
+    // pun dan ada testnya untuk empat lapis. Batasnya dokumenter — penomoran BQ
+    // kantor cuma punya tiga bentuk (A/B/C, I/II/III, 1/2/3), dan lapis keempat
+    // tidak punya bentuk cetak. Karena itu ditegakkan di jalur TULIS saja;
+    // jalur baca tetap menampilkan apa pun yang terlanjur ada.
+    let parentDepth = -1;
+    if (input.parentId) {
+      const parent = await tx.bqSection.findFirst({
+        where: { id: input.parentId, project_id: input.projectId, deleted_at: null },
+        select: { id: true },
+      });
+      if (!parent) throw new ActionError("Parent section not found.", "NOT_FOUND");
+
+      parentDepth = await sectionDepth(tx, parent.id);
+      if (parentDepth + 1 >= MAX_SECTION_DEPTH) {
+        throw new ActionError(
+          `Sections can only nest ${MAX_SECTION_DEPTH} levels deep.`,
+          "VALIDATION_ERROR",
+        );
+      }
+
+      const directObjects = await tx.bqObject.count({
+        where: {
+          project_id: input.projectId,
+          section_id: input.parentId,
+          deleted_at: null,
+        },
+      });
+      if (directObjects > 0) {
+        throw new ActionError(
+          "This section already contains work items. Move them into divisions first, or keep this section flat.",
+          "VALIDATION_ERROR",
+        );
+      }
+    }
+
+    const siblings = await tx.bqSection.findMany({
+      where: {
+        project_id: input.projectId,
+        parent_id: input.parentId ?? null,
+        deleted_at: null,
+      },
+      select: { sort_order: true },
+    });
+
+    // Kode diberi otomatis mengikuti kedalaman — A/B/C, I/II/III, lalu 1/2/3.
+    // Lihat `lib/section-tree.ts`. Membiarkan pengguna mengetik sendiri membuka
+    // pintu ke dua "B" dalam satu dokumen; `input.code` tetap boleh menimpanya
+    // untuk kantor yang sengaja melompati nomor.
+    const autoCode = sectionCodeForDepth(parentDepth + 1, siblings.length);
+
+    const section = await tx.bqSection.create({
+      data: {
+        project_id: input.projectId,
+        parent_id: input.parentId ?? null,
+        code: input.code?.trim() || autoCode,
+        name: input.name.trim(),
+        sort_order: await nextSortOrder(siblings),
+        updated_by_name: ctx.user.name ?? null,
+      },
+    });
+
+    await insertAuditLog(tx, "CREATE", "BqSection", section.id, ctx.userId, {
+      bq_project_id: input.projectId,
+      name: section.name,
+    });
+
+    revalidateProject(input.projectId);
+    return { id: section.id, code: section.code };
+  },
+  {
+    schema: z.object({
+      projectId: z.string().min(1),
+      /** Kosong = seksi tingkat atas. Terisi = DIVISI di dalam seksi itu. */
+      parentId: z.string().min(1).optional(),
+      name: z.string().min(1, "Section name is required."),
+      /** Kosong = diberi otomatis A/B/C (seksi) atau I/II/III (divisi). */
+      code: z.string().optional(),
+    }),
+  }
+);
+
+export const updateBqSectionAction = createAction(
+  async ({ input, ctx, tx }) => {
+    assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
+
+    const section = await tx.bqSection.findFirst({
+      where: { id: input.id, deleted_at: null },
+      select: { project_id: true },
+    });
+    if (!section) throw new ActionError("Section not found.", "NOT_FOUND");
+
+    await tx.bqSection.update({
+      where: { id: input.id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.code !== undefined ? { code: input.code.trim() || null } : {}),
+        updated_by_name: ctx.user.name ?? null,
+      },
+    });
+
+    revalidateProject(section.project_id);
+    return { id: input.id };
+  },
+  {
+    schema: z.object({
+      id: z.string().min(1),
+      name: z.string().min(1).optional(),
+      code: z.string().optional(),
+    }),
+  }
+);
+
+/**
+ * Menghapus seksi TIDAK menghapus pekerjaan di dalamnya.
+ *
+ * `onDelete: SetNull` di skema hanya bekerja pada hard delete, sedangkan di
+ * sini seksinya di-soft delete. Tanpa melepas `section_id` secara eksplisit,
+ * pekerjaannya akan tetap menunjuk seksi yang sudah tidak dimuat — dan lenyap
+ * dari grid tanpa jejak, padahal datanya utuh. Melepasnya membuat pekerjaan itu
+ * turun ke kelompok tanpa judul: tetap terlihat, tetap terhitung, tinggal
+ * dipindahkan ke seksi lain.
+ */
+export const deleteBqSectionAction = createAction(
+  async ({ input, ctx, tx }) => {
+    assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
+
+    const section = await tx.bqSection.findFirst({
+      where: { id: input.id, deleted_at: null },
+      select: { project_id: true, name: true },
+    });
+    if (!section) throw new ActionError("Section not found.", "NOT_FOUND");
+
+    // Divisi anak ikut terhapus lewat cascade, jadi pekerjaan DI DALAMNYA juga
+    // harus dilepas — kalau tidak, ia lenyap bersama divisinya.
+    const children = await tx.bqSection.findMany({
+      where: { parent_id: input.id },
+      select: { id: true },
+    });
+    const released = await tx.bqObject.updateMany({
+      where: { section_id: { in: [input.id, ...children.map((c) => c.id)] } },
+      data: { section_id: null },
+    });
+
+    await tx.bqSection.update({
+      where: { id: input.id },
+      data: { deleted_at: new Date(), updated_by_name: ctx.user.name ?? null },
+    });
+
+    await insertAuditLog(tx, "DELETE", "BqSection", input.id, ctx.userId, {
+      bq_project_id: section.project_id,
+      name: section.name,
+      released_objects: released.count,
+    });
+
+    revalidateProject(section.project_id);
+    return { id: input.id, releasedObjects: released.count };
+  },
+  { schema: z.object({ id: z.string().min(1) }) }
+);
+
 // ---------------------------------------------------------------------------
 // L1 — Object
 // ---------------------------------------------------------------------------
@@ -267,24 +554,47 @@ export const createBqObjectAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
 
+    if (input.sectionId) {
+      const section = await tx.bqSection.findFirst({
+        where: {
+          id: input.sectionId,
+          project_id: input.projectId,
+          deleted_at: null,
+        },
+        select: { id: true, parent_id: true },
+      });
+      if (!section) throw new ActionError("Section not found.", "NOT_FOUND");
+
+      if (!section.parent_id) {
+        const childDivisions = await tx.bqSection.count({
+          where: {
+            project_id: input.projectId,
+            parent_id: section.id,
+            deleted_at: null,
+          },
+        });
+        if (childDivisions > 0) {
+          throw new ActionError(
+            "This section already uses divisions. Add the work item inside a division instead.",
+            "VALIDATION_ERROR",
+          );
+        }
+      }
+    }
+
     const siblings = await tx.bqObject.findMany({
       where: { project_id: input.projectId, deleted_at: null },
       select: { sort_order: true },
     });
 
-    // Default kantor DISALIN, bukan dirujuk. Mengubah default markup nanti
-    // tidak boleh mengubah object yang sudah jadi — alasan yang sama dengan
-    // snapshot harga.
-    const defaults = await getObjectDefaults(tx);
-
     const object = await tx.bqObject.create({
       data: {
         project_id: input.projectId,
+        section_id: input.sectionId ?? null,
         name: input.name.trim(),
         code: input.code?.trim() || null,
         qty: input.qty,
         unit: input.unit.trim() || "unit",
-        markup_pct: input.markupPct ?? defaults.markupPct,
         sort_order: await nextSortOrder(siblings),
         updated_by_name: ctx.user.name ?? null,
       },
@@ -301,12 +611,13 @@ export const createBqObjectAction = createAction(
   {
     schema: z.object({
       projectId: z.string().min(1),
+      /** Seksi induk. Kosong = pekerjaan tanpa seksi, yang di grid muncul di
+       *  kelompok tanpa judul paling bawah. */
+      sectionId: z.string().min(1).optional(),
       name: z.string().min(1, "Object name is required."),
       code: z.string().optional(),
       qty: positive.default(1),
       unit: z.string().default("unit"),
-      /** Kalau tidak diisi, default kantor yang dipakai. */
-      markupPct: percentToFraction.optional(),
     }),
   }
 );
@@ -315,14 +626,6 @@ export const updateBqObjectAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
     await assertObjectEditable(tx, input.id);
-
-    // Markup adalah keputusan komersial dan dipisahkan izinnya. Kalau
-    // pemanggil mengirim `markupPct` tanpa memegang izinnya, permintaannya
-    // DITOLAK — bukan diam-diam dibuang. Membuang field secara senyap membuat
-    // pengguna mengira perubahannya tersimpan.
-    if (input.markupPct !== undefined) {
-      assertPerm(ctx.role, PERMISSION.BQ_MARKUP_EDIT);
-    }
 
     const projectId = await projectIdOfObject(tx, input.id);
 
@@ -333,7 +636,6 @@ export const updateBqObjectAction = createAction(
         ...(input.code !== undefined ? { code: input.code.trim() || null } : {}),
         ...(input.qty !== undefined ? { qty: input.qty } : {}),
         ...(input.unit !== undefined ? { unit: input.unit.trim() || "unit" } : {}),
-        ...(input.markupPct !== undefined ? { markup_pct: input.markupPct } : {}),
         ...(input.notes !== undefined ? { notes: input.notes.trim() || null } : {}),
         // `wasteOverridePct` sengaja dibedakan antara "tidak dikirim"
         // (`undefined`, jangan sentuh) dan "dikirim sebagai null" (hapus
@@ -359,7 +661,6 @@ export const updateBqObjectAction = createAction(
       code: z.string().optional(),
       qty: positive.optional(),
       unit: z.string().optional(),
-      markupPct: percentToFraction.optional(),
       wasteOverridePct: optionalPercent.optional(),
       notes: z.string().optional(),
     }),
@@ -571,8 +872,13 @@ async function detachFromTemplate(
 export const addBqMaterialLineAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
-    await assertSubObjectEditable(tx, input.subObjectId);
-    await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+    const parent = await resolveLineParent(tx, input);
+    // Menambah baris memutus tautan ke template library (copy-on-write) —
+    // hanya relevan untuk baris yang menempel di L2, karena tautan itu memang
+    // milik L2.
+    if (input.subObjectId) {
+      await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+    }
 
     const candidate = await loadMaterialCandidate(input.skuId);
     if (!candidate) {
@@ -584,18 +890,14 @@ export const addBqMaterialLineAction = createAction(
 
     const price = resolveSelectedMaterialPrice(candidate, input.skuPriceId);
 
-    // profile bisa null kalau SKU tidak punya costing data — dalam kasus itu
-    // snapshot costing disimpan null dan calc pakai 1:1 fallback.
-    const profile = candidate.profile ?? null;
-
     const siblings = await tx.bqMaterialLine.findMany({
-      where: { sub_object_id: input.subObjectId },
+      where: parent.where,
       select: { sort_order: true },
     });
 
     const line = await tx.bqMaterialLine.create({
       data: {
-        sub_object_id: input.subObjectId,
+        ...parent.data,
         sku_id: candidate.skuId,
         sku_price_id: price.skuPriceId,
         supplier_party_id: price.supplierPartyId,
@@ -608,18 +910,15 @@ export const addBqMaterialLineAction = createAction(
         snapshot_brand_name: candidate.brandName,
         snapshot_category_path: candidate.categoryPath,
         snapshot_supplier_name: price.supplierName,
-        snapshot_usage_unit: profile?.usageUnit ?? null,
-        snapshot_purchase_unit: profile?.purchaseUnit ?? null,
-        snapshot_conversion: profile?.conversion ?? null,
+        snapshot_usage_unit: price.unit,
+        snapshot_purchase_unit: price.unit,
+        snapshot_conversion: null,
         snapshot_price: price.price,
         snapshot_currency: price.currency,
-        // Level 3 dan 4 disimpan TERPISAH, tidak dikerucutkan — kalau
-        // digabung, mesin hitung tidak bisa lagi menjelaskan kenapa waste-nya
-        // 10% dan AT-03 tidak bisa diuji.
-        snapshot_material_default_waste_pct: profile?.defaultWastePct ?? null,
+        snapshot_material_default_waste_pct: null,
         snapshot_category_default_waste_pct: null,
-        snapshot_minimum_order: profile?.minimumOrder ?? null,
-        snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
+        snapshot_minimum_order: null,
+        snapshot_rounding_increment: 1,
         snapshot_taken_at: new Date(),
 
         sort_order: await nextSortOrder(siblings),
@@ -628,7 +927,9 @@ export const addBqMaterialLineAction = createAction(
       },
     });
 
-    const projectId = await projectIdOfSubObject(tx, input.subObjectId);
+    // `parent.objectId` sudah diketahui apa pun jalur induknya, jadi tidak
+    // perlu menelusuri ulang dari sub-object yang mungkin memang tidak ada.
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     await insertAuditLog(tx, "CREATE", "BqMaterialLine", line.id, ctx.userId, {
       bq_project_id: projectId,
       sku_id: candidate.skuId,
@@ -639,10 +940,10 @@ export const addBqMaterialLineAction = createAction(
   },
   {
     schema: z.object({
-      subObjectId: z.string().min(1),
+      ...lineParentSchema,
       skuId: z.string().min(1, "Pick a material from Master Data."),
       skuPriceId: z.string().min(1, "Pick a supplier price from Master Data."),
-      /** Kebutuhan untuk SATU sub-object, dalam usage unit. */
+      /** Koefisien untuk SATU sub-object, dalam unit harga snapshot. */
       qtyPerSub: nonNegative,
       wasteOverridePct: optionalPercent.optional(),
       notes: z.string().optional(),
@@ -653,16 +954,21 @@ export const addBqMaterialLineAction = createAction(
 export const addBqLocalMaterialLineAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
-    await assertSubObjectEditable(tx, input.subObjectId);
-    await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+    const parent = await resolveLineParent(tx, input);
+    // Menambah baris memutus tautan ke template library (copy-on-write) —
+    // hanya relevan untuk baris yang menempel di L2, karena tautan itu memang
+    // milik L2.
+    if (input.subObjectId) {
+      await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+    }
 
     const siblings = await tx.bqMaterialLine.findMany({
-      where: { sub_object_id: input.subObjectId },
+      where: parent.where,
       select: { sort_order: true },
     });
     const line = await tx.bqMaterialLine.create({
       data: {
-        sub_object_id: input.subObjectId,
+        ...parent.data,
         source: "PROJECT_LOCAL",
         qty_per_sub: input.qtyPerSub,
         waste_override_pct: input.wasteOverridePct ?? null,
@@ -670,22 +976,24 @@ export const addBqLocalMaterialLineAction = createAction(
         snapshot_code: input.code?.trim() || null,
         snapshot_brand_name: input.brandName?.trim() || null,
         snapshot_supplier_name: input.supplierName?.trim() || null,
-        snapshot_usage_unit: input.usageUnit?.trim() || null,
-        snapshot_purchase_unit: input.purchaseUnit?.trim() || null,
-        snapshot_conversion: input.conversion ?? null,
+        snapshot_usage_unit: input.purchaseUnit?.trim() || input.usageUnit?.trim() || null,
+        snapshot_purchase_unit: input.purchaseUnit?.trim() || input.usageUnit?.trim() || null,
+        snapshot_conversion: null,
         snapshot_price: input.price,
         snapshot_currency: input.currency.trim() || "IDR",
-        snapshot_material_default_waste_pct: input.defaultWastePct ?? null,
+        snapshot_material_default_waste_pct: null,
         snapshot_category_default_waste_pct: null,
-        snapshot_minimum_order: input.minimumOrder ?? null,
-        snapshot_rounding_increment: input.roundingIncrement ?? 1,
+        snapshot_minimum_order: null,
+        snapshot_rounding_increment: 1,
         snapshot_taken_at: new Date(),
         sort_order: await nextSortOrder(siblings),
         notes: input.notes?.trim() || null,
         updated_by_name: ctx.user.name ?? null,
       },
     });
-    const projectId = await projectIdOfSubObject(tx, input.subObjectId);
+    // `parent.objectId` sudah diketahui apa pun jalur induknya, jadi tidak
+    // perlu menelusuri ulang dari sub-object yang mungkin memang tidak ada.
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     await insertAuditLog(tx, "CREATE", "BqMaterialLine", line.id, ctx.userId, {
       bq_project_id: projectId,
       source: "PROJECT_LOCAL",
@@ -695,7 +1003,7 @@ export const addBqLocalMaterialLineAction = createAction(
   },
   {
     schema: z.object({
-      subObjectId: z.string().min(1),
+      ...lineParentSchema,
       name: z.string().min(1, "Material name is required."),
       code: z.string().optional(),
       brandName: z.string().optional(),
@@ -721,11 +1029,13 @@ export const updateBqMaterialLineAction = createAction(
 
     const line = await tx.bqMaterialLine.findUnique({
       where: { id: input.id },
-      select: { sub_object_id: true },
+      select: { object_id: true, sub_object_id: true },
     });
     if (!line) throw new ActionError("This line no longer exists.", "NOT_FOUND");
-    await assertSubObjectEditable(tx, line.sub_object_id);
-    await detachFromTemplate(tx, line.sub_object_id, ctx.user.name ?? null);
+    const parent = await resolveStoredLineParent(tx, line);
+    if (parent.subObjectId) {
+      await detachFromTemplate(tx, parent.subObjectId, ctx.user.name ?? null);
+    }
 
     await tx.bqMaterialLine.update({
       where: { id: input.id },
@@ -744,7 +1054,7 @@ export const updateBqMaterialLineAction = createAction(
       },
     });
 
-    const projectId = await projectIdOfSubObject(tx, line.sub_object_id);
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     revalidateProject(projectId);
     return { id: input.id };
   },
@@ -785,11 +1095,13 @@ export const overrideBqMaterialLineSnapshotAction = createAction(
 
     const line = await tx.bqMaterialLine.findUnique({
       where: { id: input.id },
-      select: { sub_object_id: true },
+      select: { object_id: true, sub_object_id: true },
     });
     if (!line) throw new ActionError("This line no longer exists.", "NOT_FOUND");
-    await assertSubObjectEditable(tx, line.sub_object_id);
-    await detachFromTemplate(tx, line.sub_object_id, ctx.user.name ?? null);
+    const parent = await resolveStoredLineParent(tx, line);
+    if (parent.subObjectId) {
+      await detachFromTemplate(tx, parent.subObjectId, ctx.user.name ?? null);
+    }
 
     await tx.bqMaterialLine.update({
       where: { id: input.id },
@@ -810,7 +1122,7 @@ export const overrideBqMaterialLineSnapshotAction = createAction(
       },
     });
 
-    const projectId = await projectIdOfSubObject(tx, line.sub_object_id);
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     await insertAuditLog(tx, "OVERRIDE", "BqMaterialLine", input.id, ctx.userId, {
       bq_project_id: projectId,
     });
@@ -838,13 +1150,15 @@ export const deleteBqMaterialLineAction = createAction(
 
     const line = await tx.bqMaterialLine.findUnique({
       where: { id: input.id },
-      select: { sub_object_id: true },
+      select: { object_id: true, sub_object_id: true },
     });
     if (!line) throw new ActionError("This line no longer exists.", "NOT_FOUND");
-    await assertSubObjectEditable(tx, line.sub_object_id);
-    await detachFromTemplate(tx, line.sub_object_id, ctx.user.name ?? null);
+    const parent = await resolveStoredLineParent(tx, line);
+    if (parent.subObjectId) {
+      await detachFromTemplate(tx, parent.subObjectId, ctx.user.name ?? null);
+    }
 
-    const projectId = await projectIdOfSubObject(tx, line.sub_object_id);
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     await tx.bqMaterialLine.delete({ where: { id: input.id } });
 
     revalidateProject(projectId);
@@ -863,8 +1177,13 @@ export const deleteBqMaterialLineAction = createAction(
 export const addBqServiceLineAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
-    await assertSubObjectEditable(tx, input.subObjectId);
-    await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+    const parent = await resolveLineParent(tx, input);
+    // Menambah baris memutus tautan ke template library (copy-on-write) —
+    // hanya relevan untuk baris yang menempel di L2, karena tautan itu memang
+    // milik L2.
+    if (input.subObjectId) {
+      await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+    }
 
     const candidate = await loadServiceCandidate(input.workPriceId);
     if (!candidate) {
@@ -872,13 +1191,13 @@ export const addBqServiceLineAction = createAction(
     }
 
     const siblings = await tx.bqServiceLine.findMany({
-      where: { sub_object_id: input.subObjectId },
+      where: parent.where,
       select: { sort_order: true },
     });
 
     const line = await tx.bqServiceLine.create({
       data: {
-        sub_object_id: input.subObjectId,
+        ...parent.data,
         work_price_id: candidate.workPriceId,
         vendor_party_id: candidate.vendorPartyId,
         qty_per_sub: input.qtyPerSub,
@@ -898,7 +1217,9 @@ export const addBqServiceLineAction = createAction(
       },
     });
 
-    const projectId = await projectIdOfSubObject(tx, input.subObjectId);
+    // `parent.objectId` sudah diketahui apa pun jalur induknya, jadi tidak
+    // perlu menelusuri ulang dari sub-object yang mungkin memang tidak ada.
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     await insertAuditLog(tx, "CREATE", "BqServiceLine", line.id, ctx.userId, {
       bq_project_id: projectId,
       work_price_id: candidate.workPriceId,
@@ -909,7 +1230,7 @@ export const addBqServiceLineAction = createAction(
   },
   {
     schema: z.object({
-      subObjectId: z.string().min(1),
+      ...lineParentSchema,
       workPriceId: z.string().min(1, "Pick a service from Master Data."),
       qtyPerSub: nonNegative,
       notes: z.string().optional(),
@@ -920,16 +1241,21 @@ export const addBqServiceLineAction = createAction(
 export const addBqLocalServiceLineAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
-    await assertSubObjectEditable(tx, input.subObjectId);
-    await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+    const parent = await resolveLineParent(tx, input);
+    // Menambah baris memutus tautan ke template library (copy-on-write) —
+    // hanya relevan untuk baris yang menempel di L2, karena tautan itu memang
+    // milik L2.
+    if (input.subObjectId) {
+      await detachFromTemplate(tx, input.subObjectId, ctx.user.name ?? null);
+    }
 
     const siblings = await tx.bqServiceLine.findMany({
-      where: { sub_object_id: input.subObjectId },
+      where: parent.where,
       select: { sort_order: true },
     });
     const line = await tx.bqServiceLine.create({
       data: {
-        sub_object_id: input.subObjectId,
+        ...parent.data,
         source: "PROJECT_LOCAL",
         work_price_id: null,
         vendor_party_id: null,
@@ -948,7 +1274,9 @@ export const addBqLocalServiceLineAction = createAction(
         updated_by_name: ctx.user.name ?? null,
       },
     });
-    const projectId = await projectIdOfSubObject(tx, input.subObjectId);
+    // `parent.objectId` sudah diketahui apa pun jalur induknya, jadi tidak
+    // perlu menelusuri ulang dari sub-object yang mungkin memang tidak ada.
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     await insertAuditLog(tx, "CREATE", "BqServiceLine", line.id, ctx.userId, {
       bq_project_id: projectId,
       source: "PROJECT_LOCAL",
@@ -958,7 +1286,7 @@ export const addBqLocalServiceLineAction = createAction(
   },
   {
     schema: z.object({
-      subObjectId: z.string().min(1),
+      ...lineParentSchema,
       name: z.string().min(1, "Service name is required."),
       code: z.string().optional(),
       vendorName: z.string().optional(),
@@ -979,11 +1307,13 @@ export const updateBqServiceLineAction = createAction(
 
     const line = await tx.bqServiceLine.findUnique({
       where: { id: input.id },
-      select: { sub_object_id: true },
+      select: { object_id: true, sub_object_id: true },
     });
     if (!line) throw new ActionError("This line no longer exists.", "NOT_FOUND");
-    await assertSubObjectEditable(tx, line.sub_object_id);
-    await detachFromTemplate(tx, line.sub_object_id, ctx.user.name ?? null);
+    const parent = await resolveStoredLineParent(tx, line);
+    if (parent.subObjectId) {
+      await detachFromTemplate(tx, parent.subObjectId, ctx.user.name ?? null);
+    }
 
     await tx.bqServiceLine.update({
       where: { id: input.id },
@@ -1003,7 +1333,7 @@ export const updateBqServiceLineAction = createAction(
       },
     });
 
-    const projectId = await projectIdOfSubObject(tx, line.sub_object_id);
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     revalidateProject(projectId);
     return { id: input.id };
   },
@@ -1027,13 +1357,15 @@ export const deleteBqServiceLineAction = createAction(
 
     const line = await tx.bqServiceLine.findUnique({
       where: { id: input.id },
-      select: { sub_object_id: true },
+      select: { object_id: true, sub_object_id: true },
     });
     if (!line) throw new ActionError("This line no longer exists.", "NOT_FOUND");
-    await assertSubObjectEditable(tx, line.sub_object_id);
-    await detachFromTemplate(tx, line.sub_object_id, ctx.user.name ?? null);
+    const parent = await resolveStoredLineParent(tx, line);
+    if (parent.subObjectId) {
+      await detachFromTemplate(tx, parent.subObjectId, ctx.user.name ?? null);
+    }
 
-    const projectId = await projectIdOfSubObject(tx, line.sub_object_id);
+    const projectId = await projectIdOfObject(tx, parent.objectId);
     await tx.bqServiceLine.delete({ where: { id: input.id } });
 
     revalidateProject(projectId);

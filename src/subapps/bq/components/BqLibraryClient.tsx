@@ -5,7 +5,9 @@
  */
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { BookOpen, FolderOpen, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Button,
   DashboardTemplate,
@@ -14,12 +16,63 @@ import {
 } from "@/ui_engine";
 import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens";
 import { cn } from "@/lib/utils";
+import {
+  deleteLibraryObjectAction,
+  deleteLibrarySubObjectAction,
+} from "../actions/bq-library-actions";
 import type {
   BqLibraryObjectRow,
   BqLibrarySubObjectRow,
 } from "../services/library-service";
 
 type Tab = "OBJECTS" | "SUB_OBJECTS";
+
+/**
+ * Hapus satu entri library.
+ *
+ * Soft delete di server (`deleted_at`), jadi resep yang sudah pernah dituang ke
+ * project TIDAK ikut hilang — baris L3 di project adalah snapshot yang berdiri
+ * sendiri, dan `BqSubObject.library_sub_object_id` di-`SetNull` oleh skema. Yang
+ * hilang hanyalah kemampuan memanggil resep ini lagi dari panel Library.
+ *
+ * Konfirmasi memakai `window.confirm` — cukup untuk aksi yang bisa dipulihkan
+ * lewat database. Kalau nanti hapus jadi permanen, ganti dengan AlertDialog.
+ */
+function useDeleteEntry() {
+  const router = useRouter();
+  const [pendingId, setPendingId] = React.useState<string | null>(null);
+
+  const remove = React.useCallback(
+    async (kind: "OBJECT" | "SUB_OBJECT", id: string, name: string) => {
+      const label = kind === "OBJECT" ? "objek" : "sub-objek";
+      if (
+        !window.confirm(
+          `Hapus ${label} library "${name}"?\n\nBQ yang sudah memakai resep ini tidak ikut berubah — ` +
+            `hanya resepnya yang tidak bisa dipanggil lagi.`,
+        )
+      ) {
+        return;
+      }
+
+      setPendingId(id);
+      const result =
+        kind === "OBJECT"
+          ? await deleteLibraryObjectAction({ id })
+          : await deleteLibrarySubObjectAction({ id });
+      setPendingId(null);
+
+      if (!result.success) {
+        toast.error(result.error ?? "Gagal menghapus entri library.");
+        return;
+      }
+      toast.success(`"${name}" dihapus dari library.`);
+      router.refresh();
+    },
+    [router],
+  );
+
+  return { remove, pendingId };
+}
 
 export function BqLibraryClient({
   initialObjects,
@@ -96,6 +149,8 @@ function ObjectsTab({
   objects: BqLibraryObjectRow[];
   canEdit: boolean;
 }) {
+  const { remove, pendingId } = useDeleteEntry();
+
   if (objects.length === 0) {
     return (
       <SectionCard padding="lg">
@@ -116,7 +171,6 @@ function ObjectsTab({
           <tr className="border-b border-slate-100 text-left">
             <th className="px-4 py-2.5 font-sans text-xs font-medium text-slate-500">Name</th>
             <th className="px-4 py-2.5 font-sans text-xs font-medium text-slate-500">Unit</th>
-            <th className="px-4 py-2.5 font-sans text-xs font-medium text-slate-500">Markup</th>
             <th className="px-4 py-2.5 font-sans text-xs font-medium text-slate-500">Sub-objs</th>
             <th className="px-4 py-2.5 font-sans text-xs font-medium text-slate-500">Lines</th>
             <th className="px-4 py-2.5 font-sans text-xs font-medium text-slate-500">Created</th>
@@ -137,9 +191,6 @@ function ObjectsTab({
               </td>
               <td className={cn(UI_ENGINE_TYPE_META, "px-4 py-3 text-slate-500")}>{obj.unit}</td>
               <td className={cn(UI_ENGINE_TYPE_META, "px-4 py-3 text-slate-500")}>
-                {Math.round(obj.markupPct * 100)}%
-              </td>
-              <td className={cn(UI_ENGINE_TYPE_META, "px-4 py-3 text-slate-500")}>
                 {obj.subObjectCount}
               </td>
               <td className={cn(UI_ENGINE_TYPE_META, "px-4 py-3 text-slate-500")}>
@@ -150,7 +201,15 @@ function ObjectsTab({
               </td>
               {canEdit && (
                 <td className="px-4 py-3 text-right">
-                  <Button size="sm" variant="ghost" className="h-7 text-slate-400 hover:text-red-600">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-slate-400 hover:text-red-600"
+                    disabled={pendingId === obj.id}
+                    title={`Hapus "${obj.name}" dari library`}
+                    aria-label={`Hapus ${obj.name}`}
+                    onClick={() => void remove("OBJECT", obj.id, obj.name)}
+                  >
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </td>
@@ -170,6 +229,8 @@ function SubObjectsTab({
   subObjects: BqLibrarySubObjectRow[];
   canEdit: boolean;
 }) {
+  const { remove, pendingId } = useDeleteEntry();
+
   if (subObjects.length === 0) {
     return (
       <SectionCard padding="lg">
@@ -219,7 +280,15 @@ function SubObjectsTab({
               </td>
               {canEdit && (
                 <td className="px-4 py-3 text-right">
-                  <Button size="sm" variant="ghost" className="h-7 text-slate-400 hover:text-red-600">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-slate-400 hover:text-red-600"
+                    disabled={pendingId === sub.id}
+                    title={`Hapus "${sub.name}" dari library`}
+                    aria-label={`Hapus ${sub.name}`}
+                    onClick={() => void remove("SUB_OBJECT", sub.id, sub.name)}
+                  >
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </td>

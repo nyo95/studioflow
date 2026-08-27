@@ -19,7 +19,6 @@ export type BqLibraryObjectRow = {
   code: string | null;
   name: string;
   unit: string;
-  markupPct: number;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -118,7 +117,6 @@ export async function listLibraryObjects(
     code: r.code,
     name: r.name,
     unit: r.unit,
-    markupPct: decToNumberStrict(r.markup_pct),
     notes: r.notes,
     createdBy: r.created_by_name,
     createdAt: r.created_at.toISOString(),
@@ -225,7 +223,6 @@ function baseObjectRow(r: {
   code: string | null;
   name: string;
   unit: string;
-  markup_pct: import("@prisma/client/runtime/client").Decimal;
   notes: string | null;
   created_by_name: string;
   created_at: Date;
@@ -236,7 +233,6 @@ function baseObjectRow(r: {
     code: r.code,
     name: r.name,
     unit: r.unit,
-    markupPct: decToNumberStrict(r.markup_pct),
     notes: r.notes,
     createdBy: r.created_by_name,
     createdAt: r.created_at.toISOString(),

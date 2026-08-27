@@ -1264,7 +1264,7 @@ pernah berisi kode — hanya PRD, prototype HTML, dan arsip. Kontrak domainnya
 sekarang ada di `AGENTS.md` §🧾 BQ Contract; **baca itu sebelum menyentuh apa pun
 di `src/subapps/bq/`**.
 
-> **`UPSTREAM-BQ-MATERIAL-SOURCE.md` sekarang USANG di bagian modelnya.** Dokumen
+> **`UPSTREAM-BQ-MATERIAL-SOURCE.md` sudah diarsipkan** ke `docs/archive/bq-2026-08/`. Dokumen
 > itu menggambarkan BQ sebagai aplikasi terpisah dengan bloker "di mana database
 > material bertempat" (§0.3). Owner membalikkannya 2026-08-19: BQ di dalam
 > StudioFlow, material tetap di `master_data`, bloker itu gugur. Bagian §2
@@ -1294,15 +1294,133 @@ di `src/subapps/bq/`**.
 > **Siklus R2 (2026-08-19, #66→#67).** Editor BQ dibandingkan terhadap
 > `D:\Misc\ProjectsHUB\BQ\prototype_fixture_breakdown.html` — prototype yang
 > sudah di-QC estimator kantor. Enam penyimpangan ditemukan; rinciannya beserta
-> urutan kerja ada di `HANDOFF-OPENCODE-R2.md`. Dikerjakan Claude langsung (#67).
+> urutan kerja ada di `docs/archive/bq-2026-08/HANDOFF-OPENCODE-R2.md` (arsip).
+> Dikerjakan Claude langsung (#67).
 > R7 (tombol "Simpan ke library" L1) sengaja ditangguhkan.
+
+### Siklus R3 — refactor hirarki BQ (2026-08-27)
+
+> Spesifikasi: **`PRD-BQ.md`**. Urutan kerja: **`HANDOFF-BQ-R3.md`**.
+> Bukti pembacaan workbook ada di `docs/archive/bq-2026-08/PLAN-BQ-REFACTOR-2026-08-27.md`.
+> Pemicu: pembacaan ulang `BQ template tes.xlsx` (kedua sheet + formulanya)
+> menunjukkan dokumen kantor butuh **pengelompok bersarang → satu lapis
+> berharga → resep koefisien**, bukan lima lapis seperti sekarang.
+> Urutan yang diminta owner: **logic/schema dulu, UI menyusul**.
+
+- [x] **BQ-30 — Rollup subtotal jadi rekursi bottom-up. SELESAI 2026-08-27.**
+      `services/breakdown-service.ts` menaikkan subtotal dengan satu kali loop
+      datar; induk diproses sebelum anaknya terisi. Pada 3 lapis
+      (`B → III → Shopfront Area`) hasilnya `SUBTOTAL B = 0` padahal harusnya
+      100. Sekarang dorman karena schema efektif 2 lapis — menjadi nyata pada
+      baris pertama BQ-31. Ganti post-order + test 3 lapis. Tanpa schema.
+
+- [x] **BQ-31 — `BqSection` rekursif, kedalaman maks 3. SELESAI 2026-08-27.**
+      **Tanpa migrasi** — schema sudah punya self-relation `parent_id` sejak awal;
+      yang mengunci di dua lapis cuma validasi aplikasi dan UI.
+      **Hirarki dikonfirmasi owner 2026-08-27** lewat diagram:
+      `L0 Section → L1 Sub Section → L2 Sub Section (opsional) → L3 Works →
+      L4 Sub-Works`. Tiga lapis pengelompok, satu lapis berharga (L3), satu
+      lapis resep (L4). `Shopfront Area` / `Store Area` = L2, pengelompok —
+      sesuai `SUBTOTAL B.III = SUM(G51:G72)` yang melewati baris areanya.
+      Validasi kedalaman maks 3 di server. `BqDetailMode` tetap tidak dihidupkan.
+      Catatan: `BqSubObject` tidak punya slot di model ini — dibiarkan di schema,
+      tidak dipakai jalur baru, penghapusannya dijadwalkan terpisah.
+
+- [x] **BQ-32 — Harga satuan pekerjaan = Σ(koefisien × harga) L3. SELESAI 2026-08-27 (BQ-39).**
+      Rumus sheet `Tes`. Fallback lumpsum saat L3 kosong — dibutuhkan `Security`
+      (Tes baris 20, tanpa sub-item), `Insurance`, `Signage`. Begitu ada L3,
+      kolomnya read-only. Tahap paling berisiko menggeser angka; AT-01 diperiksa
+      dua kali.
+      `computeObject()` menghitung harga satuan dari Σ L4, tidak ada input harga
+      satuan yang diketik di UI, dan BQ-39 sudah mencabut pengali markup terakhir.
+
+- [ ] **BQ-33 — Isi library BQ.** 🛠 agent · prioritas rendah
+      **Disederhanakan 2026-08-27.** Rencana awal: bangun skrip impor sheet `Tes`
+      + memecah varian + kurasi draft. Itu terlalu berat untuk hasil yang belum
+      tentu dipakai. Yang sederhana: library tumbuh dari tombol **"Simpan ke
+      library"** saat estimator bekerja — resep lahir dari pekerjaan nyata, bukan
+      dari taxonomy kosong. Sheet `Tes` jadi rujukan penamaan kalau perlu, tidak
+      diimpor massal. Varian dibedakan lewat nama (`... (Plywood 9mm)`).
+
+- [ ] **BQ-34 — Rekap kategori belum membedakan borongan.** 🛠 agent
+      Sheet `Tes` punya 6 kategori, enum punya 5. Datanya sudah tertampung di
+      `BqServiceLine.snapshot_has_material`; yang belum ada tampilannya. Tanpa
+      ini rekap BQ-29 menggolongkan borongan sebagai Upah murni. Tampilan saja,
+      tanpa nilai enum baru.
+
+- [ ] **BQ-35 — UI: klik-kanan + CreatableSearch + sentralisasi ui_engine.** 🛠 agent
+      Buang ~18 form tambah permanen, blok chip saran, dan paragraf instruksi di
+      drop zone. Satu gesture: klik kanan → tambah L0/L1/L2/L3, tiap "+" membuka
+      `CreatableSearch` (sudah ada di `components/ui`, belum dipakai BQ).
+      Ke `ui_engine`: `ContextMenu` (baru — `radix-ui@1.4.3` sudah terpasang),
+      `TreeGrid` pattern, `NumberCell`/`TextCell` (sekarang lokal di
+      `BqBreakdownClient` :203–315). Dikerjakan **setelah** BQ-30..BQ-34 stabil.
+
+- [x] **BQ-38 — Nasib `PROJECT_LOCAL`. DIJAWAB 2026-08-27, tidak jadi dicabut.**
+      Sempat dicatat sebagai pencabutan total (*"semua pricing dari master
+      data"*). Owner melunakkannya sore itu: *"data yang tidak ada di master data
+      → override per proyek / dibuat library di bq saja."* Jadi `PROJECT_LOCAL`
+      **tetap sah** sebagai override project, dan library BQ jadi rumah kedua
+      untuk item yang berulang tapi memang bukan urusan Master Data. Urutannya
+      tetap Master Data dulu. Ini sekaligus menutup bloker `ALAT` /
+      `BIAYA_UMUM` / `TRANSPORT_AKOMODASI` — ketiganya tidak perlu menunggu
+      Master Data menyediakan tempat. Nol perubahan kode. Lihat `PRD-BQ.md` §4.
+
+- [ ] **BQ-40 — Penjumlahan harga di komponen klien.** 🛠 agent
+      `BqBreakdownClient.tsx:1938-1939` menjumlahkan `l.cost` untuk baris Total
+      di bawah tabel Bahan/Jasa. Melanggar PRD §3.2. Risiko rendah (menjumlahkan
+      keluaran `calc.ts`, bukan harga mentah) tapi tetap tempat kedua uang
+      dijumlahkan. Pindahkan jadi `materialsSubtotal` / `servicesSubtotal` di
+      `ObjectResult` + `SubObjectResult`, kunci dengan test.
+
+- [ ] **BQ-41 — Guard lama memblokir pembuatan L2.** 🛠 agent
+      `createBqSectionAction` menolak menambah Sub Section ke section yang sudah
+      punya Works (*"move them into divisions first"*). Guard ini lahir waktu
+      model masih dua lapis; sekarang ia memblokir alur yang paling wajar —
+      estimator mengisi "Wall Works" dulu, baru sadar perlu dipisah per area.
+      **Cabut guard-nya.** Rollup sudah menangani Works + Sub Section berdampingan
+      (ada testnya), jadi tidak ada alasan teknis mempertahankannya. Aksi
+      "pindahkan Works ke Sub Section baru" TIDAK perlu dibuat — itu jalur rumit
+      untuk masalah yang hilang begitu guard dicabut. `SectionBlock.allowsDirectObjects`
+      di UI ikut dicabut. Tulis pasalnya ke PRD §2.3.
+
+- [x] **BQ-39 — Cabut markup dari kode. SELESAI 2026-08-27.** 🔒 migrasi belum diterapkan
+      **Keputusan owner 2026-08-27:** OH, profit, markup, PPN, diskon —
+      *"TIDAK MAU DI BUAT SERUMIT INI"*; *"hitungan hanya dari koefisien."*
+      Keputusannya sudah final di `PRD-BQ.md` §8; yang belum ada aba-aba
+      mengeksekusinya, karena ini destruktif.
+      Jejaknya ~60 kemunculan: `BqObject.markup_pct` + `BqSettings.default_markup_pct`
+      (migrasi), `BQ_MARKUP_EDIT` di `constants.ts` + `matrix.ts` (cabut),
+      `computeObject()` di `calc.ts` (10), **`calc.test.ts` (7 — satu-satunya test
+      angka yang tersisa, harus ditulis ulang)**, `BqToolbar` `applyMarkupAll` (4),
+      `BqBreakdownClient` (6), `settings-service` (7), `library-service` (4),
+      `bq-project-actions` (8).
+      Kolom pada settings, Works, dan library recipe dicabut lewat migrasi
+      `20260827120000_drop_bq_markup` (ditulis, tidak dijalankan). RBAC, action,
+      toolbar, library, viewer, dan kalkulasi sudah tidak membawa markup. Sepuluh
+      test `calc.test.ts` kini mengunci aritmatika koefisien × harga biasa.
+
+- [x] **BQ-37 — AT-01 gerbang hantu. DIBUBARKAN 2026-08-27, tidak perlu pengganti.**
+      Sempat dicatat menunggu owner menetapkan "fixture kanonik pengganti".
+      Itu kerumitan yang dibuat sendiri. AT-01 dulu masuk akal karena mesin
+      hitungnya rumit (waste berlapis, konversi satuan, pembulatan) sehingga
+      butuh contoh nyata dari dokumen kantor. Rantai itu sudah tidak ada — yang
+      tersisa cuma perkalian koefisien × harga. Gerbangnya cukup test aritmatika
+      biasa dengan angka yang jelas benar. **Tidak memblokir BQ-39 lagi.**
+      Yang tetap berlaku: jangan mengutip AT-01, dokumen lama jangan diedit.
+
+- [ ] **BQ-36 — Rapikan doc drift `bq-template-data.ts`.** 🛠 agent
+      Header baris 17–20 masih menulis peta lama (`Grup → BqObject`,
+      `Item → BqSubObject`) yang sudah dibatalkan `bq-template-actions.ts`.
+      Dua berkas saling bertentangan.
 
 ### Menunggu owner
 
 - [ ] **BQ-1 — Export Internal Cost Detail.** ⏳ owner
-      Satu-satunya bagian F4 yang belum ada. Seluruh angkanya sudah dihitung dan
-      tampil di layar (`BqPurchaseSummary` + `computed` tiap object); yang belum
-      ada adalah berkasnya. **Diblokir keputusan format**, bukan teknis: PDF atau
+      Satu-satunya bagian F4 yang belum ada. Angkanya sudah dihitung dan tampil
+      di layar (`computed` tiap object); yang belum ada adalah berkasnya.
+      *Koreksi 2026-08-27: `BqPurchaseSummary` yang disebut versi lama catatan
+      ini SUDAH DIHAPUS di R2 — jangan mencarinya.* **Diblokir keputusan format**, bukan teknis: PDF atau
       xlsx? Kolom apa saja? Packaging variance ikut tercetak (PRD §11 open
       decision 6)? Menebaknya menghasilkan berkas yang harus dibongkar.
       *Catatan: pertanyaan "apakah mode detail/ringkas ikut tercetak" gugur
@@ -1316,13 +1434,13 @@ di `src/subapps/bq/`**.
       `npx prisma migrate dev`; tanpa itu tidak ada perubahan R2 yang bisa diuji di
       browser.
 
-- [ ] **BQ-12 — Bahasa UI editor BQ.** ⏳ owner
-      Dokumen yang di-QC estimator berbahasa Indonesia (`URAIAN PEKERJAAN`,
-      `HARGA SATUAN`, `Tambah Pos Pekerjaan`); editor StudioFlow berbahasa
-      Inggris (`Add object`, `Rate / unit`, `Materials`). Estimator kantor
-      bekerja dengan istilah Indonesia, dan menyamakan istilah editor dengan
-      dokumen keluarannya mengurangi salah baca. Kalau diputuskan ya: pekerjaan
-      terpisah, sentuh label saja, jangan dicampur R2.
+- [x] **BQ-12 — Bahasa UI editor BQ. SELESAI 2026-08-26.**
+      Label seluruh editor BQ diubah ke terminologi RAB Indonesia: Vol., Harga Sat.,
+      Jumlah, Bahan Material, Jasa/Upah, Total Anggaran (RAB), OH+Profit %, Tambah
+      Pekerjaan, Tambah Sub-pekerjaan. Tabel L3 direstruktur dengan kolom
+      No./Uraian/Sat./Koef./Harga Sat./Jumlah. Subtotal row per seksi + total
+      sub-pekerjaan ditambahkan. `BqLinePicker` label +Bahan/+Jasa, EmptyResult
+      punya link "input manual", form custom jadi panel tersendiri.
 
 - [ ] **BQ-13 — Cabut `BQ_ACCESS` dari STAFF?** ⏳ owner
       Setelah costing pindah ke `master_data.Sku` (#66 R1), tidak ada lagi
@@ -1331,6 +1449,28 @@ di `src/subapps/bq/`**.
       §5.1 (*Admin Bahan "tidak bisa mengubah isi project"*). `constants.ts`
       sengaja belum disentuh sampai ada keputusan.
 
+
+- [ ] **BQ-14 — Drag reorder sub-pekerjaan (L2).** 🛠 agent
+      `@dnd-kit` sudah ada di repo (dipakai checklist #55). Tambah drag-handle
+      pada `SubObjectRow` dan action `reorderBqSubObjectAction` yang mengupdate
+      `sort_order`. Tidak perlu skema baru.
+
+- [ ] **BQ-15 — Duplicate object / sub-pekerjaan.** 🛠 agent
+      Tombol "Duplikat" pada ObjectRow dan SubObjectRow — kloning seluruh
+      hierarki baris (deep copy snapshot + reset `is_manual_override = false`).
+      Sangat umum saat estimasi fixture berulang (CC-1 → CC-2). Tidak memblokir
+      apa pun, murni UX.
+
+- [ ] **BQ-16 — Inline rename object/sub-pekerjaan langsung di baris.** 🛠 agent
+      Klik nama di ObjectRow/SubObjectRow → berubah jadi `<input>` inline (pola
+      sama dengan `TextCell` di L3). Saat ini nama hanya bisa diubah dengan membuka
+      field di zona kontrol (terbuka). Estimator biasa mau rename tanpa expand.
+
+- [ ] **BQ-17 — Panel ringkasan pekerjaan (sidebar/modal).** ⏳ owner dulu
+      Tampilkan tabel BQ "pandangan klien" (L1 tertutup semua) sebagai rangkuman
+      satu-layar — No./Uraian/Sat./Vol./Harga Sat./Jumlah — siap difoto/di-share
+      ke klien tanpa angka breakdown. Butuh keputusan: modal di dalam halaman yang
+      sama, atau halaman `/bq/[id]/summary` terpisah?
 - [ ] **BQ-6 — Object `sort_order` belum bisa diubah dari UI.**
       Kolomnya ada dan dipakai untuk mengurutkan; yang belum ada drag-handle-nya.
       Pola drag sudah ada di repo (`@dnd-kit` dipakai checklist task, #55) jadi
@@ -1400,3 +1540,53 @@ Satu yang perlu ditegaskan karena mudah "diperbaiki" oleh agent berikutnya:
 **tombol "refresh semua harga" tidak boleh dibuat.** Refresh snapshot sengaja
 satu baris per panggilan — PRD §5.4 meminta perubahan boleh diterapkan
 sebagian, dan tombol massal adalah tombol yang ditekan orang tanpa membaca.
+
+## BQ — Iterasi Berikutnya
+
+| ID | Prioritas | Deskripsi |
+| --- | --- | --- |
+| BQ-18 | Medium | Drag-reorder baris L3 (bahan/jasa) dalam satu sub-pekerjaan |
+| BQ-19 | Low | Duplicate sub-pekerjaan ke object lain |
+| BQ-20 | Medium | Inline rename object (L1) tanpa dialog terpisah |
+| BQ-21 | ~~Low~~ | ~~Panel ringkasan floating~~ — diserap toolbar sticky (2026-08-26) |
+| BQ-22 | Low | Export PDF BQ per object (tampilan klien saja, tanpa rincian L3) |
+| BQ-23 | Medium | Drop satu resep ke beberapa baris sekaligus (multi-select drop target) |
+| BQ-24 | Low | Simpan preferensi tingkat rincian (1/2/3) per pengguna per project |
+| BQ-25 | Medium | Panel Library: pratinjau isi resep sebelum disisipkan (daftar bahan & jasa) |
+| BQ-26 | Low | Alat global: hapus semua pekerjaan kosong (0 baris) sekaligus |
+| BQ-27 | High | Jalankan `prisma generate` + `prisma migrate deploy` untuk migrasi BqSection & BqCostCategory |
+| BQ-28 | High | Ganti baris pembentuk dari saran template (jasa PROJECT_LOCAL harga 0) dengan baris Master Data saat SKU sudah pasti |
+| BQ-29 | Medium | Rekap biaya per `cost_category` di level project (Material / Upah / Alat / Biaya Umum / Transport) |
+| BQ-30 | Medium | Seed 12 resep sheet Tes yang belum punya item BQ ke Library sebagai template sub-pekerjaan |
+| BQ-31 | Medium | Editor seksi: tambah / rename / urutkan seksi dan pindahkan pekerjaan antar seksi |
+| BQ-32 | Low | Ekspor BQ ke xlsx mengikuti tata letak sheet "BQ" (SUBTOTAL A / B.I / GRAND TOTAL) |
+| BQ-33 | ~~Medium~~ | ~~Audit tombol tanpa handler~~ — selesai 2026-08-26; ditemukan 1 lagi (hapus project), sisanya bersih |
+| BQ-34 | Low | Ganti `window.confirm` di Library dengan AlertDialog agar konsisten dengan dialog lain |
+| BQ-35 | Low | Tampilkan berapa BQ yang sedang memakai sebuah resep sebelum konfirmasi hapus |
+| BQ-36 | Medium | Halaman/menu "Arsip" untuk memulihkan breakdown & resep library yang ter-soft-delete |
+| BQ-37 | Low | Lint rule kustom: tolak `<Button>` tanpa onClick/asChild/type=submit agar bug ini tidak terulang |
+| BQ-38 | High | Dock Library belum tampil di layar < lg (kelas `hidden lg:flex`) — sediakan mode sheet untuk layar sempit |
+| BQ-39 | Medium | Aksesibilitas: alternatif keyboard untuk drag & drop (pilih resep → tombol "Sisipkan ke…") |
+| BQ-40 | Low | Lebar dock bisa di-resize dan diingat per pengguna |
+| BQ-41 | Low | Drop ke area kosong grid → buat pekerjaan + sub-pekerjaan sekaligus dari resep |
+| BQ-42 | Medium | Chip saran juga di tingkat seksi — menawarkan pekerjaan (grup) yang belum ada, bukan hanya sub-pekerjaan |
+| BQ-43 | Low | "Tambah semua saran" untuk pekerjaan yang memang dipakai lengkap |
+| BQ-44 | Low | Saran tetap muncul setelah pekerjaan di-rename, lewat kolom tautan opsional ke grup template |
+| BQ-45 | ~~Medium~~ | ~~Input koefisien cepat~~ — diselesaikan baris cepat inline (2026-08-26); drag tetap default 1 sebagai jalur sekunder |
+| BQ-46 | Medium | Tab Harga: pilih varian harga (supplier) saat SKU punya lebih dari satu `priceOptions` |
+| BQ-47 | Low | Ingat tab dock terakhir yang dipakai, per pengguna |
+| BQ-48 | Low | Tab Template: sembunyikan item yang sudah ada di BQ ini, seperti chip saran |
+| BQ-49 | High | **Paste blok dari Excel ke tabel L3** — cocokkan otomatis ke Master Data, tandai yang tidak ketemu. Fitur bernilai tertinggi untuk posisi "pengganti Excel"; pakai mesin pencocokan yang sama dengan baris cepat |
+| BQ-50 | Medium | Baris cepat: pilih varian harga (supplier) saat SKU punya >1 priceOptions — kini selalu ambil yang pertama |
+| BQ-51 | Medium | Hotkey buka baris cepat (mis. `b` / `j`) tanpa klik tombol |
+| BQ-52 | Low | Baris cepat ingat kategori biaya terakhir untuk baris lokal berturut-turut |
+| BQ-53 | Low | Sisa penyejajaran kolom: L3 masih tabel sendiri dengan header terpisah — sebagian besar sudah beres sejak grid jadi outline tabel (2026-08-26) |
+| BQ-54 | Low | Ingat seksi mana yang ditutup, per pengguna per project |
+| BQ-55 | Low | Tingkat rincian 1/2/3 di toolbar belum ikut mengatur buka-tutup seksi |
+| BQ-56 | Low | Pekerjaan implisit hasil merge tidak bisa di-rename/hapus dari UI (kepalanya tersembunyi) — sediakan aksinya di baris seksi |
+| BQ-57 | Low | Penomoran L2 masih urutan tampil (1..n), belum mengikuti nomor asli dari dokumen sumber bila item dihapus/diurut ulang |
+| BQ-58 | High | Jalankan `prisma generate` + `migrate deploy` untuk migrasi seksi bersarang & baris L1 |
+| BQ-59 | High | BQ lama hasil template versi sebelumnya perlu dibuat ulang — strukturnya memakai pemetaan yang meleset |
+| BQ-60 | Medium | Pindahkan item antar seksi/divisi (drag baris item, atau menu "pindah ke…") |
+| BQ-61 | Medium | Rename seksi/divisi inline — kini hanya bisa dibuat dan dihapus |
+| BQ-62 | Low | Urutkan ulang seksi/divisi (sort_order belum bisa diubah dari UI) |

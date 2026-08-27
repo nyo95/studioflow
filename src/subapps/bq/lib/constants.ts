@@ -16,11 +16,6 @@
  */
 export const BQ_SETTINGS_ID = "bq-settings";
 
-/** Dipakai saat tabel setelan belum diisi sama sekali. Sengaja sama dengan
- *  `@default` di skema — dua tempat, satu nilai, dan kalau salah satunya
- *  berubah tanpa yang lain, object baru akan lahir dengan markup berbeda
- *  tergantung apakah barisnya sudah pernah dibuat. */
-export const BQ_DEFAULT_MARKUP_PCT = 0.2;
 export const BQ_DEFAULT_CURRENCY = "IDR";
 
 /** Batas atas jumlah baris yang boleh diminta sekali jalan oleh picker master

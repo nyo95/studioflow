@@ -465,207 +465,50 @@ CSV staging master-data lama adalah **bukti saja**, bukan sumber impor.
    read-only; menampilkannya tidak boleh menulis atau menghidupkan kembali
    penawaran lama.
 
-## 🧾 BQ Contract (Fixture Breakdown, `/bq`)
+## 🧾 BQ Contract (`/bq`)
 
-**Ditulis 2026-08-19 (#64).** Kontrak domain untuk `src/subapps/bq/`,
-`src/app/bq/`, dan schema `bq`. Berlaku Claude maupun Codex. Spesifikasi
-sumbernya `D:\Misc\ProjectsHUB\BQ\PRD_Fixture_Breakdown.md` — repo itu tidak
-berisi kode, hanya PRD dan prototype.
+**Kontrak lengkapnya ada di `PRD-BQ.md`.** Baca itu sebelum menyentuh
+`src/subapps/bq/`, `src/app/bq/`, atau schema `bq`. Jangan re-derive dari
+`D:\Misc\ProjectsHUB\BQ\PRD_Fixture_Breakdown.md` maupun dari
+`docs/archive/bq-2026-08/` — semuanya sudah gugur (daftarnya di PRD §8).
 
-> **`UPSTREAM-BQ-MATERIAL-SOURCE.md` usang di bagian modelnya.** Ia
-> menggambarkan BQ sebagai aplikasi terpisah. Owner membalikkannya 2026-08-19:
-> BQ di dalam StudioFlow. Bloker §0.3 ("di mana database material bertempat")
-> gugur — material tetap di `master_data`, BQ membacanya lintas-schema.
+> **Seksi ini sengaja diringkas 2026-08-27.** Isi lamanya menjelaskan mesin yang
+> sudah dibongkar tiga siklus lalu: waste berlapis, konversi otomatis, purchase
+> summary, mode detail/ringkas, dan `price-drift-service.ts` yang sudah dihapus.
+> Membiarkannya berarti dua dokumen saling bertentangan, dan yang dibaca agen
+> berikutnya selalu yang salah.
 
-### 1. Tiga lapis, tidak lebih
+Lima hal yang tidak boleh dilanggar tanpa keputusan owner baru:
 
-```
-L1 BqObject      satu fixture utuh — qty, unit, markup, rate HASIL HITUNG
-  L2 BqSubObject   bagian fixture — PUNYA QTY PENGALI SENDIRI
-    L3 BqMaterialLine / BqServiceLine
-```
+1. **Hirarki lima lapis.** `L0/L1/L2 Section` (pengelompok, `BqSection`
+   rekursif, maks 3 lapis) → **`L3 Works`** (`BqObject`, satu-satunya lapis
+   berharga: Qty × Harga Satuan) → `L4 Sub-Works` (koefisien × harga).
+   `BqSubObject` tidak punya slot — jangan bangun fitur baru di atasnya.
 
-Tidak ada sub-sub-object (PRD §2.2). Bagian yang terasa perlu lapis keempat
-dipecah jadi dua L2 sejajar.
+2. **Seluruh aritmatika di `lib/calc.ts`, dan modul itu murni.** Tidak ada
+   `reduce` atas harga di komponen, service, atau action. Satu-satunya
+   pengecualian yang disengaja: `lib/section-rollup.ts`, fungsi murni dengan
+   testnya sendiri. Subtotal pengelompok **wajib post-order** — loop datar
+   membuat `SUBTOTAL B` jadi nol.
 
-**Qty pengali di L2 adalah kunci desain seluruh alat.** Estimator menulis
-kebutuhan untuk SATU ambalan lalu set jumlahnya 3; ubah jadi 5, seluruh bahan
-di bawahnya ikut. Tanpa itu BQ cuma Excel yang lebih rapi.
+3. **Snapshot tidak pernah refresh.** Bukan "refresh all", bukan "refresh
+   selected", tidak ada banner. Harga diambil sekali saat baris ditarik dari
+   Master Data. Satu-satunya perubahan setelah itu adalah suntingan manual
+   bertanda `is_manual_override`.
 
-### 2. Mesin hitung — satu tempat, urutan normatif
+4. **Master Data SSOT.** Tidak ada berkas di `src/subapps/bq/` yang menulis ke
+   tabel `master_data`. Baris `PROJECT_LOCAL` boleh dibuat dari picker BQ.
+   Harga yang hilang tidak pernah jadi `?? 0`.
 
-Seluruh aritmatika BQ hidup di `src/subapps/bq/lib/calc.ts`. Modul itu MURNI:
-tidak menyentuh Prisma, `server-only`, DOM, atau tanggal sekarang. Batas itu
-bukan gaya — ia yang membuat mesin hitung tidak bisa diam-diam membaca ulang
-master data, dan yang membuatnya bisa diuji `npm test`.
+5. **Batas ditegakkan di jalur tulis, tidak pernah di jalur baca.** Data yang
+   terlanjur cacat — terlalu dalam, yatim, berputar — tetap ditampilkan. Yang
+   tidak tampil tidak bisa diperbaiki pengguna.
 
-**DILARANG menjumlahkan biaya di komponen klien, service, atau action.** Kalau
-ada `reduce` atas harga di luar `calc.ts`, ia jadi sumber kebenaran kedua, dan
-selisih semacam itu selalu ketahuan belakangan — di kertas penawaran.
+⚠️ **Jangan mengutip "AT-01 = Rp5.653.559".** Angka itu tidak ada di kode mana
+pun; gerbangnya gugur bersama PRD Bab 7. Lihat PRD v2 §11 dan roadmap BQ-37.
 
-Urutan operasi PRD Bab 3 tidak boleh diubah:
+Arah rasa & aturan UI: **`designbq.md`** — tetap berlaku penuh.
 
-1. Waste dikali **sebelum** pengali L2.
-2. `L1.qty` masuk **paling akhir** — supaya `rate_L1` tetap harga satuan yang
-   bisa dipindah ke Rate Library dan dipakai ulang dengan qty berbeda.
-3. Pembulatan pembelian **setelah** agregasi seluruh project, tidak pernah per
-   baris.
-
-`calc.test.ts` mengunci angka contoh PRD Bab 7 (Rp4.711.299 / Rp5.653.559 /
-variance Rp721.201) apa adanya, bukan dengan toleransi. **Kalau meleset, mesin
-hitungnya yang salah, bukan angkanya.**
-
-**Konversi purchase unit tidak pernah dimatikan**, termasuk mode `ringkas`
-(AT-05b). Mematikannya membuat harga plywood Rp285.000 *per lembar* terbaca
-*per sqm* dan rate melonjak Rp5,65jt → Rp12,41jt. Itu bukan penyederhanaan,
-itu angka salah. `conversion <= 0` dilempar, tidak pernah di-`|| 1`.
-
-### 3. Snapshot — larangan silent update
-
-Setiap baris L3 membekukan harga, konversi, satuan, waste default, dan tanggal
-saat baris dibuat. **Sistem tidak membaca ulang master data saat menampilkan
-breakdown** (PRD §5.4 — aturan yang paling tidak boleh dilanggar).
-
-- `breakdown-service.ts` membaca kolom `snapshot_*` saja. Satu join "kecil" ke
-  `SkuPrice` di sana membuat setiap object diam-diam mengikuti harga hari ini.
-- Satu-satunya tempat BQ membaca ulang master untuk baris yang sudah ada adalah
-  `price-drift-service.ts`, dan ia **hanya melapor**.
-- Penerapannya aksi terpisah, **satu baris per panggilan**. PRD §5.4 meminta
-  perubahan boleh diterapkan sebagian. **JANGAN membuat "refresh semua"** — itu
-  tombol yang ditekan orang tanpa membaca, dan sesudahnya larangan ini tinggal
-  namanya.
-- Object terkunci (`locked_at`) tidak menerima refresh apa pun, banner pun tidak
-  muncul.
-
-> **⚠️ PENEGASAN OWNER 2026-08-24 (PRD Architecture Cleanup v2, menjawab
-> pertanyaan eksplisit):** BQ snapshot **TIDAK PERNAH** refresh dari Master
-> Data — bukan "refresh all", bukan "refresh selected", tidak ada banner
-> "update available". Harga current Master Data diambil **satu kali, saat baris
-> ditarik dari Master Data ke project BQ**; setelah itu snapshot yang ada tidak
-> disentuh oleh siapa pun. Konsekuensinya: `price-drift-service.ts` dan seluruh
-> mekanisme lapor-drift menjadi kerja yang dibongkar di fase R9 — jangan
-> memperluasnya. Suntingan manual `is_manual_override` tetap satu-satunya cara
-> mengubah nilai baris yang sudah ada.
-
-### 4. Master data adalah SSOT (keputusan owner 2026-08-19)
-
-> **DIPERBARUI 2026-08-24 (PRD Architecture Cleanup v2 §28).** Paragraf "tidak
-> ada jalur baris custom di picker" di bawah ini TIDAK BERLAKU lagi. Owner
-> mengesahkan project-local entry: estimator BOLEH membuat Project Material /
-> Project Service dengan source `PROJECT_LOCAL` langsung dari BQ picker bila
-> Master Data belum punya itemnya. Ia tidak menulis ke `master_data` dan bisa
-> kelak dipromosikan lewat workflow eksplisit. Kode picker sudah berjalan begini
-> sejak 2026-08-20; kontrak lama tertinggal. Larangan menulis ke tabel
-> `master_data` dari `src/subapps/bq/` tetap berlaku penuh.
-
-Tidak ada berkas di `src/subapps/bq/` yang boleh **menulis** ke tabel
-`master_data`. Bahan atau jasa yang belum ada diminta ke staff lewat Master Data
-lebih dulu. ~~Tidak ada jalur "baris custom" di picker, dan itu keputusan, bukan
-fitur yang belum sempat dibuat.~~ *(dicabut 2026-08-24, lihat catatan di atas)*
-
-Yang BOLEH: menyunting nilai **snapshot** sebuah baris di dalam BQ (harga nego,
-sisa stok, konversi khusus). Suntingan itu ditandai `is_manual_override`, hidup
-di project BQ itu saja, dan tidak pernah merambat balik. Tiap project BQ punya
-snapshot sendiri.
-
-`sku_id` / `work_price_id` di baris L3 sengaja **kolom biasa, bukan FK** — pola
-yang sama dengan `WorkPriceProjectRef.project_id` (§8). Snapshot harus selamat
-dari apa pun yang terjadi pada master sesudahnya.
-
-Sebaliknya `BqMaterialProfile` dan `BqCategoryWaste` MEMANG ber-FK ke
-`master_data`: mereka bukan snapshot, mereka pelengkap.
-
-### 5. Presedensi waste — `0` bukan `kosong`
-
-```
-1  override baris L3
-2  override object L1
-3  default bahan     (BqMaterialProfile.default_waste_pct)
-4  default kategori  (BqCategoryWaste.waste_pct)
-5  0
-```
-
-Nol eksplisit adalah nilai sah dan **menang** atas default di bawahnya (AT-04).
-Itu sebabnya seluruh kolom waste `nullable` dan seluruh parameter bertipe
-`number | null`, bukan `number | undefined` yang di-`||`: `0 || 10` adalah `10`,
-dan itu persis bug yang AT-04 tangkap. **DILARANG `?? 0` dan `COALESCE(x, 0)`
-pada kolom waste.**
-
-Level 3 dan 4 disimpan **terpisah** di snapshot, tidak dikerucutkan jadi satu
-angka — kalau digabung, `wasteSource` tidak bisa lagi menjawab "kenapa waste-nya
-10%", dan AT-03 tidak bisa diuji.
-
-### 6. Baris jasa tidak punya waste dan tidak punya konversi
-
-Ditegakkan **skema**: `BqMaterialLine` dan `BqServiceLine` adalah dua tabel, dan
-tabel jasa memang tidak punya kolomnya (PRD §3.2, AT-07). Satu tabel dengan
-kolom nullable akan membuat AT-07 lolos hanya selama ada yang ingat menulis cek
-aplikasinya.
-
-**Jangan menambahkan `waste_override_pct` atau `snapshot_conversion` ke
-`BqServiceLine` "supaya seragam dengan bahan".** Kalau kolom itu muncul, yang
-salah adalah migrasinya.
-
-### 7. Mode detail / ringkas tidak menghapus data
-
-Ganti mode hanya menulis satu kolom enum. Nilai waste tetap tersimpan di baris
-L3; ia cuma berhenti dihitung. Balik ke `detail` dan angkanya kembali persis
-(AT-05). Aksi yang ikut mengosongkan `waste_override_pct` "supaya bersih" akan
-menghilangkan pekerjaan estimator.
-
-Object ber-mode `ringkas` dilewati Purchase Summary, dan **jumlahnya wajib
-ditampilkan** (AT-05c) supaya tidak ada yang mengira daftar belanjanya lengkap.
-
-### 8. Packaging variance tidak dialokasikan
-
-`Σ purchase_cost − Σ biaya baris bahan`. Ia baris tersendiri di Purchase
-Summary: tidak dialokasikan balik ke object, tidak memengaruhi rate mana pun,
-tidak dikenai markup (PRD §3.5, AT-12).
-
-Kalau dialokasikan, rate Counter Cabinet berubah setiap kali object lain ikut
-pakai plywood — mustahil dijelaskan, dan merusak nilai rate sebagai entri yang
-bisa dipakai ulang.
-
-### 9. Markup
-
-Di L1, bukan per baris L3 (PRD §3.4). Ia keputusan komersial atas satu fixture
-utuh, bukan atas sebatang edging. **Tidak pernah tercetak ke klien** — klien
-lihat `rate` saja.
-
-`BqSettings.default_markup_pct` **DISALIN** ke `BqObject.markup_pct` saat object
-dibuat, bukan dirujuk. Mengubah default kantor tidak boleh mengubah object yang
-sudah jadi — alasan yang sama dengan snapshot harga.
-
-### 10. RBAC
-
-| Permission | Pemegang |
-|---|---|
-| `BQ_ACCESS` | ESTIMATOR, STAFF, ADMIN, DEVELOPER |
-| `BQ_PROJECT_MANAGE` · `BQ_BREAKDOWN_EDIT` · `BQ_MARKUP_EDIT` | ESTIMATOR, ADMIN, DEVELOPER |
-| `BQ_SETTINGS_MANAGE` | STAFF, ADMIN, DEVELOPER — **bukan** ESTIMATOR |
-
-`BQ_SETTINGS_MANAGE` di luar ESTIMATOR bukan kelalaian: PRD §5.1 menyatakan
-estimator tidak mengubah master apa pun maupun harga, dan konversi adalah bagian
-dari mendefinisikan harga — ia yang menentukan Rp285.000 berarti per lembar atau
-per sqm.
-
-STAFF memegang peran "Admin Bahan" PRD §5.1: ia masuk `/bq` untuk Settings, dan
-bisa **membaca** breakdown tanpa bisa mengubahnya. `scripts/verify-access-matrix.mjs`
-rule 8 menolak kalau STAFF diberi `BQ_*` di luar dua izin itu.
-
-**API menolak berdasarkan peran, bukan cuma menyembunyikan tombol di UI**
-(PRD, dan sejalan §11.3 Master Data Contract). Setiap aksi tulis memanggil
-`assertPerm()`, dan object terkunci diperiksa `assertObjectEditable()` yang
-menaiki relasi — mengunci object tapi masih bisa mengubah baris di dalamnya
-membuat kunci itu tidak berarti.
-
-### 11. Audit
-
-Tulisan BQ memakai `insertAuditLog()` → `studioflow.AuditLog`, di dalam
-transaksi yang sama. Kunci detail dinamai **`bq_project_id`**, bukan
-`project_id`: `insertAuditLog` menyimpulkan `AuditLog.project_id` dari kunci itu,
-dan kolom tersebut FK ke `studioflow.Project` — sebuah id project BQ di sana
-melanggar constraint.
 
 ## 📚 Peta dokumen — mana yang mengikat, mana yang riwayat
 
@@ -675,11 +518,16 @@ Diperbarui pada perapihan 2026-08-18. Baca urutan ini, jangan yang lain:
 |---|---|
 | **`AGENTS.md`** (berkas ini) | **Mengikat.** Kontrak domain + aturan kerja. Dibaca pertama. |
 | **`HANDOFF-CODEX.md`** | **Mengikat.** Keadaan repo per 2026-08-18 + daftar keputusan yang tidak boleh dimundurkan + pekerjaan yang benar-benar terbuka. Dibaca kedua, sebelum `roadmap.md`. |
+| **`PRD-BQ.md`** | **Mengikat untuk BQ.** PRD produk kanonik `/bq`. Menggantikan seluruh dokumen BQ lama — yang usang ada di `docs/archive/bq-2026-08/`. |
+| **`HANDOFF-BQ-R3.md`** | Urutan kerja BQ untuk agent coding, beserta hasil auditnya. |
+| **`designbq.md`** | **Mengikat untuk BQ.** Arah rasa & aturan UI. Tidak digantikan PRD v2. |
 | **`prisma/schema.prisma`** | **Mengikat.** Bentuk data yang berlaku, beranotasi panjang. Satu-satunya yang tidak bisa basi. |
 | **`changelog.md`** | **Mengikat untuk ditulis.** Riwayat perubahan + alasannya, sekaligus log handoff antar-agent (aturan 8). |
 | **`roadmap.md`** | Pekerjaan yang masih terbuka. |
 | `AUDIT-MASTERDATA-2026-08-18.md` · `VERIFIKASI-AUDIT-2026-08-18.md` | Laporan audit dan verifikasinya. Rujukan, bukan perintah. |
-| `PLAN-AUDIT-ROADMAP-2026Q3.md` · `PLAN-LIBRARY-BRAND-FIRST.md` · `UPSTREAM-BQ-MATERIAL-SOURCE.md` | ⚠️ **Menggambarkan Master Data v1 yang sudah tidak ada.** Dipertahankan hanya karena komentar kode merujuknya. Jangan dipakai sebagai acuan keadaan sekarang. |
+| `PLAN-AUDIT-ROADMAP-2026Q3.md` · `PLAN-LIBRARY-BRAND-FIRST.md` | ⚠️ **Menggambarkan Master Data v1 yang sudah tidak ada.** Dipertahankan hanya karena komentar kode merujuknya. Jangan dipakai sebagai acuan keadaan sekarang. |
+| `docs/archive/bq-2026-08/**` | ⚠️ **Dokumen BQ pra-konsolidasi.** Empat di antaranya mengutip AT-01, gerbang yang tidak pernah ada di kode. Jangan diikuti — lihat README di dalamnya. |
+| `D:\Misc\ProjectsHUB\BQ\PRD_Fixture_Breakdown.md` | ⚠️ **Gugur seluruhnya untuk BQ.** Digantikan `PRD-BQ.md`. Jangan re-derive kontrak dari sini. |
 | `MASTER_SSOT.md` | ⚠️ **Diarsipkan 2026-08-18.** Yang tersisa di root hanya penunjuk arah; isi v1-nya di `docs/archive/`. |
 | `docs/archive/**` | Semua yang sudah tidak berlaku. Disimpan, bukan dibuang. |
 
@@ -693,7 +541,8 @@ mengubah kodenya supaya cocok.
 > AI/agent bekerja** — ia bukan source of truth requirement produk. Untuk
 > requirement produk, otoritas tertinggi adalah **Product PRD**; saat ini PRD
 > yang berlaku adalah *PRD Architecture Cleanup & Consolidation v2*
-> (`PRD-Architecture-Cleanup-v2.md`). Konflik antara kontrak agent di sini dan
+> (`PRD-Architecture-Cleanup-v2.md`) untuk arsitektur, dan **`PRD-BQ.md`**
+> untuk domain BQ. Konflik antara kontrak agent di sini dan
 > PRD produk diselesaikan dengan memperbarui kontrak agar mengikuti PRD, bukan
 > sebaliknya — dan setiap pembaruan seperti itu wajib dicatat di changelog.
 

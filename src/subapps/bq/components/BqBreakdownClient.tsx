@@ -13,7 +13,8 @@
  * Requirement yang ditegakkan di berkas ini:
  *   FR-EXP-01  L1 default tertutup, ringkasannya adalah satu baris BQ.
  *   FR-EXP-02  Expand L1 -> daftar L2 + qty pengali + subtotal. L2 tertutup.
- *   FR-EXP-03  Expand L2 -> baris L3, bahan dulu lalu jasa.
+ *   FR-EXP-03  Expand L2 -> baris L3, bahan dulu lalu jasa, dengan koefisien
+ *              yang diisi estimator secara manual.
  *   FR-EXP-04  Expand All / Collapse All per object.
  *   FR-EXP-05  Status buka-tutup diingat per pengguna per object selama sesi.
  *   FR-EXP-06  Ubah angka L3 -> subtotal, rate, grand total ikut, tanpa reload.
@@ -37,10 +38,11 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  BookOpen,
   ChevronDown,
   ChevronRight,
+  BookmarkPlus,
   Hammer,
+  LayoutTemplate,
   Lock,
   LockOpen,
   Package,
@@ -60,7 +62,14 @@ import {
 import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens";
 import { statusToTone } from "@/lib/ui/status-tone";
 import { cn } from "@/lib/utils";
-import { formatIdr, formatPct, formatQty, type WasteSource } from "../lib/calc";
+import { formatIdr, formatQty } from "../lib/calc";
+import {
+  MAX_SECTION_DEPTH,
+  buildSectionTree,
+  countWorksDeep,
+  type SectionTreeNode,
+} from "../lib/section-tree";
+import type { MaterialLineResult, ServiceLineResult } from "../lib/calc";
 import {
   addBqMaterialLineAction,
   addBqLocalMaterialLineAction,
@@ -78,16 +87,91 @@ import {
   updateBqServiceLineAction,
   updateBqSubObjectAction,
 } from "../actions/bq-project-actions";
-import { saveSubObjectToLibraryAndLinkAction } from "../actions/bq-library-actions";
-import { BqLinePicker, LibraryPickerDialog } from "./BqLinePicker";
-import { BqPurchaseSummary } from "./BqPurchaseSummary";
-import type { BqObjectView, BqProjectView } from "../types/breakdown";
+import {
+  createBqSectionAction,
+  deleteBqSectionAction,
+} from "../actions/bq-project-actions";
+import {
+  loadFromLibraryObjectAction,
+  loadFromLibrarySubObjectAction,
+  saveSubObjectToLibraryAndLinkAction,
+} from "../actions/bq-library-actions";
+import { BqLinePicker } from "./BqLinePicker";
+import {
+  BqQuickAddRow,
+  type QuickAddCommit,
+  type QuickAddMode,
+} from "./BqQuickAddRow";
+import {
+  acceptsOnObject,
+  acceptsOnSubObject,
+  BqLibraryPanel,
+  BqToolbar,
+  isRecipeDrag,
+  readRecipeDrag,
+  type BqRecipeDrag,
+  type OutlineLevel,
+} from "./BqToolbar";
+import {
+  addTemplateItemAction,
+  applyBqTemplateAction,
+} from "../actions/bq-template-actions";
+import { BQ_TEMPLATE_SUMMARY } from "../lib/bq-template-data";
+import {
+  displayName,
+  suggestedTemplateItems,
+  templateItemKey,
+} from "../lib/bq-template-lookup";
+import type {
+  BqCostCategory,
+  BqMaterialLineRecord,
+  BqObjectView,
+  BqServiceLineRecord,
+  BqProjectView,
+  BqSectionView,
+} from "../types/breakdown";
 
 // ---------------------------------------------------------------------------
 // Bantu
 // ---------------------------------------------------------------------------
 
 type ActionResultLike = { success: boolean; error?: string };
+
+function duplicateSuggestionNames(
+  item: {
+    name: string;
+    area: string | null;
+  },
+): string {
+  return item.area ? `${item.area} — ${item.name}` : item.name;
+}
+
+function suggestionNameCounts(
+  items: readonly {
+    name: string;
+    area: string | null;
+  }[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const name = duplicateSuggestionNames(item);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function suggestionLabel(
+  item: {
+    name: string;
+    area: string | null;
+    spec: string | null;
+  },
+  counts: ReadonlyMap<string, number>,
+): string {
+  const name = duplicateSuggestionNames(item);
+  if ((counts.get(name) ?? 0) <= 1 || !item.spec?.trim()) return name;
+  return `${name} · ${item.spec}`;
+}
 
 /** Setiap mutasi lewat sini. Mutasi dikirim ke server tanpa memblokir UI;
  *  `router.refresh()` dijadwalkan di belakang untuk reconciliation. PRD rule
@@ -118,17 +202,6 @@ function useMutate() {
 
   return { run, pending };
 }
-
-/** Sumber angka waste, dijelaskan. Estimator yang melihat "10%" berhak tahu
- *  dari mana ia datang — PRD §4.1 menyusun presedensinya justru supaya tidak
- *  ada angka yang asalnya tidak bisa dijelaskan. */
-const WASTE_SOURCE_LABEL: Record<WasteSource, string> = {
-  LINE_OVERRIDE: "line override",
-  OBJECT_OVERRIDE: "object override",
-  MATERIAL_DEFAULT: "material default",
-  CATEGORY_DEFAULT: "category default",
-  ZERO_FALLBACK: "no default set",
-};
 
 /** Input angka yang hanya menyimpan saat blur atau Enter. Menyimpan tiap
  *  ketikan akan mengirim satu mutasi per karakter dan membuat kursor melompat
@@ -236,6 +309,535 @@ function TextCell({
   );
 }
 
+/**
+ * Drop zone untuk resep library.
+ *
+ * `dragover` HARUS memanggil `preventDefault()` — tanpa itu browser menolak
+ * drop dan `onDrop` tidak pernah jalan. Yang sering luput: `dragenter` juga
+ * perlu diperiksa, karena `dragleave` menyala setiap kali kursor melintasi
+ * anak elemen. Penghitung `depth` di bawah mencegah sorotan berkedip-kedip
+ * saat kursor bergerak di atas isi baris.
+ */
+function useRecipeDropZone(
+  onDrop: (drag: BqRecipeDrag) => Promise<boolean>,
+  enabled: boolean,
+  accepts: (kind: BqRecipeDrag["kind"]) => boolean,
+  rejectMessage?: (kind: BqRecipeDrag["kind"]) => string,
+) {
+  const [over, setOver] = React.useState(false);
+  const depth = React.useRef(0);
+
+  const reset = () => {
+    depth.current = 0;
+    setOver(false);
+  };
+
+  if (!enabled) {
+    return { over: false, handlers: {} as React.HTMLAttributes<HTMLElement> };
+  }
+
+  return {
+    over,
+    handlers: {
+      onDragEnter: (e: React.DragEvent) => {
+        const drag = readRecipeDrag(e);
+        if (!drag) return;
+        e.preventDefault();
+        if (!accepts(drag.kind)) return;
+        depth.current += 1;
+        setOver(true);
+      },
+      onDragOver: (e: React.DragEvent) => {
+        const drag = readRecipeDrag(e);
+        if (!drag) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = accepts(drag.kind) ? "copy" : "none";
+      },
+      onDragLeave: (e: React.DragEvent) => {
+        if (!isRecipeDrag(e)) return;
+        depth.current -= 1;
+        if (depth.current <= 0) reset();
+      },
+      onDrop: (e: React.DragEvent) => {
+        const drag = readRecipeDrag(e);
+        if (!drag) return;
+        e.preventDefault();
+        e.stopPropagation();
+        reset();
+        // Jenis yang tidak sah untuk lapis ini ditolak DI SINI, bukan dibiarkan
+        // sampai ke server: pesan "item template tidak bisa masuk ke dalam
+        // sub-pekerjaan" lebih berguna daripada error validasi dari action.
+        if (!accepts(drag.kind)) {
+          toast.error(
+            rejectMessage?.(drag.kind) ??
+              (drag.kind === "TEMPLATE"
+                ? "Item template adalah pekerjaan — jatuhkan ke seksi/divisi, bukan ke dalam pekerjaan."
+                : "Bahan dan jasa adalah baris — jatuhkan ke sub-pekerjaan, bukan ke pekerjaan."),
+          );
+          return;
+        }
+        void onDrop(drag);
+      },
+    } as React.HTMLAttributes<HTMLElement>,
+  };
+}
+
+/**
+ * Badge pos biaya. Hanya muncul untuk kategori yang BUKAN default barisnya —
+ * baris bahan ber-MATERIAL dan baris jasa ber-UPAH sudah jelas dari seksinya,
+ * jadi memberi badge pada keduanya cuma menambah keramaian tanpa memberi tahu
+ * apa pun. Yang perlu terlihat adalah baris yang menyimpang: alat, biaya umum,
+ * transportasi.
+ */
+const COST_CATEGORY_LABEL: Record<BqCostCategory, string> = {
+  MATERIAL: "Material",
+  UPAH: "Upah",
+  ALAT: "Alat",
+  BIAYA_UMUM: "Biaya Umum",
+  TRANSPORT_AKOMODASI: "Transport",
+};
+
+function CostCategoryBadge({
+  category,
+  defaultFor,
+}: {
+  category: BqCostCategory;
+  defaultFor: BqCostCategory;
+}) {
+  if (category === defaultFor) return null;
+  return (
+    <span
+      className={cn(
+        UI_ENGINE_TYPE_META,
+        "rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700",
+      )}
+      title="Pos biaya di luar Master Data — harga diisi per project"
+    >
+      {COST_CATEGORY_LABEL[category]}
+    </span>
+  );
+}
+
+/**
+ * Satu angka di kolom kanan.
+ *
+ * `label` OPSIONAL, dan pada baris L1 sengaja tidak diisi: strip header kolom
+ * di atas grid bersifat sticky, jadi ia melayani seluruh baris sekaligus.
+ * Sebelumnya tiap baris membawa labelnya sendiri dan kata "Jumlah" muncul 11
+ * kali dalam satu layar — label bersaing dengan angka yang seharusnya jadi
+ * fokus. `width` menjaga kolom tetap sejajar dengan strip header itu.
+ */
+
+// ---------------------------------------------------------------------------
+// L0 — Seksi & Divisi
+// ---------------------------------------------------------------------------
+
+type SectionNode = SectionTreeNode<BqSectionView, BqObjectView>;
+
+type Shared = {
+  closedSections: Set<string>;
+  onToggleSection: (id: string) => void;
+  openObjects: Set<string>;
+  openSubObjects: Set<string>;
+  toggleManual: (
+    setter: React.Dispatch<React.SetStateAction<Set<string>>>,
+    id: string,
+  ) => void;
+  setOpenObjects: React.Dispatch<React.SetStateAction<Set<string>>>;
+  setOpenSubObjects: React.Dispatch<React.SetStateAction<Set<string>>>;
+  onDropOnObject: (drag: BqRecipeDrag, objectId: string) => Promise<boolean>;
+  onDropOnSubObject: (drag: BqRecipeDrag, subObjectId: string) => Promise<boolean>;
+  onAddTemplateItem: (
+    sectionId: string,
+    templateKey: string,
+    groupName: string,
+    itemName: string,
+  ) => Promise<boolean>;
+  onAddObject: (sectionId: string, name: string) => Promise<boolean>;
+  onAddSubSection: (parentId: string, name: string) => Promise<boolean>;
+  onRemoveSection: (section: BqSectionView) => void;
+  canEdit: boolean;
+  run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
+  pending: boolean;
+};
+
+/**
+ * Satu pengelompok beserta isinya — dipakai untuk KETIGA lapis.
+ *
+ * Sebelumnya ada dua komponen kembar (`SectionBlock` + `DivisionBlock`) yang
+ * mengunci tampilan di dua lapis. Begitu L2 Sub Section ada, seluruh Works di
+ * dalamnya tidak akan pernah dirender — hilang dari layar tanpa pesan apa pun.
+ * Karena itu bentuknya jadi rekursi: kedalaman berapa pun tetap tampil, dan
+ * batas tiga lapis ditegakkan di server (lihat `lib/section-tree.ts`).
+ */
+function SectionBlock({
+  node,
+  depth = 0,
+  ...shared
+}: { node: SectionNode; depth?: number } & Shared) {
+  const open = !shared.closedSections.has(node.section.id);
+
+  // Works dan Sub Section tidak dicampur dalam satu pengelompok: begitu ada
+  // anak, urutan cetaknya jadi ambigu ("mana dulu, item langsung atau isi
+  // divisi?"). Works yang terlanjur ada tetap ditampilkan — menyembunyikannya
+  // berarti pengguna tidak bisa memindahkannya.
+  const allowsDirectObjects = node.children.length === 0;
+  const canNest = depth + 1 < MAX_SECTION_DEPTH;
+
+  return (
+    <div className="space-y-1.5">
+      <SectionHeader
+        section={node.section}
+        open={open}
+        depth={depth}
+        childCount={countWorksDeep(node)}
+        childLabel="item"
+        onToggle={() => shared.onToggleSection(node.section.id)}
+        onRemove={() => shared.onRemoveSection(node.section)}
+        canEdit={shared.canEdit}
+        pending={shared.pending}
+      />
+
+      {open ? (
+        <div className="space-y-1.5">
+          {/* Works yang menggantung langsung — bentuk PRELIMINARIES di dokumen
+              kantor, dan juga Floor Works yang tidak memakai lapis area. */}
+          {allowsDirectObjects || node.objects.length > 0 ? (
+            <ObjectList
+              section={node.section}
+              objects={node.objects}
+              allowAdd={allowsDirectObjects}
+              {...shared}
+            />
+          ) : null}
+
+          {/* Anak — indentasi menandai bahwa ia satu lapis di dalam. */}
+          {node.children.map((child) => (
+            <div key={child.section.id} className="space-y-1.5 pl-5">
+              <SectionBlock node={child} depth={depth + 1} {...shared} />
+            </div>
+          ))}
+
+          {/* Sub Section punya induk, jadi tombolnya hidup DI DALAM induk itu —
+              berbeda dari L0, yang tidak punya tujuan untuk dipilih dan
+              karenanya tinggal di panel. Hilang di lapis terdalam. */}
+          {shared.canEdit && canNest ? (
+            <div className="pl-5">
+              <SectionAddObject
+                sectionName={node.section.name}
+                pending={shared.pending}
+                label="Sub Section"
+                placeholder={`Sub Section baru di ${node.section.name}`}
+                onAdd={(name) => shared.onAddSubSection(node.section.id, name)}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Kepala pengelompok. Bentuknya sama di tiap lapis, bobot tipografinya turun. */
+function SectionHeader({
+  section,
+  open,
+  depth,
+  childCount,
+  childLabel,
+  onToggle,
+  onRemove,
+  canEdit,
+  pending,
+}: {
+  section: BqSectionView;
+  open: boolean;
+  /** 0 = L0 Section, 1 = L1 Sub Section, 2 = L2 Sub Section. */
+  depth: number;
+  childCount: number;
+  childLabel: string;
+  onToggle: () => void;
+  onRemove: () => void;
+  canEdit: boolean;
+  pending: boolean;
+}) {
+  return (
+    <div className="group/sec flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-baseline justify-between gap-4 pt-1 text-left"
+      >
+        <span className="flex items-baseline gap-2">
+          {open ? (
+            <ChevronDown className="h-4 w-4 shrink-0 self-center text-slate-400" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 self-center text-slate-400" />
+          )}
+          <span
+            className={cn(
+              "font-serif text-slate-900",
+              // Bobotnya turun tiap lapis — itu satu-satunya pembeda antar
+              // lapis selain indentasi. Tanpa ini L1 dan L2 terlihat kembar.
+              depth === 0 && "text-base font-semibold",
+              depth === 1 && "text-sm font-semibold",
+              depth >= 2 && "text-sm font-medium",
+            )}
+          >
+            {section.code ? (
+              <span className="mr-2 text-slate-400">{section.code}</span>
+            ) : null}
+            {section.name}
+          </span>
+          {/* Saat tertutup, isinya harus tetap terhitung — kalau tidak, seksi
+              tertutup terlihat sama dengan seksi kosong. */}
+          {!open ? (
+            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+              {childCount} {childLabel}
+            </span>
+          ) : null}
+        </span>
+        <span className="w-28 text-right font-sans text-sm font-medium tabular-nums text-slate-700">
+          {formatIdr(section.subtotal)}
+        </span>
+      </button>
+      {canEdit ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 shrink-0 p-0 text-slate-300 opacity-0 transition-opacity hover:text-red-600 focus-visible:opacity-100 group-hover/sec:opacity-100"
+          disabled={pending}
+          title={`Hapus "${section.name}"`}
+          aria-label={`Hapus ${section.name}`}
+          onClick={onRemove}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Daftar item di dalam sebuah seksi/divisi, plus saran template dan tombol
+ * tambah item.
+ *
+ * Kosong pun tetap merender wadahnya kalau ada saran — seksi hasil template
+ * memang lahir kosong, dan justru di situlah sarannya paling dibutuhkan.
+ */
+function ObjectList({
+  section,
+  objects,
+  allowAdd = true,
+  ...shared
+}: { section: BqSectionView; objects: BqObjectView[]; allowAdd?: boolean } & Shared) {
+  const suggestions = React.useMemo(
+    () =>
+      suggestedTemplateItems(
+        section.name,
+        objects.map((o) => ({
+          name: o.computed.name,
+          unit: o.computed.unit,
+          spec: o.notes,
+        })),
+      ),
+    [section.name, objects],
+  );
+  const counts = React.useMemo(() => suggestionNameCounts(suggestions), [suggestions]);
+  const drop = useRecipeDropZone(
+    async (drag) =>
+      drag.kind === "TEMPLATE"
+        ? shared.onAddTemplateItem(
+            section.id,
+            drag.templateKey,
+            drag.groupName,
+            drag.itemName,
+          )
+        : false,
+    allowAdd && shared.canEdit,
+    (kind) => kind === "TEMPLATE",
+    (kind) =>
+      kind === "TEMPLATE"
+        ? "Item template hanya bisa dijatuhkan ke seksi/divisi kosong, bukan ke dalam pekerjaan."
+        : "Template membuat pekerjaan baru di seksi/divisi. Resep library masuk ke pekerjaan atau sub-pekerjaan; bahan dan jasa masuk ke sub-pekerjaan.",
+  );
+
+  const hasAnything =
+    objects.length > 0 || (allowAdd && (shared.canEdit || suggestions.length > 0));
+  if (!hasAnything) return null;
+
+  return (
+    <div
+      {...drop.handlers}
+      className={cn(
+        "divide-y divide-slate-200 overflow-hidden border border-slate-200 bg-white transition-colors",
+        drop.over && "bg-slate-50 ring-1 ring-inset ring-slate-300",
+        UI_ENGINE_RADIUS_CONTROL,
+      )}
+    >
+      {drop.over ? (
+        <div className="border-b border-slate-200 bg-slate-50 px-6 py-1.5">
+          <p className={cn(UI_ENGINE_TYPE_META, "font-medium text-slate-700")}>
+            Lepas di sini — template jadi pekerjaan baru di &quot;{section.name}&quot;
+          </p>
+        </div>
+      ) : null}
+      {objects.map((object) => (
+        <ObjectRow
+          key={object.computed.objectId}
+          object={object}
+          isOpen={shared.openObjects.has(object.computed.objectId)}
+          openSubObjects={shared.openSubObjects}
+          onToggle={() =>
+            shared.toggleManual(shared.setOpenObjects, object.computed.objectId)
+          }
+          onToggleSub={(id) => shared.toggleManual(shared.setOpenSubObjects, id)}
+          onDropOnObject={shared.onDropOnObject}
+          onDropOnSubObject={shared.onDropOnSubObject}
+          canEdit={shared.canEdit}
+          run={shared.run}
+          pending={shared.pending}
+        />
+      ))}
+
+      {/* Saran dari template — yang tidak diklik tidak pernah ada. */}
+      {allowAdd && shared.canEdit && suggestions.length > 0 ? (
+        <div className="bg-slate-50/60 px-6 py-3">
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((item) => {
+              const name = displayName(item);
+              const templateKey = templateItemKey(item);
+              if (!templateKey) return null;
+              const label = suggestionLabel(item, counts);
+              return (
+                <button
+                  key={templateKey}
+                  type="button"
+                  disabled={shared.pending}
+                  title={
+                    item.lines.length > 0
+                      ? `${label} — satuan ${item.unit}, membawa ${item.lines.length} baris pembentuk`
+                      : `${label} — satuan ${item.unit}`
+                  }
+                  onClick={() =>
+                    void shared.onAddTemplateItem(
+                      section.id,
+                      templateKey,
+                      section.name,
+                      name,
+                    )
+                  }
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300",
+                    "bg-white px-2.5 py-1 text-xs text-slate-600 transition-colors",
+                    "hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900",
+                    "disabled:opacity-50",
+                  )}
+                >
+                  <Plus className="h-3 w-3 text-slate-400" />
+                  {label}
+                  <span className="text-slate-400">{item.unit}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {allowAdd && shared.canEdit ? (
+        <SectionAddObject
+          sectionName={section.name}
+          pending={shared.pending}
+          onAdd={(name) => shared.onAddObject(section.id, name)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Baris "tambah pekerjaan" milik satu seksi.
+ *
+ * Komponen terpisah karena tiap seksi butuh draft namanya SENDIRI — satu state
+ * bersama di induk berarti mengetik di seksi B ikut mengisi kotak di seksi C.
+ */
+function SectionAddObject({
+  sectionName,
+  pending,
+  onAdd,
+  label = "Pekerjaan",
+  placeholder,
+}: {
+  sectionName: string;
+  pending: boolean;
+  onAdd: (name: string) => Promise<boolean>;
+  label?: string;
+  placeholder?: string;
+}) {
+  const [name, setName] = React.useState("");
+
+  const submit = async () => {
+    if (!name.trim()) return;
+    const ok = await onAdd(name.trim());
+    if (ok) setName("");
+  };
+
+  return (
+    <div className="flex items-center gap-2 bg-slate-50/60 px-6 py-2.5">
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+        placeholder={placeholder ?? `Pekerjaan baru di ${sectionName}`}
+        className="h-8 max-w-xs text-xs"
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8"
+        disabled={pending || !name.trim()}
+        onClick={() => void submit()}
+      >
+        <Plus className="mr-1.5 h-3.5 w-3.5" />
+        Tambah {label}
+      </Button>
+    </div>
+  );
+}
+
+function SummaryMetric({
+  label,
+  value,
+  emphasis = "default",
+  width,
+}: {
+  label?: string;
+  value: React.ReactNode;
+  emphasis?: "default" | "strong" | "serif";
+  width?: string;
+}) {
+  return (
+    <div className={cn("min-w-0 text-right", width)}>
+      {label ? <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{label}</p> : null}
+      <p
+        className={cn(
+          "font-sans text-sm tabular-nums text-slate-700",
+          emphasis === "strong" && "font-medium text-slate-900",
+          emphasis === "serif" && "font-serif text-base font-semibold text-slate-900",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Komponen utama
 // ---------------------------------------------------------------------------
@@ -243,11 +845,9 @@ function TextCell({
 export function BqBreakdownClient({
   view,
   canEdit,
-  canEditMarkup,
 }: {
   view: BqProjectView;
   canEdit: boolean;
-  canEditMarkup: boolean;
 }) {
   const { run, pending } = useMutate();
 
@@ -259,7 +859,17 @@ export function BqBreakdownClient({
   const [openSubObjects, setOpenSubObjects] = React.useState<Set<string>>(
     new Set(),
   );
-  const [newObjectName, setNewObjectName] = React.useState("");
+
+  // Toolbar global — lihat BqToolbar.tsx untuk alasan pemindahannya ke sini.
+  const [outlineLevel, setOutlineLevel] = React.useState<OutlineLevel | null>(1);
+  const [libraryOpen, setLibraryOpen] = React.useState(true);
+
+  /** Seksi yang DITUTUP. Menyimpan yang tertutup, bukan yang terbuka, supaya
+   *  seksi baru muncul terbuka — seksi yang lahir tertutup menyembunyikan
+   *  pekerjaan yang baru saja dibuat pengguna. */
+  const [closedSections, setClosedSections] = React.useState<Set<string>>(
+    new Set(),
+  );
 
   const toggle = React.useCallback(
     (setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) => {
@@ -273,48 +883,258 @@ export function BqBreakdownClient({
     [],
   );
 
-  /** FR-EXP-04 — per object, bukan global. Expand All global pada project
-   *  berisi 30 object menghasilkan ratusan baris sekaligus, dan tidak ada
-   *  requirement yang memintanya. */
-  const expandObject = React.useCallback(
-    (object: BqObjectView, expand: boolean) => {
-      const subIds = object.subObjects.map((s) => s.id);
-      setOpenObjects((prev) => {
-        const next = new Set(prev);
-        if (expand) next.add(object.computed.objectId);
-        else next.delete(object.computed.objectId);
-        return next;
-      });
-      setOpenSubObjects((prev) => {
-        const next = new Set(prev);
-        for (const id of subIds) {
-          if (expand) next.add(id);
-          else next.delete(id);
-        }
-        return next;
-      });
+  /** Tingkat rincian 1/2/3 menata SELURUH dokumen sekaligus (outline Excel).
+   *  Chevron per baris tetap bebas menyimpang sesudahnya — begitu itu terjadi
+   *  `outlineLevel` dilepas ke null supaya tombol tidak berbohong soal keadaan. */
+  const applyOutline = React.useCallback(
+    (level: OutlineLevel) => {
+      setOutlineLevel(level);
+      const objectIds = view.objects.map((o) => o.computed.objectId);
+      const subIds = view.objects.flatMap((o) => o.subObjects.map((s) => s.id));
+      setOpenObjects(level >= 2 ? new Set(objectIds) : new Set());
+      setOpenSubObjects(level >= 3 ? new Set(subIds) : new Set());
     },
-    [],
+    [view.objects],
   );
 
-  const handleAddObject = React.useCallback(async () => {
-    if (!newObjectName.trim()) {
-      toast.error("Object name is required.");
-      return;
+  const toggleSection = React.useCallback((id: string) => {
+    setClosedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  /** Setiap toggle manual melepas penanda tingkat — lihat komentar di atas. */
+  const toggleManual = React.useCallback(
+    (setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) => {
+      setOutlineLevel(null);
+      toggle(setter, id);
+    },
+    [toggle],
+  );
+
+  /** Object dikelompokkan per seksi, urut `sortOrder`. Object tanpa seksi
+   *  jatuh ke satu kelompok tanpa judul yang selalu ditaruh paling akhir —
+   *  supaya BQ campuran (sebagian berseksi, sebagian tidak) tetap terbaca. */
+  /**
+   * Pohon tampilan: seksi → divisi → item.
+   *
+   * Dokumen BQ punya DUA lapis pengelompok, dan keduanya bersubtotal
+   * ("SUBTOTAL A", "SUBTOTAL B.I"). Yang berbeda cuma posisinya di pohon —
+   * bentuk datanya identik, jadi satu tipe melayani keduanya.
+   *
+   * Item tanpa seksi tidak disembunyikan: ia jatuh ke kelompok tanpa judul
+   * paling bawah. Item yang lenyap dari layar padahal datanya ada adalah cara
+   * tercepat membuat estimator kehilangan kepercayaan pada totalnya.
+   */
+  const tree = React.useMemo(() => {
+    const bySection = new Map<string, BqObjectView[]>();
+    const orphans: BqObjectView[] = [];
+    for (const o of view.objects) {
+      if (!o.sectionId) {
+        orphans.push(o);
+        continue;
+      }
+      const list = bySection.get(o.sectionId) ?? [];
+      list.push(o);
+      bySection.set(o.sectionId, list);
     }
-    const ok = await run(
-      () =>
-        createBqObjectAction({
-          projectId: view.project.id,
-          name: newObjectName,
-        }),
-      "Object added.",
-    );
-    if (ok) setNewObjectName("");
-  }, [newObjectName, run, view.project.id]);
+
+    return { nodes: buildSectionTree(view.sections, bySection), orphans };
+  }, [view.sections, view.objects]);
+
+  const hasRenderableStructure =
+    tree.nodes.length > 0 || tree.orphans.length > 0;
+
+  const lockAll = React.useCallback(
+    async (locked: boolean) => {
+      const targets = view.objects.filter((o) => (o.lockedAt !== null) !== locked);
+      if (targets.length === 0) {
+        toast.info(locked ? "Semua sudah terkunci." : "Semua sudah terbuka.");
+        return;
+      }
+      for (const object of targets) {
+        await run(() =>
+          setBqObjectLockAction({ id: object.computed.objectId, locked }),
+        );
+      }
+      toast.success(
+        locked
+          ? `${targets.length} pekerjaan dikunci.`
+          : `${targets.length} pekerjaan dibuka.`,
+      );
+    },
+    [view.objects, run],
+  );
+
+  /**
+   * Menjatuhkan sesuatu ke SUB-PEKERJAAN (L2).
+   *
+   * Tiga jenis muatan bertemu di sini karena tujuannya sama — mengisi satu
+   * sub-pekerjaan — meski aksi servernya berbeda:
+   *
+   *   LIB_SUB / LIB_OBJ   menuang seluruh isi resep
+   *   MATERIAL / SERVICE  menambah SATU baris L3
+   *
+   * TEMPLATE tidak diterima di sini: satu item template ADALAH sebuah
+   * sub-pekerjaan, jadi menjatuhkannya ke dalam sub-pekerjaan lain tidak punya
+   * arti. `acceptsOnSubObject` menolaknya sebelum sampai ke sini.
+   */
+  const dropOnSubObject = React.useCallback(
+    async (drag: BqRecipeDrag, targetSubObjectId: string) => {
+      switch (drag.kind) {
+        case "LIB_OBJ":
+          return run(
+            () =>
+              loadFromLibraryObjectAction({
+                libraryObjectId: drag.id,
+                targetSubObjectId,
+              }),
+            `"${drag.name}" disisipkan.`,
+          );
+        case "LIB_SUB":
+          return run(
+            () =>
+              loadFromLibrarySubObjectAction({
+                librarySubObjectId: drag.id,
+                targetSubObjectId,
+              }),
+            `"${drag.name}" disisipkan.`,
+          );
+        case "MATERIAL":
+          // Koefisien 1 sebagai titik awal — angka sebenarnya cuma diketahui
+          // estimator, dan menebaknya berarti menaruh angka karangan di BQ.
+          return run(
+            () =>
+              addBqMaterialLineAction({
+                subObjectId: targetSubObjectId,
+                skuId: drag.skuId,
+                skuPriceId: drag.skuPriceId,
+                qtyPerSub: 1,
+              }),
+            `"${drag.name}" ditambahkan — isi koefisiennya.`,
+          );
+        case "SERVICE":
+          return run(
+            () =>
+              addBqServiceLineAction({
+                subObjectId: targetSubObjectId,
+                workPriceId: drag.workPriceId,
+                qtyPerSub: 1,
+              }),
+            `"${drag.name}" ditambahkan — isi koefisiennya.`,
+          );
+        default:
+          return false;
+      }
+    },
+    [run],
+  );
+
+  /**
+   * Menjatuhkan sesuatu ke PEKERJAAN (L1) menghasilkan sub-pekerjaan BARU.
+   *
+   * TEMPLATE punya jalur sendiri karena aksinya memang sudah membuat
+   * sub-pekerjaan beserta pembentuknya sekaligus — memaksanya lewat jalur
+   * "buat dulu, lalu tuang" akan menghasilkan dua sub-pekerjaan.
+   *
+   * Untuk resep library, dua aksi berurutan dan itu pilihan sadar: keduanya
+   * sudah ada dan sudah teruji, sedangkan menggabungkannya berarti menyalin
+   * ~190 baris logika penuangan ke aksi ketiga yang harus ikut dirawat. Kalau
+   * langkah kedua gagal, yang tertinggal adalah sub-pekerjaan kosong bernama
+   * jelas — kelihatan di grid dan bisa dihapus, bukan kerusakan diam-diam.
+   */
+  const dropOnObject = React.useCallback(
+    async (drag: BqRecipeDrag, objectId: string) => {
+      const created = await createBqSubObjectAction({
+        objectId,
+        name: drag.name,
+      });
+      if (!created.success) {
+        toast.error(created.error ?? "Sub-pekerjaan tidak bisa dibuat.");
+        return false;
+      }
+      return dropOnSubObject(drag, created.data.id);
+    },
+    [run, dropOnSubObject],
+  );
+
+  /** Menambah pekerjaan DI DALAM sebuah seksi. `sectionId` null hanya untuk
+   *  BQ lama yang memang tidak memakai seksi. */
+  const addObjectToSection = React.useCallback(
+    async (sectionId: string | null, name: string) =>
+      run(
+        () =>
+          createBqObjectAction({
+            projectId: view.project.id,
+            sectionId: sectionId ?? undefined,
+            name,
+          }),
+        "Pekerjaan ditambahkan.",
+      ),
+    [run, view.project.id],
+  );
+
+  const addTemplateItem = React.useCallback(
+    async (
+      sectionId: string,
+      templateKey: string,
+      groupName: string,
+      itemName: string,
+    ) =>
+      run(
+        () => addTemplateItemAction({ sectionId, templateKey, groupName, itemName }),
+        `"${itemName}" ditambahkan.`,
+      ),
+    [run],
+  );
+
+  const addDivision = React.useCallback(
+    async (parentId: string, name: string) =>
+      run(
+        () =>
+          createBqSectionAction({
+            projectId: view.project.id,
+            parentId,
+            name,
+          }),
+        "Divisi ditambahkan.",
+      ),
+    [run, view.project.id],
+  );
+
+  const removeSection = React.useCallback(
+    async (section: BqSectionView) => {
+      if (
+        !window.confirm(
+          `Hapus seksi "${section.name}"?\n\n` +
+            (section.objectCount > 0
+              ? `${section.objectCount} pekerjaan di dalamnya TIDAK ikut terhapus — ` +
+                `mereka pindah ke kelompok tanpa seksi di bawah.`
+              : "Seksi ini kosong."),
+        )
+      ) {
+        return;
+      }
+      await run(
+        () => deleteBqSectionAction({ id: section.id }),
+        `Seksi "${section.name}" dihapus.`,
+      );
+    },
+    [run],
+  );
 
   return (
     <SpreadsheetTemplate
+      // Halaman ini melebar penuh, tidak mengikuti CONTAINER_MAX_WIDTH kantor.
+      // Alasannya bukan selera: dock kiri memakan 288px, dan sisanya harus
+      // menampung enam kolom angka plus indentasi tiga lapis. Pada container
+      // baku, kolom Jumlah terdorong sampai tabel L3 mulai menggulir sendiri —
+      // dan angka yang harus digulir untuk dilihat adalah angka yang tidak
+      // dibaca. `twMerge` membuat `max-w-none` menang atas token bawaan shell.
+      className="max-w-none"
       header={
         <PageHeader
           eyebrow={view.project.code ? `BQ · ${view.project.code}` : "BQ"}
@@ -334,8 +1154,37 @@ export function BqBreakdownClient({
           }
         />
       }
+      toolbar={
+        <BqToolbar
+          outlineLevel={outlineLevel}
+          onOutlineLevel={applyOutline}
+          onOpenLibrary={() => setLibraryOpen((v) => !v)}
+          libraryOpen={libraryOpen}
+          objectCount={view.objects.length}
+          lineCount={view.objects.reduce((s, o) => s + o.computed.lineCount, 0)}
+          canEdit={canEdit}
+          pending={pending}
+          onLockAll={(locked) => void lockAll(locked)}
+        />
+      }
       grid={
-        <>
+        <div className="flex items-start gap-4">
+          {canEdit ? (
+            <BqLibraryPanel
+              open={libraryOpen}
+              onClose={() => setLibraryOpen(false)}
+              canEdit={canEdit}
+              pending={pending}
+              onAddSection={(name) =>
+                run(
+                  () => createBqSectionAction({ projectId: view.project.id, name }),
+                  "Seksi ditambahkan.",
+                )
+              }
+            />
+          ) : null}
+
+          <div className="min-w-0 flex-1">
           {/* ------------------------------------------------------------------ */}
           {/* Grand total — pandangan klien                                      */}
           {/* ------------------------------------------------------------------ */}
@@ -343,90 +1192,133 @@ export function BqBreakdownClient({
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-                  Grand total
+                  Total Anggaran (RAB)
                 </p>
                 <p className="font-serif text-3xl font-semibold text-slate-900">
                   {formatIdr(view.totals.grandTotal)}
                 </p>
               </div>
-              {/* Biaya pokok dan markup TIDAK PERNAH tercetak ke klien (PRD §3.4)
-                  — ia muncul di sini karena layar ini internal, dan disembunyikan
-                  dari siapa pun yang tidak memegang izin markup. */}
-              {canEditMarkup ? (
-                <div className="flex gap-6">
-                  <div>
-                    <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-                      Base cost
-                    </p>
-                    <p className="font-sans text-sm font-medium text-slate-700">
-                      {formatIdr(view.totals.baseCost)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-                      Markup
-                    </p>
-                    <p className="font-sans text-sm font-medium text-slate-700">
-                      {formatIdr(view.totals.markupAmount)}
-                    </p>
-                  </div>
-                </div>
-              ) : null}
             </div>
           </SectionCard>
 
           {/* ------------------------------------------------------------------ */}
           {/* L1                                                                  */}
           {/* ------------------------------------------------------------------ */}
+
+          {/* Header kolom — konteks visual seperti spreadsheet */}
+          {hasRenderableStructure ? (
+            /* Strip ini STICKY, dan itu yang membuat baris di bawahnya boleh
+               tidak berlabel. Sebelumnya tiap baris L1 dan L2 mengulang
+               "Vol. / Harga Sat. / Jumlah" — pada satu layar berisi 9
+               sub-pekerjaan, kata "Jumlah" muncul 11 kali. Strip header ADA
+               justru supaya pengulangan itu tidak perlu; kalau ia ikut tergulir
+               hilang, barisnya kehilangan konteks dan pengulangan jadi
+               terpaksa. Dibuat menempel, satu label melayani seluruh kolom. */
+            <div
+              className={cn(
+                "sticky top-[3.25rem] z-10 mb-1 hidden items-center justify-between",
+                "border-b border-slate-200 bg-[var(--ui-canvas-bg,rgb(248_250_252))] px-4 py-1.5 sm:flex",
+              )}
+            >
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Pekerjaan</span>
+              <div className="flex items-center gap-x-6 pr-0.5">
+                <span className={cn(UI_ENGINE_TYPE_META, "w-14 text-right text-slate-400")}>Vol.</span>
+                <span className={cn(UI_ENGINE_TYPE_META, "w-24 text-right text-slate-400")}>Harga</span>
+                <span className={cn(UI_ENGINE_TYPE_META, "w-28 text-right text-slate-400")}>Jumlah</span>
+              </div>
+            </div>
+          ) : (
+            <SectionCard padding="md">
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <p className="font-sans text-sm font-medium text-slate-700">Belum ada pekerjaan</p>
+                {canEdit ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="mt-1"
+                      disabled={pending}
+                      onClick={() =>
+                        void run(
+                          () => applyBqTemplateAction({ projectId: view.project.id }),
+                          "Kerangka template dibuat.",
+                        )
+                      }
+                    >
+                      <LayoutTemplate className="mr-2 h-4 w-4" />
+                      Mulai dari Template BQ
+                    </Button>
+                    <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                      {BQ_TEMPLATE_SUMMARY.sectionCount} seksi ·{" "}
+                      {BQ_TEMPLATE_SUMMARY.groupCount} divisi, dengan{" "}
+                      {BQ_TEMPLATE_SUMMARY.itemCount} pekerjaan template sebagai saran
+                    </p>
+                  </>
+                ) : null}
+              </div>
+            </SectionCard>
+          )}
+
+          {/* Object dikelompokkan per seksi bila BQ ini memakainya. BQ tanpa
+              seksi jatuh ke satu kelompok tanpa judul — bentuk lamanya persis. */}
           <div className="space-y-3">
-            {view.objects.map((object) => (
-              <ObjectRow
-                key={object.computed.objectId}
-                object={object}
-                isOpen={openObjects.has(object.computed.objectId)}
+            {tree.nodes.map((node) => (
+              <SectionBlock
+                key={node.section.id}
+                node={node}
+                closedSections={closedSections}
+                onToggleSection={toggleSection}
+                openObjects={openObjects}
                 openSubObjects={openSubObjects}
-                onToggle={() =>
-                  toggle(setOpenObjects, object.computed.objectId)
-                }
-                onToggleSub={(id) => toggle(setOpenSubObjects, id)}
-                onExpandAll={(expand) => expandObject(object, expand)}
+                toggleManual={toggleManual}
+                setOpenObjects={setOpenObjects}
+                setOpenSubObjects={setOpenSubObjects}
+                onDropOnObject={dropOnObject}
+                onDropOnSubObject={dropOnSubObject}
+                onAddTemplateItem={addTemplateItem}
+                onAddObject={addObjectToSection}
+                onAddSubSection={addDivision}
+                onRemoveSection={removeSection}
                 canEdit={canEdit}
-                canEditMarkup={canEditMarkup}
                 run={run}
                 pending={pending}
               />
             ))}
+
+            {/* Item tanpa seksi — BQ lama, atau sisa dari seksi yang dihapus. */}
+            {tree.orphans.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className={cn(UI_ENGINE_TYPE_META, "px-1 pt-2 text-slate-400")}>
+                  Tanpa seksi
+                </p>
+                <div
+                  className={cn(
+                    "divide-y divide-slate-200 overflow-hidden border border-slate-200 bg-white",
+                    UI_ENGINE_RADIUS_CONTROL,
+                  )}
+                >
+                  {tree.orphans.map((object) => (
+                    <ObjectRow
+                      key={object.computed.objectId}
+                      object={object}
+                      isOpen={openObjects.has(object.computed.objectId)}
+                      openSubObjects={openSubObjects}
+                      onToggle={() =>
+                        toggleManual(setOpenObjects, object.computed.objectId)
+                      }
+                      onToggleSub={(id) => toggleManual(setOpenSubObjects, id)}
+                      onDropOnObject={dropOnObject}
+                      onDropOnSubObject={dropOnSubObject}
+                      canEdit={canEdit}
+                      run={run}
+                      pending={pending}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
-          {canEdit ? (
-            <div className="mt-4 flex items-center gap-2">
-              <Input
-                value={newObjectName}
-                onChange={(e) => setNewObjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void handleAddObject();
-                  }
-                }}
-                placeholder="New object — e.g. Counter Cabinet CC-1"
-                className="max-w-sm"
-              />
-              <Button
-                variant="outline"
-                onClick={handleAddObject}
-                disabled={pending}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add object
-              </Button>
-            </div>
-          ) : null}
-        </>
-      }
-      summary={
-        <div className="mt-8">
-          <BqPurchaseSummary summary={view.purchase} />
+          </div>
         </div>
       }
     />
@@ -443,9 +1335,9 @@ function ObjectRow({
   openSubObjects,
   onToggle,
   onToggleSub,
-  onExpandAll,
+  onDropOnObject,
+  onDropOnSubObject,
   canEdit,
-  canEditMarkup,
   run,
   pending,
 }: {
@@ -454,9 +1346,9 @@ function ObjectRow({
   openSubObjects: Set<string>;
   onToggle: () => void;
   onToggleSub: (id: string) => void;
-  onExpandAll: (expand: boolean) => void;
+  onDropOnObject: (drag: BqRecipeDrag, objectId: string) => Promise<boolean>;
+  onDropOnSubObject: (drag: BqRecipeDrag, subObjectId: string) => Promise<boolean>;
   canEdit: boolean;
-  canEditMarkup: boolean;
   run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
   pending: boolean;
 }) {
@@ -465,152 +1357,101 @@ function ObjectRow({
   const editable = canEdit && !locked;
   const [newSubName, setNewSubName] = React.useState("");
 
+  const drop = useRecipeDropZone(
+    (drag) => onDropOnObject(drag, c.objectId),
+    editable,
+    acceptsOnObject,
+    (kind) =>
+      kind === "TEMPLATE"
+        ? "Item template adalah pekerjaan — jatuhkan ke seksi/divisi, bukan ke dalam pekerjaan."
+        : "Bahan dan jasa adalah baris — jatuhkan ke sub-pekerjaan, bukan ke pekerjaan.",
+  );
+
   return (
     <div
+      {...drop.handlers}
       className={cn(
-        "border border-slate-200 bg-white",
-        UI_ENGINE_RADIUS_CONTROL,
+        "bg-white transition-colors",
+        // Sorotan drop dipindah ke latar, bukan bingkai — barisnya sudah tidak
+        // punya bingkai sendiri sejak grid jadi tabel.
+        drop.over && "bg-indigo-50 ring-1 ring-inset ring-indigo-300",
       )}
     >
+      {/* Umpan balik drop di tingkat pekerjaan: resep akan jadi sub-pekerjaan
+          BARU di sini, bukan menimpa yang sudah ada. */}
+      {drop.over ? (
+        <div className="border-b border-indigo-200 bg-indigo-50 px-6 py-1.5">
+          <p className={cn(UI_ENGINE_TYPE_META, "font-medium text-indigo-700")}>
+            Lepas di sini — resep jadi sub-pekerjaan baru di &quot;{c.name}&quot;
+          </p>
+        </div>
+      ) : null}
       {/* ---- FR-EXP-01: baris tertutup = satu baris BQ ------------------- */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+      <div className="flex flex-wrap items-start gap-3 px-6 py-4">
         <button
           type="button"
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 items-start gap-3 text-left"
         >
           {isOpen ? (
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
           ) : (
             <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
           )}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              {c.code ? (
-                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-                  {c.code}
-                </span>
-              ) : null}
+          <div className="min-w-0 space-y-1">
+            {c.code ? (
+              <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                {c.code}
+              </p>
+            ) : null}
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="truncate font-sans text-sm font-medium text-slate-900">
                 {c.name}
               </span>
               {locked ? (
-                <Lock className="h-3 w-3 shrink-0 text-slate-400" />
+                <span
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    UI_ENGINE_RADIUS_CONTROL,
+                    "inline-flex items-center gap-1 border border-slate-200 bg-slate-50 px-2 py-1 text-slate-500",
+                  )}
+                >
+                  <Lock className="h-3 w-3 shrink-0" />
+                  Locked
+                </span>
               ) : null}
             </div>
             {/* FR-EXP-08 — tertutup pun tetap tahu isinya. */}
             <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-              {c.subObjectCount} sub-objects · {c.lineCount} lines
+              {c.subObjectCount} sub-pekerjaan · {c.lineCount} baris
             </p>
           </div>
         </button>
 
-        <div className="flex items-center gap-6 text-right">
-          <div>
-            <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Qty</p>
-            <p className="font-sans text-sm text-slate-700">
-              {formatQty(c.qty)} {c.unit}
-            </p>
+        <div className="ml-auto flex flex-col items-end gap-2">
+          <div className="flex flex-wrap items-start justify-end gap-x-6 gap-y-2">
+            {/* Tanpa label — strip header sticky di atas grid yang menamainya. */}
+            <SummaryMetric
+              width="w-14"
+              value={
+                <>
+                  {formatQty(c.qty)} {c.unit}
+                </>
+              }
+            />
+            <SummaryMetric
+              width="w-24"
+              value={formatIdr(c.ratePerUnit)}
+              emphasis="strong"
+            />
+            <SummaryMetric
+              width="w-28"
+              value={formatIdr(c.total)}
+              emphasis="serif"
+            />
           </div>
-          <div>
-            <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-              Rate / unit
-            </p>
-            <p className="font-sans text-sm font-medium text-slate-900">
-              {formatIdr(c.ratePerUnit)}
-            </p>
-          </div>
-          <div className="min-w-[7rem]">
-            <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Total</p>
-            <p className="font-serif text-base font-semibold text-slate-900">
-              {formatIdr(c.total)}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ---- Terbuka: pandangan estimator -------------------------------- */}
-      {isOpen ? (
-        <div className="border-t border-slate-100">
-          {/* Kontrol object */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-slate-50/60 px-4 py-2.5">
-            <label className="flex items-center gap-2">
-              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
-                Qty
-              </span>
-              <NumberCell
-                value={c.qty}
-                disabled={!editable || pending}
-                onCommit={(next) =>
-                  next !== null &&
-                  next > 0 &&
-                  void run(() =>
-                    updateBqObjectAction({ id: c.objectId, qty: next }),
-                  )
-                }
-              />
-            </label>
-
-            {canEditMarkup ? (
-              <label className="flex items-center gap-2">
-                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
-                  Markup
-                </span>
-                <NumberCell
-                  value={c.markupPct * 100}
-                  suffix="%"
-                  disabled={!editable || pending}
-                  onCommit={(next) =>
-                    next !== null &&
-                    void run(() =>
-                      updateBqObjectAction({ id: c.objectId, markupPct: next }),
-                    )
-                  }
-                />
-              </label>
-            ) : null}
-
-            <label className="flex items-center gap-2">
-              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
-                Waste override
-              </span>
-              <NumberCell
-                value={
-                  object.wasteOverridePct === null
-                    ? null
-                    : object.wasteOverridePct * 100
-                }
-                suffix="%"
-                placeholder="—"
-                disabled={!editable || pending}
-                onCommit={(next) =>
-                  void run(() =>
-                    updateBqObjectAction({
-                      id: c.objectId,
-                      wasteOverridePct: next,
-                    }),
-                  )
-                }
-              />
-            </label>
-
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7"
-                onClick={() => onExpandAll(true)}
-              >
-                Expand all
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7"
-                onClick={() => onExpandAll(false)}
-              >
-                Collapse all
-              </Button>
+          {isOpen ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {canEdit ? (
                 <Button
                   size="sm"
@@ -652,11 +1493,61 @@ function ObjectRow({
                 </Button>
               ) : null}
             </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ---- Terbuka: pandangan estimator -------------------------------- */}
+      {isOpen ? (
+        <div className="border-t border-slate-100">
+          {/* Kontrol object */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-slate-50/60 px-6 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <label className="flex items-center gap-2">
+                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
+                  Vol.
+                </span>
+                <NumberCell
+                  value={c.qty}
+                  disabled={!editable || pending}
+                  onCommit={(next) =>
+                    next !== null &&
+                    next > 0 &&
+                    void run(() =>
+                      updateBqObjectAction({ id: c.objectId, qty: next }),
+                    )
+                  }
+                />
+              </label>
+
+            </div>
           </div>
+
+          {/* ---- Baris yang menempel LANGSUNG di item ----------------------
+              Bentuk mayoritas item BQ interior: "Screeding Base" punya semen,
+              pasir dan tukang per sqm, tanpa sub-rakitan. Dirender sebelum
+              daftar L2 karena itu urutan bacanya — yang langsung dulu, yang
+              berlapis kemudian. Total tidak ditampilkan di sini: angkanya
+              sudah jadi Harga Sat. item di baris atas. */}
+          {editable ||
+          c.materials.length > 0 ||
+          c.services.length > 0 ? (
+            <div className="border-b border-slate-100 px-6 pb-4 pt-2">
+              <LineTable
+                parent={{ objectId: c.objectId }}
+                records={{ materials: object.materials, services: object.services }}
+                computed={{ materials: c.materials, services: c.services }}
+                subtotal={null}
+                editable={editable}
+                pending={pending}
+                run={run}
+              />
+            </div>
+          ) : null}
 
           {/* ---- FR-EXP-02: L2 -------------------------------------------- */}
           <div className="divide-y divide-slate-100">
-            {object.subObjects.map((sub) => {
+            {object.subObjects.map((sub, index) => {
               const computedSub = c.subObjects.find(
                 (s) => s.subObjectId === sub.id,
               );
@@ -664,10 +1555,12 @@ function ObjectRow({
               return (
                 <SubObjectRow
                   key={sub.id}
+                  index={index}
                   sub={sub}
                   computed={computedSub}
                   isOpen={openSubObjects.has(sub.id)}
                   onToggle={() => onToggleSub(sub.id)}
+                  onDropRecipe={(drag) => onDropOnSubObject(drag, sub.id)}
                   editable={editable}
                   pending={pending}
                   run={run}
@@ -675,9 +1568,8 @@ function ObjectRow({
               );
             })}
           </div>
-
           {editable ? (
-            <div className="flex items-center gap-2 border-t border-slate-100 px-4 py-2.5">
+            <div className="flex items-center gap-2 border-t border-slate-100 px-6 py-3">
               <Input
                 value={newSubName}
                 onChange={(e) => setNewSubName(e.target.value)}
@@ -690,11 +1582,11 @@ function ObjectRow({
                           objectId: c.objectId,
                           name: newSubName,
                         }),
-                      "Sub-object added.",
+                      "Sub-pekerjaan ditambahkan.",
                     ).then((ok) => ok && setNewSubName(""));
                   }
                 }}
-                placeholder="New sub-object — e.g. Ambalan"
+                placeholder="Sub-pekerjaan baru, mis: Ambalan, Body, Pintu"
                 className="h-8 max-w-xs text-xs"
               />
               <Button
@@ -709,12 +1601,12 @@ function ObjectRow({
                         objectId: c.objectId,
                         name: newSubName,
                       }),
-                    "Sub-object added.",
+                    "Sub-pekerjaan ditambahkan.",
                   ).then((ok) => ok && setNewSubName(""))
                 }
               >
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Add sub-object
+                Tambah Sub-pekerjaan
               </Button>
             </div>
           ) : null}
@@ -729,195 +1621,201 @@ function ObjectRow({
 // ---------------------------------------------------------------------------
 
 function SubObjectRow({
+  index,
   sub,
   computed,
   isOpen,
   onToggle,
+  onDropRecipe,
   editable,
   pending,
   run,
 }: {
+  /** Urutan dalam pekerjaan induk, 0-based. */
+  index: number;
   sub: BqObjectView["subObjects"][number];
   computed: NonNullable<BqObjectView["computed"]["subObjects"][number]>;
   isOpen: boolean;
   onToggle: () => void;
+  /** Resep dijatuhkan ke baris ini — isinya dituang ke sub-pekerjaan ini. */
+  onDropRecipe: (drag: BqRecipeDrag) => Promise<boolean>;
   editable: boolean;
   pending: boolean;
   run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
 }) {
   const isLinked = sub.librarySubObjectId !== null;
-  const [showLibraryPicker, setShowLibraryPicker] = React.useState(false);
-  const [showSaveToLib, setShowSaveToLib] = React.useState(false);
-  const [libName, setLibName] = React.useState(sub.name);
+  const drop = useRecipeDropZone(
+    onDropRecipe,
+    editable,
+    acceptsOnSubObject,
+    (kind) =>
+      kind === "TEMPLATE"
+        ? "Item template adalah pekerjaan — jatuhkan ke seksi/divisi, bukan ke dalam sub-pekerjaan."
+        : "Bahan dan jasa hanya bisa masuk ke sub-pekerjaan.",
+  );
 
   return (
     // FR-EXP-07: kedalaman ditandai indentasi + garis kiri + warna latar.
-    <div className="pl-6">
-      <div className="flex flex-wrap items-center gap-3 border-l-2 border-slate-200 py-2 pl-4 pr-4">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-        >
-          {isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          )}
-          {/* R2 — ⧉ indicates linked instance, ◇ indicates standalone */}
-          <span
-            className={cn(
-              UI_ENGINE_TYPE_META,
-              "shrink-0",
-              isLinked ? "text-indigo-500" : "text-slate-300",
-            )}
-            title={
-              isLinked
-                ? `Linked to library template`
-                : "Standalone — not linked to library"
-            }
-          >
-            {isLinked ? "⧉" : "◇"}
-          </span>
-          <span className="truncate font-sans text-sm text-slate-800">
-            {sub.name}
-          </span>
-          <span className={cn(UI_ENGINE_TYPE_META, "shrink-0 text-slate-400")}>
-            {computed.lineCount} {computed.lineCount === 1 ? "line" : "lines"}
-          </span>
-        </button>
-
-        {/* R6 — Library load button at L2 level */}
-        {editable ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-slate-500"
-            disabled={pending}
-            title="Load from library"
-            onClick={() => setShowLibraryPicker(true)}
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-          </Button>
-        ) : null}
-
-        {/* R3 — Save to Library (only for standalone ◇ sub-objects) */}
-        {editable && !isLinked ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-slate-500"
-            disabled={pending}
-            title="Save to library and link (⧉)"
-            onClick={() => {
-              setLibName(sub.name);
-              setShowSaveToLib(true);
-            }}
-          >
-            <span className={cn(UI_ENGINE_TYPE_META)}>+⧉</span>
-          </Button>
-        ) : null}
-
-        {/* Pengali L2 — kolom yang membuat alat ini lebih cepat dari Excel
-            (PRD §2.1). Ubah dari 3 ke 5 dan seluruh angka di atasnya ikut,
-            tanpa satu pun bahan diketik ulang. */}
-        <label className="flex items-center gap-1.5">
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>×</span>
-          <NumberCell
-            value={sub.qty}
-            disabled={!editable || pending}
-            className="w-16"
-            onCommit={(next) =>
-              next !== null &&
-              next > 0 &&
-              void run(() => updateBqSubObjectAction({ id: sub.id, qty: next }))
-            }
-          />
-        </label>
-
-        <div className="min-w-[7rem] text-right">
-          <p className="font-sans text-sm font-medium text-slate-800">
-            {formatIdr(computed.subtotal)}
+    <div className="group/sub pl-6">
+      <div
+        {...drop.handlers}
+        className={cn(
+          "border-l-2 py-2.5 pl-4 pr-4 transition-colors",
+          drop.over
+            ? "border-indigo-500 bg-indigo-50"
+            : cn("border-slate-200", isOpen && "bg-slate-50/40"),
+        )}
+      >
+        {drop.over ? (
+          <p className={cn(UI_ENGINE_TYPE_META, "mb-1.5 font-medium text-indigo-700")}>
+            Lepas di sini — isi resep masuk ke &quot;{sub.name}&quot;
           </p>
-        </div>
-
-        {editable ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-red-600 hover:text-red-700"
-            disabled={pending}
-            onClick={() =>
-              void run(
-                () => deleteBqSubObjectAction({ id: sub.id }),
-                "Sub-object removed.",
-              )
-            }
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
         ) : null}
-      </div>
+        <div className="flex flex-wrap items-start gap-3">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex min-w-0 flex-1 items-start gap-2 text-left"
+          >
+            {isOpen ? (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            )}
+            <div className="min-w-0 space-y-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                {/* Hanya "Lib" yang ditampilkan. "Lokal" adalah keadaan
+                    default — pada BQ yang seluruh barisnya lokal, badge itu
+                    muncul di setiap baris tanpa memberi tahu apa pun. Badge
+                    berguna justru saat ia MEMBEDAKAN. */}
+                {isLinked ? (
+                  <span
+                    className={cn(
+                      UI_ENGINE_TYPE_META,
+                      "shrink-0 rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-600",
+                    )}
+                    title="Terhubung ke template Library"
+                  >
+                    Lib
+                  </span>
+                ) : null}
+                {/* Penomoran mengikuti dokumen sumber: seksi A/B/C, divisi
+                    I/II/III, item 1/2/3. Tanpa ini, sub-pekerjaan di bawah
+                    seksi yang menyatu terbaca sejajar dengan divisi di seksi
+                    lain — padahal lapisnya berbeda. Angka menjawabnya tanpa
+                    satu kata penjelasan pun. */}
+                <span
+                  className={cn(
+                    UI_ENGINE_TYPE_META,
+                    "w-4 shrink-0 text-right tabular-nums text-slate-400",
+                  )}
+                >
+                  {index + 1}
+                </span>
+                <span className="truncate font-sans text-sm font-medium text-slate-800">
+                  {sub.name}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                  {computed.lineCount} baris
+                </span>
+              </div>
+            </div>
+          </button>
 
-      {/* R3 — inline "save to library" form */}
-      {showSaveToLib ? (
-        <div className="ml-4 flex items-center gap-2 border-l-2 border-indigo-100 py-2 pl-4">
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
-            Save as:
-          </span>
-          <Input
-            value={libName}
-            onChange={(e) => setLibName(e.target.value)}
-            className="h-7 max-w-xs text-xs"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setShowSaveToLib(false);
-            }}
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7"
-            disabled={!libName.trim() || pending}
-            onClick={() =>
-              void run(
-                () =>
-                  saveSubObjectToLibraryAndLinkAction({
-                    subObjectId: sub.id,
-                    name: libName.trim(),
-                  }),
-                "Saved to library and linked ⧉",
-              ).then((ok) => ok && setShowSaveToLib(false))
-            }
-          >
-            Save ⧉
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7"
-            onClick={() => setShowSaveToLib(false)}
-          >
-            Cancel
-          </Button>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+            {/* Pengali L2 — kolom yang membuat alat ini lebih cepat dari Excel
+                (PRD §2.1). Ubah dari 3 ke 5 dan seluruh angka di atasnya ikut,
+                tanpa satu pun bahan diketik ulang. */}
+            {/* Pengali L2 tetap ditandai "×" dan BUKAN dilabeli "Vol." —
+                angkanya memang bukan volume, melainkan berapa kali
+                sub-pekerjaan ini ada di dalam satu pekerjaan. Menyamakan
+                labelnya dengan kolom Vol. di atas justru menyesatkan. */}
+            <div className="text-right">
+              <label className="flex items-center justify-end gap-1.5" title="Berapa kali sub-pekerjaan ini ada dalam satu pekerjaan">
+                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                  ×
+                </span>
+                <NumberCell
+                  value={sub.qty}
+                  disabled={!editable || pending}
+                  className="w-16"
+                  onCommit={(next) =>
+                    next !== null &&
+                    next > 0 &&
+                    void run(() =>
+                      updateBqSubObjectAction({ id: sub.id, qty: next }),
+                    )
+                  }
+                />
+              </label>
+            </div>
+
+            <SummaryMetric
+              width="w-28"
+              value={formatIdr(computed.subtotal)}
+              emphasis="strong"
+            />
+
+            {/* Menyisipkan resep kini lewat drag & drop dari dock, jadi baris
+                tidak lagi punya tombol "Muat Library". Yang tetap di sini
+                adalah arah sebaliknya — menjadikan sub-pekerjaan ini resep —
+                karena itu aksi ATAS baris ini, bukan aksi global. Muncul saat
+                hover supaya kolom angka tetap yang paling menonjol. */}
+            {editable && !isLinked ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 text-slate-300 opacity-0 transition-opacity hover:text-indigo-600 focus-visible:opacity-100 group-hover/sub:opacity-100"
+                disabled={pending}
+                title={`Simpan "${sub.name}" ke Library sebagai resep`}
+                aria-label={`Simpan ${sub.name} ke Library`}
+                onClick={() =>
+                  void run(
+                    () =>
+                      saveSubObjectToLibraryAndLinkAction({
+                        subObjectId: sub.id,
+                        name: sub.name,
+                      }),
+                    `"${sub.name}" tersimpan ke Library.`,
+                  )
+                }
+              >
+                <BookmarkPlus className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+
+            {editable ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-red-600 opacity-0 transition-opacity hover:text-red-700 focus-visible:opacity-100 group-hover/sub:opacity-100"
+                disabled={pending}
+                title="Hapus sub-pekerjaan"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void run(
+                    () => deleteBqSubObjectAction({ id: sub.id }),
+                    "Sub-pekerjaan dihapus.",
+                  );
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </div>
         </div>
-      ) : null}
-
-      {/* R6 — Library picker dialog rendered at L2 level */}
-      {showLibraryPicker ? (
-        <LibraryPickerDialog
-          key={`lib-${sub.id}`}
-          subObjectId={sub.id}
-          onClose={() => setShowLibraryPicker(false)}
-        />
-      ) : null}
+      </div>
 
       {/* ---- FR-EXP-03: L3, bahan dulu lalu jasa ------------------------- */}
       {isOpen ? (
-        <div className="ml-4 border-l-2 border-slate-100 pb-3 pl-4">
+        <div className="ml-4 border-l-2 border-slate-100 pb-4 pl-5 pr-4">
           <LineTable
-            sub={sub}
+            parent={{ subObjectId: sub.id }}
+            records={{ materials: sub.materials, services: sub.services }}
             computed={computed}
+            subtotal={computed.subtotal}
             editable={editable}
             pending={pending}
             run={run}
@@ -932,490 +1830,418 @@ function SubObjectRow({
 // L3
 // ---------------------------------------------------------------------------
 
+/**
+ * Tabel baris L3. Melayani DUA induk dengan komponen yang sama.
+ *
+ * Baris boleh menempel di item (L1) atau di sub-item (L2), dan tampilannya
+ * identik — yang berbeda cuma ke mana aksi tambah/hapus dikirim. Menduplikasi
+ * komponen ini per induk berarti dua tabel yang harus dijaga sinkron, dan
+ * perbedaan sekecil apa pun di antaranya akan terbaca sebagai bug.
+ */
 function LineTable({
-  sub,
+  parent,
+  records,
   computed,
+  subtotal,
   editable,
   pending,
   run,
 }: {
-  sub: BqObjectView["subObjects"][number];
-  computed: NonNullable<BqObjectView["computed"]["subObjects"][number]>;
+  /** Ke mana aksi dikirim. Tepat satu properti terisi. */
+  parent: { objectId: string } | { subObjectId: string };
+  records: {
+    materials: BqMaterialLineRecord[];
+    services: BqServiceLineRecord[];
+  };
+  computed: {
+    materials: MaterialLineResult[];
+    services: ServiceLineResult[];
+  };
+  /** Ditampilkan sebagai "Total" di bawah tabel. NULL = jangan tampilkan. */
+  subtotal: number | null;
   editable: boolean;
   pending: boolean;
   run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
 }) {
+  const sub = records;
+  const matTotal = computed.materials.reduce((s, l) => s + l.cost, 0);
+  const svcTotal = computed.services.reduce((s, l) => s + l.cost, 0);
+  const hasLines = computed.materials.length > 0 || computed.services.length > 0;
+  // Fix #1: per-section add buttons so +Bahan lives under Materials,
+  // +Jasa lives under Services — not floating together at the bottom.
+  /**
+   * Baris cepat yang sedang terbuka. Menggantikan dialog picker sebagai jalur
+   * utama — lihat kepala `BqQuickAddRow.tsx` untuk alasannya. Dialog masih
+   * hidup di balik "input manual", untuk barang yang memang belum ada di
+   * Master Data.
+   */
+  const [quickAdd, setQuickAdd] = React.useState<QuickAddMode | null>(null);
+  const [manualFor, setManualFor] = React.useState<QuickAddMode | null>(null);
+
+  const commitQuickAdd = React.useCallback(
+    async (input: QuickAddCommit) =>
+      input.mode === "MATERIAL"
+        ? run(() =>
+            addBqMaterialLineAction({
+              ...parent,
+              skuId: input.skuId,
+              skuPriceId: input.skuPriceId,
+              qtyPerSub: input.qtyPerSub,
+            }),
+          )
+        : run(() =>
+            addBqServiceLineAction({
+              ...parent,
+              workPriceId: input.workPriceId,
+              qtyPerSub: input.qtyPerSub,
+            }),
+          ),
+    [run, parent],
+  );
+
+  // Dialog manual: hanya untuk barang di luar Master Data.
+  const pickerProps = {
+    ...parent,
+    openFor: manualFor,
+    onExternalClose: () => setManualFor(null),
+    onAddMaterial: ({ skuId, skuPriceId, qtyPerSub }: { skuId: string; skuPriceId: string; qtyPerSub: number }) =>
+      run(
+        () => addBqMaterialLineAction({ ...parent, skuId, skuPriceId, qtyPerSub }),
+        "Bahan ditambahkan.",
+      ),
+    onAddService: (workPriceId: string, qty: number) =>
+      run(
+        () => addBqServiceLineAction({ ...parent, workPriceId, qtyPerSub: qty }),
+        "Jasa ditambahkan.",
+      ),
+    onAddLocalMaterial: (input: { name: string; usageUnit: string; price: number; qtyPerSub: number }) =>
+      run(
+        () => addBqLocalMaterialLineAction({ ...parent, ...input, currency: "IDR" }),
+        "Bahan custom ditambahkan.",
+      ),
+    onAddLocalService: (input: { name: string; rateUnit: string; price: number; qtyPerSub: number }) =>
+      run(
+        () => addBqLocalServiceLineAction({ ...parent, ...input, currency: "IDR" }),
+        "Jasa custom ditambahkan.",
+      ),
+  } as const;
+
   return (
-    <div className="space-y-3 pt-1">
-      {/* --- Bahan ----------------------------------------------------- */}
+    <div className="space-y-4 pt-2">
+      {/* --- Bahan Material -------------------------------------------- */}
       <div>
-        <div className="mb-1 flex items-center gap-1.5">
+        <div className="mb-1.5 flex items-center gap-1.5">
           <Package className="h-3 w-3 text-slate-400" />
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-            Materials
+          <span className={cn(UI_ENGINE_TYPE_META, "font-medium text-slate-500")}>
+            Bahan
           </span>
         </div>
 
-        {computed.materials.length === 0 ? (
-          <p className={cn(UI_ENGINE_TYPE_META, "py-1 text-slate-400")}>
-            None yet.
-          </p>
-        ) : (
-          <table className="w-full">
-            {/* R5 — column headers for BQ table (Indonesian convention) */}
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 pr-3 text-left font-normal text-slate-400",
-                  )}
-                >
-                  Uraian Pekerjaan
-                </th>
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 pr-2 text-right font-normal text-slate-400",
-                  )}
-                >
-                  Vol · Koef
-                </th>
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 pr-2 text-right font-normal text-slate-400",
-                  )}
-                >
-                  Susut
-                </th>
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 pr-2 text-right font-normal text-slate-400",
-                  )}
-                >
-                  Susut line
-                </th>
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 pr-3 text-right font-normal text-slate-400",
-                  )}
-                >
-                  Harga Satuan
-                </th>
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 text-right font-normal text-slate-400",
-                  )}
-                >
-                  Jumlah
-                </th>
-                {editable ? <th /> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {computed.materials.map((line) => {
-                const record = sub.materials.find((m) => m.id === line.lineId);
-                if (!record) return null;
-                return (
-                  <tr
-                    key={line.lineId}
-                    className="border-b border-slate-50 last:border-0"
-                  >
-                    <td className="py-1.5 pr-3">
-                      <TextCell
-                        value={line.name}
-                        disabled={!editable || pending}
-                        onCommit={(name) =>
-                          void run(() =>
-                            updateBqMaterialLineAction({
-                              id: line.lineId,
-                              name,
-                            }),
-                          )
-                        }
-                        className="min-w-32"
-                      />
-                      <span
-                        className={cn(
-                          UI_ENGINE_TYPE_META,
-                          "ml-2 text-slate-400",
-                        )}
-                      >
-                        {record.source === "PROJECT_LOCAL" ? "Local" : "Master"}
-                      </span>
-                      {/* R4 — † badge for manually overridden snapshot price */}
-                      {record.isManualOverride ? (
-                        <span
-                          className={cn(
-                            UI_ENGINE_TYPE_META,
-                            "ml-1 text-amber-600",
-                          )}
-                          title={
-                            record.overrideNote ?? "Price edited inside BQ"
-                          }
-                        >
-                          †
-                        </span>
-                      ) : null}
-                      {record.brandName ? (
-                        <span
-                          className={cn(
-                            UI_ENGINE_TYPE_META,
-                            "ml-2 text-slate-400",
-                          )}
-                        >
-                          {record.brandName}
-                        </span>
-                      ) : null}
-                    </td>
-
-                    <td className="py-1.5 pr-2 text-right">
-                      <NumberCell
-                        value={line.qtyPerSub}
-                        suffix={line.usageUnit ?? undefined}
-                        disabled={!editable || pending}
-                        className="w-16"
-                        onCommit={(next) =>
-                          next !== null &&
-                          void run(() =>
-                            updateBqMaterialLineAction({
-                              id: line.lineId,
-                              qtyPerSub: next,
-                            }),
-                          )
-                        }
-                      />
-                    </td>
-
-                    {/* Waste: nilai + dari mana ia datang. Presedensi §4.1
-                        disusun justru supaya angka ini bisa dijelaskan. */}
-                    <td className="py-1.5 pr-2 text-right">
-                      <span
-                        className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}
-                        title={WASTE_SOURCE_LABEL[line.wasteSource]}
-                      >
-                        {`+${formatPct(line.wastePct)}`}
-                      </span>
-                    </td>
-
-                    <td className="py-1.5 pr-2 text-right">
-                      <NumberCell
-                        value={
-                          record.wasteOverridePct === null
-                            ? null
-                            : record.wasteOverridePct * 100
-                        }
-                        suffix="%"
-                        placeholder="—"
-                        disabled={!editable || pending}
-                        className="w-14"
-                        onCommit={(next) =>
-                          void run(() =>
-                            updateBqMaterialLineAction({
-                              id: line.lineId,
-                              wasteOverridePct: next,
-                            }),
-                          )
-                        }
-                      />
-                    </td>
-
-                    {/* R4 — editable price per usage unit */}
-                    <td className="py-1.5 pr-3 text-right">
-                      <span
-                        className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}
-                      >
-                        {formatQty(line.grossTotal)}
-                        {line.usageUnit ? ` ${line.usageUnit}` : ""} @{" "}
-                      </span>
-                      <NumberCell
-                        value={
-                          line.pricePerUsageUnit * (record.conversion ?? 1)
-                        }
-                        disabled={!editable || pending}
-                        className="w-24"
-                        onCommit={(next) =>
-                          next !== null &&
-                          next >= 0 &&
-                          void run(() =>
-                            updateBqMaterialLineAction({
-                              id: line.lineId,
-                              price: next,
-                            }),
-                          )
-                        }
-                      />
-                    </td>
-
-                    <td className="py-1.5 text-right font-sans text-xs text-slate-800">
-                      {formatIdr(line.cost)}
-                    </td>
-
-                    {editable ? (
-                      <td className="w-8 py-1.5 text-right">
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() =>
+        {computed.materials.length === 0 && quickAdd !== "MATERIAL" ? null : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-7 py-1 pr-2 text-right font-normal text-slate-400")}>No.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-left font-normal text-slate-400")}>Uraian</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-12 py-1 pr-2 text-center font-normal text-slate-400")}>Sat.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-20 py-1 pr-3 text-right font-normal text-slate-400")}>Koef.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 pr-3 text-right font-normal text-slate-400")}>Harga Sat.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 text-right font-normal text-slate-400")}>Jumlah</th>
+                  {editable ? <th className="w-8" /> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {computed.materials.map((line, index) => {
+                  const record = sub.materials.find((m) => m.id === line.lineId);
+                  if (!record) return null;
+                  return (
+                    <tr key={line.lineId} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                      <td className={cn(UI_ENGINE_TYPE_META, "py-1.5 pr-2 text-right text-slate-400")}>
+                        {index + 1}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <TextCell
+                          value={line.name}
+                          disabled={!editable || pending}
+                          onCommit={(name) =>
                             void run(() =>
-                              deleteBqMaterialLineAction({ id: line.lineId }),
+                              updateBqMaterialLineAction({ id: line.lineId, name }),
                             )
                           }
-                          className="text-slate-300 transition-colors hover:text-red-600"
-                          aria-label={`Remove ${line.name}`}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                          className="min-w-32"
+                        />
+                        <div className={cn(UI_ENGINE_TYPE_META, "mt-0.5 flex flex-wrap items-center gap-x-2 text-slate-400")}>
+                          <CostCategoryBadge
+                            category={record.costCategory}
+                            defaultFor="MATERIAL"
+                          />
+                          {record.code ? <span>{record.code}</span> : null}
+                          {record.isManualOverride ? (
+                            <span className="text-amber-600" title={record.overrideNote ?? "Manual"}>
+                              Manual
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <td className={cn(UI_ENGINE_TYPE_META, "py-1.5 pr-2 text-center text-slate-600")}>
+                        {line.unit ?? "—"}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right">
+                        <NumberCell
+                          value={line.qtyPerSub}
+                          disabled={!editable || pending}
+                          className="w-16"
+                          onCommit={(next) =>
+                            next !== null &&
+                            void run(() =>
+                              updateBqMaterialLineAction({ id: line.lineId, qtyPerSub: next }),
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <NumberCell
+                          value={line.pricePerUnit}
+                          disabled={!editable || pending}
+                          className="w-24"
+                          onCommit={(next) =>
+                            next !== null &&
+                            next >= 0 &&
+                            void run(() =>
+                              updateBqMaterialLineAction({ id: line.lineId, price: next }),
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="py-1.5 text-right font-sans text-xs font-medium text-slate-800">
+                        {formatIdr(line.cost)}
+                      </td>
+                      {editable ? (
+                        <td className="w-8 py-1.5 text-right">
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() =>
+                              void run(() => deleteBqMaterialLineAction({ id: line.lineId }))
+                            }
+                            className="text-slate-200 opacity-0 transition-all group-hover:opacity-100 hover:text-red-500"
+                            aria-label={`Hapus ${line.name}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+                {quickAdd === "MATERIAL" ? (
+                  <BqQuickAddRow
+                    mode="MATERIAL"
+                    editable={editable}
+                    colSpanBefore={1}
+                    onCommit={commitQuickAdd}
+                    onClose={() => setQuickAdd(null)}
+                  />
+                ) : null}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-slate-200 bg-slate-50/60">
+                  <td colSpan={editable ? 5 : 4} />
+                  <td className={cn(UI_ENGINE_TYPE_META, "py-1 text-right font-medium text-slate-600")}>
+                    {formatIdr(matTotal)}
+                  </td>
+                  {editable ? <td /> : null}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         )}
+        {editable ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setQuickAdd("MATERIAL")}
+              className="flex items-center gap-1.5 rounded-md border border-dashed border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100"
+            >
+              <Plus className="h-3 w-3" />
+              + Tambah Bahan
+            </button>
+            {/* Jalur untuk barang yang memang belum ada di Master Data.
+                Sengaja lebih sunyi: master data tetap SSOT, dan baris karangan
+                adalah pengecualian, bukan kebiasaan. */}
+            <button
+              type="button"
+              onClick={() => setManualFor("MATERIAL")}
+              className={cn(UI_ENGINE_TYPE_META, "text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline")}
+            >
+              Manual
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {/* --- Jasa ------------------------------------------------------ */}
       <div>
-        <div className="mb-1 flex items-center gap-1.5">
+        <div className="mb-1.5 flex items-center gap-1.5">
           <Hammer className="h-3 w-3 text-slate-400" />
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-            Services
+          <span className={cn(UI_ENGINE_TYPE_META, "font-medium text-slate-500")}>
+            Jasa
           </span>
         </div>
 
-        {computed.services.length === 0 ? (
-          <p className={cn(UI_ENGINE_TYPE_META, "py-1 text-slate-400")}>
-            None yet.
-          </p>
-        ) : (
-          <table className="w-full">
-            {/* R5 — column headers */}
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 pr-3 text-left font-normal text-slate-400",
-                  )}
-                >
-                  Uraian Pekerjaan
-                </th>
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 pr-2 text-right font-normal text-slate-400",
-                  )}
-                >
-                  Vol · Koef
-                </th>
-                <th className="py-1 pr-2" colSpan={2} />
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 pr-3 text-right font-normal text-slate-400",
-                  )}
-                >
-                  Harga Satuan
-                </th>
-                <th
-                  className={cn(
-                    UI_ENGINE_TYPE_META,
-                    "py-1 text-right font-normal text-slate-400",
-                  )}
-                >
-                  Jumlah
-                </th>
-                {editable ? <th /> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {computed.services.map((line) => {
-                const record = sub.services.find((s) => s.id === line.lineId);
-                return (
-                  <tr
-                    key={line.lineId}
-                    className="border-b border-slate-50 last:border-0"
-                  >
-                    <td className="py-1.5 pr-3">
-                      <TextCell
-                        value={line.name}
-                        disabled={!editable || pending}
-                        onCommit={(name) =>
-                          void run(() =>
-                            updateBqServiceLineAction({
-                              id: line.lineId,
-                              name,
-                            }),
-                          )
-                        }
-                        className="min-w-32"
-                      />
-                      <span
-                        className={cn(
-                          UI_ENGINE_TYPE_META,
-                          "ml-2 text-slate-400",
-                        )}
-                      >
-                        {record?.source === "PROJECT_LOCAL"
-                          ? "Local"
-                          : "Master"}
-                      </span>
-                      {record?.hasMaterial ? (
-                        <span
-                          className={cn(
-                            UI_ENGINE_TYPE_META,
-                            "ml-2 text-slate-400",
-                          )}
-                          title="Supply and install — the rate already includes material"
-                        >
-                          incl. material
-                        </span>
-                      ) : null}
-                      {record?.scopeNote ? (
-                        <span
-                          className={cn(
-                            UI_ENGINE_TYPE_META,
-                            "ml-2 truncate text-slate-400",
-                          )}
-                          title={record.scopeNote}
-                        >
-                          {record.scopeNote}
-                        </span>
-                      ) : null}
-                    </td>
-
-                    <td className="py-1.5 pr-2 text-right">
-                      <NumberCell
-                        value={line.qtyPerSub}
-                        suffix={line.rateUnit}
-                        disabled={!editable || pending}
-                        className="w-16"
-                        onCommit={(next) =>
-                          next !== null &&
-                          void run(() =>
-                            updateBqServiceLineAction({
-                              id: line.lineId,
-                              qtyPerSub: next,
-                            }),
-                          )
-                        }
-                      />
-                    </td>
-
-                    {/* Kolom waste sengaja kosong untuk jasa — bukan diisi
-                        "0%". Baris jasa memang TIDAK punya waste (PRD §3.2),
-                        dan menampilkan 0% menyiratkan angka yang bisa diubah. */}
-                    <td className="py-1.5 pr-2" />
-                    <td className="py-1.5 pr-2" />
-
-                    <td className="py-1.5 pr-3 text-right">
-                      <span
-                        className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}
-                      >
-                        {formatQty(line.qtyTotal)} {line.rateUnit} @{" "}
-                      </span>
-                      <NumberCell
-                        value={line.pricePerRateUnit}
-                        disabled={!editable || pending}
-                        className="w-24"
-                        onCommit={(next) =>
-                          next !== null &&
-                          next >= 0 &&
-                          void run(() =>
-                            updateBqServiceLineAction({
-                              id: line.lineId,
-                              price: next,
-                            }),
-                          )
-                        }
-                      />
-                    </td>
-
-                    <td className="py-1.5 text-right font-sans text-xs text-slate-800">
-                      {formatIdr(line.cost)}
-                    </td>
-
-                    {editable ? (
-                      <td className="w-8 py-1.5 text-right">
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() =>
+        {computed.services.length === 0 && quickAdd !== "SERVICE" ? null : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-7 py-1 pr-2 text-right font-normal text-slate-400")}>No.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-left font-normal text-slate-400")}>Uraian</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-12 py-1 pr-2 text-center font-normal text-slate-400")}>Sat.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-20 py-1 pr-3 text-right font-normal text-slate-400")}>Koef.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 pr-3 text-right font-normal text-slate-400")}>Harga Sat.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 text-right font-normal text-slate-400")}>Jumlah</th>
+                  {editable ? <th className="w-8" /> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {computed.services.map((line, index) => {
+                  const record = sub.services.find((s) => s.id === line.lineId);
+                  return (
+                    <tr key={line.lineId} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                      <td className={cn(UI_ENGINE_TYPE_META, "py-1.5 pr-2 text-right text-slate-400")}>
+                        {index + 1}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <TextCell
+                          value={line.name}
+                          disabled={!editable || pending}
+                          onCommit={(name) =>
                             void run(() =>
-                              deleteBqServiceLineAction({ id: line.lineId }),
+                              updateBqServiceLineAction({ id: line.lineId, name }),
                             )
                           }
-                          className="text-slate-300 transition-colors hover:text-red-600"
-                          aria-label={`Remove ${line.name}`}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                          className="min-w-32"
+                        />
+                        <div className={cn(UI_ENGINE_TYPE_META, "mt-0.5 flex flex-wrap items-center gap-x-2 text-slate-400")}>
+                          {record ? (
+                            <CostCategoryBadge
+                              category={record.costCategory}
+                              defaultFor="UPAH"
+                            />
+                          ) : null}
+                          {record?.code ? <span>{record.code}</span> : null}
+                        </div>
                       </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <td className={cn(UI_ENGINE_TYPE_META, "py-1.5 pr-2 text-center text-slate-600")}>
+                        {line.rateUnit ?? "—"}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right">
+                        <NumberCell
+                          value={line.qtyPerSub}
+                          disabled={!editable || pending}
+                          className="w-16"
+                          onCommit={(next) =>
+                            next !== null &&
+                            void run(() =>
+                              updateBqServiceLineAction({ id: line.lineId, qtyPerSub: next }),
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <NumberCell
+                          value={line.pricePerRateUnit}
+                          disabled={!editable || pending}
+                          className="w-24"
+                          onCommit={(next) =>
+                            next !== null &&
+                            next >= 0 &&
+                            void run(() =>
+                              updateBqServiceLineAction({ id: line.lineId, price: next }),
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="py-1.5 text-right font-sans text-xs font-medium text-slate-800">
+                        {formatIdr(line.cost)}
+                      </td>
+                      {editable ? (
+                        <td className="w-8 py-1.5 text-right">
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() =>
+                              void run(() => deleteBqServiceLineAction({ id: line.lineId }))
+                            }
+                            className="text-slate-200 opacity-0 transition-all group-hover:opacity-100 hover:text-red-500"
+                            aria-label={`Hapus ${line.name}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+                {quickAdd === "SERVICE" ? (
+                  <BqQuickAddRow
+                    mode="SERVICE"
+                    editable={editable}
+                    colSpanBefore={1}
+                    onCommit={commitQuickAdd}
+                    onClose={() => setQuickAdd(null)}
+                  />
+                ) : null}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-slate-200 bg-slate-50/60">
+                  <td colSpan={editable ? 5 : 4} />
+                  <td className={cn(UI_ENGINE_TYPE_META, "py-1 text-right font-medium text-slate-600")}>
+                    {formatIdr(svcTotal)}
+                  </td>
+                  {editable ? <td /> : null}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         )}
+        {editable ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setQuickAdd("SERVICE")}
+              className="flex items-center gap-1.5 rounded-md border border-dashed border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:border-violet-300 hover:bg-violet-100"
+            >
+              <Plus className="h-3 w-3" />
+              + Tambah Jasa
+            </button>
+            {/* Jalur untuk barang yang memang belum ada di Master Data.
+                Sengaja lebih sunyi: master data tetap SSOT, dan baris karangan
+                adalah pengecualian, bukan kebiasaan. */}
+            <button
+              type="button"
+              onClick={() => setManualFor("SERVICE")}
+              className={cn(UI_ENGINE_TYPE_META, "text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline")}
+            >
+              Manual
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {editable ? (
-        <BqLinePicker
-          subObjectId={sub.id}
-          onAddMaterial={({ skuId, skuPriceId, qtyPerSub }) =>
-            run(
-              () =>
-                addBqMaterialLineAction({
-                  subObjectId: sub.id,
-                  skuId,
-                  skuPriceId,
-                  qtyPerSub,
-                }),
-              "Material added.",
-            )
-          }
-          onAddService={(workPriceId, qty) =>
-            run(
-              () =>
-                addBqServiceLineAction({
-                  subObjectId: sub.id,
-                  workPriceId,
-                  qtyPerSub: qty,
-                }),
-              "Service added.",
-            )
-          }
-          onAddLocalMaterial={(input) =>
-            run(
-              () =>
-                addBqLocalMaterialLineAction({
-                  subObjectId: sub.id,
-                  ...input,
-                  currency: "IDR",
-                }),
-              "Custom material added.",
-            )
-          }
-          onAddLocalService={(input) =>
-            run(
-              () =>
-                addBqLocalServiceLineAction({
-                  subObjectId: sub.id,
-                  ...input,
-                  currency: "IDR",
-                }),
-              "Custom service added.",
-            )
-          }
-        />
+      {/* --- Total sub-pekerjaan --------------------------------------- */}
+      {hasLines && subtotal !== null ? (
+        <div className="flex items-center justify-end gap-8 border-t-2 border-slate-300 pt-2">
+          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>Total</span>
+          <span className="font-sans text-sm font-semibold tabular-nums text-slate-900">
+            {formatIdr(subtotal)}
+          </span>
+        </div>
       ) : null}
+
+      {/* Dialog manual — hanya untuk barang di luar Master Data. */}
+      {editable && manualFor ? <BqLinePicker {...pickerProps} /> : null}
     </div>
   );
 }

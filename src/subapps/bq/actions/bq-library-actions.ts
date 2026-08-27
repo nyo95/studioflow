@@ -77,7 +77,6 @@ export const saveObjectToLibraryAction = createAction(
         code: object.code,
         name: input.name || object.name,
         unit: object.unit,
-        markup_pct: object.markup_pct,
         notes: object.notes,
         created_by_name: ctx.user.name ?? "Unknown",
       },
@@ -313,7 +312,6 @@ export const loadFromLibraryObjectAction = createAction(
       if (!m.sku_id) throw new ActionError("This Master Data recipe has no SKU reference.", "INVALID_LIBRARY");
       const candidate = await loadMaterialCandidate(m.sku_id, tx);
       if (!candidate) throw new ActionError("This Master Data material no longer exists.", "INVALID_LIBRARY");
-      const profile = candidate.profile;
       const price = resolveLibraryMaterialPrice(candidate, {
         skuPriceId: m.sku_price_id,
         supplierPartyId: m.supplier_party_id,
@@ -338,15 +336,15 @@ export const loadFromLibraryObjectAction = createAction(
           snapshot_brand_name: candidate.brandName,
           snapshot_category_path: candidate.categoryPath,
           snapshot_supplier_name: price.supplierName,
-          snapshot_usage_unit: profile?.usageUnit ?? null,
-          snapshot_purchase_unit: profile?.purchaseUnit ?? null,
-          snapshot_conversion: profile?.conversion ?? null,
+          snapshot_usage_unit: price.unit,
+          snapshot_purchase_unit: price.unit,
+          snapshot_conversion: null,
           snapshot_price: price.price,
           snapshot_currency: price.currency,
-          snapshot_material_default_waste_pct: profile?.defaultWastePct ?? null,
+          snapshot_material_default_waste_pct: null,
           snapshot_category_default_waste_pct: null,
-          snapshot_minimum_order: profile?.minimumOrder ?? null,
-          snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
+          snapshot_minimum_order: null,
+          snapshot_rounding_increment: 1,
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,
@@ -490,7 +488,6 @@ export const loadFromLibrarySubObjectAction = createAction(
       if (!m.sku_id) throw new ActionError("This Master Data recipe has no SKU reference.", "INVALID_LIBRARY");
       const candidate = await loadMaterialCandidate(m.sku_id, tx);
       if (!candidate) throw new ActionError("This Master Data material no longer exists.", "INVALID_LIBRARY");
-      const profile = candidate.profile;
       const price = resolveLibraryMaterialPrice(candidate, {
         skuPriceId: m.sku_price_id,
         supplierPartyId: m.supplier_party_id,
@@ -515,15 +512,15 @@ export const loadFromLibrarySubObjectAction = createAction(
           snapshot_brand_name: candidate.brandName,
           snapshot_category_path: candidate.categoryPath,
           snapshot_supplier_name: price.supplierName,
-          snapshot_usage_unit: profile?.usageUnit ?? null,
-          snapshot_purchase_unit: profile?.purchaseUnit ?? null,
-          snapshot_conversion: profile?.conversion ?? null,
+          snapshot_usage_unit: price.unit,
+          snapshot_purchase_unit: price.unit,
+          snapshot_conversion: null,
           snapshot_price: price.price,
           snapshot_currency: price.currency,
-          snapshot_material_default_waste_pct: profile?.defaultWastePct ?? null,
+          snapshot_material_default_waste_pct: null,
           snapshot_category_default_waste_pct: null,
-          snapshot_minimum_order: profile?.minimumOrder ?? null,
-          snapshot_rounding_increment: profile?.roundingIncrement ?? 1,
+          snapshot_minimum_order: null,
+          snapshot_rounding_increment: 1,
           snapshot_taken_at: new Date(),
           sort_order: nextSort,
           notes: null,

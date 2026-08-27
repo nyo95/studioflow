@@ -15,16 +15,21 @@ test("BQ readiness accepts a usable active SKU", () => {
   assert.deepEqual(evaluateBqMaterialReadiness(valid), { ok: true });
 });
 
-test("BQ readiness rejects missing or unusable costing data", () => {
+test("BQ readiness only requires a price with a priced unit", () => {
   for (const input of [
     { ...valid, price: null },
+    { ...valid, price: { unit: "" } },
+  ]) {
+    assert.equal(evaluateBqMaterialReadiness(input).ok, false);
+  }
+
+  for (const input of [
     { ...valid, purchaseUnit: null },
     { ...valid, conversion: null },
     { ...valid, conversion: 0 },
-    { ...valid, price: { unit: "" } },
     { ...valid, price: { unit: "pcs" } },
   ]) {
-    assert.equal(evaluateBqMaterialReadiness(input).ok, false);
+    assert.equal(evaluateBqMaterialReadiness(input).ok, true);
   }
 });
 

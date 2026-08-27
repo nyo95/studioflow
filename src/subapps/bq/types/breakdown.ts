@@ -14,12 +14,26 @@
 import type {
   ObjectResult,
   ProjectTotals,
-  PurchaseSummary,
-  WasteSource,
 } from "../lib/calc";
 import type { BqMaterialReadiness as MasterDataBqMaterialReadiness } from "@/subapps/master-data/lib/bq-readiness";
 
 export type BqLineSource = "MASTER_DATA" | "PROJECT_LOCAL";
+
+/**
+ * Pos biaya baris L3 — cermin `BqCostCategory` di Prisma, mengikuti kolom
+ * KATEGORI pada template BQ kantor.
+ *
+ * Ini lapisan PELAPORAN, bukan pengganti pemisahan bahan/jasa: bahan menunjuk
+ * SKU dan jasa menunjuk WorkPrice, dan itu tetap. Kategori menjawab "uang ini
+ * masuk pos apa" — dan tiga yang terakhir memang tidak punya padanan di
+ * Master Data, jadi harganya diketik per project.
+ */
+export type BqCostCategory =
+  | "MATERIAL"
+  | "UPAH"
+  | "ALAT"
+  | "BIAYA_UMUM"
+  | "TRANSPORT_AKOMODASI";
 
 export type BqProjectSummary = {
   id: string;
@@ -37,7 +51,11 @@ export type BqProjectSummary = {
  *  bukan tabel hasil. */
 export type BqMaterialLineRecord = {
   id: string;
-  subObjectId: string;
+  /** Tepat satu induk terisi: item langsung (L1) ATAU sub-item (L2). */
+  objectId: string | null;
+  subObjectId: string | null;
+  /** Pos biaya untuk rekap — lihat `BqCostCategory`. */
+  costCategory: BqCostCategory;
   skuId: string | null;
   skuPriceId: string | null;
   supplierPartyId: string | null;
@@ -67,7 +85,11 @@ export type BqMaterialLineRecord = {
 
 export type BqServiceLineRecord = {
   id: string;
-  subObjectId: string;
+  /** Tepat satu induk terisi: item langsung (L1) ATAU sub-item (L2). */
+  objectId: string | null;
+  subObjectId: string | null;
+  /** Pos biaya untuk rekap — lihat `BqCostCategory` di Prisma. */
+  costCategory: BqCostCategory;
   workPriceId: string | null;
   vendorPartyId: string | null;
   source: BqLineSource;
@@ -91,6 +113,11 @@ export type BqServiceLineRecord = {
 /** Object lengkap: hasil hitung + data mentah yang dibutuhkan form edit. */
 export type BqObjectView = {
   computed: ObjectResult;
+  /** Divisi atau seksi induk. NULL = item tidak dikelompokkan. */
+  sectionId: string | null;
+  /** Baris yang menempel LANGSUNG ke item ini, tanpa lewat L2. */
+  materials: BqMaterialLineRecord[];
+  services: BqServiceLineRecord[];
   wasteOverridePct: number | null;
   lockedAt: string | null;
   lockedByName: string | null;
@@ -108,11 +135,42 @@ export type BqObjectView = {
   }[];
 };
 
+/**
+ * Seksi cetak (L0) beserta subtotalnya.
+ *
+ * `subtotal` DIHITUNG di server dari object di dalamnya, sama seperti seluruh
+ * angka lain di subapp ini — tidak ada satu pun penjumlahan biaya yang hidup
+ * di klien (PRD Bab 6).
+ */
+/**
+ * Pengelompok cetak. Dua lapis dengan bentuk yang sama:
+ *
+ *   parentId === null  -> SEKSI  "A PRELIMINARIES"   (SUBTOTAL A)
+ *   parentId !== null  -> DIVISI "I Floor Works"     (SUBTOTAL B.I)
+ *
+ * Keduanya tidak punya qty maupun harga satuan — itu milik item (L1). Satu
+ * tipe untuk keduanya karena perilakunya memang identik; yang membedakan cuma
+ * posisinya di pohon.
+ */
+export type BqSectionView = {
+  id: string;
+  parentId: string | null;
+  code: string | null;
+  name: string;
+  sortOrder: number;
+  notes: string | null;
+  /** Σ total item di dalamnya, TERMASUK yang lewat divisi anak. */
+  subtotal: number;
+  /** Item langsung di bawahnya (tidak menghitung isi divisi anak). */
+  objectCount: number;
+};
+
 export type BqProjectView = {
   project: BqProjectSummary;
+  /** Urut `sort_order`. Kosong pada BQ yang tidak memakai seksi. */
+  sections: BqSectionView[];
   objects: BqObjectView[];
   totals: ProjectTotals;
-  purchase: PurchaseSummary;
 };
 
 // ---------------------------------------------------------------------------
@@ -120,13 +178,11 @@ export type BqProjectView = {
 // ---------------------------------------------------------------------------
 
 /**
- * Satu kandidat bahan dari Master Data, sudah digabung dengan profil BQ-nya.
+ * Satu kandidat bahan dari Master Data.
  *
  * `readiness` adalah alasan sebuah SKU tidak bisa dipakai, bukan sekadar
- * boolean. Estimator yang melihat "no BQ profile" tahu harus ke
- * `/bq/settings`; yang melihat "no current price" tahu harus minta staff
- * mengisi harga di Master Data. Satu boolean `disabled` akan mengirim
- * keduanya ke tempat yang salah.
+ * boolean. Pada mode koefisien, gate-nya sederhana: harus ada harga aktif
+ * dengan unit yang jelas.
  */
 export type BqMaterialCandidate = {
   skuId: string;
@@ -135,14 +191,6 @@ export type BqMaterialCandidate = {
   brandName: string | null;
   categoryPath: string | null;
   baseUnit: string;
-  profile: {
-    usageUnit: string;
-    purchaseUnit: string;
-    conversion: number;
-    defaultWastePct: number | null;
-      minimumOrder: number | null;
-      roundingIncrement: number;
-  } | null;
   priceOptions: Array<{
     skuPriceId: string;
     supplierPartyId: string | null;
@@ -172,4 +220,4 @@ export type BqServiceCandidate = {
   updatedAt: string | null;
 };
 
-export type { ObjectResult, ProjectTotals, PurchaseSummary, WasteSource };
+export type { ObjectResult, ProjectTotals };

@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * BQ — setelan kantor (default markup).
+ * BQ — setelan kantor.
  *
  * Field costing sudah dipindahkan ke `master_data.Sku` (P1, 2026-08-19).
  * `BqDetailMode` sudah dihapus (O3, 2026-08-19) — semua object selalu DETAIL.
@@ -25,8 +25,6 @@ function assertSettingsPerm(role: Role): void {
   }
 }
 
-const percentToFraction = z.number().min(0).max(1000).transform((v) => v / 100);
-
 export const saveBqSettingsAction = createAction(
   async ({ input, ctx, tx }) => {
     assertSettingsPerm(ctx.role);
@@ -37,19 +35,17 @@ export const saveBqSettingsAction = createAction(
       where: { id: BQ_SETTINGS_ID },
       create: {
         id: BQ_SETTINGS_ID,
-        default_markup_pct: input.defaultMarkupPct,
         currency: input.currency,
         updated_by_name: ctx.user.name ?? null,
       },
       update: {
-        default_markup_pct: input.defaultMarkupPct,
         currency: input.currency,
         updated_by_name: ctx.user.name ?? null,
       },
     });
 
     await insertAuditLog(tx, "UPDATE", "BqSettings", BQ_SETTINGS_ID, ctx.userId, {
-      default_markup_pct: input.defaultMarkupPct,
+      currency: input.currency,
     });
 
     revalidatePath("/bq");
@@ -57,7 +53,6 @@ export const saveBqSettingsAction = createAction(
   },
   {
     schema: z.object({
-      defaultMarkupPct: percentToFraction,
       currency: z.string().min(1).default("IDR"),
     }),
   }

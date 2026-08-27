@@ -80,10 +80,7 @@ export const ROLE_PERMISSIONS: Record<Role, PERMISSION[]> = {
   //   MASTERDATA_PRICE_VIEW -> may READ vendor/SKU pricing as data, because BQ
   //                            is the price consumer (30 Jul 2026 decision).
   //   BQ_PROJECT_MANAGE     -> owns the BQ project list.
-  //   BQ_BREAKDOWN_EDIT     -> builds the three-layer breakdown.
-  //   BQ_MARKUP_EDIT        -> sets markup. Separable on purpose: a studio that
-  //                            wants costing without pricing authority drops
-  //                            this one grant and nothing else changes.
+  //   BQ_BREAKDOWN_EDIT     -> builds the BQ breakdown.
   //
   // Deliberately NOT granted BQ_SETTINGS_MANAGE. PRD §5.1: the estimator
   // changes no master data and no price, and conversion is part of defining a
@@ -100,6 +97,5 @@ export const ROLE_PERMISSIONS: Record<Role, PERMISSION[]> = {
     PERMISSION.MASTERDATA_PRICE_VIEW,
     PERMISSION.BQ_PROJECT_MANAGE,
     PERMISSION.BQ_BREAKDOWN_EDIT,
-    PERMISSION.BQ_MARKUP_EDIT,
   ],
 };

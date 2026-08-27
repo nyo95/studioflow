@@ -16,27 +16,23 @@ import "server-only";
  * ============================================================================
  * KENAPA TIDAK MEMBACA `v_bq_material_rate` / `v_bq_work_rate`
  * ============================================================================
- * Kedua view itu memang kontrak baca BQ dan tetap benar. Tapi ia tidak tahu
- * apa pun tentang `bq.BqMaterialProfile` — konversi, waste default, minimum
- * order, rounding — yang justru menentukan apakah sebuah SKU bisa dipakai BQ
- * sama sekali. Membacanya lewat view berarti dua query dan satu join manual
- * di JavaScript untuk hasil yang sama, ditambah `$queryRaw` yang tidak
- * mengikuti perubahan skema.
+ * Kedua view itu memang kontrak baca BQ dan tetap benar. Tapi kebutuhan viewer
+ * BQ sekarang sederhana: estimator memilih harga per unit, lalu mengisi
+ * koefisien manual. Kita tetap butuh baca konteks SKU + supplier-price dalam
+ * satu query yang stabil terhadap perubahan skema.
  *
  * Yang DIWARISI dari view itu dan ditegakkan di sini adalah aturannya, bukan
  * SQL-nya:
  *   - SKU `deleted_at IS NULL` dan `status <> 'DISCONTINUED'`;
- *   - `bq_ready` = harga ADA dan satuan COCOK (AGENTS.md §3.6);
+ *   - `bq_ready` = harga ADA dan unit harga jelas;
  *   - `WorkPrice` hanya yang `is_active AND deleted_at IS NULL`.
  *
  * ============================================================================
  * GATE MASUK PICKER (keputusan owner 2026-08-19)
  * ============================================================================
- * Gate-nya adalah: SKU punya ≥1 harga berlaku (`NO_PRICE`). Costing fields
- * (`purchase_unit`, `conversion`) TIDAK memblokir — SKU CRUD hanya bisa
- * ditrigger dari layar Price sehingga keduanya dijamin terisi sebelum harga
- * pertama tercatat. `NO_PROFILE` dihapus dari kode karena tidak mungkin
- * terjadi dalam alur normal.
+ * Gate-nya sederhana: SKU punya ≥1 harga berlaku (`NO_PRICE`) dan harga itu
+ * punya unit. Koefisien pemakaian dinilai manual oleh estimator, jadi BQ
+ * tidak lagi memblokir karena conversion/purchase-unit profile.
  *
  * Kalau satu SKU punya beberapa supplier, picker menampilkan SELURUH opsi
  * supplier-price. Estimator memilihnya eksplisit saat menambah baris, lalu
@@ -45,10 +41,10 @@ import "server-only";
  * ============================================================================
  * KOSONG BUKAN NOL
  * ============================================================================
- * AGENTS.md §3.2. Berkas ini tidak pernah menulis `?? 0` pada harga, konversi,
- * atau waste. Harga yang hilang membuat sebuah SKU **tidak siap dipakai**, dan
- * itu dilaporkan sebagai `readiness.reason`, bukan disulap jadi tarif nol yang
- * kemudian jadi satu baris di dokumen komersial.
+ * AGENTS.md §3.2. Berkas ini tidak pernah menulis `?? 0` pada harga. Harga
+ * yang hilang membuat sebuah SKU **tidak siap dipakai**, dan itu dilaporkan
+ * sebagai `readiness.reason`, bukan disulap jadi tarif nol yang kemudian jadi
+ * satu baris di dokumen komersial.
  */
 
 import { prisma } from "@/core/platform/db";
@@ -135,10 +131,6 @@ type SkuRow = Prisma.SkuGetPayload<{ select: typeof SKU_SELECT }>;
  *
  * Gate satu-satunya adalah harga: SKU tanpa harga berlaku (`NO_PRICE`) tidak
  * bisa dipakai karena BQ tidak boleh mengarang harga (AGENTS.md §3.2).
- *
- * `UNIT_MISMATCH` tetap diperiksa bila `purchase_unit` terisi — bila profil
- * bilang "beli per lembar" tapi harga ditulis per "sqm", yang salah bisa
- * profilnya, bisa penawarannya, dan BQ tidak menebak yang mana.
  */
 function evaluateReadiness(sku: SkuRow): BqMaterialReadiness {
   const price = sku.prices[0] ?? null;
@@ -155,8 +147,6 @@ function evaluateReadiness(sku: SkuRow): BqMaterialReadiness {
 function toCandidate(sku: SkuRow): BqMaterialCandidate {
   const primary = sku.categories[0]?.category ?? null;
 
-  const hasCosting = sku.purchase_unit && sku.conversion;
-
   return {
     skuId: sku.id,
     code: sku.code,
@@ -164,16 +154,6 @@ function toCandidate(sku: SkuRow): BqMaterialCandidate {
     brandName: sku.brand?.name ?? null,
     categoryPath: primary?.path ?? null,
     baseUnit: sku.base_unit,
-    profile: hasCosting
-      ? {
-          usageUnit: sku.usage_unit ?? sku.base_unit,
-          purchaseUnit: sku.purchase_unit!,
-          conversion: decToNumberStrict(sku.conversion!),
-          defaultWastePct: decToNumber(sku.default_waste_pct),
-          minimumOrder: decToNumber(sku.minimum_order),
-          roundingIncrement: sku.rounding_increment ? decToNumberStrict(sku.rounding_increment) : 1,
-        }
-      : null,
     priceOptions: sku.prices.map((price) => ({
           skuPriceId: price.id,
           supplierPartyId: price.supplier_party_id,

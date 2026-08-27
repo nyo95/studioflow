@@ -19,6 +19,15 @@ kolom `catalog_*` / `vendor_id` merujuk tabel yang **tidak ada lagi**.
 
 ## Isi
 
+### `bq-2026-08/` — dokumen BQ pra-konsolidasi (dipindah 2026-08-27)
+
+PRD, plan, dan handoff BQ yang menggambarkan mesin sebelum BQ berpindah ke mode
+koefisien murni. Empat di antaranya mengutip **AT-01**, gerbang angka yang
+ternyata tidak pernah ada di kode. Lihat `bq-2026-08/README.md`.
+Yang berlaku sekarang: `PRD-BQ.md`, `designbq.md`, `HANDOFF-BQ-R3.md` di root.
+
+
+
 ### Changelog
 
 | Berkas | Cakupan |

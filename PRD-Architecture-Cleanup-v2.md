@@ -808,14 +808,32 @@ Contains:
 ```text
 material
 supplier/source
-qty
-usage unit
-purchase unit
-conversion
+coefficient
+priced unit
 price snapshot
-waste
 cost
 ```
+
+Rule:
+
+```text
+coefficient is estimator-owned
+```
+
+The estimator reads drawing details, layout dimensions, nesting assumptions,
+or 3D output manually, then decides how much of the priced unit is consumed by
+one sub-object.
+
+Example:
+
+```text
+HPL sheet price = Rp150.000 / sheet
+Top table needs about 0.7 sheet
+coefficient = 0.7
+line cost   = 0.7 × Rp150.000
+```
+
+BQ does not try to infer this automatically from sheet dimensions.
 
 ---
 
@@ -842,10 +860,9 @@ Existing `calc.ts` remains canonical.
 Concept:
 
 ```text
-Material Qty
-× Waste
+Material Coefficient
 × L2 Qty
-× Price / Conversion
+× Snapshot Unit Price
 = Cost
 ```
 
@@ -872,7 +889,15 @@ Unit Rate × L1 Qty
 = Object Total
 ```
 
-Do not rewrite unless regression tests prove a defect.
+Important:
+
+```text
+No automatic sheet-usage conversion
+No automatic waste expansion
+No automatic purchase rounding
+```
+
+Those are estimator judgments, not hidden system calculations.
 
 ---
 
@@ -1017,13 +1042,8 @@ code optional
 brand optional
 supplier optional
 
-usage unit
-purchase unit
-conversion
+priced unit
 price
-waste
-MOQ
-rounding
 ```
 
 Does not modify Master Data.
@@ -1125,8 +1145,6 @@ L1/L2/L3
 supplier
 qty
 unit
-conversion
-waste
 snapshot price
 cost
 override
@@ -1135,9 +1153,20 @@ source
 
 ---
 
-### Purchase Summary
+### Exported BQ Document
 
-Aggregate purchasing requirement.
+Export should flatten the estimator breakdown into a clean Excel-like BQ
+document.
+
+Viewer and export are allowed to differ:
+
+```text
+viewer = easy to edit
+export = formal document
+```
+
+The app should optimize for fast coefficient entry during estimation, then
+project that structure into the exported BQ layout.
 
 ---
 
@@ -1193,6 +1222,18 @@ Required:
 * minimal modal usage.
 
 Avoid forcing estimator through CRUD forms.
+
+The UI should feel closer to:
+
+```text
+working sheet for estimator
+```
+
+and not:
+
+```text
+automatic material calculator
+```
 
 ---
 

@@ -86,11 +86,7 @@ export enum PERMISSION {
   //
   //   BQ_ACCESS           -> may enter the /bq surface.
   //   BQ_PROJECT_MANAGE   -> create / rename / archive BQ projects.
-  //   BQ_BREAKDOWN_EDIT   -> objects, sub-objects, L3 lines, snapshot refresh.
-  //   BQ_MARKUP_EDIT      -> set markup. Split out because markup is a
-  //                          COMMERCIAL decision, not an estimating one, and a
-  //                          studio may well want an estimator who costs but
-  //                          does not price.
+  //   BQ_BREAKDOWN_EDIT   -> objects, sub-objects, and L3 lines.
   //   BQ_SETTINGS_MANAGE  -> BqMaterialProfile, category waste defaults, office
   //                          defaults. Deliberately NOT granted to ESTIMATOR
   //                          (PRD §5.1: an estimator changes no master data,
@@ -102,7 +98,6 @@ export enum PERMISSION {
   BQ_ACCESS = "BQ_ACCESS",
   BQ_PROJECT_MANAGE = "BQ_PROJECT_MANAGE",
   BQ_BREAKDOWN_EDIT = "BQ_BREAKDOWN_EDIT",
-  BQ_MARKUP_EDIT = "BQ_MARKUP_EDIT",
   BQ_SETTINGS_MANAGE = "BQ_SETTINGS_MANAGE",
 
   // System Permissions
