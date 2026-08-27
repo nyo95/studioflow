@@ -68,6 +68,46 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-27 (rev 12) — BQ-34: borongan dipisahkan dari Upah murni
+
+### Hasil akhir
+
+Baris jasa dengan `snapshot_has_material = true` sekarang mendapat badge
+**Material + Upah**, sedangkan jasa UPAH murni tetap memakai tampilan default
+tanpa badge. Lima nilai `BqCostCategory` tidak berubah; dimensi borongan tetap
+berasal dari flag snapshot yang sudah ada.
+
+Audit juga mengoreksi cakupan dokumen: kode belum memiliki rekap agregat biaya
+per kategori di level project—itu masih BQ-29 pada daftar iterasi berikutnya.
+Yang hidup dan diperbaiki BQ-34 adalah pelabelan kategori per baris L4, bukan
+panel total baru. Karena itu tidak ada penjumlahan baru di luar `calc.ts`.
+
+### Area/berkas
+
+- `src/subapps/bq/lib/cost-category.ts` — resolver label murni memisahkan
+  borongan dari Upah murni tanpa enum baru.
+- `src/subapps/bq/lib/cost-category.test.ts` — tiga test untuk Upah murni,
+  Material + Upah, dan kategori non-default.
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — badge jasa menerima
+  `record.hasMaterial` dan menampilkan label hasil resolver.
+- `roadmap.md` — BQ-34 ditutup dan klaim rekap BQ-29 yang belum ada dikoreksi.
+
+### Verifikasi
+
+- `npx prisma validate` — **lulus**.
+- `npm test` — **211/211 lulus** (23 file test).
+- `npx tsc --noEmit` — **lulus**.
+- `npx eslint src/subapps/bq/` — **exit 0**, dua warning lama/non-blocking.
+- `npx eslint src/` — **exit 0**, 51 warning lama/non-blocking dan nol error.
+- Pencarian enum tambahan (`MATERIAL_UPAH` / `BORONGAN`) — **kosong**;
+  `BqCostCategory` tetap lima nilai.
+
+### Risiko / tindak lanjut
+
+- Perubahan hanya presentasi label; angka dan skema tidak berubah.
+- Rekap agregat kategori level project tetap BQ-29 dan tidak diselundupkan ke
+  task ini.
+
 ## [Unreleased] - 2026-08-27 (rev 11) — BQ-36: peta template diselaraskan dengan PRD
 
 ### Hasil akhir

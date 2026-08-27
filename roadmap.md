@@ -1342,11 +1342,13 @@ di `src/subapps/bq/`**.
       dari taxonomy kosong. Sheet `Tes` jadi rujukan penamaan kalau perlu, tidak
       diimpor massal. Varian dibedakan lewat nama (`... (Plywood 9mm)`).
 
-- [ ] **BQ-34 — Rekap kategori belum membedakan borongan.** 🛠 agent
+- [x] **BQ-34 — Kategori baris belum membedakan borongan. SELESAI 2026-08-27.**
       Sheet `Tes` punya 6 kategori, enum punya 5. Datanya sudah tertampung di
-      `BqServiceLine.snapshot_has_material`; yang belum ada tampilannya. Tanpa
-      ini rekap BQ-29 menggolongkan borongan sebagai Upah murni. Tampilan saja,
-      tanpa nilai enum baru.
+      `BqServiceLine.snapshot_has_material`; yang belum ada tampilannya. Badge
+      baris kini menampilkan `Material + Upah` saat flag itu true, sementara
+      Upah murni tetap tanpa badge. Tampilan saja, tanpa nilai enum baru.
+      **Koreksi audit:** rekap agregat level project BQ-29 masih roadmap terpisah;
+      yang sudah hidup saat task ini adalah pelabelan kategori per baris.
 
 - [ ] **BQ-35 — UI: klik-kanan + CreatableSearch + sentralisasi ui_engine.** 🛠 agent
       Buang ~18 form tambah permanen, blok chip saran, dan paragraf instruksi di

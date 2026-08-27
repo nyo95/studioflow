@@ -63,6 +63,7 @@ import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens";
 import { statusToTone } from "@/lib/ui/status-tone";
 import { cn } from "@/lib/utils";
 import { formatIdr, formatQty } from "../lib/calc";
+import { costCategoryLabel } from "../lib/cost-category";
 import {
   MAX_SECTION_DEPTH,
   buildSectionTree,
@@ -384,36 +385,34 @@ function useRecipeDropZone(
 
 /**
  * Badge pos biaya. Hanya muncul untuk kategori yang BUKAN default barisnya —
- * baris bahan ber-MATERIAL dan baris jasa ber-UPAH sudah jelas dari seksinya,
- * jadi memberi badge pada keduanya cuma menambah keramaian tanpa memberi tahu
- * apa pun. Yang perlu terlihat adalah baris yang menyimpang: alat, biaya umum,
- * transportasi.
+ * baris bahan ber-MATERIAL dan jasa UPAH murni sudah jelas dari seksinya.
+ * Pengecualian: jasa borongan tetap ber-enum UPAH tetapi membawa material,
+ * sehingga harus diberi label terpisah bersama kategori non-default lain.
  */
-const COST_CATEGORY_LABEL: Record<BqCostCategory, string> = {
-  MATERIAL: "Material",
-  UPAH: "Upah",
-  ALAT: "Alat",
-  BIAYA_UMUM: "Biaya Umum",
-  TRANSPORT_AKOMODASI: "Transport",
-};
-
 function CostCategoryBadge({
   category,
   defaultFor,
+  hasMaterial = false,
 }: {
   category: BqCostCategory;
   defaultFor: BqCostCategory;
+  hasMaterial?: boolean;
 }) {
-  if (category === defaultFor) return null;
+  const label = costCategoryLabel(category, defaultFor, hasMaterial);
+  if (!label) return null;
   return (
     <span
       className={cn(
         UI_ENGINE_TYPE_META,
         "rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700",
       )}
-      title="Pos biaya di luar Master Data — harga diisi per project"
+      title={
+        hasMaterial
+          ? "This service rate includes material."
+          : "Cost category outside the default line type."
+      }
     >
-      {COST_CATEGORY_LABEL[category]}
+      {label}
     </span>
   );
 }
@@ -2119,6 +2118,7 @@ function LineTable({
                             <CostCategoryBadge
                               category={record.costCategory}
                               defaultFor="UPAH"
+                              hasMaterial={record.hasMaterial}
                             />
                           ) : null}
                           {record?.code ? <span>{record.code}</span> : null}
