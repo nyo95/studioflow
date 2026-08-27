@@ -12,12 +12,9 @@
  *   divisi I/II/III        -> BqSection (parent terisi) pengelompok
  *   item                   -> TIDAK dibuat. Ia jadi SARAN di baris divisi.
  *
- * Pemetaan ini sempat meleset satu lapis: divisi ditaruh di L1 dan item di L2.
- * Padahal di dokumen sumber yang punya SATUAN dan HARGA SATUAN adalah item
- * ("Screeding Base H+100mm | sqm"), sementara seksi dan divisi tidak punya
- * keduanya — dan di aplikasi, yang punya qty/unit/rate justru Works.
- * Akibatnya divisi diberi satuan "ls" yang tak bermakna, dan baris BQ yang
- * sesungguhnya kehilangan kolom harga satuannya.
+ * Divisi tetap pengelompok BqSection (L1). Item yang punya satuan tidak dituang
+ * otomatis; ia ditawarkan sebagai saran Works (L3), lalu baris pembentuknya
+ * menjadi Sub-Works (L4) hanya ketika estimator memilih saran itu.
  *
  * ============================================================================
  * KENAPA ITEM TIDAK IKUT DIBUAT
@@ -35,7 +32,7 @@
  * tidak diklik tidak pernah ada. Lihat `lib/bq-template-lookup.ts` untuk cara
  * pekerjaan dicocokkan dengan grup templatenya.
  *
- * Baris L3 dari template SELALU `PROJECT_LOCAL` dengan harga 0, tidak peduli
+ * Baris L4 dari template SELALU `PROJECT_LOCAL` dengan harga 0, tidak peduli
  * kategorinya. Alasannya bukan kemalasan: template menyebut "Material HT"
  * tanpa menunjuk SKU tertentu, dan menebak SKU mana yang dimaksud adalah cara
  * tercepat memasukkan harga yang salah ke penawaran. Estimator mengganti baris
@@ -49,7 +46,7 @@
  * karangan.
  *
  * ============================================================================
- * KENAPA BARIS L3 DIBUAT SEBAGAI JASA
+ * KENAPA BARIS L4 DIBUAT SEBAGAI JASA
  * ============================================================================
  * `BqMaterialLine` menuntut kolom snapshot bahan (unit beli, konversi, waste)
  * yang tidak ada di template. `BqServiceLine` cuma butuh nama, satuan, dan
@@ -167,16 +164,15 @@ export const applyBqTemplateAction = createAction(
 );
 
 /**
- * Menyisipkan SATU item template sebagai ITEM BQ (L1), beserta pembentuknya.
+ * Menyisipkan SATU item template sebagai Works (L3), beserta pembentuknya.
  *
  * Inilah yang berjalan saat estimator mengklik chip saran di baris seksi atau
  * divisi. Item mewarisi SATUANNYA dari dokumen sumber (sqm / ls / nos) — itu
  * yang membuatnya bisa dicetak sebagai baris BQ yang sah.
  *
- * Pembentuknya (sub-item sheet "Tes") menempel LANGSUNG ke item, tanpa lapis
- * L2: "Screeding Base" tidak punya sub-rakitan berulang, koefisiennya memang
- * dinyatakan per sqm. L2 disediakan untuk item komposit seperti kabinet, dan
- * estimator menambahkannya sendiri saat memang perlu.
+ * Pembentuknya menempel LANGSUNG sebagai Sub-Works (L4), tanpa lapis resep
+ * tambahan. L2 adalah Sub Section pengelompok opsional, bukan bagian komposisi
+ * Works.
  *
  * Baris dibuat sebagai jasa `PROJECT_LOCAL` berharga 0 — template menyebut
  * "Material HT" tanpa menunjuk SKU, dan menebak SKU mana yang dimaksud adalah

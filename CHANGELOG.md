@@ -68,6 +68,44 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-27 (rev 11) — BQ-36: peta template diselaraskan dengan PRD
+
+### Hasil akhir
+
+Dokumentasi template sekarang memakai hirarki yang berlaku:
+`BqSection L0/L1 → saran Works BqObject L3 → Sub-Works L4`. Pemetaan lama
+`Grup → BqObject` dan `Item → BqSubObject` dicabut dari header data template;
+komentar action konsumennya ikut diselaraskan agar tidak menulis ulang model
+lama dengan istilah berbeda.
+
+Audit menemukan handoff keliru saat menyatakan file ini mempunyai generator.
+Tidak ada generator versioned di `scripts/`, file repo (termasuk ignored), atau
+riwayat Git; satu-satunya bukti adalah klaim di header file itu sendiri. Klaim
+tersebut dihapus dan file dinyatakan sebagai sumber versioned. Tidak dibuat
+pipeline impor workbook baru karena workbook adalah mockup, bukan spesifikasi.
+
+### Area/berkas
+
+- `src/subapps/bq/lib/bq-template-data.ts` — header dan komentar tipe memakai
+  L0/L1/L3/L4 yang kanonik serta menegaskan PRD menang atas workbook.
+- `src/subapps/bq/actions/bq-template-actions.ts` — komentar alur template
+  memakai Works/Sub-Works dan menyatakan L2 adalah pengelompok.
+- `roadmap.md` — BQ-36 ditutup sekaligus mengoreksi klaim generator.
+
+### Verifikasi
+
+- Pencarian pada data/action template — tidak ada lagi `BqSubObject` sebagai
+  lapis normal maupun label L1/L2/L3 lama.
+- `npm test` — **208/208 lulus**.
+- `npx tsc --noEmit` — **lulus**.
+- `npx eslint src/subapps/bq/` — **exit 0**, dua warning lama/non-blocking.
+
+### Risiko / tindak lanjut
+
+- Perubahan hanya dokumentasi kode; data template dan perilaku runtime tidak
+  berubah.
+- Lanjut sesuai urutan: BQ-34.
+
 ## [Unreleased] - 2026-08-27 (rev 10) — BQ-41: Works dan Sub Section boleh berdampingan
 
 ### Hasil akhir

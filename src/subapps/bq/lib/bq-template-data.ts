@@ -1,28 +1,28 @@
 /**
- * BQ — template standar kantor, hasil impor "BQ template tes.xlsx".
+ * BQ — snapshot kerangka dan saran penamaan template kantor.
  *
  * ============================================================================
  * DARI MANA BENTUK INI DATANG
  * ============================================================================
- * Berkas Excel itu punya dua sheet dengan dua peran berbeda, dan keduanya
- * dipakai di sini:
+ * Data awalnya dibaca dari workbook mockup. Workbook itu bukan spesifikasi;
+ * `PRD-BQ.md` tetap menang bila bentuk datanya berbeda. Dua sheet hanya
+ * menjadi sumber kerangka dan saran yang tersimpan di sini:
  *
  *   sheet "BQ"   -> KERANGKA DOKUMEN. Seksi A/B/C, divisi I/II/III, dan
  *                   daftar itemnya. Inilah yang dicetak ke klien.
  *   sheet "Tes"  -> TAXONOMY RESEP. Untuk sebagian item, ia merinci
  *                   pembentuknya: nama sub-item, satuan, dan KATEGORI biaya.
  *
- * Pemetaan ke tiga lapis BQ (komponen -> subkomponen -> pembentuk):
+ * Pemetaan ke model BQ yang berlaku:
  *
  *   Seksi   (A PRELIMINARIES)      -> BqSection      — pengelompok cetak (L0)
- *   Grup    (I Floor Works)        -> BqObject       — KOMPONEN        (L1)
- *   Item    (Screeding Base)       -> BqSubObject    — SUBKOMPONEN     (L2)
- *   Sub-item(Material HT)          -> baris bahan/jasa — PEMBENTUK     (L3)
+ *   Grup    (I Floor Works)        -> BqSection      — Sub Section     (L1)
+ *   Item    (Screeding Base)       -> saran BqObject — Works           (L3)
+ *   Sub-item(Material HT)          -> baris bahan/jasa — Sub-Works     (L4)
  *
  * PRELIMINARIES tidak punya divisi di sheet aslinya — itemnya menggantung
- * langsung di bawah seksi. Di sini ia diberi satu grup implisit bernama sama,
- * supaya setiap item selalu punya induk L1 dan aturan "L1 = satu baris BQ"
- * tidak perlu dikecualikan.
+ * langsung di bawah seksi. Grup implisit bernama sama dipakai untuk menyimpan
+ * sarannya tanpa menciptakan Sub Section duplikat di project.
  *
  * ============================================================================
  * HARGA SENGAJA KOSONG
@@ -36,11 +36,11 @@
  * Koefisien pun mayoritas kosong: sheet "Tes" masih kerangka. Yang kosong
  * dituang sebagai 0 dan menunggu diisi estimator.
  *
- * BERKAS INI DIHASILKAN SKRIP — jangan disunting tangan. Untuk memperbarui,
- * impor ulang workbook-nya.
+ * Berkas ini adalah sumber versioned yang dirawat bersama action template.
+ * Jangan meregenerasinya otomatis dari workbook mockup.
  */
 
-/** Pos biaya baris L3 — cermin `BqCostCategory` di Prisma. */
+/** Pos biaya baris L4 — cermin `BqCostCategory` di Prisma. */
 export type BqTemplateCategory =
   | "MATERIAL"
   | "UPAH"
@@ -48,7 +48,7 @@ export type BqTemplateCategory =
   | "BIAYA_UMUM"
   | "TRANSPORT_AKOMODASI";
 
-/** Pembentuk (L3) — satu baris bahan atau jasa di dalam subkomponen. */
+/** Sub-Works (L4) — satu baris bahan atau jasa di dalam Works. */
 export type BqTemplateLine = {
   name: string;
   unit: string;
@@ -57,7 +57,7 @@ export type BqTemplateLine = {
   category: BqTemplateCategory;
 };
 
-/** Subkomponen (L2) — satu item BQ dengan qty, satuan, dan pembentuknya. */
+/** Saran Works (L3) dengan satuan dan calon baris pembentuknya. */
 export type BqTemplateItem = {
   name: string;
   /** Kolom "Specification" sheet BQ. */
@@ -68,7 +68,7 @@ export type BqTemplateItem = {
   lines: BqTemplateLine[];
 };
 
-/** Komponen (L1) — grup / divisi. `code` = angka romawi pada sheet BQ. */
+/** Sub Section (L1) — grup / divisi. `code` = angka romawi pada sumber awal. */
 export type BqTemplateGroup = {
   code: string | null;
   name: string;

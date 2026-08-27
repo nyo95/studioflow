@@ -1412,10 +1412,13 @@ di `src/subapps/bq/`**.
       biasa dengan angka yang jelas benar. **Tidak memblokir BQ-39 lagi.**
       Yang tetap berlaku: jangan mengutip AT-01, dokumen lama jangan diedit.
 
-- [ ] **BQ-36 — Rapikan doc drift `bq-template-data.ts`.** 🛠 agent
+- [x] **BQ-36 — Rapikan doc drift `bq-template-data.ts`. SELESAI 2026-08-27.**
       Header baris 17–20 masih menulis peta lama (`Grup → BqObject`,
       `Item → BqSubObject`) yang sudah dibatalkan `bq-template-actions.ts`.
-      Dua berkas saling bertentangan.
+      Dua berkas saling bertentangan. Header dan komentar action kini memakai
+      `BqSection L0/L1 → saran BqObject L3 → baris L4`. Audit repo + riwayat Git
+      membuktikan tidak ada generator versioned; klaim "dihasilkan skrip" yang
+      tidak benar dicabut, tanpa membangun pipeline workbook baru.
 
 ### Menunggu owner
 
