@@ -477,11 +477,6 @@ function SectionBlock({
 }: { node: SectionNode; depth?: number } & Shared) {
   const open = !shared.closedSections.has(node.section.id);
 
-  // Works dan Sub Section tidak dicampur dalam satu pengelompok: begitu ada
-  // anak, urutan cetaknya jadi ambigu ("mana dulu, item langsung atau isi
-  // divisi?"). Works yang terlanjur ada tetap ditampilkan — menyembunyikannya
-  // berarti pengguna tidak bisa memindahkannya.
-  const allowsDirectObjects = node.children.length === 0;
   const canNest = depth + 1 < MAX_SECTION_DEPTH;
 
   return (
@@ -502,14 +497,7 @@ function SectionBlock({
         <div className="space-y-1.5">
           {/* Works yang menggantung langsung — bentuk PRELIMINARIES di dokumen
               kantor, dan juga Floor Works yang tidak memakai lapis area. */}
-          {allowsDirectObjects || node.objects.length > 0 ? (
-            <ObjectList
-              section={node.section}
-              objects={node.objects}
-              allowAdd={allowsDirectObjects}
-              {...shared}
-            />
-          ) : null}
+          <ObjectList section={node.section} objects={node.objects} {...shared} />
 
           {/* Anak — indentasi menandai bahwa ia satu lapis di dalam. */}
           {node.children.map((child) => (
@@ -629,9 +617,8 @@ function SectionHeader({
 function ObjectList({
   section,
   objects,
-  allowAdd = true,
   ...shared
-}: { section: BqSectionView; objects: BqObjectView[]; allowAdd?: boolean } & Shared) {
+}: { section: BqSectionView; objects: BqObjectView[] } & Shared) {
   const suggestions = React.useMemo(
     () =>
       suggestedTemplateItems(
@@ -655,7 +642,7 @@ function ObjectList({
             drag.itemName,
           )
         : false,
-    allowAdd && shared.canEdit,
+    shared.canEdit,
     (kind) => kind === "TEMPLATE",
     (kind) =>
       kind === "TEMPLATE"
@@ -663,8 +650,7 @@ function ObjectList({
         : "Template membuat pekerjaan baru di seksi/divisi. Resep library masuk ke pekerjaan atau sub-pekerjaan; bahan dan jasa masuk ke sub-pekerjaan.",
   );
 
-  const hasAnything =
-    objects.length > 0 || (allowAdd && (shared.canEdit || suggestions.length > 0));
+  const hasAnything = objects.length > 0 || shared.canEdit || suggestions.length > 0;
   if (!hasAnything) return null;
 
   return (
@@ -702,7 +688,7 @@ function ObjectList({
       ))}
 
       {/* Saran dari template — yang tidak diklik tidak pernah ada. */}
-      {allowAdd && shared.canEdit && suggestions.length > 0 ? (
+      {shared.canEdit && suggestions.length > 0 ? (
         <div className="bg-slate-50/60 px-6 py-3">
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((item) => {
@@ -745,7 +731,7 @@ function ObjectList({
         </div>
       ) : null}
 
-      {allowAdd && shared.canEdit ? (
+      {shared.canEdit ? (
         <SectionAddObject
           sectionName={section.name}
           pending={shared.pending}

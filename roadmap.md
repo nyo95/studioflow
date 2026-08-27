@@ -1375,7 +1375,7 @@ di `src/subapps/bq/`**.
       dihitung di `calc.ts`; komponen hanya merender hasilnya dan tidak lagi
       mempunyai `reduce` atas harga/biaya.
 
-- [ ] **BQ-41 — Guard lama memblokir pembuatan L2.** 🛠 agent
+- [x] **BQ-41 — Guard lama memblokir pembuatan L2. SELESAI 2026-08-27.**
       `createBqSectionAction` menolak menambah Sub Section ke section yang sudah
       punya Works (*"move them into divisions first"*). Guard ini lahir waktu
       model masih dua lapis; sekarang ia memblokir alur yang paling wajar —
@@ -1384,7 +1384,8 @@ di `src/subapps/bq/`**.
       (ada testnya), jadi tidak ada alasan teknis mempertahankannya. Aksi
       "pindahkan Works ke Sub Section baru" TIDAK perlu dibuat — itu jalur rumit
       untuk masalah yang hilang begitu guard dicabut. `SectionBlock.allowsDirectObjects`
-      di UI ikut dicabut. Tulis pasalnya ke PRD §2.3.
+      di UI ikut dicabut. PRD §2 sekarang menegaskan Works langsung dan Sub
+      Section boleh berdampingan; tombol tambah Works tetap hidup setelah ada anak.
 
 - [x] **BQ-39 — Cabut markup dari kode. SELESAI 2026-08-27.** 🔒 migrasi belum diterapkan
       **Keputusan owner 2026-08-27:** OH, profit, markup, PPN, diskon —

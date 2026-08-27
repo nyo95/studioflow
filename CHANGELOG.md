@@ -68,6 +68,42 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
 
+## [Unreleased] - 2026-08-27 (rev 10) — BQ-41: Works dan Sub Section boleh berdampingan
+
+### Hasil akhir
+
+Estimator sekarang dapat menambah Sub Section di bawah Section yang sudah
+berisi Works, dan tetap dapat menambah Works langsung setelah Section mempunyai
+anak. Guard dua-lapis lama di server dan `SectionBlock.allowsDirectObjects` di
+UI dicabut.
+
+Tidak dibuat aksi pemindahan otomatis. Works yang sudah ada tetap di tempatnya;
+subtotal rekursif yang sudah diuji menjumlahkan Works langsung dan isi anak
+secara bersamaan.
+
+### Area/berkas
+
+- `src/subapps/bq/actions/bq-project-actions.ts` — count + penolakan Works
+  langsung di `createBqSectionAction` dihapus; batas kedalaman tiga lapis tetap.
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — daftar/tombol tambah Works
+  tidak lagi dimatikan ketika Section mempunyai anak.
+- `PRD-BQ.md` — kontrak koeksistensi Works + Sub Section ditulis di §2.
+- `roadmap.md` — BQ-41 ditutup.
+
+### Verifikasi
+
+- `npm test` — **208/208 lulus**, termasuk test rollup Works pada beberapa lapis.
+- `npx tsc --noEmit` — **lulus**.
+- `npx eslint src/subapps/bq/` — **exit 0**, dua warning lama/non-blocking.
+- Pencarian `allowsDirectObjects`, `directObjects`, dan pesan guard lama di BQ
+  — **kosong**.
+
+### Risiko / tindak lanjut
+
+- Verifikasi browser belum bisa dilakukan sampai owner menerapkan antrean
+  migrasi BQ-2; perubahan ini sendiri tidak menambah migrasi.
+- Lanjut sesuai urutan: BQ-36.
+
 ## [Unreleased] - 2026-08-27 (rev 9) — BQ-40: subtotal bahan/jasa kembali ke `calc.ts`
 
 ### Hasil akhir

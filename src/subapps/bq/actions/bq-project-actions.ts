@@ -406,19 +406,6 @@ export const createBqSectionAction = createAction(
         );
       }
 
-      const directObjects = await tx.bqObject.count({
-        where: {
-          project_id: input.projectId,
-          section_id: input.parentId,
-          deleted_at: null,
-        },
-      });
-      if (directObjects > 0) {
-        throw new ActionError(
-          "This section already contains work items. Move them into divisions first, or keep this section flat.",
-          "VALIDATION_ERROR",
-        );
-      }
     }
 
     const siblings = await tx.bqSection.findMany({

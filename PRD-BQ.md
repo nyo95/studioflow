@@ -38,6 +38,14 @@ L0 Section          FIXTURES · PRELIMINARIES · INTERIOR WORKS   pengelompok
 | L3 Works | `BqObject` | nama, satuan, **koefisien (qty)**. Harga satuannya **tidak pernah diketik**. |
 | L4 Sub-Works | `BqMaterialLine` / `BqServiceLine` | **koefisien**, harga snapshot |
 
+### Works dan Sub Section boleh berdampingan
+
+Satu Section boleh sekaligus mempunyai Works langsung dan Sub Section. Ini
+mendukung alur estimator yang mengisi Works lebih dulu, lalu belakangan perlu
+memecah sebagian pekerjaan per area. Menambah Sub Section tidak memindahkan,
+menghapus, atau memblokir Works yang sudah ada; Works langsung tetap dapat
+ditambah setelah Section mempunyai anak.
+
 ### Rumus
 
 ```
