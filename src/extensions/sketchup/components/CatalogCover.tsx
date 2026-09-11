@@ -20,7 +20,7 @@ export function CatalogCover({
       style={{
         position: "relative",
         width: "100%",
-        height: "100vh",
+        height: "var(--catalog-cover-print-height, var(--ui-render-print-page-height, 210mm))",
         background: "#fff",
         color: "#0f172a",
         overflow: "hidden",

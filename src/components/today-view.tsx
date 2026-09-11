@@ -560,7 +560,7 @@ export function TodayView({
   // the same visual weight as a project with active work. The user can expand
   // it manually at any time; the state is not persisted across reloads.
   const [collapsed, setCollapsed] = React.useState<Set<string>>(
-    () => new Set(groups.filter((g) => g.tasks.length === 0).map((g) => g.project_id))
+    () => new Set(groups.filter((g) => countOpen(g.tasks) === 0).map((g) => g.project_id))
   );
   const [collapsedTasks, setCollapsedTasks] = React.useState<Set<string>>(() => new Set());
   const [busyKey, setBusyKey] = React.useState<string | null>(null);

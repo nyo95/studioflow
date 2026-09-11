@@ -20,8 +20,8 @@ test("kode mengikuti kedalaman — A/B/C, I/II/III, 1/2/3", () => {
   assert.equal(sectionCodeForDepth(0, 2), "C");
   assert.equal(sectionCodeForDepth(1, 0), "I");
   assert.equal(sectionCodeForDepth(1, 2), "III");
+  // Kedalaman 2 tidak lagi bisa dibuat, tapi kodenya tetap ada untuk data lama.
   assert.equal(sectionCodeForDepth(2, 0), "1");
-  assert.equal(sectionCodeForDepth(2, 3), "4"); // Full Slab di Wall Works
 });
 
 test("huruf berlanjut ke AA setelah Z", () => {
@@ -34,15 +34,23 @@ test("romawi cocok dengan dokumen kantor sampai VII", () => {
   assert.deepEqual(got, ["I", "II", "III", "IV", "V", "VI", "VII"]);
 });
 
-test("batas kedalaman tiga lapis", () => {
-  assert.equal(MAX_SECTION_DEPTH, 3);
+test("batas kedalaman DUA lapis — Section lalu Sub Section, titik", () => {
+  // Direvisi owner 2026-08-27 sore: Sub Section berisi Works saja, tidak boleh
+  // berisi Sub Section lain. Sempat 3 di versi pagi hari yang sama.
+  assert.equal(MAX_SECTION_DEPTH, 2);
 });
 
 // ---------------------------------------------------------------------------
 // Pohon
 // ---------------------------------------------------------------------------
 
-/** Bentuk "B INTERIOR WORKS → III Wall Works → Shopfront/Store Area". */
+/**
+ * Bentuk warisan "B → III → Shopfront/Store" — TIGA lapis pengelompok.
+ *
+ * Sejak batasnya jadi dua, bentuk ini tidak bisa lagi DIBUAT. Ia tetap diuji
+ * karena jalur BACA wajib menampilkan data yang terlanjur ada — kalau tidak,
+ * BQ lama jadi tidak bisa diperbaiki penggunanya.
+ */
 const WALL: SectionLike[] = [
   { id: "B", parentId: null },
   { id: "III", parentId: "B" },
@@ -50,7 +58,7 @@ const WALL: SectionLike[] = [
   { id: "store", parentId: "III" },
 ];
 
-test("tiga lapis tersusun benar", () => {
+test("tiga lapis warisan tetap tersusun benar saat dibaca", () => {
   const roots = buildSectionTree(WALL, new Map<string, string[]>());
 
   assert.equal(roots.length, 1);

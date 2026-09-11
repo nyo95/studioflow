@@ -20,19 +20,19 @@ pembulatan pembelian, purchase summary, mode detail/ringkas, drift harga).
 
 Semua detail dan acceptance ada di `HANDOFF-BQ-R3.md` §3 bagian 🟢.
 
-1. **BQ-39 — cabut markup.** Paling besar. `markup_pct` di `BqObject` +
+1. **BQ-71 — cabut markup.** Paling besar. `markup_pct` di `BqObject` +
    `default_markup_pct` di `BqSettings` (migrasi), `BQ_MARKUP_EDIT` di
    `core/rbac/constants.ts` + `matrix.ts`, `computeObject()` di `calc.ts`,
    `applyMarkupAll` di `BqToolbar`, dan 7 assertion di `calc.test.ts`.
    Tujuh assertion itu ditulis ulang jadi test aritmatika biasa — koefisien ×
    harga, angka yang jelas benar. Tidak perlu contoh dari dokumen kantor.
 
-2. **BQ-40 — pindahkan penjumlahan harga dari klien ke `calc.ts`.**
+2. **BQ-70 — pindahkan penjumlahan harga dari klien ke `calc.ts`.**
    `BqBreakdownClient.tsx:1938-1939`. Tambahkan `materialsSubtotal` dan
    `servicesSubtotal` ke `ObjectResult` + `SubObjectResult`, kunci dengan test.
-   Kerjakan **sesudah** BQ-39 — keduanya menyentuh `calc.ts` dan `calc.test.ts`.
+   Kerjakan **sesudah** BQ-71 — keduanya menyentuh `calc.ts` dan `calc.test.ts`.
 
-3. **BQ-41 — cabut guard yang memblokir L2.** `createBqSectionAction` menolak
+3. **BQ-69 — cabut guard yang memblokir L2.** `createBqSectionAction` menolak
    menambah Sub Section ke section yang sudah punya Works. Cabut guard-nya, dan
    cabut juga `SectionBlock.allowsDirectObjects` di `BqBreakdownClient`.
    **JANGAN** membuat aksi "pindahkan Works ke Sub Section baru" — itu jalur
@@ -49,11 +49,36 @@ Semua detail dan acceptance ada di `HANDOFF-BQ-R3.md` §3 bagian 🟢.
 Commit terpisah per nomor. Kalau kehabisan waktu, berhenti di batas nomor —
 jangan menyisakan satu nomor setengah jalan.
 
+## Batch berikutnya — BQ-65
+
+Kalau lima nomor di atas sudah selesai, lanjut ke **BQ-65: satukan Template +
+Library BQ**. Spesifikasi lengkap `PRD-BQ.md` §5, ringkasan tugas `roadmap.md`.
+
+Intinya: sekarang ada DUA sumber untuk benda yang sama (resep Works) — tab
+`Library` baca `BqLibraryObject` (DB), tab `Template` baca `bq-template-data.ts`
+(file TS). Dan skema library-nya masih memaksa baris lewat
+`BqLibrarySubObjectOfObject`, bentuk warisan yang sudah tidak sah.
+
+Empat hal yang tidak boleh keliru:
+
+1. **Baris bahan/jasa menempel LANGSUNG ke object.** Migrasi harus menaikkan
+   baris yang terlanjur ada dari `BqLibrarySubObjectOfObject`.
+2. **`Harga` TIDAK dilebur ke `Template`.** Beda lapis dan beda hak — owner:
+   *"master data hanya untuk di-snapshot harga terbaru, bukan untuk
+   diotak-atik."* Tab Harga read-only.
+3. **Menyunting template bawaan membuat SALINAN milik user.** Yang bawaan tetap
+   utuh supaya seed ulang tidak bertabrakan.
+4. **`bq-template-data.ts` jadi bahan SEED, bukan sumber runtime.** Ini
+   sekaligus menutup BQ-36 — kerjakan bersamaan, jangan dua kali.
+
 ## Jangan dikerjakan
 
-- **`BqSubObject`.** PRD §8 menyatakan ia dipensiunkan, tapi ia masih hidup di 12
-  berkas dan ada data lama yang belum diperiksa. Boleh berhenti menambah fitur di
-  atasnya; **jangan mencabut, memigrasi, atau menghapus tabelnya.**
+- **`BqSubObject`.** PRD §8 menyatakan ia dipensiunkan. Jalur membuat yang baru
+  sudah dicabut dari UI (BQ-64), dan baris lama tetap dirender supaya bisa
+  dibaca dan dipindahkan. **Jangan mencabut, memigrasi, atau menghapus
+  tabelnya** — data lama belum diperiksa. Pengecualian tunggal: BQ-65 memang
+  menaikkan baris LIBRARY keluar dari `BqLibrarySubObjectOfObject`, dan itu
+  tabel yang berbeda.
 - **Jangan menjalankan migrasi.** Tulis berkas migrasinya, biarkan owner yang
   menjalankan `npx prisma migrate dev` di mesinnya. Ada enam migrasi lain yang
   juga belum diterapkan (BQ-2).
@@ -85,7 +110,7 @@ npm test
 ```
 
 Sekarang 30 test lulus: `calc.test.ts` (10), `section-rollup.test.ts` (8),
-`section-tree.test.ts` (12). Angka `calc.test.ts` akan berubah setelah BQ-39 —
+`section-tree.test.ts` (12). Angka `calc.test.ts` akan berubah setelah BQ-71 —
 yang penting seluruhnya lulus dan `eslint src/subapps/bq/` exit 0.
 
 `/bq` **tidak bisa diuji di browser** sampai owner menjalankan migrasi. Typecheck,

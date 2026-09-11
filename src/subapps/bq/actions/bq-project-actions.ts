@@ -383,13 +383,13 @@ export const createBqSectionAction = createAction(
   async ({ input, ctx, tx }) => {
     assertPerm(ctx.role, PERMISSION.BQ_BREAKDOWN_EDIT);
 
-    // L0 Section -> L1 Sub Section -> L2 Sub Section, lalu berhenti.
+    // Section -> Sub Section, lalu berhenti. Sub Section berisi Works saja.
     //
-    // Batasnya BUKAN teknis: `rollupSectionSubtotals` sanggup kedalaman berapa
-    // pun dan ada testnya untuk empat lapis. Batasnya dokumenter — penomoran BQ
-    // kantor cuma punya tiga bentuk (A/B/C, I/II/III, 1/2/3), dan lapis keempat
-    // tidak punya bentuk cetak. Karena itu ditegakkan di jalur TULIS saja;
-    // jalur baca tetap menampilkan apa pun yang terlanjur ada.
+    // Aturan owner 2026-08-27 (revisi sore, mencabut lapis pengelompok ketiga
+    // yang sempat diizinkan pagi harinya). Batasnya MODEL, bukan teknis:
+    // `rollupSectionSubtotals` sanggup kedalaman berapa pun dan ada testnya.
+    // Ditegakkan di jalur TULIS saja; jalur baca tetap menampilkan apa pun yang
+    // terlanjur ada, supaya BQ lama bisa diperbaiki penggunanya.
     let parentDepth = -1;
     if (input.parentId) {
       const parent = await tx.bqSection.findFirst({
@@ -401,7 +401,7 @@ export const createBqSectionAction = createAction(
       parentDepth = await sectionDepth(tx, parent.id);
       if (parentDepth + 1 >= MAX_SECTION_DEPTH) {
         throw new ActionError(
-          `Sections can only nest ${MAX_SECTION_DEPTH} levels deep.`,
+          "A sub section can only contain works, not another sub section.",
           "VALIDATION_ERROR",
         );
       }
@@ -448,7 +448,7 @@ export const createBqSectionAction = createAction(
       /** Kosong = seksi tingkat atas. Terisi = DIVISI di dalam seksi itu. */
       parentId: z.string().min(1).optional(),
       name: z.string().min(1, "Section name is required."),
-      /** Kosong = diberi otomatis A/B/C (seksi) atau I/II/III (divisi). */
+      /** Kosong = diberi otomatis A/B/C (Section) atau I/II/III (Sub Section). */
       code: z.string().optional(),
     }),
   }
@@ -506,7 +506,7 @@ export const deleteBqSectionAction = createAction(
     if (!section) throw new ActionError("Section not found.", "NOT_FOUND");
 
     // Divisi anak ikut terhapus lewat cascade, jadi pekerjaan DI DALAMNYA juga
-    // harus dilepas — kalau tidak, ia lenyap bersama divisinya.
+    // harus dilepas — kalau tidak, ia lenyap bersama Sub Section-nya.
     const children = await tx.bqSection.findMany({
       where: { parent_id: input.id },
       select: { id: true },
@@ -548,25 +548,20 @@ export const createBqObjectAction = createAction(
           project_id: input.projectId,
           deleted_at: null,
         },
-        select: { id: true, parent_id: true },
+        select: { id: true },
       });
       if (!section) throw new ActionError("Section not found.", "NOT_FOUND");
 
-      if (!section.parent_id) {
-        const childDivisions = await tx.bqSection.count({
-          where: {
-            project_id: input.projectId,
-            parent_id: section.id,
-            deleted_at: null,
-          },
-        });
-        if (childDivisions > 0) {
-          throw new ActionError(
-            "This section already uses divisions. Add the work item inside a division instead.",
-            "VALIDATION_ERROR",
-          );
-        }
-      }
+      // Dulu di sini ada guard: Section yang sudah punya Sub Section menolak
+      // Works langsung. Itu melanggar aturan owner 2026-08-27 —
+      // `Section -> Sub Section DAN Works` — dan memblokir alur yang paling
+      // wajar: estimator menaruh beberapa Works dulu, baru sebagian
+      // dikelompokkan ke Sub Section. Saat itu ia buntu, dan pesannya menyuruh
+      // "pindahkan ke dalam Sub Section" tanpa menyediakan caranya.
+      //
+      // `rollupSectionSubtotals` sudah menangani Works dan Sub Section
+      // berdampingan di satu induk — ada testnya ("Works yang menempel di
+      // beberapa lapis sekaligus"). Jadi tidak ada alasan teknis yang tersisa.
     }
 
     const siblings = await tx.bqObject.findMany({

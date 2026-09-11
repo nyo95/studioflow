@@ -109,7 +109,7 @@ export function BqLibraryClient({
             >
               <FolderOpen className="h-4 w-4" />
               Objects
-              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
                 {initialObjects.length}
               </span>
             </button>
@@ -125,7 +125,7 @@ export function BqLibraryClient({
             >
               <BookOpen className="h-4 w-4" />
               Sub-objects
-              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
                 {initialSubObjects.length}
               </span>
             </button>
@@ -155,8 +155,8 @@ function ObjectsTab({
     return (
       <SectionCard padding="lg">
         <div className="text-center">
-          <FolderOpen className="mx-auto h-8 w-8 text-slate-300" />
-          <p className={cn(UI_ENGINE_TYPE_META, "mt-2 text-slate-400")}>
+          <FolderOpen className="mx-auto h-8 w-8 text-slate-500" />
+          <p className={cn(UI_ENGINE_TYPE_META, "mt-2 text-slate-500")}>
             No library objects yet. Save an object from a BQ breakdown.
           </p>
         </div>
@@ -186,7 +186,7 @@ function ObjectsTab({
               <td className="px-4 py-3">
                 <span className="font-sans text-sm font-medium text-slate-900">{obj.name}</span>
                 {obj.code && (
-                  <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-400")}>{obj.code}</span>
+                  <span className={cn(UI_ENGINE_TYPE_META, "ml-2 text-slate-500")}>{obj.code}</span>
                 )}
               </td>
               <td className={cn(UI_ENGINE_TYPE_META, "px-4 py-3 text-slate-500")}>{obj.unit}</td>
@@ -204,7 +204,7 @@ function ObjectsTab({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-slate-400 hover:text-red-600"
+                    className="h-7 text-slate-500 hover:text-red-600"
                     disabled={pendingId === obj.id}
                     title={`Hapus "${obj.name}" dari library`}
                     aria-label={`Hapus ${obj.name}`}
@@ -235,8 +235,8 @@ function SubObjectsTab({
     return (
       <SectionCard padding="lg">
         <div className="text-center">
-          <BookOpen className="mx-auto h-8 w-8 text-slate-300" />
-          <p className={cn(UI_ENGINE_TYPE_META, "mt-2 text-slate-400")}>
+          <BookOpen className="mx-auto h-8 w-8 text-slate-500" />
+          <p className={cn(UI_ENGINE_TYPE_META, "mt-2 text-slate-500")}>
             No library sub-objects yet. Save a sub-object from a BQ breakdown.
           </p>
         </div>
@@ -283,7 +283,7 @@ function SubObjectsTab({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-slate-400 hover:text-red-600"
+                    className="h-7 text-slate-500 hover:text-red-600"
                     disabled={pendingId === sub.id}
                     title={`Hapus "${sub.name}" dari library`}
                     aria-label={`Hapus ${sub.name}`}

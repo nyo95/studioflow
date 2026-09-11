@@ -210,7 +210,7 @@ export function BqQuickAddRow({
       {/* Kolom sebelum Uraian (No.) */}
       {Array.from({ length: colSpanBefore }).map((_, i) => (
         <td key={i} className="py-1.5 pr-2 text-right">
-          <Plus className="ml-auto h-3 w-3 text-slate-400" />
+          <Plus className="ml-auto h-3 w-3 text-slate-500" />
         </td>
       ))}
 
@@ -283,13 +283,13 @@ export function BqQuickAddRow({
                     <span
                       className={cn(
                         "block truncate font-sans text-xs",
-                        r.blocked ? "text-slate-400" : "text-slate-900",
+                        r.blocked ? "text-slate-500" : "text-slate-900",
                       )}
                     >
                       {r.name}
                     </span>
                     {r.detail ? (
-                      <span className={cn(UI_ENGINE_TYPE_META, "block truncate text-slate-400")}>
+                      <span className={cn(UI_ENGINE_TYPE_META, "block truncate text-slate-500")}>
                         {r.detail}
                       </span>
                     ) : null}
@@ -316,7 +316,7 @@ export function BqQuickAddRow({
         ) : null}
 
         {loading && !chosen ? (
-          <Loader2 className="absolute right-5 top-3 h-3 w-3 animate-spin text-slate-400" />
+          <Loader2 className="absolute right-5 top-3 h-3 w-3 animate-spin text-slate-500" />
         ) : null}
       </td>
 
@@ -355,7 +355,7 @@ export function BqQuickAddRow({
       {/* ---- Jumlah (pratinjau) ------------------------------------------ */}
       <td className="py-1.5 text-right font-sans text-xs font-medium tabular-nums text-slate-800">
         {saving ? (
-          <Loader2 className="ml-auto h-3 w-3 animate-spin text-slate-400" />
+          <Loader2 className="ml-auto h-3 w-3 animate-spin text-slate-500" />
         ) : preview !== null ? (
           formatIdr(preview)
         ) : (
@@ -370,7 +370,7 @@ export function BqQuickAddRow({
           onClick={onClose}
           title="Selesai (Esc)"
           aria-label="Tutup baris cepat"
-          className="text-slate-300 transition-colors hover:text-slate-600"
+          className="text-slate-500 transition-colors hover:text-slate-600"
         >
           <X className="h-3 w-3" />
         </button>

@@ -2,25 +2,33 @@
  * BQ — pengelompok bertingkat: kedalaman, penomoran, dan pembangun pohonnya.
  *
  * ============================================================================
- * TIGA LAPIS PENGELOMPOK, SATU LAPIS BERHARGA
+ * DUA LAPIS PENGELOMPOK, SATU LAPIS BERHARGA
  * ============================================================================
- * Hirarki yang dikonfirmasi owner 2026-08-27 (lihat
- * `PLAN-BQ-REFACTOR-2026-08-27.md` §2 T1):
+ * Aturan owner 2026-08-27 (revisi sore):
  *
- *   L0  Section                 PRELIMINARIES · INTERIOR WORKS · FIXTURES
- *   L1  Sub Section             Floor Works · Ceiling Works · Wall Works
- *   L2  Sub Section (OPSIONAL)  Shopfront Area · Store Area
- *   L3  Works                   Flat Ceiling · Screeding — Qty x Harga Satuan
- *   L4  Sub-Works               koefisien x harga, dari master data / library
+ *     Section     ->  Sub Section  DAN  Works
+ *     Sub Section ->  Works saja
  *
- * L0..L2 semuanya `BqSection` — sifatnya identik (pengelompok tanpa qty, tanpa
- * harga, punya subtotal), jadi satu tabel yang menunjuk dirinya sendiri, bukan
- * tiga tabel kembar. Yang membedakan cuma posisinya di pohon.
+ * Jadi:
  *
- * Lapis berharga SELALU L3. Itu yang membuat Floor Works (Works langsung di
- * L1) dan Wall Works (Works di dalam L2 "Shopfront Area") bisa dicetak dengan
- * aturan yang sama, tanpa penanda cetak-rinci per pekerjaan — keputusan O3
- * (`BqDetailMode` dibuang) tetap utuh.
+ *   L0  Section       PRELIMINARIES · INTERIOR WORKS · FIXTURES
+ *   L1  Sub Section   Floor Works · Ceiling Works · Wall Works   (OPSIONAL)
+ *   L2  Works         Flat Ceiling · Screeding — Qty x Harga Satuan
+ *   L3  Sub-Works     koefisien x harga, dari master data / library
+ *
+ * L0 dan L1 sama-sama `BqSection` — sifatnya identik (pengelompok tanpa qty,
+ * tanpa harga, punya subtotal), jadi satu tabel yang menunjuk dirinya sendiri.
+ * Yang membedakan cuma posisinya di pohon.
+ *
+ * **Sub Section tidak boleh berisi Sub Section lain.** Versi pagi 2026-08-27
+ * sempat mengizinkan lapis pengelompok ketiga ("Shopfront Area" di dalam "Wall
+ * Works"); owner mencabutnya sore itu juga. Kasus area kini ditangani dengan
+ * menjadikan areanya Sub Section langsung di bawah Section, atau memasukkan
+ * namanya ke nama Works.
+ *
+ * Lapis berharga SELALU Works. Itu yang membuat Floor Works (Works langsung di
+ * Sub Section) dan Preliminaries (Works langsung di Section) bisa dicetak
+ * dengan aturan yang sama, tanpa penanda cetak-rinci per pekerjaan.
  *
  * ============================================================================
  * KENAPA DIBATASI TIGA
@@ -33,8 +41,8 @@
  * menampilkan data lama apa pun bentuknya.
  */
 
-/** L0, L1, L2 — tiga lapis. Kedalaman terdalam yang sah berindeks 2. */
-export const MAX_SECTION_DEPTH = 3;
+/** L0 Section dan L1 Sub Section. Kedalaman terdalam yang sah berindeks 1. */
+export const MAX_SECTION_DEPTH = 2;
 
 /** A, B, C, … Z, AA. Untuk L0 Section. */
 export function letterForIndex(i: number): string {
@@ -73,11 +81,13 @@ export function romanForIndex(i: number): string {
 export function sectionCodeForDepth(depth: number, siblingIndex: number): string {
   if (depth <= 0) return letterForIndex(siblingIndex);
   if (depth === 1) return romanForIndex(siblingIndex);
+  // Tidak lagi bisa dicapai lewat jalur tulis sejak batasnya jadi dua, tapi
+  // data lama yang terlanjur lebih dalam tetap butuh kode untuk ditampilkan.
   return String(siblingIndex + 1);
 }
 
 /** Label lapis untuk tombol dan pesan. Indeks = kedalaman. */
-export const SECTION_DEPTH_LABEL = ["Section", "Sub Section", "Sub Section"] as const;
+export const SECTION_DEPTH_LABEL = ["Section", "Sub Section"] as const;
 
 // ---------------------------------------------------------------------------
 // Pembangun pohon

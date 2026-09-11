@@ -224,11 +224,21 @@ export async function getAuditLogSchemaCapabilities(
     };
   });
 
-  if (db === prisma) {
-    cachedCapabilities = load;
+  if (db !== prisma) {
+    return load;
   }
 
-  return load;
+  // A transient database outage must not poison the process-wide cache. When
+  // the first capability probe rejects, evict that rejected promise so the
+  // next request can retry after PostgreSQL becomes reachable again.
+  const cachedLoad = load.catch((error) => {
+    if (cachedCapabilities === cachedLoad) {
+      cachedCapabilities = null;
+    }
+    throw error;
+  });
+  cachedCapabilities = cachedLoad;
+  return cachedLoad;
 }
 
 export function hasFinalAuditPayloadColumns(capabilities: AuditLogSchemaCapabilities) {

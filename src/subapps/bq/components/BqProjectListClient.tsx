@@ -136,7 +136,7 @@ export function BqProjectListClient({
           projects.length === 0 ? (
             <SectionCard>
               <div className="flex flex-col items-center gap-2 py-10 text-center">
-                <FolderOpen className="h-8 w-8 text-slate-300" />
+                <FolderOpen className="h-8 w-8 text-slate-500" />
                 <p className="font-sans text-sm font-medium text-slate-700">No breakdowns yet</p>
                 <p className={cn(UI_ENGINE_TYPE_META, "max-w-sm text-slate-500")}>
                   {canManageProjects
@@ -163,7 +163,7 @@ export function BqProjectListClient({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         {project.code ? (
-                          <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{project.code}</p>
+                          <p className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>{project.code}</p>
                         ) : null}
                         <p className="truncate font-serif text-lg font-semibold text-slate-900">
                           {project.name}
@@ -186,7 +186,7 @@ export function BqProjectListClient({
                       size="sm"
                       variant="ghost"
                       className={cn(
-                        "absolute bottom-3 right-3 h-7 w-7 p-0 text-slate-300",
+                        "absolute bottom-3 right-3 h-7 w-7 p-0 text-slate-500",
                         "opacity-0 transition-opacity hover:text-red-600",
                         "focus-visible:opacity-100 group-hover:opacity-100"
                       )}

@@ -1721,21 +1721,24 @@ model BqSection {
   /// Pengelompok induk. NULL = L0 Section ("A PRELIMINARIES"); terisi =
   /// Sub Section di dalamnya ("I Floor Works", lalu "Shopfront Area").
   ///
-  /// Dokumen BQ kantor punya TIGA lapis pengelompok (dikonfirmasi owner
-  /// 2026-08-27, lihat PLAN-BQ-REFACTOR-2026-08-27.md):
+  /// Aturan owner 2026-08-27:
   ///
-  ///   L0 Section                 A PRELIMINARIES      SUBTOTAL A
-  ///   L1 Sub Section             I Floor Works        SUBTOTAL B.I
-  ///   L2 Sub Section (opsional)  Shopfront Area
+  ///     Section     ->  Sub Section  DAN  Works
+  ///     Sub Section ->  Works saja
   ///
-  /// Ketiganya SAMA sifatnya — pengelompok tanpa qty, tanpa harga, punya
-  /// subtotal — jadi dimodelkan satu tabel yang menunjuk dirinya sendiri,
-  /// bukan tiga tabel kembar. Lapis berharga selalu L3 `BqObject`.
+  ///   L0 Section       A PRELIMINARIES      SUBTOTAL A
+  ///   L1 Sub Section   I Floor Works        SUBTOTAL B.I   (opsional)
   ///
-  /// Kedalaman dibatasi TIGA di lapisan aplikasi, bukan di sini. Batasnya
-  /// dokumenter, bukan teknis: penomoran BQ kantor cuma punya tiga bentuk
-  /// (A/B/C, I/II/III, 1/2/3) dan lapis keempat tidak punya bentuk cetak.
-  /// Ditegakkan `createBqSectionAction` saat MENULIS; jalur baca tetap
+  /// Keduanya SAMA sifatnya — pengelompok tanpa qty, tanpa harga, punya
+  /// subtotal — jadi satu tabel yang menunjuk dirinya sendiri, bukan dua tabel
+  /// kembar. Lapis berharga selalu `BqObject` (Works).
+  ///
+  /// **Sub Section tidak boleh berisi Sub Section lain.** Lapis pengelompok
+  /// ketiga sempat diizinkan pagi 2026-08-27 lalu dicabut sore harinya.
+  ///
+  /// Kedalaman dibatasi DUA di lapisan aplikasi, bukan di sini — constraint
+  /// rekursif di Postgres jauh lebih mahal daripada satu pemeriksaan saat
+  /// menulis. Ditegakkan `createBqSectionAction` saat MENULIS; jalur baca tetap
   /// menampilkan apa pun yang terlanjur ada.
   parent_id String?
   parent    BqSection?  @relation("BqSectionTree", fields: [parent_id], references: [id], onDelete: Cascade)
@@ -2072,6 +2075,11 @@ model BqLibraryObject {
   deleted_at      DateTime?
 
   sub_objects BqLibrarySubObjectOfObject[]
+  /// Baris yang menempel LANGSUNG ke resep Works — bentuk yang berlaku sejak
+  /// `BqSubObject` dipensiunkan (PRD-BQ §2.2). `sub_objects` di atas tinggal
+  /// jalur warisan untuk resep lama.
+  materials   BqLibraryMaterialLine[]
+  services    BqLibraryServiceLine[]
 
   @@schema("bq")
 }
@@ -2122,7 +2130,10 @@ model BqLibrarySubObject {
 model BqLibraryMaterialLine {
   id String @id @default(uuid())
 
-  // FK ke salah satu dari dua parent (keduanya nullable, validasi di app layer)
+  // FK ke SALAH SATU parent. `library_object_id` bentuk yang berlaku; dua yang
+  // lain jalur warisan dari masa `BqSubObject` masih dipakai.
+  library_object_id       String?
+  library_object          BqLibraryObject? @relation(fields: [library_object_id], references: [id], onDelete: Cascade)
   sub_object_of_object_id String?
   sub_object_of_object    BqLibrarySubObjectOfObject? @relation(fields: [sub_object_of_object_id], references: [id], onDelete: Cascade)
   sub_object_id           String?
@@ -2153,6 +2164,7 @@ model BqLibraryMaterialLine {
   notes          String?
   sort_order     Int      @default(0)
 
+  @@index([library_object_id])
   @@index([sub_object_of_object_id])
   @@index([sub_object_id])
   @@schema("bq")
@@ -2162,6 +2174,10 @@ model BqLibraryMaterialLine {
 model BqLibraryServiceLine {
   id String @id @default(uuid())
 
+  // FK ke SALAH SATU parent. `library_object_id` bentuk yang berlaku; dua yang
+  // lain jalur warisan dari masa `BqSubObject` masih dipakai.
+  library_object_id       String?
+  library_object          BqLibraryObject? @relation(fields: [library_object_id], references: [id], onDelete: Cascade)
   sub_object_of_object_id String?
   sub_object_of_object    BqLibrarySubObjectOfObject? @relation(fields: [sub_object_of_object_id], references: [id], onDelete: Cascade)
   sub_object_id           String?
@@ -2185,6 +2201,7 @@ model BqLibraryServiceLine {
   sort_order    Int     @default(0)
   notes         String?
 
+  @@index([library_object_id])
   @@index([sub_object_of_object_id])
   @@index([sub_object_id])
   @@schema("bq")

@@ -59,7 +59,20 @@ import {
   StatusBadge,
   UI_ENGINE_RADIUS_CONTROL,
 } from "@/ui_engine";
-import { UI_ENGINE_TYPE_META } from "@/ui_engine/tokens";
+import {
+  UI_ENGINE_ICON_DECORATIVE,
+  UI_ENGINE_TEXT_TERTIARY,
+  UI_ENGINE_TYPE_META,
+} from "@/ui_engine/tokens";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { CreatableSearch } from "@/components/ui/creatable-search";
 import { statusToTone } from "@/lib/ui/status-tone";
 import { cn } from "@/lib/utils";
 import { formatIdr, formatQty } from "../lib/calc";
@@ -77,7 +90,6 @@ import {
   addBqServiceLineAction,
   addBqLocalServiceLineAction,
   createBqObjectAction,
-  createBqSubObjectAction,
   deleteBqMaterialLineAction,
   deleteBqObjectAction,
   deleteBqServiceLineAction,
@@ -85,6 +97,7 @@ import {
   setBqObjectLockAction,
   updateBqMaterialLineAction,
   updateBqObjectAction,
+  updateBqSectionAction,
   updateBqServiceLineAction,
   updateBqSubObjectAction,
 } from "../actions/bq-project-actions";
@@ -93,8 +106,9 @@ import {
   deleteBqSectionAction,
 } from "../actions/bq-project-actions";
 import {
-  loadFromLibraryObjectAction,
-  loadFromLibrarySubObjectAction,
+  createBqObjectFromLibraryAction,
+  saveObjectToLibraryAction,
+  searchLibraryObjectsAction,
   saveSubObjectToLibraryAndLinkAction,
 } from "../actions/bq-library-actions";
 import { BqLinePicker } from "./BqLinePicker";
@@ -103,23 +117,13 @@ import {
   type QuickAddCommit,
   type QuickAddMode,
 } from "./BqQuickAddRow";
-import {
-  acceptsOnObject,
-  acceptsOnSubObject,
-  BqLibraryPanel,
-  BqToolbar,
-  isRecipeDrag,
-  readRecipeDrag,
-  type BqRecipeDrag,
-  type OutlineLevel,
-} from "./BqToolbar";
+import { BqToolbar, type OutlineLevel } from "./BqToolbar";
 import {
   addTemplateItemAction,
   applyBqTemplateAction,
 } from "../actions/bq-template-actions";
 import { BQ_TEMPLATE_SUMMARY } from "../lib/bq-template-data";
 import {
-  displayName,
   suggestedTemplateItems,
   templateItemKey,
 } from "../lib/bq-template-lookup";
@@ -137,6 +141,15 @@ import type {
 // ---------------------------------------------------------------------------
 
 type ActionResultLike = { success: boolean; error?: string };
+/** Bentuk minimum resep Library untuk ditawarkan di pencarian tambah-pekerjaan. */
+type LibraryRecipeOption = {
+  id: string;
+  name: string;
+  unit: string;
+  materialLineCount: number;
+  serviceLineCount: number;
+};
+type ActionResultWith<T> = ActionResultLike & { data?: T };
 
 function duplicateSuggestionNames(
   item: {
@@ -201,7 +214,34 @@ function useMutate() {
     [router],
   );
 
-  return { run, pending };
+  /**
+   * Seperti `run`, tapi mengembalikan payload aksinya.
+   *
+   * Dibutuhkan sejak Sub Section dibuat langsung dari menu: barisnya harus
+   * LANGSUNG masuk mode ganti-nama, dan untuk itu kita perlu id-nya sekarang —
+   * bukan setelah `router.refresh()` selesai.
+   */
+  const runData = React.useCallback(
+    async <T,>(
+      fn: () => Promise<ActionResultWith<T>>,
+      successMessage?: string,
+    ): Promise<T | null> => {
+      setPending(true);
+      const result = await fn();
+      setPending(false);
+
+      if (!result.success) {
+        toast.error(result.error ?? "That change could not be saved.");
+        return null;
+      }
+      if (successMessage) toast.success(successMessage);
+      void router.refresh();
+      return result.data ?? null;
+    },
+    [router],
+  );
+
+  return { run, runData, pending };
 }
 
 /** Input angka yang hanya menyimpan saat blur atau Enter. Menyimpan tiap
@@ -264,7 +304,7 @@ function NumberCell({
         inputMode="decimal"
       />
       {suffix ? (
-        <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+        <span className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>
           {suffix}
         </span>
       ) : null}
@@ -311,77 +351,25 @@ function TextCell({
 }
 
 /**
- * Drop zone untuk resep library.
+ * Drag-drop dari panel Sumber DICABUT 2026-08-27 bersama panelnya.
  *
- * `dragover` HARUS memanggil `preventDefault()` — tanpa itu browser menolak
- * drop dan `onDrop` tidak pernah jalan. Yang sering luput: `dragenter` juga
- * perlu diperiksa, karena `dragleave` menyala setiap kali kursor melintasi
- * anak elemen. Penghitung `depth` di bawah mencegah sorotan berkedip-kedip
- * saat kursor bergerak di atas isi baris.
+ * Ia tidak pernah berfungsi: `useRecipeDropZone` memanggil
+ * `dataTransfer.getData()` di `dragenter`/`dragover`, padahal selama dua fase
+ * itu drag data store ada dalam PROTECTED MODE dan `getData()` selalu
+ * mengembalikan string kosong — hanya `types` yang boleh dibaca. Penjaganya
+ * karena itu selalu bernilai null, `preventDefault()` tidak pernah dipanggil,
+ * browser menolak drop, dan `onDrop` tidak pernah jalan.
+ *
+ * Komentar aslinya sudah menuliskan kegagalan itu persis ("dragover HARUS
+ * memanggil preventDefault"), lalu memasang penjaga yang membaca data yang
+ * belum boleh dibaca.
+ *
+ * Tidak diperbaiki, tapi dibuang: seluruh fungsinya sudah ada di klik-kanan
+ * (Tambah Pekerjaan, dengan saran template di dalam pencariannya) dan di
+ * quick-add row (`+ Tambah Bahan` / `+ Tambah Jasa`, mencari master data
+ * inline). Memelihara jalan kedua yang rusak untuk hal yang sudah bisa
+ * dilakukan bukan kesederhanaan.
  */
-function useRecipeDropZone(
-  onDrop: (drag: BqRecipeDrag) => Promise<boolean>,
-  enabled: boolean,
-  accepts: (kind: BqRecipeDrag["kind"]) => boolean,
-  rejectMessage?: (kind: BqRecipeDrag["kind"]) => string,
-) {
-  const [over, setOver] = React.useState(false);
-  const depth = React.useRef(0);
-
-  const reset = () => {
-    depth.current = 0;
-    setOver(false);
-  };
-
-  if (!enabled) {
-    return { over: false, handlers: {} as React.HTMLAttributes<HTMLElement> };
-  }
-
-  return {
-    over,
-    handlers: {
-      onDragEnter: (e: React.DragEvent) => {
-        const drag = readRecipeDrag(e);
-        if (!drag) return;
-        e.preventDefault();
-        if (!accepts(drag.kind)) return;
-        depth.current += 1;
-        setOver(true);
-      },
-      onDragOver: (e: React.DragEvent) => {
-        const drag = readRecipeDrag(e);
-        if (!drag) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = accepts(drag.kind) ? "copy" : "none";
-      },
-      onDragLeave: (e: React.DragEvent) => {
-        if (!isRecipeDrag(e)) return;
-        depth.current -= 1;
-        if (depth.current <= 0) reset();
-      },
-      onDrop: (e: React.DragEvent) => {
-        const drag = readRecipeDrag(e);
-        if (!drag) return;
-        e.preventDefault();
-        e.stopPropagation();
-        reset();
-        // Jenis yang tidak sah untuk lapis ini ditolak DI SINI, bukan dibiarkan
-        // sampai ke server: pesan "item template tidak bisa masuk ke dalam
-        // sub-pekerjaan" lebih berguna daripada error validasi dari action.
-        if (!accepts(drag.kind)) {
-          toast.error(
-            rejectMessage?.(drag.kind) ??
-              (drag.kind === "TEMPLATE"
-                ? "Item template adalah pekerjaan — jatuhkan ke seksi/divisi, bukan ke dalam pekerjaan."
-                : "Bahan dan jasa adalah baris — jatuhkan ke sub-pekerjaan, bukan ke pekerjaan."),
-          );
-          return;
-        }
-        void onDrop(drag);
-      },
-    } as React.HTMLAttributes<HTMLElement>,
-  };
-}
 
 /**
  * Badge pos biaya. Hanya muncul untuk kategori yang BUKAN default barisnya —
@@ -444,8 +432,6 @@ type Shared = {
   ) => void;
   setOpenObjects: React.Dispatch<React.SetStateAction<Set<string>>>;
   setOpenSubObjects: React.Dispatch<React.SetStateAction<Set<string>>>;
-  onDropOnObject: (drag: BqRecipeDrag, objectId: string) => Promise<boolean>;
-  onDropOnSubObject: (drag: BqRecipeDrag, subObjectId: string) => Promise<boolean>;
   onAddTemplateItem: (
     sectionId: string,
     templateKey: string,
@@ -453,12 +439,144 @@ type Shared = {
     itemName: string,
   ) => Promise<boolean>;
   onAddObject: (sectionId: string, name: string) => Promise<boolean>;
-  onAddSubSection: (parentId: string, name: string) => Promise<boolean>;
+  /** Resep Works yang tersimpan di Library BQ — ikut ditawarkan di pencarian
+   *  yang sama dengan saran template. */
+  libraryRecipes: LibraryRecipeOption[];
+  onAddFromLibrary: (sectionId: string, libraryObjectId: string) => Promise<boolean>;
   onRemoveSection: (section: BqSectionView) => void;
+  /**
+   * SATU baris tambah untuk seluruh pohon.
+   *
+   * Sebelumnya tiap `SectionBlock` memegang state-nya sendiri, jadi dua kotak
+   * bisa terbuka sekaligus di dua pengelompok berbeda — dan yang di atas tampak
+   * seperti form permanen yang tertinggal, persis yang mau dihapus BQ-35.
+   * Dengan satu state, membuka yang baru menutup yang lama dengan sendirinya.
+   */
+  /** Satu baris cari-Works untuk seluruh pohon — membuka yang baru menutup
+   *  yang lama. Sub Section TIDAK lewat sini: ia dibuat langsung dari menu. */
+  addWorksIn: string | null;
+  setAddWorksIn: (sectionId: string | null) => void;
+  /** Section yang baru dibuat dan harus langsung masuk mode ganti-nama. */
+  renameTarget: string | null;
+  onRenameSection: (sectionId: string, name: string) => void;
+  onAddSubSection: (parentId: string) => Promise<void>;
   canEdit: boolean;
   run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
   pending: boolean;
 };
+
+/**
+ * SATU GRID ANGKA UNTUK SELURUH BARIS.
+ *
+ * Sebelum 2026-08-27 ada TIGA sistem layout untuk kolom yang sama:
+ *
+ *   strip header    px-4 + pr-0.5   w-14 / w-24 / w-28
+ *   baris seksi     tanpa padding                 w-28
+ *   baris Works     px-6, di dalam kartu berbingkai  w-14 / w-24 / w-28
+ *
+ * Akibatnya "Rp 0" milik seksi mendarat ~24px di kanan "Rp 0" milik Works, dan
+ * tidak satu pun sejajar dengan judul kolomnya sendiri. Pada layar bertipe
+ * spreadsheet itu bukan cacat kosmetik: mata membaca kolom, dan kolom yang
+ * bergeser antar jenis baris membuat angka tidak bisa dibandingkan sekilas.
+ *
+ * Ketiganya sekarang memakai konstanta yang sama. Kalau salah satu kolom
+ * berubah lebar, ubah DI SINI — jangan di salah satu pemakainya.
+ */
+const ROW_PX = "px-4";
+const COL_GAP = "gap-x-6";
+const COL_VOL = "w-14";
+const COL_PRICE = "w-24";
+const COL_TOTAL = "w-28";
+
+/**
+ * Nama yang bisa diganti di tempat.
+ *
+ * Menggantikan kotak "Sub Section baru di …" yang dulu muncul terpisah. Alurnya
+ * jadi satu langkah: menu membuat barisnya, baris itu langsung masuk mode
+ * ganti-nama (`autoEdit`), pengguna mengetik dan menekan Enter. Tidak ada kotak
+ * mengambang yang bisa tertinggal terbuka.
+ *
+ * Escape membatalkan dan mengembalikan nama lama — penting karena baris yang
+ * baru dibuat sudah punya nama bawaan yang sah; membatalkan tidak boleh
+ * meninggalkan nama kosong.
+ */
+function EditableName({
+  value,
+  onCommit,
+  autoEdit = false,
+  disabled = false,
+  className,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  /** Langsung masuk mode edit — dipakai baris yang baru dibuat. */
+  autoEdit?: boolean;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [editing, setEditing] = React.useState(autoEdit);
+  const [draft, setDraft] = React.useState(value);
+  const ref = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  React.useEffect(() => {
+    if (editing) ref.current?.select();
+  }, [editing]);
+
+  if (!editing || disabled) {
+    return (
+      <span
+        className={cn(className, !disabled && "cursor-text")}
+        onClick={
+          disabled
+            ? undefined
+            : (event) => {
+                // Header seksi itu tombol buka/tutup. Tanpa ini, mengklik nama
+                // ikut melipat isinya.
+                event.stopPropagation();
+                setEditing(true);
+              }
+        }
+        title={disabled ? undefined : "Klik untuk ganti nama"}
+      >
+        {value}
+      </span>
+    );
+  }
+
+  const commit = () => {
+    const next = draft.trim();
+    if (next && next !== value) onCommit(next);
+    setEditing(false);
+  };
+
+  return (
+    <Input
+      ref={ref}
+      autoFocus
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onClick={(event) => event.stopPropagation()}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setDraft(value);
+          setEditing(false);
+        }
+      }}
+      className={cn("h-7 max-w-xs text-sm", className)}
+    />
+  );
+}
 
 /**
  * Satu pengelompok beserta isinya — dipakai untuk KETIGA lapis.
@@ -475,28 +593,74 @@ function SectionBlock({
   ...shared
 }: { node: SectionNode; depth?: number } & Shared) {
   const open = !shared.closedSections.has(node.section.id);
-
   const canNest = depth + 1 < MAX_SECTION_DEPTH;
+
+  const addingWorks = shared.addWorksIn === node.section.id;
+  const closeAdd = () => shared.setAddWorksIn(null);
+
+  const openSection = () => {
+    if (!open) shared.onToggleSection(node.section.id);
+  };
 
   return (
     <div className="space-y-1.5">
-      <SectionHeader
-        section={node.section}
-        open={open}
-        depth={depth}
-        childCount={countWorksDeep(node)}
-        childLabel="item"
-        onToggle={() => shared.onToggleSection(node.section.id)}
-        onRemove={() => shared.onRemoveSection(node.section)}
-        canEdit={shared.canEdit}
-        pending={shared.pending}
-      />
+      <ContextMenu>
+        <ContextMenuTrigger asChild disabled={!shared.canEdit}>
+          <div>
+            <SectionHeader
+              section={node.section}
+              open={open}
+              depth={depth}
+              childCount={countWorksDeep(node)}
+              childLabel="item"
+              onToggle={() => shared.onToggleSection(node.section.id)}
+              canEdit={shared.canEdit}
+              autoEdit={shared.renameTarget === node.section.id}
+              onRename={(name) => shared.onRenameSection(node.section.id, name)}
+            />
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuLabel>{node.section.name}</ContextMenuLabel>
+          <ContextMenuItem
+            onSelect={() => {
+              openSection();
+              shared.setAddWorksIn(node.section.id);
+            }}
+          >
+            <Plus /> Tambah Pekerjaan
+          </ContextMenuItem>
+          {canNest ? (
+            <ContextMenuItem
+              onSelect={() => {
+                openSection();
+                void shared.onAddSubSection(node.section.id);
+              }}
+            >
+              <Plus /> Tambah Sub Section
+            </ContextMenuItem>
+          ) : null}
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => shared.onRemoveSection(node.section)}
+          >
+            <Trash2 /> Hapus
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
       {open ? (
         <div className="space-y-1.5">
           {/* Works yang menggantung langsung — bentuk PRELIMINARIES di dokumen
               kantor, dan juga Floor Works yang tidak memakai lapis area. */}
-          <ObjectList section={node.section} objects={node.objects} {...shared} />
+          <ObjectList
+            section={node.section}
+            objects={node.objects}
+            addOpen={addingWorks}
+            onAddClose={closeAdd}
+            {...shared}
+          />
 
           {/* Anak — indentasi menandai bahwa ia satu lapis di dalam. */}
           {node.children.map((child) => (
@@ -505,27 +669,12 @@ function SectionBlock({
             </div>
           ))}
 
-          {/* Sub Section punya induk, jadi tombolnya hidup DI DALAM induk itu —
-              berbeda dari L0, yang tidak punya tujuan untuk dipilih dan
-              karenanya tinggal di panel. Hilang di lapis terdalam. */}
-          {shared.canEdit && canNest ? (
-            <div className="pl-5">
-              <SectionAddObject
-                sectionName={node.section.name}
-                pending={shared.pending}
-                label="Sub Section"
-                placeholder={`Sub Section baru di ${node.section.name}`}
-                onAdd={(name) => shared.onAddSubSection(node.section.id, name)}
-              />
-            </div>
-          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-/** Kepala pengelompok. Bentuknya sama di tiap lapis, bobot tipografinya turun. */
 function SectionHeader({
   section,
   open,
@@ -533,9 +682,9 @@ function SectionHeader({
   childCount,
   childLabel,
   onToggle,
-  onRemove,
   canEdit,
-  pending,
+  autoEdit = false,
+  onRename,
 }: {
   section: BqSectionView;
   open: boolean;
@@ -544,64 +693,79 @@ function SectionHeader({
   childCount: number;
   childLabel: string;
   onToggle: () => void;
-  onRemove: () => void;
+  /** Dipakai hanya untuk petunjuk klik-kanan — aksinya sendiri di context menu. */
   canEdit: boolean;
-  pending: boolean;
+  /** Baris yang baru dibuat langsung bisa diketik namanya. */
+  autoEdit?: boolean;
+  onRename: (name: string) => void;
 }) {
   return (
-    <div className="group/sec flex items-center gap-1">
+    <div
+      className={cn("group/sec flex items-center gap-1", ROW_PX)}
+      title={canEdit ? "Klik kanan untuk menambah atau menghapus" : undefined}
+    >
+      {/* Tombol lipat dan nama SENGAJA bersebelahan, bukan bersarang.
+          `EditableName` merender <Input>, dan <input> di dalam <button> itu
+          HTML tidak sah — kliknya nyasar ke tombol dan pengetikan bisa memicu
+          lipat. Jadi tombolnya cuma memuat chevron dan kode; namanya berdiri
+          sendiri sebagai target ganti-nama. */}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-baseline justify-between gap-4 pt-1 text-left"
+        aria-label={open ? `Tutup ${section.name}` : `Buka ${section.name}`}
+        className="flex shrink-0 items-center gap-2 py-1 text-left"
       >
-        <span className="flex items-baseline gap-2">
-          {open ? (
-            <ChevronDown className="h-4 w-4 shrink-0 self-center text-slate-400" />
-          ) : (
-            <ChevronRight className="h-4 w-4 shrink-0 self-center text-slate-400" />
-          )}
-          <span
-            className={cn(
-              "font-serif text-slate-900",
-              // Bobotnya turun tiap lapis — itu satu-satunya pembeda antar
-              // lapis selain indentasi. Tanpa ini L1 dan L2 terlihat kembar.
-              depth === 0 && "text-base font-semibold",
-              depth === 1 && "text-sm font-semibold",
-              depth >= 2 && "text-sm font-medium",
-            )}
-          >
-            {section.code ? (
-              <span className="mr-2 text-slate-400">{section.code}</span>
-            ) : null}
-            {section.name}
-          </span>
-          {/* Saat tertutup, isinya harus tetap terhitung — kalau tidak, seksi
-              tertutup terlihat sama dengan seksi kosong. */}
-          {!open ? (
-            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-              {childCount} {childLabel}
-            </span>
-          ) : null}
+        {open ? (
+          <ChevronDown className={cn("h-4 w-4 shrink-0", UI_ENGINE_ICON_DECORATIVE)} />
+        ) : (
+          <ChevronRight className={cn("h-4 w-4 shrink-0", UI_ENGINE_ICON_DECORATIVE)} />
+        )}
+        {section.code ? (
+          <span className="text-slate-500">{section.code}</span>
+        ) : null}
+      </button>
+
+      <span
+        className={cn(
+          "min-w-0 font-serif text-slate-900",
+          // Bobotnya turun tiap lapis — itu satu-satunya pembeda antar lapis
+          // selain indentasi. Tanpa ini L1 dan L2 terlihat kembar.
+          depth === 0 && "text-base font-semibold",
+          depth === 1 && "text-sm font-semibold",
+          depth >= 2 && "text-sm font-medium",
+        )}
+      >
+        <EditableName
+          value={section.name}
+          autoEdit={autoEdit}
+          disabled={!canEdit}
+          onCommit={onRename}
+        />
+      </span>
+
+      {/* Saat tertutup, isinya harus tetap terhitung — kalau tidak, seksi
+          tertutup terlihat sama dengan seksi kosong. */}
+      {!open ? (
+        <span className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>
+          {childCount} {childLabel}
         </span>
-        <span className="w-28 text-right font-sans text-sm font-medium tabular-nums text-slate-700">
+      ) : null}
+
+      {/* Kolom kosong supaya subtotal mendarat tepat di bawah "Jumlah",
+          sejajar dengan Works — bukan menempel di tepi kanan sendiri. */}
+      <span className={cn("ml-auto flex items-center", COL_GAP)}>
+        <span className={COL_VOL} aria-hidden />
+        <span className={COL_PRICE} aria-hidden />
+        <span
+          className={cn(
+            COL_TOTAL,
+            "text-right font-sans text-sm font-medium tabular-nums text-slate-700",
+          )}
+        >
           {formatIdr(section.subtotal)}
         </span>
-      </button>
-      {canEdit ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 shrink-0 p-0 text-slate-300 opacity-0 transition-opacity hover:text-red-600 focus-visible:opacity-100 group-hover/sec:opacity-100"
-          disabled={pending}
-          title={`Hapus "${section.name}"`}
-          aria-label={`Hapus ${section.name}`}
-          onClick={onRemove}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      ) : null}
+      </span>
     </div>
   );
 }
@@ -616,8 +780,16 @@ function SectionHeader({
 function ObjectList({
   section,
   objects,
+  addOpen,
+  onAddClose,
   ...shared
-}: { section: BqSectionView; objects: BqObjectView[] } & Shared) {
+}: {
+  section: BqSectionView;
+  objects: BqObjectView[];
+  /** Dibuka dari menu klik-kanan pengelompok. */
+  addOpen: boolean;
+  onAddClose: () => void;
+} & Shared) {
   const suggestions = React.useMemo(
     () =>
       suggestedTemplateItems(
@@ -631,43 +803,20 @@ function ObjectList({
     [section.name, objects],
   );
   const counts = React.useMemo(() => suggestionNameCounts(suggestions), [suggestions]);
-  const drop = useRecipeDropZone(
-    async (drag) =>
-      drag.kind === "TEMPLATE"
-        ? shared.onAddTemplateItem(
-            section.id,
-            drag.templateKey,
-            drag.groupName,
-            drag.itemName,
-          )
-        : false,
-    shared.canEdit,
-    (kind) => kind === "TEMPLATE",
-    (kind) =>
-      kind === "TEMPLATE"
-        ? "Item template hanya bisa dijatuhkan ke seksi/divisi kosong, bukan ke dalam pekerjaan."
-        : "Template membuat pekerjaan baru di seksi/divisi. Resep library masuk ke pekerjaan atau sub-pekerjaan; bahan dan jasa masuk ke sub-pekerjaan.",
-  );
 
-  const hasAnything = objects.length > 0 || shared.canEdit || suggestions.length > 0;
+  const hasAnything = objects.length > 0 || addOpen;
   if (!hasAnything) return null;
 
   return (
     <div
-      {...drop.handlers}
-      className={cn(
-        "divide-y divide-slate-200 overflow-hidden border border-slate-200 bg-white transition-colors",
-        drop.over && "bg-slate-50 ring-1 ring-inset ring-slate-300",
-        UI_ENGINE_RADIUS_CONTROL,
+            className={cn(
+        // Baris polos, bukan kartu berbingkai. Kartu membuat Works terbaca
+        // sebagai jenis benda yang berbeda dari pengelompoknya, padahal
+        // keduanya baris di tabel yang sama — dan bingkainya menambah inset
+        // yang menggeser kolom angka. Kedalaman sudah dibawa indentasi.
+        "divide-y divide-slate-100 bg-white transition-colors",
       )}
     >
-      {drop.over ? (
-        <div className="border-b border-slate-200 bg-slate-50 px-6 py-1.5">
-          <p className={cn(UI_ENGINE_TYPE_META, "font-medium text-slate-700")}>
-            Lepas di sini — template jadi pekerjaan baru di &quot;{section.name}&quot;
-          </p>
-        </div>
-      ) : null}
       {objects.map((object) => (
         <ObjectRow
           key={object.computed.objectId}
@@ -678,120 +827,70 @@ function ObjectList({
             shared.toggleManual(shared.setOpenObjects, object.computed.objectId)
           }
           onToggleSub={(id) => shared.toggleManual(shared.setOpenSubObjects, id)}
-          onDropOnObject={shared.onDropOnObject}
-          onDropOnSubObject={shared.onDropOnSubObject}
           canEdit={shared.canEdit}
           run={shared.run}
           pending={shared.pending}
         />
       ))}
 
-      {/* Saran dari template — yang tidak diklik tidak pernah ada. */}
-      {shared.canEdit && suggestions.length > 0 ? (
-        <div className="bg-slate-50/60 px-6 py-3">
-          <div className="flex flex-wrap gap-1.5">
-            {suggestions.map((item) => {
-              const name = displayName(item);
-              const templateKey = templateItemKey(item);
-              if (!templateKey) return null;
-              const label = suggestionLabel(item, counts);
-              return (
-                <button
-                  key={templateKey}
-                  type="button"
-                  disabled={shared.pending}
-                  title={
-                    item.lines.length > 0
-                      ? `${label} — satuan ${item.unit}, membawa ${item.lines.length} baris pembentuk`
-                      : `${label} — satuan ${item.unit}`
-                  }
-                  onClick={() =>
-                    void shared.onAddTemplateItem(
-                      section.id,
-                      templateKey,
-                      section.name,
-                      name,
-                    )
-                  }
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300",
-                    "bg-white px-2.5 py-1 text-xs text-slate-600 transition-colors",
-                    "hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900",
-                    "disabled:opacity-50",
-                  )}
-                >
-                  <Plus className="h-3 w-3 text-slate-400" />
-                  {label}
-                  <span className="text-slate-400">{item.unit}</span>
-                </button>
-              );
-            })}
-          </div>
+      {/* Baris tambah muncul HANYA saat diminta lewat klik-kanan. Saran
+          template ikut ke dalam pencariannya — dulu ia blok chip permanen yang
+          menempel di setiap daftar. */}
+      {addOpen ? (
+        <div className={cn("py-2", ROW_PX)}>
+          <CreatableSearch
+            groups={[
+              {
+                label: "Library",
+                options: shared.libraryRecipes.map((r) => ({
+                  id: `lib:${r.id}`,
+                  name: r.name,
+                  subText: `${r.unit} · ${r.materialLineCount + r.serviceLineCount} sub-works`,
+                })),
+              },
+              {
+                label: "Template",
+                options: suggestions
+              .map((item) => {
+                const key = templateItemKey(item);
+                return key
+                  ? {
+                      id: key,
+                      name: suggestionLabel(item, counts),
+                      subText: item.unit,
+                    }
+                  : null;
+              })
+                  .filter((o): o is { id: string; name: string; subText: string } => o !== null),
+              },
+            ].filter((g) => g.options.length > 0)}
+            allowFreeText
+            placeholder={`Pekerjaan baru di ${section.name}`}
+            createLabel={'Buat "{q}"'}
+            emptyLabel="Ketik nama pekerjaannya"
+            aria-label={`Tambah pekerjaan di ${section.name}`}
+            onSelect={(id, name) => {
+              if (!id) return;
+              // Prefiks `lib:` memisahkan resep Library dari kunci template.
+              // Keduanya hidup di satu pencarian karena bagi estimator keduanya
+              // hal yang sama — "pekerjaan yang sudah pernah disusun".
+              if (id.startsWith("lib:")) {
+                void shared
+                  .onAddFromLibrary(section.id, id.slice(4))
+                  .then(onAddClose);
+                return;
+              }
+              void shared
+                .onAddTemplateItem(section.id, id, section.name, name)
+                .then(onAddClose);
+            }}
+            onCreate={(name) => {
+              void shared.onAddObject(section.id, name).then(onAddClose);
+            }}
+            className="max-w-sm"
+          />
         </div>
       ) : null}
-
-      {shared.canEdit ? (
-        <SectionAddObject
-          sectionName={section.name}
-          pending={shared.pending}
-          onAdd={(name) => shared.onAddObject(section.id, name)}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Baris "tambah pekerjaan" milik satu seksi.
- *
- * Komponen terpisah karena tiap seksi butuh draft namanya SENDIRI — satu state
- * bersama di induk berarti mengetik di seksi B ikut mengisi kotak di seksi C.
- */
-function SectionAddObject({
-  sectionName,
-  pending,
-  onAdd,
-  label = "Pekerjaan",
-  placeholder,
-}: {
-  sectionName: string;
-  pending: boolean;
-  onAdd: (name: string) => Promise<boolean>;
-  label?: string;
-  placeholder?: string;
-}) {
-  const [name, setName] = React.useState("");
-
-  const submit = async () => {
-    if (!name.trim()) return;
-    const ok = await onAdd(name.trim());
-    if (ok) setName("");
-  };
-
-  return (
-    <div className="flex items-center gap-2 bg-slate-50/60 px-6 py-2.5">
-      <Input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            void submit();
-          }
-        }}
-        placeholder={placeholder ?? `Pekerjaan baru di ${sectionName}`}
-        className="h-8 max-w-xs text-xs"
-      />
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-8"
-        disabled={pending || !name.trim()}
-        onClick={() => void submit()}
-      >
-        <Plus className="mr-1.5 h-3.5 w-3.5" />
-        Tambah {label}
-      </Button>
     </div>
   );
 }
@@ -809,7 +908,7 @@ function SummaryMetric({
 }) {
   return (
     <div className={cn("min-w-0 text-right", width)}>
-      {label ? <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{label}</p> : null}
+      {label ? <p className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>{label}</p> : null}
       <p
         className={cn(
           "font-sans text-sm tabular-nums text-slate-700",
@@ -834,12 +933,35 @@ export function BqBreakdownClient({
   view: BqProjectView;
   canEdit: boolean;
 }) {
-  const { run, pending } = useMutate();
+  const { run, runData, pending } = useMutate();
 
   // FR-EXP-01 / FR-EXP-02: keduanya default TERTUTUP, jadi state menyimpan
   // yang TERBUKA. Menyimpan yang tertutup akan membuat object baru muncul
   // dalam keadaan terbuka, dan "default tertutup" berhenti berlaku persis
   // saat estimator paling butuh pandangan klien.
+  /**
+   * Resep Library dimuat SEKALI saat halaman siap, bukan per pencarian.
+   *
+   * Daftarnya kecil (resep kantor, bukan katalog master data) dan dipakai di
+   * setiap kotak tambah-pekerjaan — memuatnya ulang tiap ketikan berarti satu
+   * server action per karakter untuk data yang praktis tidak berubah.
+   */
+  const [libraryRecipes, setLibraryRecipes] = React.useState<LibraryRecipeOption[]>([]);
+  React.useEffect(() => {
+    if (!canEdit) return;
+    let alive = true;
+    void searchLibraryObjectsAction({ query: "" }).then((result) => {
+      if (alive && result.success && result.data) setLibraryRecipes(result.data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canEdit]);
+
+  /** Baris cari-Works yang sedang terbuka — SATU untuk seluruh pohon. */
+  const [addWorksIn, setAddWorksIn] = React.useState<string | null>(null);
+  /** Section yang baru dibuat dan harus langsung bisa diketik namanya. */
+  const [renameTarget, setRenameTarget] = React.useState<string | null>(null);
   const [openObjects, setOpenObjects] = React.useState<Set<string>>(new Set());
   const [openSubObjects, setOpenSubObjects] = React.useState<Set<string>>(
     new Set(),
@@ -847,7 +969,6 @@ export function BqBreakdownClient({
 
   // Toolbar global — lihat BqToolbar.tsx untuk alasan pemindahannya ke sini.
   const [outlineLevel, setOutlineLevel] = React.useState<OutlineLevel | null>(1);
-  const [libraryOpen, setLibraryOpen] = React.useState(true);
 
   /** Seksi yang DITUTUP. Menyimpan yang tertutup, bukan yang terbuka, supaya
    *  seksi baru muncul terbuka — seksi yang lahir tertutup menyembunyikan
@@ -954,97 +1075,7 @@ export function BqBreakdownClient({
     [view.objects, run],
   );
 
-  /**
-   * Menjatuhkan sesuatu ke SUB-PEKERJAAN (L2).
-   *
-   * Tiga jenis muatan bertemu di sini karena tujuannya sama — mengisi satu
-   * sub-pekerjaan — meski aksi servernya berbeda:
-   *
-   *   LIB_SUB / LIB_OBJ   menuang seluruh isi resep
-   *   MATERIAL / SERVICE  menambah SATU baris L3
-   *
-   * TEMPLATE tidak diterima di sini: satu item template ADALAH sebuah
-   * sub-pekerjaan, jadi menjatuhkannya ke dalam sub-pekerjaan lain tidak punya
-   * arti. `acceptsOnSubObject` menolaknya sebelum sampai ke sini.
-   */
-  const dropOnSubObject = React.useCallback(
-    async (drag: BqRecipeDrag, targetSubObjectId: string) => {
-      switch (drag.kind) {
-        case "LIB_OBJ":
-          return run(
-            () =>
-              loadFromLibraryObjectAction({
-                libraryObjectId: drag.id,
-                targetSubObjectId,
-              }),
-            `"${drag.name}" disisipkan.`,
-          );
-        case "LIB_SUB":
-          return run(
-            () =>
-              loadFromLibrarySubObjectAction({
-                librarySubObjectId: drag.id,
-                targetSubObjectId,
-              }),
-            `"${drag.name}" disisipkan.`,
-          );
-        case "MATERIAL":
-          // Koefisien 1 sebagai titik awal — angka sebenarnya cuma diketahui
-          // estimator, dan menebaknya berarti menaruh angka karangan di BQ.
-          return run(
-            () =>
-              addBqMaterialLineAction({
-                subObjectId: targetSubObjectId,
-                skuId: drag.skuId,
-                skuPriceId: drag.skuPriceId,
-                qtyPerSub: 1,
-              }),
-            `"${drag.name}" ditambahkan — isi koefisiennya.`,
-          );
-        case "SERVICE":
-          return run(
-            () =>
-              addBqServiceLineAction({
-                subObjectId: targetSubObjectId,
-                workPriceId: drag.workPriceId,
-                qtyPerSub: 1,
-              }),
-            `"${drag.name}" ditambahkan — isi koefisiennya.`,
-          );
-        default:
-          return false;
-      }
-    },
-    [run],
-  );
 
-  /**
-   * Menjatuhkan sesuatu ke PEKERJAAN (L1) menghasilkan sub-pekerjaan BARU.
-   *
-   * TEMPLATE punya jalur sendiri karena aksinya memang sudah membuat
-   * sub-pekerjaan beserta pembentuknya sekaligus — memaksanya lewat jalur
-   * "buat dulu, lalu tuang" akan menghasilkan dua sub-pekerjaan.
-   *
-   * Untuk resep library, dua aksi berurutan dan itu pilihan sadar: keduanya
-   * sudah ada dan sudah teruji, sedangkan menggabungkannya berarti menyalin
-   * ~190 baris logika penuangan ke aksi ketiga yang harus ikut dirawat. Kalau
-   * langkah kedua gagal, yang tertinggal adalah sub-pekerjaan kosong bernama
-   * jelas — kelihatan di grid dan bisa dihapus, bukan kerusakan diam-diam.
-   */
-  const dropOnObject = React.useCallback(
-    async (drag: BqRecipeDrag, objectId: string) => {
-      const created = await createBqSubObjectAction({
-        objectId,
-        name: drag.name,
-      });
-      if (!created.success) {
-        toast.error(created.error ?? "Sub-pekerjaan tidak bisa dibuat.");
-        return false;
-      }
-      return dropOnSubObject(drag, created.data.id);
-    },
-    [run, dropOnSubObject],
-  );
 
   /** Menambah pekerjaan DI DALAM sebuah seksi. `sectionId` null hanya untuk
    *  BQ lama yang memang tidak memakai seksi. */
@@ -1058,6 +1089,20 @@ export function BqBreakdownClient({
             name,
           }),
         "Pekerjaan ditambahkan.",
+      ),
+    [run, view.project.id],
+  );
+
+  const addFromLibrary = React.useCallback(
+    async (sectionId: string, libraryObjectId: string) =>
+      run(
+        () =>
+          createBqObjectFromLibraryAction({
+            projectId: view.project.id,
+            sectionId,
+            libraryObjectId,
+          }),
+        "Pekerjaan dibuat dari Library.",
       ),
     [run, view.project.id],
   );
@@ -1076,18 +1121,41 @@ export function BqBreakdownClient({
     [run],
   );
 
-  const addDivision = React.useCallback(
-    async (parentId: string, name: string) =>
-      run(
+  /**
+   * Sub Section dibuat LANGSUNG dari menu, dengan nama bawaan, lalu barisnya
+   * masuk mode ganti-nama. Dulu ia lewat kotak "Sub Section baru di …" yang
+   * muncul terpisah dan bisa tertinggal terbuka — lihat CHANGELOG 2026-08-27.
+   */
+  const addSubSection = React.useCallback(
+    async (parentId: string) => {
+      const created = await runData<{ id: string }>(
         () =>
           createBqSectionAction({
             projectId: view.project.id,
             parentId,
-            name,
+            name: "Sub Section baru",
           }),
-        "Divisi ditambahkan.",
-      ),
-    [run, view.project.id],
+      );
+      if (created?.id) setRenameTarget(created.id);
+    },
+    [runData, view.project.id],
+  );
+
+  /** Section tingkat atas. Sama polanya dengan Sub Section: dibuat langsung
+   *  dengan nama bawaan, lalu barisnya masuk mode ganti-nama. */
+  const addSection = React.useCallback(async () => {
+    const created = await runData<{ id: string }>(() =>
+      createBqSectionAction({ projectId: view.project.id, name: "Section baru" }),
+    );
+    if (created?.id) setRenameTarget(created.id);
+  }, [runData, view.project.id]);
+
+  const renameSection = React.useCallback(
+    (sectionId: string, name: string) => {
+      setRenameTarget(null);
+      void run(() => updateBqSectionAction({ id: sectionId, name }));
+    },
+    [run],
   );
 
   const removeSection = React.useCallback(
@@ -1143,8 +1211,6 @@ export function BqBreakdownClient({
         <BqToolbar
           outlineLevel={outlineLevel}
           onOutlineLevel={applyOutline}
-          onOpenLibrary={() => setLibraryOpen((v) => !v)}
-          libraryOpen={libraryOpen}
           objectCount={view.objects.length}
           lineCount={view.objects.reduce((s, o) => s + o.computed.lineCount, 0)}
           canEdit={canEdit}
@@ -1153,30 +1219,15 @@ export function BqBreakdownClient({
         />
       }
       grid={
-        <div className="flex items-start gap-4">
-          {canEdit ? (
-            <BqLibraryPanel
-              open={libraryOpen}
-              onClose={() => setLibraryOpen(false)}
-              canEdit={canEdit}
-              pending={pending}
-              onAddSection={(name) =>
-                run(
-                  () => createBqSectionAction({ projectId: view.project.id, name }),
-                  "Seksi ditambahkan.",
-                )
-              }
-            />
-          ) : null}
-
-          <div className="min-w-0 flex-1">
+        <div>
+          <div className="min-w-0">
           {/* ------------------------------------------------------------------ */}
           {/* Grand total — pandangan klien                                      */}
           {/* ------------------------------------------------------------------ */}
           <SectionCard className="mb-4" padding="md">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                <p className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>
                   Total Anggaran (RAB)
                 </p>
                 <p className="font-serif text-3xl font-semibold text-slate-900">
@@ -1202,14 +1253,15 @@ export function BqBreakdownClient({
             <div
               className={cn(
                 "sticky top-[3.25rem] z-10 mb-1 hidden items-center justify-between",
-                "border-b border-slate-200 bg-[var(--ui-canvas-bg,rgb(248_250_252))] px-4 py-1.5 sm:flex",
+                "border-b border-slate-200 bg-[var(--ui-canvas-bg,rgb(248_250_252))] py-1.5 sm:flex",
+                ROW_PX,
               )}
             >
-              <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>Pekerjaan</span>
-              <div className="flex items-center gap-x-6 pr-0.5">
-                <span className={cn(UI_ENGINE_TYPE_META, "w-14 text-right text-slate-400")}>Vol.</span>
-                <span className={cn(UI_ENGINE_TYPE_META, "w-24 text-right text-slate-400")}>Harga</span>
-                <span className={cn(UI_ENGINE_TYPE_META, "w-28 text-right text-slate-400")}>Jumlah</span>
+              <span className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>Pekerjaan</span>
+              <div className={cn("flex items-center", COL_GAP)}>
+                <span className={cn(UI_ENGINE_TYPE_META, COL_VOL, "text-right text-slate-500")}>Vol.</span>
+                <span className={cn(UI_ENGINE_TYPE_META, COL_PRICE, "text-right text-slate-500")}>Harga</span>
+                <span className={cn(UI_ENGINE_TYPE_META, COL_TOTAL, "text-right text-slate-500")}>Jumlah</span>
               </div>
             </div>
           ) : (
@@ -1232,7 +1284,7 @@ export function BqBreakdownClient({
                       <LayoutTemplate className="mr-2 h-4 w-4" />
                       Mulai dari Template BQ
                     </Button>
-                    <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                    <p className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>
                       {BQ_TEMPLATE_SUMMARY.sectionCount} seksi ·{" "}
                       {BQ_TEMPLATE_SUMMARY.groupCount} divisi, dengan{" "}
                       {BQ_TEMPLATE_SUMMARY.itemCount} pekerjaan template sebagai saran
@@ -1244,8 +1296,15 @@ export function BqBreakdownClient({
           )}
 
           {/* Object dikelompokkan per seksi bila BQ ini memakainya. BQ tanpa
-              seksi jatuh ke satu kelompok tanpa judul — bentuk lamanya persis. */}
-          <div className="space-y-3">
+              seksi jatuh ke satu kelompok tanpa judul — bentuk lamanya persis.
+
+              Klik kanan di RUANG KOSONG grid menambah Section tingkat atas.
+              Dulu itu satu-satunya hal yang cuma ada di panel Sumber; panelnya
+              dicabut, jadi jalurnya pindah ke sini — gesture yang sama dengan
+              menambah Sub Section dan Works, di tempat hasilnya muncul. */}
+          <ContextMenu>
+            <ContextMenuTrigger asChild disabled={!canEdit}>
+          <div className="min-h-24 space-y-3">
             {tree.nodes.map((node) => (
               <SectionBlock
                 key={node.section.id}
@@ -1257,12 +1316,16 @@ export function BqBreakdownClient({
                 toggleManual={toggleManual}
                 setOpenObjects={setOpenObjects}
                 setOpenSubObjects={setOpenSubObjects}
-                onDropOnObject={dropOnObject}
-                onDropOnSubObject={dropOnSubObject}
                 onAddTemplateItem={addTemplateItem}
                 onAddObject={addObjectToSection}
-                onAddSubSection={addDivision}
+                libraryRecipes={libraryRecipes}
+                onAddFromLibrary={addFromLibrary}
+                onAddSubSection={addSubSection}
                 onRemoveSection={removeSection}
+                addWorksIn={addWorksIn}
+                setAddWorksIn={setAddWorksIn}
+                renameTarget={renameTarget}
+                onRenameSection={renameSection}
                 canEdit={canEdit}
                 run={run}
                 pending={pending}
@@ -1272,7 +1335,7 @@ export function BqBreakdownClient({
             {/* Item tanpa seksi — BQ lama, atau sisa dari seksi yang dihapus. */}
             {tree.orphans.length > 0 ? (
               <div className="space-y-1.5">
-                <p className={cn(UI_ENGINE_TYPE_META, "px-1 pt-2 text-slate-400")}>
+                <p className={cn(UI_ENGINE_TYPE_META, "px-1 pt-2 text-slate-500")}>
                   Tanpa seksi
                 </p>
                 <div
@@ -1291,8 +1354,6 @@ export function BqBreakdownClient({
                         toggleManual(setOpenObjects, object.computed.objectId)
                       }
                       onToggleSub={(id) => toggleManual(setOpenSubObjects, id)}
-                      onDropOnObject={dropOnObject}
-                      onDropOnSubObject={dropOnSubObject}
                       canEdit={canEdit}
                       run={run}
                       pending={pending}
@@ -1302,6 +1363,13 @@ export function BqBreakdownClient({
               </div>
             ) : null}
           </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => void addSection()}>
+                <Plus /> Tambah Section
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
 
           </div>
         </div>
@@ -1320,8 +1388,6 @@ function ObjectRow({
   openSubObjects,
   onToggle,
   onToggleSub,
-  onDropOnObject,
-  onDropOnSubObject,
   canEdit,
   run,
   pending,
@@ -1331,8 +1397,6 @@ function ObjectRow({
   openSubObjects: Set<string>;
   onToggle: () => void;
   onToggleSub: (id: string) => void;
-  onDropOnObject: (drag: BqRecipeDrag, objectId: string) => Promise<boolean>;
-  onDropOnSubObject: (drag: BqRecipeDrag, subObjectId: string) => Promise<boolean>;
   canEdit: boolean;
   run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
   pending: boolean;
@@ -1340,52 +1404,33 @@ function ObjectRow({
   const c = object.computed;
   const locked = object.lockedAt !== null;
   const editable = canEdit && !locked;
-  const [newSubName, setNewSubName] = React.useState("");
 
-  const drop = useRecipeDropZone(
-    (drag) => onDropOnObject(drag, c.objectId),
-    editable,
-    acceptsOnObject,
-    (kind) =>
-      kind === "TEMPLATE"
-        ? "Item template adalah pekerjaan — jatuhkan ke seksi/divisi, bukan ke dalam pekerjaan."
-        : "Bahan dan jasa adalah baris — jatuhkan ke sub-pekerjaan, bukan ke pekerjaan.",
-  );
 
   return (
     <div
-      {...drop.handlers}
-      className={cn(
+            className={cn(
         "bg-white transition-colors",
         // Sorotan drop dipindah ke latar, bukan bingkai — barisnya sudah tidak
         // punya bingkai sendiri sejak grid jadi tabel.
-        drop.over && "bg-indigo-50 ring-1 ring-inset ring-indigo-300",
       )}
     >
       {/* Umpan balik drop di tingkat pekerjaan: resep akan jadi sub-pekerjaan
           BARU di sini, bukan menimpa yang sudah ada. */}
-      {drop.over ? (
-        <div className="border-b border-indigo-200 bg-indigo-50 px-6 py-1.5">
-          <p className={cn(UI_ENGINE_TYPE_META, "font-medium text-indigo-700")}>
-            Lepas di sini — resep jadi sub-pekerjaan baru di &quot;{c.name}&quot;
-          </p>
-        </div>
-      ) : null}
       {/* ---- FR-EXP-01: baris tertutup = satu baris BQ ------------------- */}
-      <div className="flex flex-wrap items-start gap-3 px-6 py-4">
+      <div className={cn("flex flex-wrap items-start gap-3 py-4", ROW_PX)}>
         <button
           type="button"
           onClick={onToggle}
           className="flex min-w-0 flex-1 items-start gap-3 text-left"
         >
           {isOpen ? (
-            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+            <ChevronDown className={cn("h-4 w-4 shrink-0", UI_ENGINE_ICON_DECORATIVE)} />
           ) : (
-            <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+            <ChevronRight className={cn("h-4 w-4 shrink-0", UI_ENGINE_ICON_DECORATIVE)} />
           )}
           <div className="min-w-0 space-y-1">
             {c.code ? (
-              <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+              <p className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>
                 {c.code}
               </p>
             ) : null}
@@ -1407,17 +1452,24 @@ function ObjectRow({
               ) : null}
             </div>
             {/* FR-EXP-08 — tertutup pun tetap tahu isinya. */}
-            <p className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
-              {c.subObjectCount} sub-pekerjaan · {c.lineCount} baris
+            <p className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>
+              {/* Kosakata mengikuti PRD-BQ §2: Works berisi Sub-Works. Lapis
+                  sub-object sudah dipensiunkan (PRD §8) — ia hanya disebut
+                  kalau memang MASIH ADA datanya, supaya baris lama tetap bisa
+                  dijelaskan tanpa mengiklankan lapis yang tidak dipakai lagi. */}
+              {c.lineCount} sub-works
+              {c.subObjectCount > 0
+                ? ` · ${c.subObjectCount} sub-object (lama)`
+                : ""}
             </p>
           </div>
         </button>
 
         <div className="ml-auto flex flex-col items-end gap-2">
-          <div className="flex flex-wrap items-start justify-end gap-x-6 gap-y-2">
+          <div className={cn("flex flex-wrap items-start justify-end gap-y-2", COL_GAP)}>
             {/* Tanpa label — strip header sticky di atas grid yang menamainya. */}
             <SummaryMetric
-              width="w-14"
+              width={COL_VOL}
               value={
                 <>
                   {formatQty(c.qty)} {c.unit}
@@ -1425,12 +1477,12 @@ function ObjectRow({
               }
             />
             <SummaryMetric
-              width="w-24"
+              width={COL_PRICE}
               value={formatIdr(c.ratePerUnit)}
               emphasis="strong"
             />
             <SummaryMetric
-              width="w-28"
+              width={COL_TOTAL}
               value={formatIdr(c.total)}
               emphasis="serif"
             />
@@ -1461,6 +1513,32 @@ function ObjectRow({
                   )}
                 </Button>
               ) : null}
+              {/* Simpan resep ke Library. Sebelum 2026-08-27 tombol ini HANYA
+                  ada di sub-pekerjaan — lapis yang sudah dipensiunkan — jadi
+                  begitu jalur membuatnya dicabut, Library tidak bisa diisi
+                  sama sekali. */}
+              {editable ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 hover:text-indigo-600"
+                  disabled={pending}
+                  title={`Simpan "${c.name}" ke Library sebagai resep`}
+                  aria-label={`Simpan ${c.name} ke Library`}
+                  onClick={() =>
+                    void run(
+                      () =>
+                        saveObjectToLibraryAction({
+                          objectId: c.objectId,
+                          name: c.name,
+                        }),
+                      `"${c.name}" tersimpan ke Library.`,
+                    )
+                  }
+                >
+                  <BookmarkPlus className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
               {editable ? (
                 <Button
                   size="sm"
@@ -1486,7 +1564,7 @@ function ObjectRow({
       {isOpen ? (
         <div className="border-t border-slate-100">
           {/* Kontrol object */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-slate-50/60 px-6 py-2.5">
+          <div className={cn("flex flex-wrap items-center gap-x-5 gap-y-2 bg-slate-50/60 py-2.5", ROW_PX)}>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
               <label className="flex items-center gap-2">
                 <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
@@ -1517,7 +1595,7 @@ function ObjectRow({
           {editable ||
           c.materials.length > 0 ||
           c.services.length > 0 ? (
-            <div className="border-b border-slate-100 px-6 pb-4 pt-2">
+            <div className={cn("border-b border-slate-100 pb-4 pt-2", ROW_PX)}>
               <LineTable
                 parent={{ objectId: c.objectId }}
                 records={{ materials: object.materials, services: object.services }}
@@ -1550,7 +1628,6 @@ function ObjectRow({
                   computed={computedSub}
                   isOpen={openSubObjects.has(sub.id)}
                   onToggle={() => onToggleSub(sub.id)}
-                  onDropRecipe={(drag) => onDropOnSubObject(drag, sub.id)}
                   editable={editable}
                   pending={pending}
                   run={run}
@@ -1558,48 +1635,16 @@ function ObjectRow({
               );
             })}
           </div>
-          {editable ? (
-            <div className="flex items-center gap-2 border-t border-slate-100 px-6 py-3">
-              <Input
-                value={newSubName}
-                onChange={(e) => setNewSubName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newSubName.trim()) {
-                    e.preventDefault();
-                    void run(
-                      () =>
-                        createBqSubObjectAction({
-                          objectId: c.objectId,
-                          name: newSubName,
-                        }),
-                      "Sub-pekerjaan ditambahkan.",
-                    ).then((ok) => ok && setNewSubName(""));
-                  }
-                }}
-                placeholder="Sub-pekerjaan baru, mis: Ambalan, Body, Pintu"
-                className="h-8 max-w-xs text-xs"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8"
-                disabled={pending || !newSubName.trim()}
-                onClick={() =>
-                  void run(
-                    () =>
-                      createBqSubObjectAction({
-                        objectId: c.objectId,
-                        name: newSubName,
-                      }),
-                    "Sub-pekerjaan ditambahkan.",
-                  ).then((ok) => ok && setNewSubName(""))
-                }
-              >
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Tambah Sub-pekerjaan
-              </Button>
-            </div>
-          ) : null}
+          {/* "Tambah Sub-pekerjaan" DICABUT 2026-08-27.
+              `BqSubObject` sudah dipensiunkan (PRD-BQ §8): baris bahan/jasa
+              menempel langsung ke Works. Menawarkan tombolnya mengundang orang
+              membangun lapis yang sudah dibuang — dan owner menegaskan
+              pekerjaan seperti Mobilization atau Security memang tidak butuh
+              elemen sub-works.
+
+              Sub-object yang TERLANJUR ada tetap dirender di atas, supaya data
+              lama bisa dibaca dan dipindahkan. Yang hilang cuma cara membuat
+              yang baru. */}
         </div>
       ) : null}
     </div>
@@ -1616,7 +1661,6 @@ function SubObjectRow({
   computed,
   isOpen,
   onToggle,
-  onDropRecipe,
   editable,
   pending,
   run,
@@ -1628,39 +1672,22 @@ function SubObjectRow({
   isOpen: boolean;
   onToggle: () => void;
   /** Resep dijatuhkan ke baris ini — isinya dituang ke sub-pekerjaan ini. */
-  onDropRecipe: (drag: BqRecipeDrag) => Promise<boolean>;
   editable: boolean;
   pending: boolean;
   run: (fn: () => Promise<ActionResultLike>, msg?: string) => Promise<boolean>;
 }) {
   const isLinked = sub.librarySubObjectId !== null;
-  const drop = useRecipeDropZone(
-    onDropRecipe,
-    editable,
-    acceptsOnSubObject,
-    (kind) =>
-      kind === "TEMPLATE"
-        ? "Item template adalah pekerjaan — jatuhkan ke seksi/divisi, bukan ke dalam sub-pekerjaan."
-        : "Bahan dan jasa hanya bisa masuk ke sub-pekerjaan.",
-  );
 
   return (
     // FR-EXP-07: kedalaman ditandai indentasi + garis kiri + warna latar.
     <div className="group/sub pl-6">
       <div
-        {...drop.handlers}
         className={cn(
           "border-l-2 py-2.5 pl-4 pr-4 transition-colors",
-          drop.over
-            ? "border-indigo-500 bg-indigo-50"
-            : cn("border-slate-200", isOpen && "bg-slate-50/40"),
+          "border-slate-200",
+          isOpen && "bg-slate-50/40",
         )}
       >
-        {drop.over ? (
-          <p className={cn(UI_ENGINE_TYPE_META, "mb-1.5 font-medium text-indigo-700")}>
-            Lepas di sini — isi resep masuk ke &quot;{sub.name}&quot;
-          </p>
-        ) : null}
         <div className="flex flex-wrap items-start gap-3">
           <button
             type="button"
@@ -1668,9 +1695,9 @@ function SubObjectRow({
             className="flex min-w-0 flex-1 items-start gap-2 text-left"
           >
             {isOpen ? (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
             )}
             <div className="min-w-0 space-y-1">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1697,7 +1724,7 @@ function SubObjectRow({
                 <span
                   className={cn(
                     UI_ENGINE_TYPE_META,
-                    "w-4 shrink-0 text-right tabular-nums text-slate-400",
+                    "w-4 shrink-0 text-right tabular-nums text-slate-500",
                   )}
                 >
                   {index + 1}
@@ -1707,7 +1734,7 @@ function SubObjectRow({
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                <span className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>
                   {computed.lineCount} baris
                 </span>
               </div>
@@ -1724,7 +1751,7 @@ function SubObjectRow({
                 labelnya dengan kolom Vol. di atas justru menyesatkan. */}
             <div className="text-right">
               <label className="flex items-center justify-end gap-1.5" title="Berapa kali sub-pekerjaan ini ada dalam satu pekerjaan">
-                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+                <span className={cn(UI_ENGINE_TYPE_META, UI_ENGINE_TEXT_TERTIARY)}>
                   ×
                 </span>
                 <NumberCell
@@ -1743,7 +1770,7 @@ function SubObjectRow({
             </div>
 
             <SummaryMetric
-              width="w-28"
+              width={COL_TOTAL}
               value={formatIdr(computed.subtotal)}
               emphasis="strong"
             />
@@ -1757,7 +1784,7 @@ function SubObjectRow({
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 w-7 p-0 text-slate-300 opacity-0 transition-opacity hover:text-indigo-600 focus-visible:opacity-100 group-hover/sub:opacity-100"
+                className="h-7 w-7 p-0 text-slate-500 opacity-0 transition-opacity hover:text-indigo-600 focus-visible:opacity-100 group-hover/sub:opacity-100"
                 disabled={pending}
                 title={`Simpan "${sub.name}" ke Library sebagai resep`}
                 aria-label={`Simpan ${sub.name} ke Library`}
@@ -1921,7 +1948,7 @@ function LineTable({
       {/* --- Bahan Material -------------------------------------------- */}
       <div>
         <div className="mb-1.5 flex items-center gap-1.5">
-          <Package className="h-3 w-3 text-slate-400" />
+          <Package className="h-3 w-3 text-slate-500" />
           <span className={cn(UI_ENGINE_TYPE_META, "font-medium text-slate-500")}>
             Bahan
           </span>
@@ -1932,12 +1959,12 @@ function LineTable({
             <table className="w-full min-w-[560px] border-collapse">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-7 py-1 pr-2 text-right font-normal text-slate-400")}>No.</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-left font-normal text-slate-400")}>Uraian</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-12 py-1 pr-2 text-center font-normal text-slate-400")}>Sat.</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-20 py-1 pr-3 text-right font-normal text-slate-400")}>Koef.</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 pr-3 text-right font-normal text-slate-400")}>Harga Sat.</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 text-right font-normal text-slate-400")}>Jumlah</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-7 py-1 pr-2 text-right font-normal text-slate-500")}>No.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-left font-normal text-slate-500")}>Uraian</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-12 py-1 pr-2 text-center font-normal text-slate-500")}>Sat.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-20 py-1 pr-3 text-right font-normal text-slate-500")}>Koef.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 pr-3 text-right font-normal text-slate-500")}>Harga Sat.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 text-right font-normal text-slate-500")}>Jumlah</th>
                   {editable ? <th className="w-8" /> : null}
                 </tr>
               </thead>
@@ -1947,7 +1974,7 @@ function LineTable({
                   if (!record) return null;
                   return (
                     <tr key={line.lineId} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
-                      <td className={cn(UI_ENGINE_TYPE_META, "py-1.5 pr-2 text-right text-slate-400")}>
+                      <td className={cn(UI_ENGINE_TYPE_META, "py-1.5 pr-2 text-right text-slate-500")}>
                         {index + 1}
                       </td>
                       <td className="py-1.5 pr-3">
@@ -1961,7 +1988,7 @@ function LineTable({
                           }
                           className="min-w-32"
                         />
-                        <div className={cn(UI_ENGINE_TYPE_META, "mt-0.5 flex flex-wrap items-center gap-x-2 text-slate-400")}>
+                        <div className={cn(UI_ENGINE_TYPE_META, "mt-0.5 flex flex-wrap items-center gap-x-2 text-slate-500")}>
                           <CostCategoryBadge
                             category={record.costCategory}
                             defaultFor="MATERIAL"
@@ -2063,7 +2090,7 @@ function LineTable({
             <button
               type="button"
               onClick={() => setManualFor("MATERIAL")}
-              className={cn(UI_ENGINE_TYPE_META, "text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline")}
+              className={cn(UI_ENGINE_TYPE_META, "text-slate-500 underline-offset-2 hover:text-slate-600 hover:underline")}
             >
               Manual
             </button>
@@ -2074,7 +2101,7 @@ function LineTable({
       {/* --- Jasa ------------------------------------------------------ */}
       <div>
         <div className="mb-1.5 flex items-center gap-1.5">
-          <Hammer className="h-3 w-3 text-slate-400" />
+          <Hammer className="h-3 w-3 text-slate-500" />
           <span className={cn(UI_ENGINE_TYPE_META, "font-medium text-slate-500")}>
             Jasa
           </span>
@@ -2085,12 +2112,12 @@ function LineTable({
             <table className="w-full min-w-[560px] border-collapse">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-7 py-1 pr-2 text-right font-normal text-slate-400")}>No.</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-left font-normal text-slate-400")}>Uraian</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-12 py-1 pr-2 text-center font-normal text-slate-400")}>Sat.</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-20 py-1 pr-3 text-right font-normal text-slate-400")}>Koef.</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 pr-3 text-right font-normal text-slate-400")}>Harga Sat.</th>
-                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 text-right font-normal text-slate-400")}>Jumlah</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-7 py-1 pr-2 text-right font-normal text-slate-500")}>No.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "py-1 pr-3 text-left font-normal text-slate-500")}>Uraian</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-12 py-1 pr-2 text-center font-normal text-slate-500")}>Sat.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-20 py-1 pr-3 text-right font-normal text-slate-500")}>Koef.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 pr-3 text-right font-normal text-slate-500")}>Harga Sat.</th>
+                  <th className={cn(UI_ENGINE_TYPE_META, "w-28 py-1 text-right font-normal text-slate-500")}>Jumlah</th>
                   {editable ? <th className="w-8" /> : null}
                 </tr>
               </thead>
@@ -2099,7 +2126,7 @@ function LineTable({
                   const record = sub.services.find((s) => s.id === line.lineId);
                   return (
                     <tr key={line.lineId} className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
-                      <td className={cn(UI_ENGINE_TYPE_META, "py-1.5 pr-2 text-right text-slate-400")}>
+                      <td className={cn(UI_ENGINE_TYPE_META, "py-1.5 pr-2 text-right text-slate-500")}>
                         {index + 1}
                       </td>
                       <td className="py-1.5 pr-3">
@@ -2113,7 +2140,7 @@ function LineTable({
                           }
                           className="min-w-32"
                         />
-                        <div className={cn(UI_ENGINE_TYPE_META, "mt-0.5 flex flex-wrap items-center gap-x-2 text-slate-400")}>
+                        <div className={cn(UI_ENGINE_TYPE_META, "mt-0.5 flex flex-wrap items-center gap-x-2 text-slate-500")}>
                           {record ? (
                             <CostCategoryBadge
                               category={record.costCategory}
@@ -2213,7 +2240,7 @@ function LineTable({
             <button
               type="button"
               onClick={() => setManualFor("SERVICE")}
-              className={cn(UI_ENGINE_TYPE_META, "text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline")}
+              className={cn(UI_ENGINE_TYPE_META, "text-slate-500 underline-offset-2 hover:text-slate-600 hover:underline")}
             >
               Manual
             </button>

@@ -20,8 +20,8 @@
 
   /* Text */
   --ui-text-primary: #0f172a;     /* slate-950 */
-  --ui-text-secondary: #475569;   /* slate-600 */
-  --ui-text-tertiary: #94a3b8;    /* slate-400 */
+  --ui-text-secondary: #475569;   /* slate-600 — 7,5:1 */
+  --ui-text-tertiary: #64748b;    /* slate-500 — 4,8:1 di atas putih (WCAG AA) */
   --ui-text-inverse: #ffffff;
 
   /* Action */

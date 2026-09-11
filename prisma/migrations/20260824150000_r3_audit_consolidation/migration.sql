@@ -4,9 +4,9 @@
 -- studioflow.AuditLog, then drop the transitional table/column.
 
 ALTER TABLE "studioflow"."AuditLog"
-  ADD COLUMN "before_json" JSONB,
-  ADD COLUMN "after_json" JSONB,
-  ADD COLUMN "metadata_json" JSONB;
+  ADD COLUMN IF NOT EXISTS "before_json" JSONB,
+  ADD COLUMN IF NOT EXISTS "after_json" JSONB,
+  ADD COLUMN IF NOT EXISTS "metadata_json" JSONB;
 
 -- Existing StudioFlow/BQ rows stored their payload in `details`.
 UPDATE "studioflow"."AuditLog"
@@ -224,7 +224,13 @@ core_ranked AS (
   FROM "studioflow"."AuditLog"
   WHERE "domain" = 'MASTER_DATA'
 )
+-- `id` HARUS disebut eksplisit. `@default(uuid())` di schema.prisma dihasilkan
+-- Prisma Client di sisi aplikasi, ia TIDAK pernah jadi DEFAULT di Postgres —
+-- kolomnya cuma `"id" TEXT NOT NULL`. INSERT mentah yang menghilangkan `id`
+-- karena itu mengirim NULL dan kena not-null constraint. Bukan data lama yang
+-- rusak: `id` adalah primary key, ia tidak mungkin NULL di baris yang sudah ada.
 INSERT INTO "studioflow"."AuditLog" (
+  "id",
   "domain",
   "action",
   "entity_type",
@@ -237,6 +243,7 @@ INSERT INTO "studioflow"."AuditLog" (
   "created_at"
 )
 SELECT
+  gen_random_uuid()::TEXT,
   'MASTER_DATA',
   legacy_ranked."action",
   legacy_ranked."entity",

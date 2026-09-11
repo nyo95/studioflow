@@ -101,6 +101,10 @@ export async function listLibraryObjects(
         : {}),
     },
     include: {
+      // Baris langsung — bentuk yang berlaku sejak `BqSubObject` dipensiunkan.
+      materials: { select: { id: true } },
+      services: { select: { id: true } },
+      // Jalur warisan.
       sub_objects: {
         select: {
           materials: { select: { id: true } },
@@ -122,8 +126,14 @@ export async function listLibraryObjects(
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at?.toISOString() ?? null,
     subObjectCount: r.sub_objects.length,
-    materialLineCount: r.sub_objects.reduce((sum, so) => sum + so.materials.length, 0),
-    serviceLineCount: r.sub_objects.reduce((sum, so) => sum + so.services.length, 0),
+    // Baris langsung + baris warisan di dalam sub-object. Menghitung salah
+    // satunya saja membuat resep modern tampak kosong di daftar.
+    materialLineCount:
+      r.materials.length +
+      r.sub_objects.reduce((sum, so) => sum + so.materials.length, 0),
+    serviceLineCount:
+      r.services.length +
+      r.sub_objects.reduce((sum, so) => sum + so.services.length, 0),
   }));
 }
 

@@ -285,6 +285,10 @@ async function checkDuplicateProduct(
   }
 }
 
+function isDuplicateProductError(error: unknown) {
+  return error instanceof ActionError && error.code === "DUPLICATE_PRODUCT";
+}
+
 
 
 
@@ -356,7 +360,12 @@ export class ScheduleService {
     tx: PrismaTransaction,
     projectId: string,
     userId?: string
-  ): Promise<{ createdCategories: string[]; createdItems: string[]; noDefaultsConfigured: boolean }> {
+  ): Promise<{
+    createdCategories: string[];
+    createdItems: string[];
+    noDefaultsConfigured: boolean;
+    skippedDuplicateItems: string[];
+  }> {
     // Ambil item template aktif (baru) + kategori default (lama, is_default_entry)
     const [templateItems, defaultCategories] = await Promise.all([
       tx.scheduleTemplateItem.findMany({
@@ -370,7 +379,14 @@ export class ScheduleService {
     ]);
 
     const noDefaultsConfigured = templateItems.length === 0 && defaultCategories.length === 0;
-    if (noDefaultsConfigured) return { createdCategories: [], createdItems: [], noDefaultsConfigured: true };
+    if (noDefaultsConfigured) {
+      return {
+        createdCategories: [],
+        createdItems: [],
+        noDefaultsConfigured: true,
+        skippedDuplicateItems: [],
+      };
+    }
 
     // Kunci idempotensi: per template_item_id (bukan per kategori)
     const existingTemplateEntries = await tx.projectScheduleEntry.findMany({
@@ -390,19 +406,27 @@ export class ScheduleService {
 
     const createdItems: string[] = [];
     const createdCategories: string[] = [];
+    const skippedDuplicateItems: string[] = [];
 
     // 1. Item template (spesifikasi sudah terisi)
     for (const item of templateItems) {
       if (appliedItemIds.has(item.id)) continue; // sudah ada di proyek ini
 
-      await this.addEntryToSchedule(
-        tx, projectId, item.schedule_category, "template",
-        undefined, undefined, item.section, userId,
-        undefined, // sourceOptionId
-        item.id    // templateItemId
-      );
-      appliedItemIds.add(item.id);
-      createdItems.push(`${item.section}:${item.schedule_category}:${item.id}`);
+      try {
+        await this.addEntryToSchedule(
+          tx, projectId, item.schedule_category, "template",
+          undefined, undefined, item.section, userId,
+          undefined, // sourceOptionId
+          item.id    // templateItemId
+        );
+        appliedItemIds.add(item.id);
+        createdItems.push(`${item.section}:${item.schedule_category}:${item.id}`);
+      } catch (error) {
+        if (!isDuplicateProductError(error)) {
+          throw error;
+        }
+        skippedDuplicateItems.push(`${item.section}:${item.schedule_category}:${item.id}`);
+      }
     }
 
     // 2. Kategori default lama (is_default_entry — entri kosong / reserve)
@@ -436,10 +460,11 @@ export class ScheduleService {
         project_id: projectId,
         created_categories: createdCategories,
         created_items: createdItems.length,
+        skipped_duplicate_items: skippedDuplicateItems,
       });
     }
 
-    return { createdCategories, createdItems, noDefaultsConfigured: false };
+    return { createdCategories, createdItems, noDefaultsConfigured: false, skippedDuplicateItems };
   }
 
   /**

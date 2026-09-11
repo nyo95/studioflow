@@ -726,6 +726,78 @@ ditunda, masing-masing dengan alasannya.
       2026-08-19 (#59)** ke database lokal `studioflow` setelah owner secara
       eksplisit mewakilkan langkah tersebut; `prisma migrate status` menyatakan
       seluruh 28 migrasi up to date.
+- [ ] **C-SISA-8 · Project Task Center — satu daftar TODO per project (P1,
+      disetujui owner 2026-08-31).** UI hari ini masih membuat task terasa
+      terpecah: TODO umum hidup di Project Tasks, TODO/feedback revisi hidup di
+      masing-masing halaman phase, dan halaman Tasks lintas project baru
+      menyatukannya setelah keluar dari konteks project. Padahal read-model
+      `getTaskFeed()` sudah membuktikan ketiganya dapat diproyeksikan ke bentuk
+      bersama.
+
+      **Keputusan produk yang mengikat:** satu project mempunyai satu permukaan
+      utama **Project Tasks**. Phase tidak dihapus; ia menjadi scope/tag task
+      (`General`, `Moodboard`, `Layout 2D`, `Design 3D`, `Construction
+      Drawings`, `Supervision`) sekaligus filter. Relasi phase tetap disimpan
+      karena dipakai approval gate, aturan locked/read-only, dan provenance
+      revision. Ini generalisasi permukaan kerja, bukan mengubah semua task
+      menjadi task General.
+
+      **Keadaan kode/data yang menjadi baseline (audit 2026-08-31):**
+
+      - `Activity` adalah jalur tulis yang benar-benar dipakai untuk loose TODO
+        dan feedback. Database lokal berisi 18 TODO project, 16 TODO
+        revision/phase, dan 15 feedback.
+      - `ProjectChecklist` adalah requirement/checklist bertemplate dengan
+        priority, subtask, label, assignee, dan komentar. Database lokal saat
+        audit tidak memiliki baris `ProjectChecklist` maupun template aktif;
+        keadaan kosong ini bukan izin menghapus modelnya.
+      - `ProjectChecklist.phase_id` dan `Activity.phase_id` sudah nullable.
+        `task-feed-query.ts` sudah menggabungkan project-level dan phase-level
+        ke `UnifiedTask`, sehingga tahap pertama **tidak membutuhkan migrasi**.
+
+      **Tahap 1 — konsolidasi UI/read-model, tanpa migrasi:**
+
+      1. Jadikan `ProjectTasksCard`/halaman project satu daftar lengkap berisi
+         General + seluruh phase, bukan hanya `projectTodoActivities` dan
+         deferred activities.
+      2. Tampilkan badge scope pada setiap baris dan filter `All`, `General`,
+         serta setiap phase. Status open/completed tetap dapat disaring tanpa
+         membuat implementasi filter baru yang berbeda dari shared task rules.
+      3. Quick-add default ke `General`; pengguna dapat memilih phase sebelum
+         menyimpan. Jangan memakai parsing hashtag sebagai satu-satunya cara
+         memilih phase—pilihan aktif harus terlihat sebelum submit.
+      4. Halaman phase memakai komponen/list implementation yang sama dalam
+         keadaan terfilter ke phase tersebut. Jangan mempertahankan dua renderer
+         yang dapat drift; aksi edit/toggle/delete tetap lewat writer asal row.
+      5. `FEEDBACK` tetap dibedakan secara visual dan tetap terikat revision.
+         Ia boleh terlihat di Project Task Center, tetapi tidak boleh diubah
+         menjadi loose TODO atau dilepas dari revision secara diam-diam.
+      6. Pertahankan seluruh server guard: task phase terkunci tetap read-only,
+         TODO/feedback terbuka tetap memblokir transisi phase sesuai
+         `assertNoPendingTasks`, dan task General tidak ikut memblokir phase.
+      7. Today/Upcoming tetap menjadi tampilan lintas project di atas read-model
+         yang sama; perubahan ini tidak membuat query ketiga yang menjawab
+         berbeda tentang task mana yang ada.
+
+      **Tahap 2 — evaluasi penyatuan storage, BUKAN bagian implementasi tahap
+      1:** audit setelah UI tunggal dipakai. Jangan memindahkan TODO ke
+      `ProjectChecklist` hanya karena fiturnya lebih kaya: root checklist saat
+      ini adalah requirement dari template dan sengaja tidak dapat dibuat user.
+      Kalau owner nanti menginginkan satu tabel fisik, perlu keputusan baru +
+      migration map untuk memisahkan `TASK`, `REQUIREMENT`, dan `FEEDBACK`
+      tanpa merusak lifecycle revision maupun template.
+
+      **Acceptance:** pada satu halaman project, user dapat melihat seluruh
+      pekerjaan General dan phase, memilih scope ketika menambah, memfilter per
+      phase, lalu membuka halaman phase dan melihat subset yang sama. Satu
+      perubahan status harus langsung konsisten di Project Tasks, halaman
+      phase, Today, dan Upcoming. Pengajuan phase tetap ditolak selama masih
+      ada TODO/feedback phase yang terbuka.
+
+      **Titik awal berkas:** `src/components/project-tasks-card.tsx`,
+      `src/components/activity-manager.tsx`, `src/components/phase-checklist.tsx`,
+      `src/components/today-inline-add.tsx`, `src/lib/services/task-feed-query.ts`,
+      `src/lib/services/task-feed.ts`, `src/lib/services/phase-service.ts`.
 - [ ] **C-SISA-6 · Recurring** 🔒 — butuh parser jadwal, mesin penjadwalan, dan
       keputusan soal kemunculan yang terlewat. Sebesar seluruh bagian C
       digabung.
@@ -795,21 +867,136 @@ Hanya yang bersifat **cacat** yang diangkat; temuan preferensi sengaja tidak.
 - [ ] **R-SCHED-TPL-2e · Plugin SketchUp** — kirim `reserved_codes`, adopsi slot
       template. **Out of scope sampai plugin di-update**; guard server Fase 4
       adalah perlindungan sementara.
-- [ ] **B1 · Struktur foldering deliverable per fase** ⏳ **DITUNDA dengan
-      gerbang (keputusan owner 2026-08-18).** Owner: *"biarkan dulu — tapi tulis
-      di roadmap. Nanti setelah Master Data selesai dan StudioFlow utama tidak
-      ada regresi dan works well, baru pindah ke sini."*
+- [ ] **B1 · Project Documents — deliverable, foldering, versioning, dan arsip
+      final** 🔒 — **SPESIFIKASI DISETUJUI OWNER 2026-08-31; implementasi belum
+      dimulai.** Keputusan ini menggantikan status tunda 2026-08-18 dan menjawab
+      pertanyaan lama tentang folder buatan user versus folder dari sistem:
+      struktur utama dibuat oleh sistem dan berlaku holistik untuk satu project.
+      Phase tetap menjadi konteks workflow/approval, tetapi user mengelola file
+      dari satu permukaan **Project Documents / Deliverables** lintas phase.
 
-      **Gerbangnya dua, dua-duanya harus terpenuhi:** (1) Master Data selesai,
-      (2) StudioFlow utama bebas regresi dan berjalan baik. Jangan dikerjakan
-      sebelum itu, dan jangan pula dicabut — owner menyimpannya dengan sengaja.
+      **Baseline kode yang tidak boleh dianggap sebagai desain final:** `File`
+      saat ini datar di bawah `Revision`; dialog upload menulis langsung ke
+      `projects/<projectId>/deliverables/<phaseId>/<revisionId>/...`; endpoint
+      upload menampung seluruh file di memory; dan penggantian deliverable
+      menghapus baris file sebelumnya untuk phase tersebut. Karena itu B1
+      membutuhkan desain data + migrasi eksplisit, bukan sekadar mengganti nama
+      folder di UI. Database development pada audit 2026-08-31 hanya memiliki
+      satu `File` bertipe link, tetapi migrasi tetap wajib menjaga data existing.
 
-      Konteks yang tetap berlaku: `File` datar di bawah `Revision`, tanpa kolom
-      folder atau path. `PrefixDictionary` memetakan `schedule_category` →
-      `prefix` per `section`, jadi kemungkinan besar prefix itu yang dimaksud
-      sebagai pengelompokan. **Pertanyaan "folder buatan user atau struktur dari
-      sistem" sengaja BELUM dijawab** — baru ditanyakan saat gerbangnya terbuka,
-      karena jawabannya menentukan perlu migrasi atau tidak.
+      **Struktur dokumen project yang mengikat:**
+
+      | Kelompok | Isi utama | Aturan |
+      |---|---|---|
+      | `Data` | requirement dan data awal project | Dipertahankan sebagai bukti sumber; dapat ditautkan ke General Requirements, tetapi file dan checklist tetap dua konsep berbeda. |
+      | `References` | referensi desain/project | Kelompok input pendukung; struktur existing dipertahankan. |
+      | `IN` | file yang dikirim pihak luar ke studio | Dikelompokkan lagi menurut tanggal/pengirim dan dipertahankan sebagai bukti sumber. |
+      | `Drawings` | file kerja AutoCAD untuk Layout 2D | Issue bernomor `Layout 1`, `Layout 2`, dan seterusnya. |
+      | `3D` | model kerja Design 3D, terutama SketchUp | Issue bernomor `D1`, `D2`, dan seterusnya. |
+      | `OUT/Presentation` | PDF Moodboard dan Design 3D | Dapat menjadi asset PDF pada issue desain yang sama dengan model `.skp`. |
+      | `OUT/External` | keluaran yang benar-benar dikirim ke pihak luar | Audience `EXTERNAL`; dipertahankan ketika project difinalkan. |
+      | `CD` | Construction Drawing, terutama PDF/DWG | Issue bernomor `CD 1`, `CD 2`, dan seterusnya. |
+
+      Nama di atas adalah **folder virtual dari metadata**, bukan path fisik
+      yang diketik bebas oleh user. Storage fisik memakai identifier immutable
+      agar rename project, perubahan nomor issue, atau pemindahan kategori tidak
+      memindahkan blob secara massal.
+
+      **Kontrak nama file:** nomor/kode project seperti `2025-405` tidak ikut.
+      Format nama yang ditampilkan/diunduh adalah
+      `YYYYMMDD Nama Proyek Tahap.ext`, memakai tanggal Asia/Jakarta dan nama
+      project tanpa project number. Contoh kanonik:
+
+      - `20260831 Sociolla SMD Depok R1 D1.skp`
+      - `20260831 Sociolla SMD Depok R1 D1.pdf`
+      - `20260831 Sociolla SMD Depok R1 Layout 1.dwg`
+      - `20260831 Sociolla SMD Depok R1 CD 1.pdf`
+
+      `D1/D2/...` adalah urutan Design 3D + PDF presentation; file `.skp` dan
+      `.pdf` boleh menjadi dua asset pada issue `D1` yang sama. `Layout 1/2/...`
+      untuk Layout 2D dan `CD 1/2/...` untuk Construction Drawing. Tanda kutip
+      tidak menjadi bagian nama. Nama asli saat upload disimpan sebagai
+      provenance. `INTERNAL`/`EXTERNAL` adalah metadata audience dan penentu
+      folder/urutan, bukan suffix nama file. Urutan harus dialokasikan server
+      secara atomik di dalam scope project + jenis dokumen + audience agar dua
+      upload bersamaan tidak memperoleh nomor yang sama.
+
+      **Interaksi drag-and-drop:** browser mengenali kandidat dari ekstensi,
+      tetapi tidak memutuskan metadata bisnis secara diam-diam. `.skp`
+      menyarankan `3D`, file AutoCAD menyarankan `Drawings`, sedangkan PDF
+      meminta user memilih Presentation, CD, atau kelompok yang relevan. Sebelum
+      finalize, dialog selalu memperlihatkan project, kategori, phase/issue,
+      audience Internal/External, dan nama hasil. Jika `D1` sudah ada, user
+      harus memilih dengan jelas: **Attach to D1**, **Replace D1 asset**, atau
+      **Create D2**. Replace tidak menimpa blob: ia membuat versi immutable baru
+      pada issue yang sama, lalu memindahkan pointer current setelah versi baru
+      berstatus siap.
+
+      **Model konseptual:** pisahkan `Deliverable`/issue (`D1`, `Layout 1`,
+      `CD 1`) dari `DeliverableVersion` dan `Asset` (misalnya SKP + PDF dalam
+      satu D1). `audience = INTERNAL | EXTERNAL` tidak boleh memakai kembali
+      arti `File.is_external` saat ini, karena kolom itu membedakan link dengan
+      upload. Storage kind (`UPLOAD`/`LINK`) dan audience adalah dua dimensi
+      berbeda. Riwayat versi immutable; penggantian hanya mengubah versi current
+      setelah blob dan metadata baru berhasil difinalisasi.
+
+      **Upload dan temporary storage:**
+
+      1. Drop membuat `UploadSession` ber-ID acak; file di-stream/chunk ke
+         `storage/temp/uploads/<session-id>/payload.part` pada volume yang sama
+         dengan final storage. Jangan memakai `file.arrayBuffer()` untuk SKP/DWG
+         besar dan jangan memakai nama kiriman client sebagai path.
+      2. Server memvalidasi ukuran, ekstensi/MIME, checksum, hak akses, quota,
+         dan metadata. Selama user menjawab dialog klasifikasi, blob tetap
+         temporary dan belum terlihat sebagai deliverable.
+      3. Finalize bersifat idempotent: tulis metadata `PENDING`, pindahkan blob
+         secara atomic ke
+         `storage/deliverables/<project-id>/<deliverable-id>/<version-id>/asset.ext`,
+         ubah ke `READY`, baru alihkan pointer current.
+      4. Session sukses dibersihkan segera. Session abandoned/failed eligible
+         dibersihkan setelah 24 jam oleh job yang hanya menyentuh direktori
+         session valid dan mencatat hasilnya. Reconciler menangani crash:
+         `PENDING`, temp tanpa row, final tanpa row, dan retry finalize.
+      5. Simpan checksum + ukuran setiap asset, tampilkan pemakaian storage per
+         project, beri warning sebelum quota, dan backup metadata database serta
+         volume blob sebagai satu recovery set. File final tidak pernah ikut
+         cleanup temporary atau retention otomatis biasa.
+
+      **Flag project `FINAL` dan kebijakan retensi:** status final adalah aksi
+      arsip eksplisit, bukan sekadar label visual. Sebelum konfirmasi, sistem
+      menampilkan manifest file yang dipertahankan/dihapus serta total ukurannya
+      dan meminta konfirmasi destruktif dengan `requiredText` melalui dialog
+      aplikasi.
+
+      - **Tetap disimpan:** seluruh `OUT/External`, seluruh asset/version yang
+        ditandai `FINAL`, serta `Data` dan `IN` sebagai bukti sumber. Metadata,
+        checksum, original filename, dan audit history tetap disimpan.
+      - **Masuk trash:** file kerja/version internal pada `3D`, `Drawings`,
+        `OUT/Internal` atau presentation internal, serta `CD` yang bukan final.
+        File temporary abandoned mengikuti retensi 24 jamnya sendiri.
+      - Trash mempunyai grace period **30 hari**. Selama periode ini owner dapat
+        membatalkan finalisasi dan memulihkan file. Purge permanen baru boleh
+        berjalan setelah tenggat, wajib ter-log, dan tidak boleh hanya menghapus
+        metadata sementara blob tertinggal (atau sebaliknya).
+      - Project final menjadi read-only untuk mutasi dokumen. Revisi baru harus
+        diawali aksi **Reopen project** yang diaudit; sistem tidak boleh
+        mengganti arsip final secara diam-diam.
+
+      **Tahap implementasi:** (1) schema/migration dan service storage/session;
+      (2) import/backfill aman untuk `File` existing; (3) Project Documents +
+      drag/drop classifier dan version chooser; (4) finalization manifest,
+      trash/restore/purge; (5) observability, quota, backup/restore drill.
+      Implementasi schema/migrasi tetap bertanda 🔒 sampai owner secara langsung
+      meminta coding; persetujuan spesifikasi ini bukan perintah menjalankan
+      migrasi.
+
+      **Acceptance minimum:** upload besar tidak dibuffer penuh; kegagalan di
+      setiap titik dapat diretry tanpa deliverable ganda; replace tidak
+      menghilangkan versi sebelumnya; nama unduhan mengikuti format tanpa nomor
+      project; D1 dapat memiliki SKP + PDF; Internal/External tidak tercampur;
+      finalization memiliki preview + restore 30 hari; `Data`, `IN`,
+      `OUT/External`, dan asset `FINAL` tidak ikut purge; seluruh operasi
+      upload/finalize/restore/purge dapat diaudit.
 
 ## Utang teknis
 
@@ -953,7 +1140,7 @@ tidak terlihat dari pertanyaan pertama.
 | **§10** | Semua role (STAFF/ADMIN/DEVELOPER) boleh edit Master Data, dan **edit tidak menurunkan status**. | Cabut paksaan `PENDING` di `MasterDataProductDialog.tsx:477` **dan** `library-actions.ts:276`. CREATE tetap `PENDING`; wewenang menyetujui tetap admin-level. |
 | **M5** | **Bahasa Inggris** untuk semua teks yang dibaca pengguna, termasuk pesan error. Dokumen internal tetap Indonesia. | Terjemahkan `mapKnownPrismaError()` (#27) ke Inggris — tetap actionable, bukan pesan Prisma mentah. Membuka **UI-CON-3**. |
 | **BR8** | **Direframe** — bukan tombol create (sudah selesai #28), tapi **viewer**. | (a) popup detail SKU dari tabel harga, riwayat harga **A7** sekalian; (b) halaman daftar SKU lintas-brand baru, tab SKU di Brand tetap ada. |
-| **B1** | **Ditunda dengan gerbang** — baru dikerjakan setelah Master Data selesai DAN StudioFlow utama bebas regresi. | Tidak ada. Pertanyaan folder-user vs folder-sistem sengaja belum dijawab. |
+| **B1** | **Keputusan historis 2026-08-18: ditunda dengan gerbang.** Status ini digantikan keputusan owner 2026-08-31 yang menyetujui spesifikasi Project Documents; lihat item B1 aktif di atas. | Tidak ada pada saat keputusan historis ini dibuat. |
 | **Urutan** | Bug layar harian dulu. | BR3 → BR1 → BR6 → §10+H5 → BR8 viewer+A7 → M5+UI-CON-3 → D5 sisa+D2. |
 
 **Dua putaran tambahan itu bukan basa-basi.** Jawaban pertama §10 (*"staf tanpa
@@ -1350,15 +1537,175 @@ di `src/subapps/bq/`**.
       **Koreksi audit:** rekap agregat level project BQ-29 masih roadmap terpisah;
       yang sudah hidup saat task ini adalah pelabelan kategori per baris.
 
-- [ ] **BQ-35 — UI: klik-kanan + CreatableSearch + sentralisasi ui_engine.** 🛠 agent
-      Buang ~18 form tambah permanen, blok chip saran, dan paragraf instruksi di
-      drop zone. Satu gesture: klik kanan → tambah L0/L1/L2/L3, tiap "+" membuka
-      `CreatableSearch` (sudah ada di `components/ui`, belum dipakai BQ).
-      Ke `ui_engine`: `ContextMenu` (baru — `radix-ui@1.4.3` sudah terpasang),
-      `TreeGrid` pattern, `NumberCell`/`TextCell` (sekarang lokal di
-      `BqBreakdownClient` :203–315). Dikerjakan **setelah** BQ-30..BQ-34 stabil.
+- [x] **BQ-35 — UI: klik-kanan + CreatableSearch + ui_engine. SELESAI 2026-08-27.**
+      `ContextMenu` baru di `components/ui/context-menu.tsx` (paket `radix-ui`
+      sudah terpasang), diekspor lewat `ui_engine/primitives`. `CreatableSearch`
+      ternyata sudah diekspor sejak lama — tinggal dipakai.
+      Dibuang: form "tambah" permanen di tiap pengelompok (`SectionAddObject`),
+      blok chip saran template, dan tombol hapus yang menempel di header seksi.
+      Saran template **tidak hilang** — ia pindah ke dalam pencarian
+      `CreatableSearch`, jadi bisa dicari alih-alih jadi dinding chip.
+      Pesan penolakan drop dipangkas dari kalimat penuh jadi frasa.
 
-- [x] **BQ-38 — Nasib `PROJECT_LOCAL`. DIJAWAB 2026-08-27, tidak jadi dicabut.**
+- [x] **BQ-77 — Library bisa DIPAKAI, bukan cuma diisi. SELESAI 2026-08-27.**
+      Setengah lingkaran yang tersisa dari BQ-76. `loadFromLibraryObjectAction`
+      masih menargetkan `targetSubObjectId` — lapis yang dipensiunkan — dan cuma
+      membaca `sub_objects[0]`, jadi resep dengan lebih dari satu sub-object
+      kehilangan sisanya tanpa pesan. Setelah drag-drop dicabut ia bahkan tidak
+      punya pemanggil sama sekali.
+      Ditulis ulang menargetkan **Works**. Resep warisan (isinya di dalam
+      sub-object) **diratakan**, dengan qty dikalikan pengali sub-object itu —
+      tanpa itu biayanya diam-diam mengecil.
+      Logika tuang yang tadinya disalin EMPAT kali (PROJECT_LOCAL vs MASTER_DATA
+      × dua aksi) diangkat jadi `pourMaterialRecipeLine` / `pourServiceRecipeLine`.
+      Aksi baru `createBqObjectFromLibraryAction`: satu pilihan → satu Works
+      lengkap dengan barisnya, nama & satuan ikut resep.
+      UI: resep Library muncul di **pencarian yang sama** dengan saran template
+      (grup "Library" + "Template"), karena bagi estimator keduanya hal yang
+      sama — pekerjaan yang sudah pernah disusun. Dimuat sekali saat halaman
+      siap, bukan per ketikan.
+
+- [x] **BQ-76 — Library BQ tidak bisa diisi sama sekali. SELESAI 2026-08-27.** 🔒 migrasi
+      Owner: *"BQ ini tidak berfungsi?"* — benar, dan tiga sebab bertumpuk:
+      **(1)** Tombol "Simpan ke Library" HANYA ada di `SubObjectRow` — lapis
+      `BqSubObject` yang dipensiunkan. Jalur untuk Works memang belum pernah
+      dibuat (BQ-10 mencatat *"L1 ditangguhkan"*).
+      **(2)** BQ-64 mencabut "Tambah Sub-pekerjaan", jadi sub-object baru tidak
+      bisa dibuat lagi → satu-satunya pintu ke Library tertutup rapat.
+      **(3)** Bahkan kalau tombolnya dipasang, hasilnya kosong:
+      `saveObjectToLibraryAction` hanya mengiterasi `object.sub_objects` dan
+      **mengabaikan baris yang menempel langsung di Works** — dan skema
+      `BqLibraryMaterialLine` memang tidak punya tempatnya (FK-nya cuma
+      `sub_object_of_object_id` dan `sub_object_id`).
+      Diperbaiki: kolom `library_object_id` di kedua tabel baris library
+      (migrasi `20260827130000_bq_library_direct_lines`, kolom lama
+      dipertahankan supaya resep lama tetap terbaca); action menyalin baris
+      langsung dan menolak menyimpan Works kosong; pemetaan baris→resep
+      diangkat jadi `materialRecipeData`/`serviceRecipeData` karena kini dipakai
+      dua kali; tombol Simpan dipasang di `ObjectRow`; `library-service`
+      menghitung baris langsung + warisan.
+      **Belum:** memuat resep Library ke dalam Works. `loadFromLibraryObjectAction`
+      masih menargetkan `targetSubObjectId` dan cuma membaca `sub_objects[0]` —
+      bagian dari BQ-65.
+
+- [x] **BQ-75 — Cabut panel Sumber + drag-drop. SELESAI 2026-08-27.**
+      Owner: *"kepotong nih desainnya · cek sidebar nya masih perlu ga ·
+      dragdrop template jg ga fungsional."* Ketiganya satu akar.
+      **Drag-drop tidak pernah berfungsi sejak ditulis:** `useRecipeDropZone`
+      memanggil `dataTransfer.getData()` di `dragenter`/`dragover`, padahal di
+      dua fase itu drag data store ada dalam PROTECTED MODE — `getData()` selalu
+      "" dan hanya `types` yang boleh dibaca. Penjaganya selalu null, jadi
+      `preventDefault()` tidak pernah dipanggil dan browser menolak drop.
+      Komentar aslinya sudah menuliskan kegagalan itu persis, lalu memasang
+      penjaga yang membaca data yang belum boleh dibaca.
+      **Dicabut, bukan diperbaiki** — fungsinya sudah ada di klik-kanan (Tambah
+      Pekerjaan + saran template di dalam pencariannya) dan quick-add row
+      (+Bahan/+Jasa, mencari master data inline). Panel `w-72` ikut dicabut, jadi
+      grid dapat 288px dan "kepotong" selesai tanpa menyentuh kolom.
+      "Seksi baru" yang tadinya cuma ada di panel pindah ke **klik kanan ruang
+      kosong grid → Tambah Section**, pola yang sama dengan Sub Section.
+      `BqToolbar` 841 → 184 baris; `BqBreakdownClient` 2255 → 2167.
+
+- [x] **BQ-74 — Guard cermin: Section berisi Sub Section menolak Works. SELESAI 2026-08-27.**
+      BQ-69 mencabut guard yang memblokir *menambah Sub Section ke Section yang
+      sudah punya Works*. Ternyata ada **kembarannya di arah sebaliknya**, di
+      `createBqObjectAction`: Section yang sudah punya Sub Section menolak Works
+      langsung — *"This section already uses divisions. Add the work item inside
+      a division instead."*
+      Itu melanggar aturan `Section → Sub Section DAN Works`, dan memblokir alur
+      paling wajar: taruh beberapa Works dulu, baru sebagian dikelompokkan.
+      Pesannya juga menyuruh "pindahkan ke dalam divisi" tanpa menyediakan
+      caranya. `rollupSectionSubtotals` sudah menangani keduanya berdampingan
+      (ada testnya), jadi tidak ada alasan teknis tersisa.
+      Sekalian: istilah "divisi/division" yang tertinggal dibersihkan —
+      `addDivision` → `addSubSection`, tiga komentar diselaraskan.
+
+- [x] **BQ-63 — Pangkas pengelompok jadi DUA lapis. SELESAI 2026-08-27.**
+      **Aturan owner (revisi sore):** `Section → Sub Section DAN Works`,
+      `Sub Section → Works saja`. Ini **mencabut lapis pengelompok ketiga** yang
+      diizinkan BQ-31 pagi harinya (diagram owner sempat punya "L2 Optional Sub
+      Section": Shopfront Area, Store Area). Kasus area kini ditangani dengan
+      menjadikan areanya Sub Section langsung di bawah Section, atau memasukkan
+      namanya ke nama Works.
+      `MAX_SECTION_DEPTH` 3 → 2; pesan penolakan action diganti; komentar schema,
+      `section-tree.ts`, PRD §2, dan AGENTS.md aturan #1 diselaraskan.
+      **Data lama yang terlanjur tiga lapis tetap ditampilkan** — testnya
+      dipertahankan dan diberi alasan, karena yang tidak tampil tidak bisa
+      diperbaiki pengguna.
+
+- [ ] **BQ-65 — Satukan Template + Library BQ jadi satu daftar berkategori.** 🛠 agent · 🔒 migrasi
+      **Keputusan owner 2026-08-27.** Spesifikasinya `PRD-BQ.md` §5.
+      Sekarang ada dua sumber untuk benda yang sama (resep Works): tab `Library`
+      baca `BqLibraryObject` (DB), tab `Template` baca `bq-template-data.ts`
+      (file TS hardcoded).
+
+      **Skema.** `BqLibraryObject` = Template Works. Tambah `category String?`
+      (nama Section yang cocok) dan `is_default Boolean`. **Baris bahan/jasa
+      menempel LANGSUNG ke object** — sekarang wajib lewat
+      `BqLibrarySubObjectOfObject`, bentuk warisan L1→L2→L3 yang tidak lagi sah
+      (PRD §2.2). Migrasi harus menaikkan baris yang terlanjur ada.
+
+      **Seed.** `bq-template-data.ts` jadi bahan seed, bukan sumber runtime —
+      ini sekaligus menutup BQ-36 permanen.
+
+      **Perilaku.** Menyunting template bawaan membuat SALINAN milik user;
+      yang bawaan tetap utuh supaya seed ulang tidak bertabrakan.
+
+      **UI.** Sidebar jadi 2 tab: `Template` (resep Works, boleh disunting) dan
+      `Harga` (SKU & WorkPrice, **read-only** — owner: *"master data hanya untuk
+      di-snapshot harga terbaru, bukan untuk diotak-atik"*). Jangan dilebur.
+      Saran di `CreatableSearch` disaring pakai `category`: Section bernama
+      Preliminaries menawarkan Mobilization, Loading/Unloading, Security.
+
+- [x] **BQ-64 — Cabut "Tambah Sub-pekerjaan" dari UI. SELESAI 2026-08-27.**
+      `BqSubObject` sudah dipensiunkan (PRD §8) tapi tombolnya masih terpasang
+      tepat di bawah blok Bahan/Jasa — mengundang orang membangun lapis yang
+      sudah dibuang. Owner menegaskan pekerjaan seperti Mobilization/Security
+      memang tidak butuh elemen sub-works. Sub-object yang terlanjur ada tetap
+      dirender supaya data lama bisa dibaca dan dipindahkan; yang hilang cuma
+      cara membuat yang baru.
+
+- [~] **BQ-16 — Ganti nama inline di baris. Section SELESAI 2026-08-27, Works belum.**
+      Kotak "Sub Section baru di …" dihapus; menu klik-kanan membuat barisnya
+      langsung dengan nama bawaan, lalu baris itu masuk mode ketik.
+      `EditableName` + `runData` di `useMutate` (butuh id baris yang baru,
+      sekarang, bukan setelah refresh). `SectionHeader` direstrukturisasi karena
+      `<input>` di dalam `<button>` HTML tidak sah — tombol lipat kini hanya
+      chevron + kode. Pola yang sama tinggal dipasang ke nama Works.
+
+- [x] **BQ-66 — Dua kotak tambah terbuka sekaligus. SELESAI 2026-08-27.**
+      State `adding` dipegang per-`SectionBlock`, jadi membuka baris tambah di
+      satu pengelompok tidak menutup yang lain — kotak yang tertinggal terbaca
+      seperti form permanen, persis yang dihapus BQ-35. Baris tambah Sub Section
+      juga dirender di ekor seluruh isi seksi, jauh dari header yang diklik.
+      Diangkat jadi satu `addTarget` di `BqBreakdownClient` + dipindah ke bawah
+      header. Owner masih perlu memutuskan apakah Sub Section tetap dinamai
+      lewat kotak, atau dibuat langsung dari menu lalu di-rename inline.
+
+- [x] **BQ-67 — Kolom angka tidak sejajar antar jenis baris. SELESAI 2026-08-27.**
+      Owner: *"works dan sub works nya ga konsisten."* Ada TIGA sistem layout
+      untuk kolom yang sama — strip header `px-4+pr-0.5`, baris seksi tanpa
+      padding, baris Works `px-6` di dalam kartu berbingkai. Subtotal seksi
+      mendarat ~24px di kanan Jumlah milik Works. Disatukan lewat konstanta
+      `ROW_PX`/`COL_GAP`/`COL_VOL`/`COL_PRICE`/`COL_TOTAL`; bingkai kartu
+      `ObjectList` dicabut karena ia yang menambah inset.
+      Sekalian: baris Works menulis `"0 sub-pekerjaan · 0 baris"` — mengiklankan
+      `BqSubObject` yang sudah dipensiunkan (PRD §8) sambil menyebut Sub-Works
+      sebagai "baris". Diluruskan ke kosakata PRD §2.
+
+- [x] **BQ-68 — Kontras teks gagal WCAG AA. SELESAI 2026-08-27.**
+      `TEXT_TERTIARY` adalah `slate-400` (#94a3b8) = **2,6:1** di atas putih —
+      gagal AA bahkan untuk ambang teks besar. Dipakai untuk hal yang bukan
+      hiasan: kode pekerjaan, hitungan baris, label kolom.
+      Ditemukan juga drift: `tokens/colors.ts` menulis `TEXT_SECONDARY =
+      slate-500` sementara `designTokens.css` menulis `--ui-text-secondary:
+      #475569` (slate-600). Keduanya diluruskan.
+      Tangga baru: `slate-950` / `slate-600` (7,5:1) / `slate-500` (4,8:1),
+      plus `ICON_DECORATIVE` (slate-400) khusus ikon murni dekoratif.
+      83 kelas hardcoded di 6 komponen BQ diangkat; **nol** kelas yang gagal AA
+      tersisa.
+
+- [x] **BQ-72 — Nasib `PROJECT_LOCAL`. DIJAWAB 2026-08-27, tidak jadi dicabut.**
       Sempat dicatat sebagai pencabutan total (*"semua pricing dari master
       data"*). Owner melunakkannya sore itu: *"data yang tidak ada di master data
       → override per proyek / dibuat library di bq saja."* Jadi `PROJECT_LOCAL`
@@ -1368,7 +1715,7 @@ di `src/subapps/bq/`**.
       `BIAYA_UMUM` / `TRANSPORT_AKOMODASI` — ketiganya tidak perlu menunggu
       Master Data menyediakan tempat. Nol perubahan kode. Lihat `PRD-BQ.md` §4.
 
-- [x] **BQ-40 — Penjumlahan harga di komponen klien. SELESAI 2026-08-27.**
+- [x] **BQ-70 — Penjumlahan harga di komponen klien. SELESAI 2026-08-27.**
       `BqBreakdownClient.tsx:1938-1939` menjumlahkan `l.cost` untuk baris Total
       di bawah tabel Bahan/Jasa. Melanggar PRD §3.2. Risiko rendah (menjumlahkan
       keluaran `calc.ts`, bukan harga mentah) tapi tetap tempat kedua uang
@@ -1377,7 +1724,7 @@ di `src/subapps/bq/`**.
       dihitung di `calc.ts`; komponen hanya merender hasilnya dan tidak lagi
       mempunyai `reduce` atas harga/biaya.
 
-- [x] **BQ-41 — Guard lama memblokir pembuatan L2. SELESAI 2026-08-27.**
+- [x] **BQ-69 — Guard lama memblokir pembuatan Sub Section. SELESAI 2026-08-27.**
       `createBqSectionAction` menolak menambah Sub Section ke section yang sudah
       punya Works (*"move them into divisions first"*). Guard ini lahir waktu
       model masih dua lapis; sekarang ia memblokir alur yang paling wajar —
@@ -1389,7 +1736,7 @@ di `src/subapps/bq/`**.
       di UI ikut dicabut. PRD §2 sekarang menegaskan Works langsung dan Sub
       Section boleh berdampingan; tombol tambah Works tetap hidup setelah ada anak.
 
-- [x] **BQ-39 — Cabut markup dari kode. SELESAI 2026-08-27.** 🔒 migrasi belum diterapkan
+- [x] **BQ-71 — Cabut markup dari kode. SELESAI 2026-08-27.** 🔒 migrasi belum diterapkan
       **Keputusan owner 2026-08-27:** OH, profit, markup, PPN, diskon —
       *"TIDAK MAU DI BUAT SERUMIT INI"*; *"hitungan hanya dari koefisien."*
       Keputusannya sudah final di `PRD-BQ.md` §8; yang belum ada aba-aba
@@ -1405,7 +1752,7 @@ di `src/subapps/bq/`**.
       toolbar, library, viewer, dan kalkulasi sudah tidak membawa markup. Sepuluh
       test `calc.test.ts` kini mengunci aritmatika koefisien × harga biasa.
 
-- [x] **BQ-37 — AT-01 gerbang hantu. DIBUBARKAN 2026-08-27, tidak perlu pengganti.**
+- [x] **BQ-73 — AT-01 gerbang hantu. DIBUBARKAN 2026-08-27, tidak perlu pengganti.**
       Sempat dicatat menunggu owner menetapkan "fixture kanonik pengganti".
       Itu kerumitan yang dibuat sendiri. AT-01 dulu masuk akal karena mesin
       hitungnya rumit (waste berlapis, konversi satuan, pembulatan) sehingga

@@ -46,6 +46,7 @@ export * from "@/components/ui/badge";
 export * from "@/components/ui/button";
 export * from "@/components/ui/card";
 export * from "@/components/ui/checkbox";
+export * from "@/components/ui/context-menu";
 export * from "@/components/ui/creatable-checklist";
 export * from "@/components/ui/creatable-search";
 export * from "@/components/ui/creatable-tag-input";

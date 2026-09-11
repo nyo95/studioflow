@@ -40,6 +40,12 @@ export const UI_ENGINE_NAV_BG = "bg-white";
 export const UI_ENGINE_CARD_BG = "bg-white";
 export const UI_ENGINE_BG_SUBTLE = colors.BG_SUBTLE;
 export const UI_ENGINE_ACCENT_PRIMARY = "text-slate-900";
+// Tangga teks — seluruhnya lolos WCAG AA. Lihat kepala tokens/colors.ts.
+export const UI_ENGINE_TEXT_PRIMARY = colors.TEXT_PRIMARY;
+export const UI_ENGINE_TEXT_SECONDARY = colors.TEXT_SECONDARY;
+export const UI_ENGINE_TEXT_TERTIARY = colors.TEXT_TERTIARY;
+export const UI_ENGINE_ICON_DECORATIVE = colors.ICON_DECORATIVE;
+export const UI_ENGINE_ICON_DEFAULT = colors.ICON_DEFAULT;
 export const UI_ENGINE_BORDER_COLOR = colors.BORDER_COLOR || "border-slate-200";
 export const UI_ENGINE_BORDER_SUBTLE = colors.BORDER_SUBTLE;
 export const UI_ENGINE_INTERACTIVE_RESIZER = colors.INTERACTIVE_RESIZER;

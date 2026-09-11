@@ -480,9 +480,11 @@ CSV staging master-data lama adalah **bukti saja**, bukan sumber impor.
 
 Lima hal yang tidak boleh dilanggar tanpa keputusan owner baru:
 
-1. **Hirarki lima lapis.** `L0/L1/L2 Section` (pengelompok, `BqSection`
-   rekursif, maks 3 lapis) → **`L3 Works`** (`BqObject`, satu-satunya lapis
-   berharga: Qty × Harga Satuan) → `L4 Sub-Works` (koefisien × harga).
+1. **Hirarki empat lapis.** Aturannya dua kalimat:
+   `Section → Sub Section DAN Works`, `Sub Section → Works saja`.
+   `L0 Section` / `L1 Sub Section` (pengelompok, `BqSection`, **maks 2 lapis**,
+   L1 opsional) → **`L2 Works`** (`BqObject`, satu-satunya lapis berharga:
+   Qty × Harga Satuan) → `L3 Sub-Works` (koefisien × harga).
    `BqSubObject` tidak punya slot — jangan bangun fitur baru di atasnya.
 
 2. **Seluruh aritmatika di `lib/calc.ts`, dan modul itu murni.** Tidak ada

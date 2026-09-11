@@ -15,6 +15,7 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 
 | Tanggal | Area | Perubahan |
 |---|---|---|
+| 2026-09-08 | StudioFlow → Product Schedule export | Cover print katalog memakai lebar A4 landscape dari token print dan tinggi aman yang lebih pendek dari tinggi kertas, bukan `100vh`, sehingga label `Material Schedule` dan tanggal tidak jatuh ke halaman berikutnya saat export PDF/print. |
 | 2026-08-26 | BQ → UI/UX | **Redesign UI sebagai pengganti Excel RAB/BQ:** Terminologi diubah ke standar RAB Indonesia (Vol., Harga Sat., Jumlah, Bahan Material, Jasa/Upah, Total Anggaran, OH+Profit %). Tabel L3 direstruktur dengan kolom No./Uraian/Sat./Koef./Harga Sat./Jumlah mirip format spreadsheet BQ; Sat. kini kolom tersendiri. Subtotal row muncul di bawah tabel Bahan dan Jasa, plus total per sub-pekerjaan. Tombol hapus baris tampil hanya hover. Empty state membimbing estimator. Column-header hint (Uraian/Vol./Harga Sat./Jumlah) di atas daftar L1. `BqLinePicker`: label Indonesia (+Bahan, +Jasa), EmptyResult punya link "input manual", form custom jadi panel tersendiri. |
 | 2026-08-26 | Documentation → BQ | `designbq.md` ditambahkan sebagai catatan arah desain BQ: app diposisikan sebagai worksheet estimator yang ringkas, berbasis koefisien manual, dan tidak meniru kalkulasi material otomatis ala engine costing. |
 | 2026-08-26 | BQ | Breakdown viewer disederhanakan untuk workflow estimator: code + title diringkas ke satu identitas utama, tabel line cukup menampilkan description, coefficient, unit price, dan total; waste override dan purchase summary otomatis dihapus dari viewer kerja. |
@@ -67,6 +68,1037 @@ kanoniknya. Pekerjaan yang **belum** selesai ada di `roadmap.md`.
 | 2026-08-18 | Master Data → Supplier detail (dialog Contact) | Tidak ada perubahan terlihat — pertahanan berlapis di baliknya: edit/hapus contact sekarang menolak kalau contact ternyata bukan milik party yang sedang dibuka. (#27) |
 
 | 2026-08-20 | Master Data/BQ | BQ readiness memakai satu aturan kanonik; indikator Master Data dan picker/direct lookup BQ menolak SKU terhapus, discontinued, tanpa harga/satuan beli/konversi valid, atau dengan satuan harga yang tidak cocok. |
+
+## [Unreleased] - 2026-09-08 — Product Schedule export cover pagination
+
+### Fixed
+
+- **Hasil akhir:** export/print Product Schedule tidak lagi bergantung pada `100vh`; cover memakai box print yang lebih pendek dari tinggi kertas agar Chrome tidak memecah footer cover ke halaman kedua.
+- **Area/berkas berubah:** `src/app/(dashboard)/projects/[id]/extensions/product-catalog/page.tsx`, `src/extensions/sketchup/components/CatalogCover.tsx`, dan `changelog.md`.
+- **Verifikasi yang benar-benar dijalankan:** `npm run typecheck` lulus; `npx eslint --no-warn-ignored -- 'src/app/(dashboard)/projects/[id]/extensions/product-catalog/page.tsx' src/extensions/sketchup/components/CatalogCover.tsx` lulus.
+- **Risiko:** belum ada verifikasi visual lewat dialog print browser pada mesin ini; `graphify query` dan `graphify update .` gagal karena `uv trampoline failed to canonicalize script path`. Perubahan sengaja dibatasi ke CSS print cover.
+- **Pekerjaan yang masih terbuka:** tidak ada dari patch ini.
+
+## [Unreleased] - 2026-09-01 — Master Data R4.02: Production-readiness gap sweep
+
+### Context
+
+Analisis menyeluruh semua celah antara kontrak service, skema Prisma, dan implementasi:
+3 cacat kritis (P0), 4 celah logika signifikan (P1), 1 bug TypeScript yang lolos dari
+R4.01, dan 1 peningkatan UX (P2). Seluruhnya dieksekusi dalam satu siklus.
+
+### P0 — Logic defects (must-fix)
+
+- **P0-1 `updatePriceMaterial`:** Validasi `unitId` terhadap `purchase_unit_id ??
+  base_unit_id` SKU sebelumnya tidak ada; harga material bisa disimpan dengan satuan
+  yang tidak cocok unit beli/dasar SKU, melanggar pricing-contract §5.
+  Error baru: `PRICE_UNIT_SKU_MISMATCH`.
+
+- **P0-2 Brand-scoped VendorContact ownership:** `createVendor` dan `updateVendor`
+  tidak memvalidasi bahwa vendor memiliki atau menyuplai brand yang di-scope-kan ke
+  contact. Sekarang divalidasi eksplisit: vendor harus `owner_vendor` brand tersebut
+  atau ada di `brandSuppliers` (incoming atau existing DB).
+  Error baru: `CONTACT_BRAND_NOT_RELATED`, `CONTACT_BRAND_ARCHIVED`.
+
+- **P0-3 `listVendorTypes` / `listVendorTypesForAssignment`:** Query menggunakan
+  `orderBy: { name: "asc" }` — mengabaikan `sort_order`. Diperbaiki ke
+  `orderBy: { sort_order: "asc" }` dan `sort_order` ditambahkan ke `select`.
+
+### P1 — Logic gaps
+
+- **P1-1 `approveDeletion` Category:** Langsung `delete` tanpa pre-check; Prisma
+  foreign-key error mentah bisa bocor ke client. Sekarang menghitung dependansi
+  (`BrandCategory`, `SkuCategory`, `PriceMaterialLabor`, `PriceLabor`) dan melempar
+  `AppError("CONFLICT", "CATEGORY_HAS_DEPENDENCIES", ...)`.
+
+- **P1-1 `approveDeletion` VendorType:** Sama — sekarang cek `VendorVendorType.count`
+  dan melempar `AppError("CONFLICT", "VENDOR_TYPE_HAS_ASSIGNMENTS", ...)`.
+
+- **P1-2 VendorLink `archive_url` + `sort_order`:** Field ada di skema tapi tidak
+  diwire di manapun — input type, `createMany`, `listVendors` select, dan actions Zod
+  schema. Seluruh pipeline dari service input → actions → form UI kini lengkap.
+
+- **P1-2 BrandSupplier `is_authorized` + `notes`:** Field di skema tidak ditulis di
+  `createVendor`, `updateVendor`, `createBrand`, maupun `updateBrand`. Seluruh pipeline
+  diwire: service input type, `create` data, actions Zod schema, UI form (tab "Brand
+  Suppliers" baru di Vendor dialog dengan checkbox Authorized + field notes).
+
+- **P1-3 `listVendors` select:** `links` diperluas dengan `archive_url` dan
+  `sort_order`; `brand_suppliers` ditambahkan (`is_authorized`, `notes`, `brand { id, name }`).
+
+### R4.01 missed bug (TypeScript)
+
+- **`VendorRow.contacts` type** di `vendor-directory.tsx` masih menggunakan field
+  lama `name` dan `position` dari skema lama; service mengembalikan `person_name`,
+  `job_title`, `is_primary`, `brand_id`. Diperbaiki — mencegah runtime undefined dan
+  compile error.
+
+### P2 — UX improvement
+
+- **Near-duplicate name warning:** `VendorDirectory` dan `BrandDirectory` kini
+  menampilkan peringatan amber non-blocking saat nama yang diketik di form Create/Edit
+  mirip vendor atau brand yang sudah ada (substring / prefix 4-char match, case-insensitive).
+  Form edit mengecualikan record yang sedang diedit sendiri dari perbandingan.
+
+### Files changed
+
+- `src/apps/masterdata/service.ts`
+- `src/app/(platform)/masterdata/vendors/actions.ts`
+- `src/app/(platform)/masterdata/vendors/vendor-directory.tsx`
+- `src/app/(platform)/masterdata/brands/brand-directory.tsx`
+
+### Post-sweep additions (same release)
+
+- **`pricing/actions.ts` — `refreshPricing()` salah path:** `revalidatePath("/masterdata/settings/deletions")` menunjuk route yang tidak ada; dihapus. `revalidatePath("/masterdata/deletions")` ditambahkan khusus di `requestPriceDeletionAction`.
+- **`service.ts` — `archiveUnit` tanpa dependency check:** Unit yang masih direferensikan oleh `PriceMaterial`, `PriceMaterialLabor`, `PriceLabor`, atau `SKU` (base/purchase unit) bisa diarsipkan; sekarang diblokir dengan `AppError("CONFLICT", "UNIT_IN_USE", ...)`.
+- **`service.ts` — `approveDeletion` branch `unit` tanpa pre-check:** Bare `tx.unit.delete` tanpa guard; bergantung pada `mapWriteError` untuk FK violation. Ditambahkan guard `UNIT_IN_USE` yang sama — konsisten dengan pola category/vendor_type.
+
+
+### Hasil akhir
+
+Item roadmap B1 yang sebelumnya ditunda kini memiliki spesifikasi produk yang
+disetujui owner: satu permukaan Project Documents lintas phase, struktur folder
+virtual dari sistem, klasifikasi drag-and-drop, issue/version/asset terpisah,
+format nama tanpa nomor project, serta audience Internal/External yang terpisah
+dari jenis storage.
+
+Roadmap juga menetapkan upload staged yang aman untuk file besar, temporary
+storage 24 jam, finalize idempotent, dan aturan project `FINAL`. Finalisasi
+mempertahankan `Data`, `IN`, `OUT/External`, dan asset bertanda `FINAL`; file
+kerja internal masuk trash 30 hari sebelum purge permanen dan dapat dipulihkan
+dengan membuka kembali project.
+
+### Area/berkas berubah
+
+- `roadmap.md` — B1 diperbarui dari pertanyaan tertunda menjadi work order
+  lengkap: struktur dokumen, naming, versioning, storage, finalization,
+  retention, tahapan implementasi, dan acceptance criteria.
+
+### Verifikasi
+
+- Aturan dibandingkan dengan baseline `File`, jalur upload media, dialog
+  deliverable, dan service replace yang hidup per 2026-08-31.
+- Riwayat keputusan B1 tanggal 2026-08-18 tetap dipertahankan dan diberi catatan
+  bahwa statusnya telah digantikan keputusan baru.
+- Tidak ada kode, schema, migrasi, data, ataupun file storage yang diubah.
+
+### Risiko dan pekerjaan terbuka
+
+Implementasi B1 belum dimulai. Perubahan model dan migrasi tetap menunggu
+permintaan coding langsung owner. Kebijakan backup fisik serta batas quota
+angka per project masih harus ditentukan pada tahap implementasi operasional.
+
+
+## [Unreleased] - 2026-08-31 (rev 23) — Roadmap Project Documents dan arsip final
+
+## [Unreleased] - 2026-08-31 (rev 22) — Roadmap Project Task Center
+
+### Hasil akhir
+
+Roadmap task menambahkan `C-SISA-8`: satu permukaan Project Tasks yang
+menggabungkan TODO General dan seluruh phase, sementara phase dipertahankan
+sebagai scope/filter serta pengikat approval, lock, dan revision. Tahap pertama
+ditetapkan sebagai konsolidasi UI/read-model tanpa migrasi; penyatuan tabel
+fisik ditunda sampai ada audit pemakaian dan keputusan owner baru.
+
+### Area/berkas berubah
+
+- `roadmap.md` — baseline kode/data, keputusan produk, dua tahap pekerjaan,
+  batas non-goal, acceptance criteria, dan titik awal implementasi.
+
+### Verifikasi
+
+- Dibandingkan dengan `prisma/schema.prisma`, `task-feed-query.ts`,
+  `task-feed.ts`, `phase-service.ts`, serta data development aktif.
+- Tidak ada kode, schema, migrasi, atau data yang diubah.
+
+### Risiko dan pekerjaan terbuka
+
+Implementasi `C-SISA-8` belum dimulai. Tahap 2 tetap membutuhkan keputusan
+owner baru karena menyentuh perbedaan semantik antara TODO, requirement
+bertemplate, dan feedback revision.
+
+## [Unreleased] - 2026-08-31 (rev 21) — Antrean proyek kosong tertutup secara default
+
+### Hasil akhir
+
+Grup proyek dengan angka antrean terbuka `0` sekarang mulai dalam keadaan
+collapse pada halaman Tasks. Sebelumnya hanya proyek yang sama sekali tidak
+punya riwayat task yang ditutup; proyek yang seluruh task-nya sudah selesai
+tetap terbuka dan memenuhi layar dengan `Nothing queued.`.
+
+Proyek yang masih memiliki task terbuka tetap terbuka. Grup kosong tetap dapat
+dibuka manual untuk melihat empty state dan memakai `Add task…`.
+
+### Area/berkas berubah
+
+- `src/components/today-view.tsx` — state collapse awal memakai hitungan task
+  terbuka yang sama dengan angka pada header proyek.
+
+### Verifikasi
+
+- `npx eslint src/components/today-view.tsx` — lulus.
+- `npm run typecheck` — lulus.
+- Browser pada data laporan owner: proyek bernilai `0` tertutup, proyek bernilai
+  `6` tetap terbuka, dan expand manual menampilkan `Nothing queued.` kembali.
+
+### Risiko dan pekerjaan terbuka
+
+Risiko rendah dan terisolasi pada state presentasi awal; pilihan collapse manual
+tetap berlaku selama halaman terbuka dan tidak ada perubahan data atau schema.
+
+## [Unreleased] - 2026-08-28 (rev 20) — Product Schedule tidak lagi 404
+
+### Hasil akhir
+
+Route Product Schedule kanonik
+`/projects/[id]/extensions/product-catalog` kembali dapat dibuka. Guard
+`NEXT_PUBLIC_ENABLE_MATERIAL_FIXTURES` dari route Material/Fixtures legacy
+dihapus; guard tersebut sudah tidak sesuai setelah Product Schedule menjadi
+Catalog Board kanonik dan navigasinya selalu tersedia.
+
+### Area/berkas berubah
+
+- `src/app/(dashboard)/projects/[id]/extensions/product-catalog/page.tsx` —
+  menghapus feature gate legacy saja. Pemeriksaan session, permission
+  `PLUGIN_SCHEDULE_VIEW`, membership edit, dan keberadaan project tetap utuh.
+
+### Verifikasi
+
+- Browser: Product Schedule project `2026-506 Sociolla SG Funan` terbuka pada
+  URL laporan owner, menampilkan 29 schedule entry dalam 10 kelompok, tanpa
+  404 atau runtime error.
+- `npx eslint src/app/(dashboard)/projects/[id]/extensions/product-catalog/page.tsx`
+  — lulus.
+- `npm run typecheck` — lulus.
+
+### Risiko dan pekerjaan terbuka
+
+Risiko rendah: perubahan hanya mencabut gate route yang usang dan tidak
+mengubah data, schema, RBAC, atau mutasi schedule. Tidak ada pekerjaan lanjutan
+yang dibuka.
+
+## [Unreleased] - 2026-08-28 (rev 19) — Pemulihan data project lokal
+
+### Hasil akhir
+
+Database development yang aktif ditemukan hanya berisi schema/migrasi tanpa
+data aplikasi (`Project=0`, `User=0`). Data StudioFlow dipulihkan secara atomik
+dari backup valid `studioflow_pre_samples_20260730_185125.dump` setelah isinya
+diuji lebih dulu pada database recovery terpisah dan dimigrasikan ke schema
+terbaru. Hasil akhir: 11 project aktif, 8 user, 55 phase, dan seluruh relasi
+designer/drafter project valid.
+
+### Area/data berubah
+
+- Database lokal `studioflow`, hanya data schema `studioflow` yang kompatibel.
+  Schema `master_data` dan `bq` tidak diisi atau ditimpa oleh operasi ini.
+- Role legacy `OWNER` pada backup dipetakan menjadi `ADMIN`, sesuai migrasi
+  RBAC yang berlaku saat ini; ID user dan assignment project dipertahankan.
+- Backup keselamatan kondisi kosong, dump recovery current-schema, dan backup
+  penuh pascapemulihan disimpan di `backups/`.
+
+### Verifikasi
+
+- Database: 11/11 project aktif, 8 user, 55 phase, 0 relasi designer yatim,
+  dan 0 relasi drafter yatim.
+- `npx prisma migrate status` — 52 migrasi, database up to date.
+- Browser: `/projects` menampilkan 11 project; detail
+  `2025-429 Heloskin Cimanggu` beserta phase terbuka tanpa runtime error.
+- Backup pascapemulihan lolos pembacaan daftar archive oleh `pg_restore`.
+
+### Risiko dan pekerjaan terbuka
+
+Backup valid terakhir untuk data project bertanggal 2026-07-30. Dump
+`studioflow_pre_backfill_schedule_spec_20260812_180039.dump` tidak disentuh,
+tetapi arsip aslinya rusak karena output binary pernah tersimpan sebagai teks
+UTF-16; data setelah 30 Juli belum dapat dibuktikan pulih dari berkas itu.
+Halaman Tasks akun Berkah tetap kosong karena ia bukan designer/drafter pada
+11 project hasil recovery; daftar lengkap tersedia di `/projects`.
+
+## [Unreleased] - 2026-08-28 (rev 18) — Dashboard pulih setelah database kembali
+
+### Hasil akhir
+
+Dashboard tidak lagi terus melempar `PrismaClientKnownRequestError` setelah
+PostgreSQL sempat tidak tersedia. Probe kapabilitas schema AuditLog sekarang
+membuang promise cache yang gagal, sehingga request berikutnya mencoba ulang
+dan aplikasi pulih segera setelah database kembali sehat tanpa restart Next.js.
+
+### Area/berkas berubah
+
+- `src/core/platform/audit/compat.ts` — cache kapabilitas hanya mempertahankan
+  hasil probe yang berhasil; kegagalan sementara di-evict sebelum dilempar ulang.
+
+### Verifikasi
+
+- `npx eslint src/core/platform/audit/compat.ts` — lulus.
+- `npm run typecheck` — lulus.
+- `npm test` — 211 test lulus.
+- Uji browser lokal dengan server Next.js yang sama: dashboard normal → service
+  database dihentikan dan fallback terkonfirmasi → service database dinyalakan
+  kembali → reload berikutnya menampilkan navigasi StudioFlow tanpa overlay
+  runtime. Tidak ada source edit atau restart Next.js di antara outage dan
+  recovery.
+
+### Risiko dan pekerjaan terbuka
+
+Risiko rendah dan terisolasi pada cache read-only kapabilitas audit. Kegagalan
+database tetap diteruskan ke caller pada request yang terdampak; perubahan ini
+hanya memastikan kegagalan itu tidak disimpan permanen di proses. Tidak ada
+perubahan schema, migrasi, atau pekerjaan lanjutan yang dibuka.
+
+## [Unreleased] - 2026-08-27 (rev 17) — BQ-77: Library bisa dipakai, bukan cuma diisi
+
+### Hasil akhir
+
+BQ-76 membuat Library bisa DIISI. Ini setengah lingkaran sisanya.
+
+`loadFromLibraryObjectAction` punya tiga cacat sekaligus:
+
+- menargetkan **`targetSubObjectId`** — lapis `BqSubObject` yang dipensiunkan
+- cuma membaca **`sub_objects[0]`**, jadi resep dengan lebih dari satu
+  sub-object kehilangan sisanya tanpa satu pun pesan
+- setelah drag-drop dicabut (BQ-75), ia **tidak punya pemanggil sama sekali**
+
+Cacat kedua sudah tercatat sejak recheck pertama pagi ini, dan baru sekarang
+jadi relevan — Library-nya memang belum bisa diisi.
+
+### Yang ditulis ulang
+
+**Menargetkan Works.** Resep warisan — yang isinya duduk di dalam sub-object —
+**diratakan**, dengan `qty_per_sub` dikalikan pengali sub-object itu. Tanpa
+perkalian itu biayanya diam-diam mengecil; dan menuang ke dalam bentuk lama
+akan menghidupkan kembali lapis yang sudah dibuang.
+
+**Logika tuang tadinya disalin EMPAT kali** — dua cabang (`PROJECT_LOCAL` vs
+`MASTER_DATA`) × dua aksi tuang — sehingga setiap penambahan kolom snapshot
+harus menyentuh keempatnya. Diangkat jadi `pourMaterialRecipeLine` /
+`pourServiceRecipeLine`.
+
+**`createBqObjectFromLibraryAction`** baru: satu pilihan → satu Works lengkap
+dengan barisnya, nama dan satuan ikut dari resep. Estimator tidak mengetik ulang
+apa yang sudah tersimpan.
+
+Harga tetap **dibekukan ulang saat dituang**, dari master data saat itu —
+library cuma menunjuk (PRD-BQ §5.1).
+
+### Library dan Template jadi satu pencarian
+
+Resep Library muncul di kotak yang sama dengan saran template, dua grup:
+
+```
+klik kanan → Tambah Pekerjaan
+  ┌ Library   Pintu Kabinet HPL · unit · 4 sub-works
+  └ Template  Mobilization · ls
+  + Buat "..."
+```
+
+Bagi estimator keduanya hal yang sama — *pekerjaan yang sudah pernah disusun*.
+Memisahkannya ke dua tempat cuma memindahkan beban memilah ke pengguna.
+
+Daftar resep dimuat **sekali saat halaman siap**, bukan per ketikan: ia kecil
+(resep kantor, bukan katalog master data) dan dipakai di setiap kotak
+tambah-pekerjaan. Memuat ulang tiap karakter berarti satu server action per
+ketikan untuk data yang praktis tidak berubah.
+
+Ini juga membuat **BQ-65 tinggal separuh**: penyatuan Template + Library sudah
+terjadi di tempat yang penting — titik pakainya. Sisanya tinggal memindahkan
+sumber template dari file TS ke DB beserta `category` dan `is_default`.
+
+### Area/berkas
+
+- `src/subapps/bq/actions/bq-library-actions.ts` — `pourMaterialRecipeLine` /
+  `pourServiceRecipeLine` / `pourLibraryObject`; `loadFromLibraryObjectAction`
+  ditulis ulang; `createBqObjectFromLibraryAction` baru. ~180 baris salinan
+  hilang.
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — `libraryRecipes` dimuat
+  sekali; `CreatableSearch` bergrup; prefiks `lib:` memisahkan resep dari kunci
+  template.
+
+### Verifikasi
+
+`prisma validate` ✓ · `tsc --noEmit` **0 error** · `eslint src/subapps/bq/`
+exit 0, 1 warning bawaan · **33 test lulus**.
+
+### Risiko / tindak lanjut
+
+- **Perataan resep warisan belum diuji dengan data nyata** — belum ada resep
+  lama di database untuk dicoba. Perkaliannya lurus (`qty × sub.qty`), tapi
+  layak diperiksa kalau nanti muncul resep dari jalur sub-object.
+- Halaman `/bq/library` masih memakai kosakata "Objects / Sub-objects".
+- `loadFromLibrarySubObjectAction` masih menargetkan sub-object dan masih
+  dipakai `SubObjectRow` untuk data lama. Dibiarkan.
+
+## [Unreleased] - 2026-08-27 (rev 16) — BQ-76: Library BQ tidak bisa diisi sama sekali
+
+### Hasil akhir
+
+Owner membuka `/bq/library`, melihat *"Objects 0 · Sub-objects 0"*, dan bertanya
+*"BQ ini tidak berfungsi?"* — benar. **Tiga sebab bertumpuk**, dan yang kedua
+perbuatan saya beberapa jam sebelumnya.
+
+**1. Tombol "Simpan ke Library" hanya ada di sub-pekerjaan.**
+Satu-satunya pemanggil `saveSubObjectToLibraryAndLinkAction` hidup di
+`SubObjectRow` — lapis `BqSubObject` yang sudah dipensiunkan. Jalur untuk Works
+memang belum pernah dibuat; roadmap BQ-10 mencatatnya sebagai *"L1
+ditangguhkan"*.
+
+**2. BQ-64 menutup pintu terakhirnya.** Mencabut "Tambah Sub-pekerjaan" berarti
+sub-object baru tidak bisa dibuat lagi — jadi tombol simpan itu tidak bisa
+dicapai untuk data baru. Fitur yang tadinya sempit jadi **mati total**.
+
+**3. Bahkan kalau tombolnya dipasang, hasilnya cangkang kosong.**
+`saveObjectToLibraryAction` hanya mengiterasi `object.sub_objects`. Baris yang
+menempel LANGSUNG di Works — bentuk yang berlaku sejak PRD ditulis ulang —
+diabaikan tanpa satu pun peringatan. Dan itu bukan kelalaian kode: skema
+`BqLibraryMaterialLine` memang **tidak punya tempat** untuknya, FK-nya cuma
+`sub_object_of_object_id` dan `sub_object_id`.
+
+Sebab ketiga inilah yang membuat ini bukan sekadar tombol yang lupa dipasang.
+
+### Yang diperbaiki
+
+- **Migrasi `20260827130000_bq_library_direct_lines`** — kolom
+  `library_object_id` di `BqLibraryMaterialLine` dan `BqLibraryServiceLine`.
+  Kolom lama **dipertahankan**: resep yang terlanjur tersimpan lewat jalur
+  sub-object harus tetap terbaca.
+- `saveObjectToLibraryAction` menyalin baris langsung, dan **menolak menyimpan
+  Works yang belum punya baris** alih-alih diam-diam membuat resep kosong.
+- Pemetaan baris→resep (~15 field) diangkat jadi `materialRecipeData` /
+  `serviceRecipeData`. Ia kini dipakai dua kali — baris langsung dan baris
+  warisan — dan menyalinnya dua kali berarti dua daftar yang harus berubah
+  bersamaan setiap kali skema snapshot bergeser; yang satu pasti tertinggal.
+- Tombol **Simpan ke Library** dipasang di `ObjectRow`.
+- `library-service` menghitung baris langsung **+** warisan; tanpa itu resep
+  modern tampak kosong di daftar.
+
+### ⚠️ Owner perlu menjalankan
+
+```
+npx prisma migrate dev
+```
+
+`npx prisma generate` sudah dijalankan dari sini, tapi lewat workaround: mount
+device menolak `unlink`, jadi `src/generated/prisma` **dipindah** ke
+`_to_delete/prisma-client-2026-08-27b/` sebelum generate. Folder itu perlu
+dihapus manual — mount tidak bisa menghapusnya.
+
+### Area/berkas
+
+- `prisma/schema.prisma` + migrasi baru.
+- `src/subapps/bq/actions/bq-library-actions.ts` — helper pemetaan, query baris
+  langsung, penjaga Works kosong.
+- `src/subapps/bq/services/library-service.ts` — hitungan baris.
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — tombol Simpan di Works.
+
+### Verifikasi
+
+`prisma validate` ✓ · `prisma generate` ✓ · `tsc --noEmit` **0 error** ·
+`eslint src/subapps/bq/` exit 0, 1 warning bawaan · **33 test lulus**.
+
+### Risiko / tindak lanjut
+
+- **Memuat resep Library ke dalam Works belum ada.**
+  `loadFromLibraryObjectAction` masih menargetkan `targetSubObjectId` dan hanya
+  membaca `sub_objects[0]` — cacat yang sudah tercatat sejak recheck pertama.
+  Jadi Library sekarang bisa DIISI tapi belum bisa DIPAKAI. Bagian dari BQ-65.
+- Halaman `/bq/library` masih memakai kosakata "Objects / Sub-objects", bukan
+  "Works / Sub-Works".
+
+## [Unreleased] - 2026-08-27 (rev 15) — BQ-75: panel Sumber + drag-drop dicabut
+
+### Hasil akhir
+
+Tiga keluhan owner sekaligus — *"kepotong nih desainnya"*, *"cek sidebar nya
+masih perlu ga"*, *"dragdrop template jg ga fungsional"* — ternyata satu akar.
+
+### Drag-drop tidak pernah berfungsi sejak ditulis
+
+`useRecipeDropZone` memanggil `readRecipeDrag(e)` di `dragenter` dan `dragover`.
+Fungsi itu isinya `dataTransfer.getData(...)`.
+
+Per spesifikasi HTML, selama kedua fase itu drag data store ada dalam
+**protected mode**: `getData()` selalu mengembalikan string kosong, dan hanya
+`types` yang boleh dibaca. Jadi:
+
+```
+onDragOver → readRecipeDrag() → getData() = "" → null
+           → return lebih awal
+           → preventDefault() TIDAK PERNAH dipanggil
+           → browser menolak drop → onDrop tidak pernah jalan
+```
+
+Yang bikin ini layak dicatat: **komentar tepat di atas fungsi itu sudah
+menuliskan kegagalannya** — *"dragover HARUS memanggil preventDefault() — tanpa
+itu browser menolak drop dan onDrop tidak pernah jalan."* Penulisnya tahu
+jebakannya, lalu memasang penjaga yang membaca data yang belum boleh dibaca.
+Bukan regresi; ia lahir rusak.
+
+### Dicabut, bukan diperbaiki
+
+Perbaikannya ada (encode jenis ke MIME supaya `types` cukup). Tapi drag-drop
+adalah **jalan kedua untuk hal yang sudah bisa dilakukan**:
+
+| Panel Sumber | Sudah ada di grid |
+|---|---|
+| Template (drag) | klik kanan → Tambah Pekerjaan, saran template ada di dalam pencariannya |
+| Library (drag) | sama |
+| Harga (drag) | quick-add row `+ Tambah Bahan` / `+ Tambah Jasa`, mencari master data inline |
+
+Memperbaiki jalan kedua yang rusak untuk hal yang sudah jalan bukan
+kesederhanaan. Panelnya ikut dicabut — `w-72` (288px) yang selama ini menekan
+grid, sehingga *"kepotong"* selesai tanpa menyentuh satu kolom pun.
+
+### "Seksi baru" pindah, tidak hilang
+
+Itu satu-satunya hal yang benar-benar cuma ada di panel. Sekarang: **klik kanan
+ruang kosong grid → Tambah Section**, dibuat langsung dengan nama bawaan lalu
+masuk mode ganti-nama — pola yang sama persis dengan Sub Section.
+
+Klik-kanan jadi konsisten di seluruh kedalaman:
+
+```
+ruang kosong  →  Tambah Section
+Section       →  Tambah Sub Section · Tambah Pekerjaan · Hapus
+Sub Section   →  Tambah Pekerjaan · Hapus
+```
+
+### Angka
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| `BqToolbar.tsx` | 841 baris | **184** |
+| `BqBreakdownClient.tsx` | 2.255 | 2.167 |
+| Lebar terpakai sidebar | 288px | **0** |
+| Warning eslint `src/subapps/bq/` | 2 | **1** |
+
+Yang ikut mati bersama panelnya: `BqLibraryPanel`, `useRecipeDropZone`,
+`startDrag`, `readRecipeDrag`, `isRecipeDrag`, `acceptsOnObject`,
+`acceptsOnSubObject`, `BQ_RECIPE_MIME`, tipe `BqRecipeDrag`, plus belasan impor
+yang jadi yatim. `grep dataTransfer|draggable|BqRecipeDrag` di `src/subapps/bq/`
+sekarang **kosong**.
+
+### Area/berkas
+
+- `src/subapps/bq/components/BqToolbar.tsx` — panel + seluruh mesin drag dicabut.
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — drop zone, prop
+  `onDropOn*`, callback `dropOn*` dicabut; `ContextMenu` di ruang kosong grid
+  dengan aksi `addSection`.
+- `PRD-BQ.md` — aturan keras #7 ditulis ulang jadi tabel klik-kanan per lapis +
+  "tidak ada drag-drop"; §8 menambah baris panel Sumber beserta sebab teknisnya.
+- `roadmap.md` — BQ-75.
+
+### Verifikasi
+
+`prisma validate` ✓ · `tsc --noEmit` 0 error · `eslint src/subapps/bq/`
+**exit 0, 1 warning bawaan** · **33 test lulus**.
+
+### Risiko / tindak lanjut
+
+- **Kehilangan cara MENJELAJAH** template/library tanpa tahu namanya — sekarang
+  harus mengetik dulu di pencarian. Kalau itu terasa hilang, jawabannya bukan
+  mengembalikan panel: `CreatableSearch` bisa menampilkan daftar saat kosong.
+- BQ-65 (satukan Template + Library) jadi lebih sederhana: tidak ada lagi tab
+  yang perlu dilebur, cuma sumber data untuk pencarian.
+- Sub-object lama masih dirender; jalur menuang resep ke dalamnya
+  (`loadFromLibrary*Action`) kini tidak punya pemanggil di UI.
+
+## [Unreleased] - 2026-08-27 (rev 14) — BQ-74: guard cermin yang terlewat
+
+### Hasil akhir
+
+Owner menemui penolakan di browser:
+
+> *"This section already uses divisions. Add the work item inside a division
+> instead."*
+
+BQ-69 sudah mencabut guard yang memblokir **menambah Sub Section ke Section yang
+sudah punya Works**. Yang terlewat: **kembarannya di arah sebaliknya**, hidup di
+`createBqObjectAction` — Section yang sudah punya Sub Section menolak Works
+langsung.
+
+Keduanya lahir dari asumsi lama bahwa satu Section harus memilih salah satu
+bentuk. Aturan owner justru sebaliknya: **`Section → Sub Section DAN Works`.**
+
+Yang diblokirnya adalah alur paling wajar: estimator menaruh beberapa Works
+dulu, lalu sebagian dikelompokkan ke Sub Section — dan sisanya yang tidak
+dikelompokkan jadi tidak bisa ditambah lagi. Pesannya pun menyuruh *"pindahkan
+ke dalam divisi"* tanpa menyediakan caranya.
+
+Tidak ada alasan teknis yang tersisa: `rollupSectionSubtotals` sudah menangani
+Works dan Sub Section berdampingan di satu induk, dan itu ada testnya sejak
+BQ-30 (*"Works yang menempel di beberapa lapis sekaligus"*).
+
+### Pelajaran yang layak dicatat
+
+Mencabut satu guard tanpa mencari kembarannya menyisakan setengah masalah, dan
+setengah itu justru lebih membingungkan — pengguna berhasil di satu arah lalu
+buntu di arah lain, tanpa pola yang bisa ditebak. Saat mencabut aturan
+simetris, **cari pasangannya dulu**.
+
+### Istilah "divisi" dibersihkan
+
+Kata *division* / *divisi* adalah sisa model dua-lapis lama dan sudah tidak ada
+di PRD. `addDivision` → `addSubSection`, plus tiga komentar di
+`bq-project-actions.ts`.
+
+### Area/berkas
+
+- `src/subapps/bq/actions/bq-project-actions.ts` — guard di
+  `createBqObjectAction` dicabut, alasannya ditinggal sebagai komentar di
+  tempatnya; istilah diselaraskan.
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — `addDivision` →
+  `addSubSection`.
+- `roadmap.md` — BQ-74.
+
+### Verifikasi
+
+`tsc --noEmit` 0 error · `eslint src/subapps/bq/` **exit 0** · **33 test lulus**.
+
+### Risiko / tindak lanjut
+
+- Dua guard simetris lain yang masih berdiri dan memang benar: batas kedalaman
+  Sub Section (BQ-63) dan "template hanya untuk BQ kosong". Keduanya bukan
+  asumsi lama — keduanya aturan yang masih berlaku.
+
+## [Unreleased] - 2026-08-27 (rev 13) — BQ-63: pengelompok dipangkas jadi DUA lapis
+
+### Hasil akhir
+
+**Owner mencabut lapis pengelompok ketiga**, beberapa jam setelah menyetujuinya.
+Aturannya sekarang dua kalimat:
+
+```
+Section      →  Sub Section  DAN  Works
+Sub Section  →  Works saja
+```
+
+Ini **membalik BQ-31 pagi ini**. Diagram hirarki yang owner kirim pagi tadi
+punya baris *"L2 · **Optional Sub Section** · Shopfront Area, Store Area"* —
+disorot kuning, jelas disengaja — dan seluruh BQ-31 dibangun di atasnya
+(`BqSection` rekursif, `MAX_SECTION_DEPTH = 3`, penomoran tiga bentuk
+A/B/C → I/II/III → 1/2/3).
+
+Kasus area kini ditangani tanpa lapis ketiga: areanya jadi Sub Section langsung
+di bawah Section, atau namanya masuk ke nama Works.
+
+Yang berubah:
+
+- `MAX_SECTION_DEPTH` **3 → 2**
+- Pesan penolakan action jadi menyebut aturannya, bukan angka kedalaman:
+  *"A sub section can only contain works, not another sub section."*
+- Komentar `section-tree.ts`, komentar schema `BqSection.parent_id`, PRD §2,
+  dan `AGENTS.md` aturan keras #1 diselaraskan
+- Penamaan lapis bergeser satu: yang dulu L3 Works kini **L2 Works**, L4
+  Sub-Works kini **L3 Sub-Works**. Rumusnya tidak berubah.
+
+### Data tiga lapis yang terlanjur ada tetap ditampilkan
+
+Test `section-tree` untuk pohon tiga lapis **dipertahankan**, dan diberi alasan
+di tempatnya: bentuk itu tidak bisa lagi DIBUAT, tapi jalur baca wajib
+menampilkannya — kalau tidak, BQ lama jadi tidak bisa diperbaiki penggunanya.
+Prinsip yang sama sudah dipakai untuk pengelompok yatim dan data berputar.
+
+`sectionCodeForDepth` juga tetap menangani kedalaman 2 dengan alasan yang sama.
+
+### Penomoran roadmap dibetulkan
+
+Nomor BQ-37..BQ-47 yang dipakai siklus R3 hari ini **bentrok dengan tabel
+backlog lama** (BQ-47 sudah dipakai *"Ingat tab dock terakhir yang dipakai"*,
+dan tabel itu berlanjut sampai BQ-62). Seluruh item R3 dinomori ulang ke
+**BQ-63..BQ-73**, dan 12 rujukan silang di `PRD-BQ.md`, `HANDOFF-BQ-R3.md`, dan
+`PROMPT-CODEX-BQ.md` ikut diselaraskan.
+
+Entri changelog lama **tidak diedit** — nomornya benar untuk saat itu ditulis.
+
+### Area/berkas
+
+- `src/subapps/bq/lib/section-tree.ts` + `.test.ts` — batas dua lapis, alasannya
+  di kepala berkas, test tiga lapis dipertahankan sebagai jalur baca.
+- `src/subapps/bq/actions/bq-project-actions.ts` — pesan penolakan.
+- `prisma/schema.prisma` — komentar `BqSection.parent_id` ditulis ulang.
+- `PRD-BQ.md` §2 · `AGENTS.md` aturan #1 · `roadmap.md` (BQ-63 + penomoran ulang).
+
+### Verifikasi
+
+`prisma validate` ✓ · `tsc --noEmit` 0 error · **33 test lulus**.
+
+### Risiko / tindak lanjut
+
+- **Kalau sudah ada BQ dengan tiga lapis di database**, ia tetap tampil tapi
+  tidak bisa ditambah lagi di lapis terdalamnya. Belum diperiksa apakah ada.
+- BQ-65 (satukan Template + Library) belum tersentuh dan masih membawa migrasi.
+
+## [Unreleased] - 2026-08-27 (rev 12) — BQ-46 cabut "Tambah Sub-pekerjaan"; BQ-45 dispesifikasikan
+
+### Hasil akhir
+
+Owner melihat panel Sumber di browser dan menegaskan dua hal yang saling
+menguatkan:
+
+> *"semua yang ditulis disitu jatuhnya works, bukan sub works — karena itu
+> kerjaan yang ga perlu elemen sub works."*
+
+> *"library/template maksudnya library dari ranah BQ, bukan master data. Master
+> data hanya untuk di-snapshot harga terbaru, bukan untuk diotak-atik."*
+
+**BQ-46 — "Tambah Sub-pekerjaan" dicabut.** `BqSubObject` sudah dipensiunkan
+sejak PRD ditulis ulang, tapi tombolnya masih terpasang tepat di bawah blok
+Bahan/Jasa — mengundang orang membangun lapis yang sudah dibuang. Sub-object
+yang terlanjur ada **tetap dirender**, supaya data lama bisa dibaca dan
+dipindahkan; yang hilang cuma cara membuat yang baru.
+
+### Yang ketahuan saat memeriksa panel Sumber
+
+Tiga tab, tiga sumber berbeda — dan dua di antaranya benda yang sama:
+
+| Tab | Sumbernya | Isinya |
+|---|---|---|
+| Library | `BqLibraryObject` (DB) | resep buatan user |
+| Template | `bq-template-data.ts` (file TS) | daftar baku kantor |
+| Harga | Master Data | SKU & WorkPrice |
+
+Lebih dalam lagi: **skema library masih memodelkan bentuk yang sudah tidak sah.**
+
+```
+BqLibraryObject → BqLibrarySubObjectOfObject → baris bahan/jasa
+                        ↑ lapis yang dipensiunkan
+```
+
+Resep template WAJIB lewat sub-object untuk sampai ke barisnya, padahal PRD §2.2
+menyatakan barisnya menempel langsung ke Works. Jadi bukan cuma dua tab yang
+perlu digabung — bentuk datanya juga harus diluruskan.
+
+### Keputusan owner untuk BQ-45
+
+- **`Harga` tetap terpisah dari `Template`.** Beda lapis (L4 vs L3), beda hak:
+  Template milik BQ dan boleh disunting, Harga cuma sumber snapshot dan
+  read-only. Meleburnya menaruh dua benda yang tidak bisa saling menggantikan
+  dalam satu hasil pencarian.
+- **Menyunting template bawaan membuat SALINAN milik user.** Yang bawaan tetap
+  utuh, jadi seed ulang tidak pernah bertabrakan dengan suntingan siapa pun.
+- **`category`** menyaring saran: Section bernama Preliminaries menawarkan
+  Mobilization, Loading/Unloading, Security. Mekanismenya sudah ada
+  (`suggestedTemplateItems` mencocokkan by nama Section) — yang pindah cuma
+  sumbernya, dari file TS ke DB.
+
+`bq-template-data.ts` turun status jadi bahan seed. Itu sekaligus menutup BQ-36
+permanen — file yang doc-nya drift tidak lagi jadi sumber runtime.
+
+### Area/berkas
+
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — blok "Tambah
+  Sub-pekerjaan" + state `newSubName` dicabut, dengan alasannya ditinggal
+  sebagai komentar di tempatnya.
+- `PRD-BQ.md` — §5 ditulis ulang: resep = Works (bukan Sub-Works), §5.2
+  "Library selalu berarti library BQ" beserta tabel dua tab, §5.3 satu daftar
+  bawaan+user dengan `category` dan `is_default`.
+- `roadmap.md` — BQ-45 (satukan template, 🔒 migrasi) dan BQ-46 (selesai).
+
+### Verifikasi
+
+`tsc --noEmit` 0 error · `eslint src/subapps/bq/` **exit 0** · **33 test lulus**.
+
+### Risiko / tindak lanjut
+
+- **BQ-45 bawa migrasi** yang harus menaikkan baris dari
+  `BqLibrarySubObjectOfObject` ke object induknya. Data library yang sudah ada
+  belum diperiksa isinya.
+- Antrean migrasi BQ-2 bertambah lagi.
+
+## [Unreleased] - 2026-08-27 (rev 11) — BQ-16: ganti nama di baris; kotak Sub Section dihapus
+
+### Hasil akhir
+
+Owner memilih jalur yang lebih ringkas: kotak *"Sub Section baru di …"* dihapus
+sama sekali, diganti **buat-lalu-ganti-nama di barisnya**.
+
+Alurnya sekarang satu langkah, bukan dua layar:
+
+```
+klik kanan → Tambah Sub Section
+  → baris langsung ada, nama bawaan "Sub Section baru", KURSOR SUDAH DI SITU
+  → ketik → Enter
+```
+
+Tidak ada lagi kotak mengambang yang bisa tertinggal terbuka, dan tidak ada
+lagi jarak antara tempat mengklik dan tempat hasilnya muncul.
+
+**`EditableName`** — teks yang jadi input saat diklik. Escape membatalkan dan
+mengembalikan nama lama; itu penting karena baris yang baru dibuat SUDAH punya
+nama yang sah, jadi membatalkan tidak boleh meninggalkannya kosong.
+
+**`runData`** ditambahkan ke `useMutate`. `run` yang lama hanya mengembalikan
+boolean, sementara mode ganti-nama butuh id baris yang baru — sekarang, bukan
+setelah `router.refresh()` selesai.
+
+### Satu bug HTML yang ikut ketahuan
+
+Percobaan pertama menaruh `EditableName` di tempat nama berada sekarang — **di
+dalam `<button>` pelipat seksi**. `<input>` di dalam `<button>` adalah HTML yang
+tidak sah: kliknya nyasar ke tombol, dan mengetik bisa memicu lipat.
+`stopPropagation` cuma menutupi gejalanya.
+
+`SectionHeader` direstrukturisasi: tombol lipat kini memuat **hanya** chevron
+dan kode; nama berdiri sendiri sebagai target ganti-nama. Kebetulan itu juga
+lebih jelas — dua target, dua maksud, tidak saling tumpang tindih. Tombolnya
+diberi `aria-label` sendiri karena tidak lagi memuat nama seksinya.
+
+### Yang ikut dibuang
+
+`InlineAdd` sudah tidak dipakai siapa pun dan dihapus. `Shared.addTarget`
+(gabungan works+section) menyusut jadi `addWorksIn` — Sub Section tidak lagi
+lewat jalur itu sama sekali.
+
+### Area/berkas
+
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — `EditableName` baru;
+  `runData` di `useMutate`; `addDivision` membuat langsung + menandai baris untuk
+  ganti-nama; `renameSection` memanggil `updateBqSectionAction`; `SectionHeader`
+  direstrukturisasi (tombol dan nama bersebelahan, bukan bersarang); `InlineAdd`
+  dihapus.
+
+### Verifikasi
+
+`tsc --noEmit` 0 error · `eslint src/subapps/bq/` **exit 0** · **33 test lulus**.
+
+### Risiko / tindak lanjut
+
+- **Area klik pelipat mengecil** — sekarang hanya chevron + kode, bukan seluruh
+  baris. Itu harga dari nama yang bisa diklik untuk diganti. Kalau terasa
+  sempit, chevron bisa diberi padding lebih besar tanpa mengembalikan nesting.
+- Nama bawaan `"Sub Section baru"` akan tertinggal kalau pengguna menekan Escape
+  atau berpindah tanpa mengetik. Itu disengaja — baris yang sudah ada lebih
+  mudah dibetulkan daripada baris yang gagal dibuat.
+- Pola `EditableName` belum dipakai untuk nama Works (BQ-16 asli mencakup
+  keduanya). Mekanismenya sudah ada, tinggal dipasang.
+
+## [Unreleased] - 2026-08-27 (rev 10) — BQ-44: dua kotak tambah bisa terbuka sekaligus
+
+### Hasil akhir
+
+Owner mengirim tangkapan layar dengan tanda silang di kotak *"Sub Section baru
+di PRELIMINARIES"*: *"ini nya apus aja."*
+
+Penyebabnya bukan kotak itu sendiri, tapi **state-nya per-`SectionBlock`**.
+Tiap pengelompok memegang `adding` sendiri, jadi membuka baris tambah di satu
+tempat tidak menutup yang lain. Hasilnya persis yang terlihat di layar: dua
+kotak terbuka bersamaan di dua kedalaman berbeda, dan yang di atas terbaca
+seperti **form permanen yang tertinggal** — justru hal yang dihapus BQ-35.
+
+Diperparah posisinya: baris tambah Sub Section dirender di **ekor seluruh isi
+seksi**, jadi ia muncul jauh di bawah header yang tadi diklik-kanan. Pada seksi
+berisi banyak Works, kotaknya bahkan bisa di luar layar — pengguna mengklik
+"Tambah Sub Section" lalu tidak melihat apa pun terjadi.
+
+Dua perbaikan:
+
+- **Satu `addTarget` untuk seluruh pohon**, diangkat ke `BqBreakdownClient`.
+  Membuka baris tambah yang baru menutup yang lama dengan sendirinya — bukan
+  lewat `onBlur` yang bisa tidak pernah kena.
+- **Baris tambah pindah ke tepat di bawah header yang diklik**, bukan di ekor.
+  Aksi dan hasilnya kini berdampingan.
+
+### Kenapa kotaknya tidak dihapus begitu saja
+
+Instruksi owner terbaca sebagai "hilangkan yang ini", dan yang bikin ia
+mengganggu memang sudah hilang: ia tidak lagi bisa muncul bersamaan dengan kotak
+lain, dan tidak lagi nongol jauh dari tempat klik.
+
+Menghapusnya total akan mencabut satu-satunya cara memberi NAMA pada Sub Section
+baru. Kalau yang dimaksud owner memang itu — Sub Section dibuat langsung dari
+menu dengan nama bawaan lalu diganti inline — itu perubahan lain lagi, dan
+sebaiknya diputuskan sadar, bukan disimpulkan dari satu tanda silang.
+
+### Area/berkas
+
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — `addTarget` +
+  `setAddTarget` masuk `Shared`; state lokal `adding` di `SectionBlock` dicabut;
+  `InlineAdd` Sub Section dipindah dari ekor ke bawah header.
+
+### Verifikasi
+
+`tsc --noEmit` 0 error · `eslint src/subapps/bq/` **exit 0** · **33 test lulus**.
+
+### Risiko / tindak lanjut
+
+- Perilaku barunya perlu dicoba owner: apakah "satu kotak sekaligus" terasa
+  benar, atau justru mengganggu saat ingin menambah di dua tempat berurutan.
+- Kalau owner memang ingin kotaknya hilang sama sekali, jalur penggantinya
+  sudah disiapkan di catatan ini.
+
+## [Unreleased] - 2026-08-27 (rev 9) — BQ-43: satu grid angka; kosakata Works diluruskan
+
+### Hasil akhir
+
+Owner melihat editor di browser (migrasi sudah jalan) dan melaporkan *"works dan
+sub works nya ga konsisten"*. Dua penyebab, dan yang kedua lebih dalam dari
+tampilan.
+
+**1. Tiga sistem layout untuk kolom angka yang sama.**
+
+```
+strip header    px-4 + pr-0.5                    w-14 / w-24 / w-28
+baris seksi     TANPA padding                              w-28
+baris Works     px-6, DI DALAM kartu berbingkai   w-14 / w-24 / w-28
+```
+
+Akibatnya "Rp 0" milik seksi mendarat ~24px di kanan "Rp 0" milik Works, dan
+tidak satu pun sejajar dengan judul kolomnya sendiri. Pada layar bertipe
+spreadsheet itu bukan cacat kosmetik — mata membaca kolom, dan kolom yang
+bergeser antar jenis baris membuat angka tidak bisa dibandingkan sekilas.
+
+Diperbaiki dengan satu grid: konstanta `ROW_PX` / `COL_GAP` / `COL_VOL` /
+`COL_PRICE` / `COL_TOTAL` dipakai ketiganya. Baris seksi kini menaruh
+subtotalnya di kolom `Jumlah` lewat dua kolom kosong `aria-hidden`, bukan
+menempel di tepi kanan sendiri.
+
+Kartu berbingkai di `ObjectList` **dibuang**. Ia menambah inset yang menggeser
+kolom, dan membuat Works terbaca sebagai jenis benda yang berbeda dari
+pengelompoknya — padahal keduanya baris di tabel yang sama. Kedalaman sudah
+dibawa indentasi; pembeda jenis baris cukup bobot tipografi.
+
+**2. UI mengiklankan lapis yang sudah dipensiunkan.**
+
+Tiap baris Works menulis `"0 sub-pekerjaan · 0 baris"`. `sub-pekerjaan` di situ
+adalah `BqSubObject` — lapis yang PRD §2.2 nyatakan **dipensiunkan**, dan
+`sub-Works` (L4) justru disebut "baris".
+
+Jadi kosakata UI berlawanan dengan modelnya: yang dipensiunkan tampil dominan,
+yang dipakai tampil sebagai istilah generik. Wajar kalau terbaca tidak konsisten
+— memang tidak konsisten.
+
+Sekarang: `"{n} sub-works"`, dan sub-object **hanya disebut kalau datanya memang
+masih ada** (`"· {n} sub-object (lama)"`), supaya baris lama tetap bisa
+dijelaskan tanpa mengiklankan lapis yang tidak dipakai lagi.
+
+### Area/berkas
+
+- `src/subapps/bq/components/BqBreakdownClient.tsx` — konstanta grid + alasannya
+  di kepala blok; strip header, `SectionHeader`, dan `ObjectRow` memakainya;
+  9 `px-6` jadi `ROW_PX`; bingkai kartu `ObjectList` dicabut; `SummaryMetric`
+  memakai konstanta kolom; kosakata baris Works diluruskan ke PRD §2.
+
+### Verifikasi
+
+`tsc --noEmit` 0 error · `eslint src/subapps/bq/` **exit 0** (2 warning bawaan)
+· **33 test lulus**.
+
+Perataan kolomnya sendiri **belum dilihat mata** — perlu owner membuka ulang
+`/bq`. Yang bisa dijamin dari kode: ketiga baris kini memakai konstanta yang
+sama, jadi tidak mungkin lagi bergeser satu sama lain.
+
+### Risiko / tindak lanjut
+
+- Membuang bingkai kartu mengubah rasa visual editor cukup terasa. Kalau
+  ternyata batas antar pengelompok jadi kurang jelas, jawabannya **bukan**
+  mengembalikan kartu — melainkan menaikkan kontras garis pemisah atau memberi
+  latar tipis pada baris pengelompok, karena keduanya tidak menggeser kolom.
+- `SubObjectRow` masih dirender untuk data lama. Itu disengaja (PRD §8), tapi
+  begitu tidak ada lagi project yang memakainya, seluruh cabangnya bisa dicabut.
+
+## [Unreleased] - 2026-08-27 (rev 8) — BQ-42 kontras WCAG + BQ-35 klik-kanan
+
+### Hasil akhir
+
+Tiga temuan design critique diselesaikan sekaligus. Yang pertama ternyata bug
+aksesibilitas nyata, bukan preferensi.
+
+**BQ-42 — kontras teks gagal WCAG AA.**
+
+`TEXT_TERTIARY` adalah `slate-400` (#94a3b8) = **2,6:1** di atas putih. AA butuh
+4,5:1; ambang teks besar (3:1) pun tidak lewat. Ia dipakai 40× di
+`BqBreakdownClient` untuk hal yang **bukan hiasan**: kode pekerjaan, hitungan
+`"{n} sub-pekerjaan · {m} baris"` (satu-satunya petunjuk isi saat baris
+tertutup), dan label kolom. Estimator membaca layar itu berjam-jam.
+
+Ditemukan sekalian: **token dan CSS-nya sudah tidak sinkron.**
+`tokens/colors.ts` menulis `TEXT_SECONDARY = slate-500`, sementara
+`designTokens.css` menulis `--ui-text-secondary: #475569` (slate-600). Dua
+sumber kebenaran untuk warna yang sama.
+
+Tangga diturunkan satu tingkat, **bukan diratakan** — tiga tier tetap ada:
+
+| Token | Sebelum | Sesudah | Kontras |
+|---|---|---|---|
+| `TEXT_PRIMARY` | slate-950 | slate-950 | ~19:1 |
+| `TEXT_SECONDARY` | slate-500 *(≠ CSS)* | **slate-600** | 7,5:1 |
+| `TEXT_TERTIARY` | slate-400 ❌ | **slate-500** | 4,8:1 ✓ |
+| `ICON_DECORATIVE` | — | slate-400 | khusus ikon murni dekoratif |
+
+`ICON_DECORATIVE` ditambahkan supaya chevron tetap boleh redup tanpa membuka
+pintu bagi teks untuk ikut redup — WCAG 1.4.11 mengecualikan yang murni
+dekoratif, dan tanpa token terpisah pengecualian itu akan dipakai untuk apa saja.
+
+83 kelas hardcoded di 6 komponen BQ diangkat. **Nol** kelas yang gagal AA
+tersisa di seluruh subapp.
+
+**BQ-35 — klik-kanan menggantikan afordans permanen.**
+
+`components/ui/context-menu.tsx` baru (paket `radix-ui` sudah terpasang, tinggal
+dibungkus), diekspor lewat `ui_engine/primitives`. `CreatableSearch` ternyata
+sudah diekspor sejak lama — tinggal dipakai.
+
+Dibuang dari editor:
+
+| Yang dibuang | Kenapa |
+|---|---|
+| `SectionAddObject` — form tambah permanen di tiap pengelompok | belasan form nganggur sekaligus pada BQ seukuran dokumen kantor |
+| Blok chip saran template | dinding chip permanen di setiap daftar |
+| Tombol hapus di header seksi | pindah ke menu, tidak lagi butuh trik `opacity-0` + hover |
+
+Saran template **tidak hilang** — ia pindah ke dalam `CreatableSearch`, jadi
+sekarang bisa **dicari** alih-alih dipindai mata. Dan karena menu hanya
+menawarkan yang sah di baris itu, tiga pesan penolakan drop yang panjang jadi
+tidak perlu; sisanya dipangkas dari kalimat penuh jadi frasa.
+
+Adanya tiga pesan penolakan berbeda itu sendiri gejala: kalau perlu tiga kalimat
+untuk menjelaskan ke mana sesuatu boleh dijatuhkan, **gesture-nya** yang salah,
+bukan penjelasannya yang kurang.
+
+`InlineAdd` menggantikan form permanen: muncul saat diminta, fokus otomatis,
+Enter simpan, Escape batal, blur-kosong menutup sendiri.
+
+### Angka
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| Kelas gagal WCAG AA (6 komponen BQ) | 83 | **0** |
+| Form tambah permanen | 14 afordans | 0 (on-demand) |
+| String instruksi >60 karakter | 36 | 28 |
+| Warning eslint di `src/subapps/bq/` | 3 | 2 |
+
+### Area/berkas
+
+- `src/ui_engine/tokens/colors.ts` — tangga teks dipatok + `ICON_DECORATIVE` /
+  `ICON_DEFAULT`, dengan alasannya di kepala berkas.
+- `src/ui_engine/tokens/index.ts` — lima token teks/ikon diekspor.
+- `src/styles/designTokens.css` — `--ui-text-tertiary` #94a3b8 → #64748b.
+- `src/components/ui/context-menu.tsx` — **baru**.
+- `src/ui_engine/primitives/index.ts` — mengekspor context-menu.
+- `src/subapps/bq/components/*.tsx` — 6 berkas: kontras + klik-kanan.
+- `PRD-BQ.md` — §3 menambah aturan 7 (klik-kanan) dan 8 (tangga teks AA).
+- `roadmap.md` — BQ-35 dan BQ-42 ditandai selesai.
+
+### Verifikasi
+
+`prisma validate` ✓ · `tsc --noEmit` 0 error · `eslint src/subapps/bq/ +
+context-menu.tsx` **exit 0** · **33 test lulus**.
+
+Kontras dihitung dari nilai heksa Tailwind terhadap #ffffff, bukan ditaksir dari
+tampilan.
+
+### Risiko / tindak lanjut
+
+- **Perubahan token berlaku global** — Master Data ikut menerima tangga baru.
+  Itu disengaja dan strictly membaik, tapi belum dilihat mata karena `/bq` dan
+  sebagian layar lain butuh migrasi (BQ-2).
+- **Klik kanan gesture tak terlihat.** Header seksi diberi `title` sebagai
+  petunjuk, tapi ini yang paling perlu dicoba owner langsung begitu DB nyala.
+- Komponen BQ lain (`BqToolbar`, `BqLinePicker`, `BqQuickAddRow`) baru dibetulkan
+  kontrasnya, belum ditokenkan penuh — sisa hardcode `slate-500/600/700/900`
+  masih ada. Bukan pelanggaran AA, tapi masih utang Zero Hardcode Policy.
 
 ## [Unreleased] - 2026-08-27 (rev 12) — BQ-34: borongan dipisahkan dari Upah murni
 

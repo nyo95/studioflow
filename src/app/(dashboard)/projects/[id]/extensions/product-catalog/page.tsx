@@ -21,10 +21,6 @@ export default async function ProductCatalogPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  if (process.env.NEXT_PUBLIC_ENABLE_MATERIAL_FIXTURES === "false") {
-    notFound();
-  }
-
   const { id } = await params;
   const { userId, role } = await getSession();
   if (!userId) notFound();
@@ -71,7 +67,7 @@ export default async function ProductCatalogPage({
   const exportDate = `${String(now.getDate()).padStart(2, "0")} ${String(now.getMonth() + 1).padStart(2, "0")} ${year}`;
 
   return (
-    <div style={{ background: "#fff", minHeight: "100vh" }}>
+    <div className="catalog-print-root" style={{ background: "#fff", minHeight: "100vh" }}>
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -81,7 +77,7 @@ export default async function ProductCatalogPage({
             .catalog-cover-wrap { display: block !important; }
             /* Zero page margin so the black cover can bleed to the paper edge;
                content pages get their margins back via .catalog-sheet padding. */
-            @page { size: A4 landscape; margin: 0; }
+            @page { size: 297mm 210mm; margin: 0; }
             header, nav, footer, button, .no-print, [role="button"] { display: none !important; }
             html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
             /* Plain background everywhere — kill any gradients / shadows / tints
@@ -98,10 +94,11 @@ export default async function ProductCatalogPage({
                (pt-[var(--ui-header-height)]) instead of the old pt-14 utility. */
             .pt-14, .pt-\[var\(--ui-header-height\)\] { padding-top: 0 !important; }
             main { padding: 0 !important; overflow: visible !important; background: #fff !important; }
+            .catalog-print-root { min-height: 0 !important; }
 
             /* Full-bleed cover = whole first page. */
-            .catalog-cover-wrap { max-width: none !important; margin: 0 !important; padding: 0 !important; }
-            .catalog-cover { width: 100% !important; height: 100vh !important; break-after: page; page-break-after: always; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .catalog-cover-wrap { --catalog-cover-print-height: calc(var(--ui-render-print-page-height) - 20mm); width: var(--ui-render-print-page-width) !important; height: var(--catalog-cover-print-height) !important; max-width: none !important; margin: 0 !important; padding: 0 !important; break-inside: avoid !important; page-break-inside: avoid !important; break-after: page; page-break-after: always; overflow: hidden !important; }
+            .catalog-cover { width: var(--ui-render-print-page-width) !important; height: var(--catalog-cover-print-height) !important; break-after: auto; page-break-after: auto; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             .catalog-cover, .catalog-cover * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
             .catalog-page { max-width: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }

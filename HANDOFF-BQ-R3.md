@@ -14,7 +14,7 @@ kerja yang sudah dipilah antara "boleh jalan" dan "tunggu owner".
 | 1 | **`PRD-BQ.md`** | spesifikasi yang berlaku. Semua acceptance di bawah merujuk pasalnya. |
 | 2 | `designbq.md` | arah rasa & UI. Mengikat, tidak digantikan PRD. |
 | 3 | `AGENTS.md` §🧾 BQ Contract | 5 aturan keras, ringkas |
-| 4 | `roadmap.md` §Siklus R3 | BQ-30..BQ-39 |
+| 4 | `roadmap.md` §Siklus R3 | BQ-30..BQ-71 |
 
 **JANGAN** menurunkan aturan dari `D:\Misc\ProjectsHUB\BQ\PRD_Fixture_Breakdown.md`
 maupun dari `BQ template tes.xlsx`. Keputusan owner 2026-08-27: workbook itu
@@ -158,7 +158,7 @@ menambah nilai enum** (PRD §8).
 
 ---
 
-**D1 — Markup masih hidup di kode** *(BQ-39)* · 🔒 butuh migrasi
+**D1 — Markup masih hidup di kode** *(BQ-71)* · 🔒 butuh migrasi
 
 PRD §3.5 memutuskan markup **dibuang** (owner: *"TIDAK MAU DI BUAT SERUMIT INI"*,
 *"hitungan hanya dari koefisien"*). Kodenya belum menyusul.

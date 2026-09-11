@@ -215,7 +215,7 @@ function PickerDialog({
 
         {!custom ? (
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -230,7 +230,7 @@ function PickerDialog({
         {!custom ? (
           <div className="max-h-80 space-y-1 overflow-y-auto">
             {loading ? (
-              <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-400")}>Mencari…</p>
+              <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-500")}>Mencari…</p>
             ) : mode === "MATERIAL" ? (
               materials.length === 0 ? (
                 <EmptyResult mode={mode} onUseCustom={() => { setCustom(true); setSelectedId(null); }} />
@@ -324,7 +324,7 @@ function PickerDialog({
                 inputMode="decimal"
               />
               {selectedUnit ? (
-                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{selectedUnit}</span>
+                <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>{selectedUnit}</span>
               ) : null}
             </label>
             <Button variant="ghost" onClick={onClose} disabled={saving}>
@@ -383,11 +383,11 @@ function MaterialRow({
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           {candidate.code ? (
-            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{candidate.code}</span>
+            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>{candidate.code}</span>
           ) : null}
           <span className="truncate font-sans text-sm text-slate-900">{candidate.name}</span>
           {candidate.brandName ? (
-            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>
+            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>
               {candidate.brandName}
             </span>
           ) : null}
@@ -424,7 +424,7 @@ function MaterialRow({
                 </p>
               </div>
               {price.updatedAt ? (
-                <span className={cn(UI_ENGINE_TYPE_META, "shrink-0 text-slate-400")}>
+                <span className={cn(UI_ENGINE_TYPE_META, "shrink-0 text-slate-500")}>
                   Updated {formatDate(price.updatedAt)}
                 </span>
               ) : null}
@@ -463,11 +463,11 @@ function ServiceRow({
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>{candidate.code}</span>
+          <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>{candidate.code}</span>
           <span className="truncate font-sans text-sm text-slate-900">{candidate.name}</span>
           {/* Dinyatakan, bukan disimpulkan dari harga (AGENTS.md §3.4). */}
           {candidate.hasMaterial ? (
-            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-400")}>incl. material</span>
+            <span className={cn(UI_ENGINE_TYPE_META, "text-slate-500")}>incl. material</span>
           ) : null}
         </div>
         <p className={cn(UI_ENGINE_TYPE_META, "mt-0.5 text-slate-500")}>
@@ -477,7 +477,7 @@ function ServiceRow({
         {/* PRD §5.3 menyebut scope penting: "Jasa Pasang HPL" harus jelas
             sudah termasuk lem atau belum. */}
         {candidate.scopeNote ? (
-          <p className={cn(UI_ENGINE_TYPE_META, "mt-0.5 truncate text-slate-400")}>
+          <p className={cn(UI_ENGINE_TYPE_META, "mt-0.5 truncate text-slate-500")}>
             {candidate.scopeNote}
           </p>
         ) : null}
@@ -610,7 +610,7 @@ export function LibraryPickerDialog({
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -623,9 +623,9 @@ export function LibraryPickerDialog({
         {/* List */}
         <div className="max-h-80 space-y-1 overflow-y-auto">
           {loading ? (
-            <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-400")}>Searching…</p>
+            <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-500")}>Searching…</p>
           ) : itemCount === 0 ? (
-            <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-400")}>
+            <p className={cn(UI_ENGINE_TYPE_META, "py-6 text-center text-slate-500")}>
               No library entries found.
             </p>
           ) : tab === "OBJECTS" ? (
